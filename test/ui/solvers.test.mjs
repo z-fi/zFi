@@ -1,6 +1,6 @@
 import { test, describe, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { AbiCoder } from 'ethers';
+import { AbiCoder, Interface } from 'ethers';
 import { A, MockChain, loadPage, fixedRateQuoter, closeAllPages } from './harness.mjs';
 
 after(closeAllPages);
@@ -170,6 +170,73 @@ describe('the solver lanes', () => {
       p.close();
     });
   }
+
+  // Seeing the field is how a user can tell the selection was made on floors
+  // rather than on whoever advertised the biggest number.
+  test('the losing venues are listed, ranked, and collapsed until asked for', async () => {
+    const chain = chainWithQuote();
+    wire(chain, [lane('0x', 'https://a.example', FILL), lane('ParaSwap', 'https://b.example', FILL)]);
+    chain.lanes = {
+      'a.example': { buyAmount: (3600n * USDC).toString(), transaction: { to: ROUTER, data: '0x1234' } },
+      'b.example/prices': { priceRoute: { destAmount: (3200n * USDC).toString(), srcDecimals: 18, destDecimals: 6, tokenTransferProxy: ROUTER } },
+      'b.example/transactions/1': { to: ROUTER, data: '0x1234' },
+    };
+    const p = await open(chain);
+    await p.typeAmount('amt', '1');
+
+    const box = p.$('rankBox');
+    assert.ok(box.classList.contains('hide'), 'the venue list was shown without being asked for');
+
+    const rows = [...box.querySelectorAll('i')].map(r => r.textContent);
+    assert.equal(rows.length, 3, `expected on-chain + two lanes, got: ${JSON.stringify(rows)}`);
+    assert.match(rows[0], /0x/, `the winner is not listed first: ${JSON.stringify(rows)}`);
+    assert.ok(box.querySelector('i.w'), 'no row is marked as the winner');
+    // Ranked by floor, descending: 3600 > 3200, and the chain's 3000 is last.
+    assert.match(rows[2], /On-chain/, `rows are not ranked by floor: ${JSON.stringify(rows)}`);
+    // Losers carry their gap to the winner, so the comparison is legible.
+    assert.match(rows[1], /-\d+\.\d+%/, `no delta shown on a losing venue: ${rows[1]}`);
+
+    const caret = p.$('rate').querySelector('.rk');
+    assert.ok(caret, 'no control to open the list');
+    caret.onclick();
+    assert.ok(!box.classList.contains('hide'), 'the list did not open');
+    p.close();
+  });
+
+  // The page hand-rolls its calldata - no ABI library ships in it - so the one
+  // thing worth proving is that what it builds actually decodes as the call it
+  // means to make. A silent layout slip here would send a well-formed
+  // transaction to the wrong arguments.
+  test('the winning lane builds calldata that decodes as fill()', async () => {
+    const chain = chainWithQuote();
+    wire(chain, [lane('0x', 'https://c.example', FILL)]);
+    chain.lanes = {
+      'c.example': { buyAmount: (3600n * USDC).toString(), transaction: { to: ROUTER, data: '0xdeadbeefcafe' } },
+    };
+    // A connected wallet, because the page only builds `last` once there is an
+    // account to build it for - walletless visitors get the price, not a
+    // transaction.
+    const p = await loadPage({ chain, url: 'https://' + SELF + '.1.w3link.io/', hash: 'token=ETH&out=USDC' });
+    await p.connect();
+    await p.typeAmount('amt', '1');
+
+    const q = p.window.eval('last');
+    assert.ok(q, 'no quote was recorded');
+    assert.equal(q.to.toLowerCase(), FILL.toLowerCase(), 'the route does not go through the pinned adapter');
+
+    const iface = new Interface([
+      'function fill(address target,address spender,address tokenIn,uint256 amountIn,address tokenOut,uint256 minOut,address to,bytes data)',
+    ]);
+    const d = iface.parseTransaction({ data: q.callData });
+    assert.equal(d.name, 'fill', 'the calldata is not a fill() call');
+    assert.equal(d.args[0].toLowerCase(), ROUTER.toLowerCase(), 'target is not the router the lane named');
+    assert.equal(d.args[2], '0x0000000000000000000000000000000000000000', 'tokenIn is not ETH');
+    assert.equal(d.args[3], 10n ** 18n, 'amountIn is not the amount typed');
+    assert.equal(d.args[7], '0xdeadbeefcafe', 'the solver payload was mangled in encoding');
+    // minOut must be the FLOOR, never the quote - that is the whole bargain.
+    assert.ok(d.args[5] < 3600n * USDC, `minOut is the quote, not the floor: ${d.args[5]}`);
+    p.close();
+  });
 
   test('a lane that cannot beat the on-chain floor does not win', async () => {
     // The whole point of comparing floors: a lane quoting barely above the

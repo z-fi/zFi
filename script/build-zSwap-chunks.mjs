@@ -34,7 +34,29 @@ import {fileURLToPath} from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const EIP170 = 24576;
-const n = 12;
+const n = 16;
+
+// THE COUNT LIVES IN TWO PLACES AND THEY MUST AGREE. `n` here decides how the
+// page is split; `zSwap.sol`'s constructor arity decides how many addresses the
+// wrapper can be handed. A mismatch does not fail loudly on its own - it fails
+// at deploy, after the chunks are already on chain and paid for - so read the
+// arity out of the source and refuse to proceed when the two have drifted.
+// This has now been wrong twice, in both directions.
+{
+  const sol = fs.readFileSync(path.join(ROOT, "src", "zSwap.sol"), "utf8");
+  const m = sol.match(/constructor\(address dao, address previous, address\[(\d+)\] memory d\)/);
+  if (!m) {
+    console.error("could not read zSwap.sol's constructor arity - has the signature changed?");
+    process.exit(1);
+  }
+  if (Number(m[1]) !== n) {
+    console.error(
+      `chunk count (${n}) does not match zSwap.sol's arity (${m[1]}).\n` +
+      `Deploying this way would hand the wrapper the wrong number of chunks.\n` +
+      `Update both, plus CHUNKS in script/*.mjs and test/*.t.sol.`);
+    process.exit(1);
+  }
+}
 // The count is a positional argument; `--file` and its value are not it.
 const countArg = process.argv.slice(2).find(a => /^\d+$/.test(a));
 if (countArg && countArg !== String(n)) {

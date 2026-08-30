@@ -171,6 +171,10 @@ letter-spacing:.02em;color:var(--f);display:flex;justify-content:space-between;a
 .docs summary em{display:inline-flex;align-items:center;margin:0 auto 0 .5em;opacity:.75}
 .lngap{font-size:.6em;text-transform:uppercase;letter-spacing:.1em;color:var(--m);margin:.9em .2em .1em}
 .lnhdr{margin-bottom:.2em}
+.lnhdr>small:first-child{white-space:nowrap}
+.lqbar.fill>b{right:auto;width:var(--at);opacity:.9}
+#cbEl{display:block}
+.cbrow{display:flex;justify-content:space-between;gap:.6em;align-items:baseline}
 #lnSub{color:var(--m);text-transform:none;letter-spacing:0}
 #lnNote,#floorNote{display:block;font-size:.7em;line-height:1.45;color:var(--m);text-align:center;text-wrap:balance;margin:.55em .2em 0}
 #lnNote:empty,#floorNote:empty{display:none}
@@ -202,6 +206,12 @@ letter-spacing:.02em;color:var(--f);display:flex;justify-content:space-between;a
 .chtog:hover{color:var(--f);background:var(--p)}
 .chtog span{display:inline-block;transition:transform .2s}
 .chtog[aria-expanded=true] span{transform:rotate(180deg)}
+.rank{display:block;margin-top:.45em;opacity:.72;font-size:.92em;line-height:1.5}
+.rank i{font-style:normal;display:flex;justify-content:space-between;gap:1em}
+.rank i.w{opacity:1;font-weight:600}
+.rank u{text-decoration:none;color:var(--m)}
+#rate .rk{cursor:pointer;padding:0 .25em;opacity:.6}
+#rate .rk:hover{opacity:1}
 #chBox{margin-top:.4em}
 .chtf{display:flex;gap:.18em;background:var(--p);padding:.18em;border-radius:.35em;margin-bottom:.4em}
 .chtf button{flex:1;padding:.35em;font:inherit;font-size:.65em;font-weight:600;text-transform:uppercase;letter-spacing:.06em;border:0;border-radius:.35em;background:transparent;color:var(--m);cursor:pointer}
@@ -287,16 +297,20 @@ background:var(--e);margin:.5em auto .1em}
 <div class="tabs" role="tablist"><button id="tabSwap" class="on" role="tab" aria-selected="true">Swap</button><button id="tabSend" role="tab" aria-selected="false">Send</button><button id="tabBook" role="tab" aria-selected="false">Orders</button></div>
 <div class="panel"><div class="hdr"><small id="payL">You pay</small><span class="pill"><span id="fromIcon"></span><select id="fromSel"></select><button type="button" class="tkb" id="fromPick" aria-haspopup="listbox" aria-expanded="false"><span class="tkbs"></span><span class="tkbc">▾</span></button></span></div><div class="row" id="amtRow"><input id="amt" type="text" inputmode="decimal" placeholder="0.0" aria-label="Amount to pay" autocomplete="off" spellcheck="false"></div><small id="bal"></small></div>
 <button id="flip" class="flip" title="Flip tokens" aria-label="Flip tokens"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14m-5-5 5 5 5-5"/></svg></button>
-<div class="panel" id="rcvPanel"><div class="hdr"><small id="rcvHdr">You receive</small><span class="pill"><span id="toIcon"></span><select id="toSel"></select><button type="button" class="tkb" id="toPick" aria-haspopup="listbox" aria-expanded="false"><span class="tkbs"></span><span class="tkbc">▾</span></button></span></div><div class="row" id="outRow"><input id="outAmt" type="text" inputmode="decimal" placeholder="0.0" aria-label="Amount to receive" autocomplete="off" spellcheck="false"></div><small id="bal1" class="hide"></small><small id="rate"></small></div>
+<div class="panel" id="rcvPanel"><div class="hdr"><small id="rcvHdr">You receive</small><span class="pill"><span id="toIcon"></span><select id="toSel"></select><button type="button" class="tkb" id="toPick" aria-haspopup="listbox" aria-expanded="false"><span class="tkbs"></span><span class="tkbc">▾</span></button></span></div><div class="row" id="outRow"><input id="outAmt" type="text" inputmode="decimal" placeholder="0.0" aria-label="Amount to receive" autocomplete="off" spellcheck="false"></div><small id="bal1" class="hide"></small><small id="rate"></small><small id="rankBox" class="rank hide"></small></div>
 <div id="lqPanel" class="hide"><div class="hdr"><small>Liquidity</small><small id="lqSub"></small></div><div id="lqList"></div></div>
 <div id="lnPanel" class="hide">
-<div class="hdr lnhdr"><small>Launch a coin</small><small id="lnSub">you earn 0.4% of every trade, forever</small></div>
+<div class="hdr lnhdr"><small id="lnTitle">Launch a coin</small><small id="lnSub">you earn 0.4% of every trade, forever</small></div>
+<label class="dly" id="lnKindL" title="A coin opens a market: supply is minted and seeded into a pool that trades from the first block. A cause opens a fund: backers pay ether for a token that can always be burned back for its share of whatever the cause has not spent.">Launch<select id="lnKind"><option value="coin">Coin</option><option value="cause">Cause</option></select></label>
 <label class="dly">Name<input id="lnName" maxlength="64" placeholder="Zero Cat" autocomplete="off" spellcheck="false"></label>
 <label class="dly">Symbol<input id="lnSym" maxlength="16" placeholder="ZCAT" autocomplete="off" spellcheck="false"></label>
-<label class="dly">Supply<input id="lnSupply" inputmode="decimal" value="1,000,000,000" autocomplete="off" spellcheck="false"></label>
-<div class="lngap">Market</div>
-<label class="dly" title="The pool holds NO ether at launch - this is its virtual ether reserve, and it is the only thing deciding where on the curve your market opens. It sets the opening price and how hard that price is to move, which are the same knob: roughly this much buying moves the market halfway. Small numbers mean the first buyer takes a huge share of the supply.">Starting market cap<span class="lnu"><input id="lnMcap" inputmode="decimal" value="30" autocomplete="off" spellcheck="false">ETH</span></label>
-<label class="dly" title="The percentage of total supply paid to the creator at launch. Everything else is seeded into the pool. Capped at 20%.">Creator keeps<span class="lnu"><input id="lnAlloc" inputmode="decimal" value="0" autocomplete="off" spellcheck="false">%</span></label>
+<label class="dly" id="lnSupplyL">Supply<input id="lnSupply" inputmode="decimal" value="1,000,000,000" autocomplete="off" spellcheck="false"></label>
+<div class="lngap" id="lnMktL">Market</div>
+<label class="dly" id="lnMcapL" title="The pool holds NO ether at launch - this is its virtual ether reserve, and it is the only thing deciding where on the curve your market opens. It sets the opening price and how hard that price is to move, which are the same knob: roughly this much buying moves the market halfway. Small numbers mean the first buyer takes a huge share of the supply.">Starting market cap<span class="lnu"><input id="lnMcap" inputmode="decimal" value="30" autocomplete="off" spellcheck="false">ETH</span></label>
+<label class="dly" id="lnAllocL" title="The percentage of total supply paid to the creator at launch. Everything else is seeded into the pool. Capped at 20%.">Creator keeps<span class="lnu"><input id="lnAlloc" inputmode="decimal" value="0" autocomplete="off" spellcheck="false">%</span></label>
+<label class="dly hide" id="lnGoalL" title="What the whole raise comes to. Ten million units are offered and the price is this divided by ten million, so a backer always knows what one unit costs and what it is a claim on.">Goal<span class="lnu"><input id="lnGoal" inputmode="decimal" value="10" autocomplete="off" spellcheck="false">ETH</span></label>
+<label class="dly hide" id="lnDaysL" title="How long backing stays open. After this, the sale closes and nobody else can buy in.">Runs for<span class="lnu"><input id="lnDays" inputmode="decimal" value="30" autocomplete="off" spellcheck="false">days</span></label>
+<label class="dly hide" id="lnVestL" title="How slowly the ether reaches you. The clock starts the moment you launch and runs whether or not anyone has backed you yet, so this wants to be well longer than the raise - what has not been released is exactly what a backer can still burn their token back for, and a release that finishes when backing closes leaves them nothing.">Released over<select id="lnVest"><option value="7889238">3 months</option><option value="15778476">6 months</option><option value="31556952" selected>12 months</option><option value="63113904">2 years</option></select></label>
 <div class="lngap">Optional</div>
 <label class="dly" id="lnArtRow" title="Held on-chain as contract code, not as a link. Nothing to pin and no gateway to go dark. Editable later, so a rough mark now costs nothing.">Logo<span><img id="lnPrev" alt=""><small id="lnArtNote">none</small><button type="button" id="lnPick" class="lnbtn">Choose</button></span></label>
 <input id="lnArt" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" class="hide">
@@ -310,6 +324,7 @@ background:var(--e);margin:.5em auto .1em}
 <input id="rc" class="rcpt" placeholder="Recipient (optional) — 0x or .eth/.(g)wei" spellcheck="false" autocomplete="off">
 <small id="rcvEl"></small>
 <small id="fcEl" class="hide" role="status" aria-live="polite"></small>
+<small id="cbEl" class="hide" role="status" aria-live="polite"></small>
 <small id="lnNote" class="hide" role="status" aria-live="polite"></small>
 <button id="lnGo" class="primary hide">Launch</button>
 <button id="wnGo" class="primary hide">Register</button>
@@ -356,6 +371,13 @@ background:var(--e);margin:.5em auto .1em}
 <p><b>Creator keeps</b> is a share of the token SUPPLY, minted straight to you when the coin launches &mdash; tokens, not ether, and not a fee on trading. Keep 10% of a billion and 100,000,000 land in your wallet at once, unlocked, with nothing vesting.</p>
 <p>Whatever you keep does not go into the pool, and selling it later pulls ether back out of that pool &mdash; so a modest-looking percentage can be a claim on most of what early buyers put in. Anyone deciding whether to buy your coin can work that out too.</p>
 <p>A <b>logo</b> is stored as contract code on Ethereum &mdash; no IPFS, no pinning service, nothing to go dark. Upload anything; the page compresses it and shows the size before you sign. You can replace it later.</p></details>
+<details><summary>Launching a cause <em><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/></svg></em></summary>
+<p>The other half of the launcher, and a different thing entirely: no pool, no market, no trading. Ten million units are offered at a fixed price in ether &mdash; your <b>goal</b> divided by ten million &mdash; and what backers pay accumulates in a treasury that belongs to the cause, not to you.</p>
+<p>Two clocks, and they are deliberately different lengths. <b>Runs for</b> is how long backing stays open. <b>Released over</b> is how slowly the ether reaches you &mdash; evenly, a little each second, however much has been raised. Ten ether released over a year is under three hundredths of an ether a day.</p>
+<p>The release clock starts the moment you launch and runs whether or not anyone has backed you yet, which is why it wants to be much longer than the raise. Release over the same thirty days you raise for and the whole treasury is yours the day backing closes &mdash; and somebody who backed you on the last day gets nothing back, because there is nothing left unreleased.</p>
+<p>That is what makes the token worth something on its own: <b>whatever has not been released yet can be burned back for</b>. A backer who changes their mind, or who watches a cause go quiet, redeems their share of the untouched treasury and takes their ether home. Nobody has to agree and nothing has to be voted on.</p>
+<p>Backers hold <b>loot</b>, which carries that claim and no vote. You keep a single share and the vote that comes with it, and you buy that share at the same price everyone else pays &mdash; so your claim on the treasury is the same shape as theirs.</p>
+<p>Paste a cause’s token into the swap and the page prices the burn for you, against the treasury rather than against a market. It is the only price such a token has, and it is the honest one.</p></details>
 <details><summary>Fees</summary>
 <p>A launched market charges <b>1%</b> per swap. Half of that stays in the pool as reserves, which raises the floor for every holder. The other half is collectable, and splits <b>80% creator, 10% protocol, 10% tithe</b>.</p>
 <p>The <b>tithe</b> is burned to Ethereum itself. The ether goes to the BETH burner, which destroys it and mints a BETH receipt recording that it happened. Nobody can spend it and it cannot be redeemed &mdash; the ether no longer exists. What it buys is a smaller ether supply, which accrues to everyone holding ether rather than to us.</p>
@@ -1459,9 +1481,11 @@ toBalance=v;showBal(bal1,v,t.dec);
 const optsHtml=()=>{
 let ft="",nft="";
 let born="";
+let cau="";
 TOKENS.forEach((t,i)=>{const o=`<option value="${i}">${t.sym}</option>`;
-if(t.std==="nft")nft+=o;else if(t.launched)born+=o;else ft+=o});
+if(t.std==="nft")nft+=o;else if(t.cause)cau+=o;else if(t.launched)born+=o;else ft+=o});
 return ft
++(cau?`<optgroup label="Causes — backed and burned, never traded">${cau}</optgroup>`:"")
 +(born?`<optgroup label="Launched on zSwap — not curated">${born}</optgroup>`:"")
 +(nft?`<optgroup label="NFT collections — auction only">${nft}</optgroup>`:"")
 +`<option value="__custom">+ Custom token…</option>`;
@@ -2368,7 +2392,7 @@ update();
 fcMine();
 loadPos();
 syncChart();
-if(lnMode)lnQuote();
+if(lnMode)lnKindQuote();
 }finally{connecting=false;swap.disabled=false;
 lnGo.disabled=false;lnGo.textContent=account?"Launch":"Connect Wallet";
 wnGo.disabled=false;
@@ -2459,6 +2483,7 @@ async function update(auto){
 if(!auto)autoQ=0;
 syncIcons();
 fcSync();
+cbSync();
 if(wnMode)return;
 if(lqMode)return loadLq();
 if(tab==="book")return render();
@@ -2484,7 +2509,7 @@ const rv=rc.value.trim();
 let rcv="";
 if(rv){
 const fail=m=>{rc.classList.add("bad");rcvEl.textContent="";
-outEl.value="";fitFont(outEl);stat.textContent=m};
+outEl.value="";fitFont(outEl);rankBox.textContent="";rankBox.classList.add("hide");stat.textContent=m};
 const bad=rcErr(rv);
 if(bad){fail(bad);return}
 if(isAddr(rv))rcv=rv;
@@ -2621,7 +2646,7 @@ if(!r)r=pc;
 if(!r&&curveOnlyOut)throw Object.assign(Error(`exact-output is unavailable for this pair — enter an amount to PAY instead`),{exactOut:1});
 if(!r)throw Error("bad quote");
 if(r.best.amountIn<=0n||r.best.amountOut<=0n||(!isIn&&r.amountLimit<r.best.amountIn))throw Error("bad quote");
-let hybrid=null,bookIncomplete=false,bookUnavailable=false,plannerBounded=false;
+let hybrid=null,bookIncomplete=false,bookUnavailable=false,plannerBounded=false,rank=null;
 if(acct){
 const candidates=await candJob;
 bookIncomplete=!!candidates.incomplete;
@@ -2767,7 +2792,12 @@ if(c&&c!==r&&c.best.amountOut>r.best.amountOut){r=c;hybrid=null}
 // itself - which is exactly the state an attacker who can degrade one lane
 // wants. Exact-output quotes are also left alone: the lanes here are asked
 // sell-side only.
-if(isIn&&r&&r.amountLimit>0n&&acct!==undefined){
+// No wallet check: `account` is null before one connects, never undefined, so
+// the guard that used to sit here gated on nothing. Leaving it as a no-op was
+// worse than either choice it looked like it was making - and running the
+// lanes walletless is the right one anyway, since the whole point of the
+// read path is that a visitor sees the real best price before connecting.
+if(isIn&&r&&r.amountLimit>0n){
 try{
 await loadSolvers();
 const lanes=(solverLanes||[]).filter(x=>!laneDown(x.name));
@@ -2786,6 +2816,15 @@ const floor=c.out-(c.out*slipBps)/10000n;
 if(floor*10000n<=r.amountLimit*(10000n+c.lane.handicapBps))continue;
 if(!win||floor>win.floor)win={...c,floor};
 }
+// THE FIELD, NOT JUST THE WINNER. Ranked on FLOORS - the same number the
+// selection used - because ranking the quotes would show a loser holding a
+// bigger figure than the winner and make the honest choice look like a bug.
+rank=[{n:"On-chain",f:r.amountLimit}];
+for(const c of tried){
+if(!c||!c.out)continue;
+rank.push({n:c.lane.name,f:c.out-(c.out*slipBps)/10000n});
+}
+rank.sort((a,b)=>a.f<b.f?1:a.f>b.f?-1:0);
 if(win&&my===seq){
 const ethIn=f.addr===ZERO;
 r={best:{source:SRC_SOLVER,amountIn:swapAmt,amountOut:win.out,feeBps:0n,lane:win.lane.name},
@@ -2813,6 +2852,33 @@ rate.textContent=isFinite(rx)?`1 ${f.sym} ≈ ${rx>=1?rx.toLocaleString("en-US",
 // added here: the `Min` suffix a few lines down already says it, for every
 // route, and a solver route is not a special case that deserves the number
 // twice - it was the same `amountLimit` both times.
+//
+// THE FIELD IS AVAILABLE, NOT INSISTED UPON. Somebody who wants to know why
+// this venue won can ask; nobody has to read a table to make a swap. So the
+// list stays collapsed behind one small caret, and each row is a FLOOR with
+// its gap to the winner's - the comparison that actually decided this - never
+// a quote, because ranking quotes would show a loser holding the bigger
+// number and make the honest choice look like a bug.
+//
+// Lane names come from the on-chain roster, so they are somebody else's text
+// in this page's DOM: they go through `safeSym` and are set as textContent,
+// never parsed as markup.
+rankBox.textContent="";
+if(rank&&rank.length>1&&isIn){
+const top=rank[0].f;
+for(const x of rank){
+const row=document.createElement("i");
+if(x.f===top)row.className="w";
+const n=document.createElement("span");
+n.textContent=safeSym(x.n).slice(0,16);
+const v=document.createElement("u");
+const d=top>0n?Number((top-x.f)*10000n/top)/100:0;
+v.textContent=`${trimAmt(x.f,t.dec)}${d>0.004?` \u00b7 -${d.toFixed(2)}%`:""}`;
+row.append(n,v);
+rankBox.appendChild(row);
+}
+}
+rankBox.classList.add("hide");
 const paysSym=r.poolOut===ZERO?"ETH":"WETH";
 rcvHdr.textContent=r.outDiffers?`You receive \u2014 as ${paysSym}`:"You receive";
 if(r.outDiffers&&rate.textContent)rate.textContent+=` \u00b7 pays ${paysSym}`;
@@ -2822,6 +2888,17 @@ else{
 const exactMax=formatUnits(r.amountLimit,f.dec);
 rate.textContent+=` · Max ${maxAmt(r.amountLimit,f.dec)} ${f.sym}`;
 rate.title=`Exact maximum: ${exactMax} ${f.sym}`;
+}
+// LAST, because every suffix above assigns `textContent`, and that discards
+// child nodes - a control appended before them is thrown away without a word.
+if(rankBox.firstChild){
+const car=document.createElement("span");
+car.className="rk";
+car.textContent="\u25be";
+car.title="Compare venues";
+car.onclick=()=>rankBox.classList.toggle("hide");
+rate.appendChild(document.createTextNode(" "));
+rate.appendChild(car);
 }
 if(r.slipBps>slipBps)rate.textContent+=` · Split — bound widened to ${Number(r.slipBps)/100}%`;
 if(bookIncomplete)rate.textContent+=" · Book scan capped";
@@ -2878,7 +2955,7 @@ render();
 quoting=false;
 const transport=!!e?.noWallet||mcGaveUp>gaveUp0||(mcFailed>failed0&&mcOk===ok0);
 if(!transport&&!e?.exactOut&&advancePastDeadPair()){loadChart();update();return}
-outEl.value="";fitFont(outEl);render();
+outEl.value="";fitFont(outEl);rankBox.textContent="";rankBox.classList.add("hide");render();
 stat.textContent=e?.noWallet?NO_WALLET
 :e&&e.exactOut?e.message
 :transport
@@ -2923,7 +3000,7 @@ e.preventDefault();
 if(debounceT){clearTimeout(debounceT);debounceT=0;update();return}
 if(!go.disabled)go.click();
 };
-for(const el of[amt,outAmt,rc,slip,floorAmt,nftId,lnName,lnSym,lnSupply,lnMcap,lnAlloc])
+for(const el of[amt,outAmt,rc,slip,floorAmt,nftId,lnName,lnSym,lnSupply,lnMcap,lnAlloc,lnGoal,lnDays])
 if(el)el.addEventListener("keydown",onEnter);
 slip.addEventListener("change",()=>{slip.value=Math.min(10,Math.max(.01,+slip.value||.5));slipWarn();LS.slip=slip.value});
 for(const sel of [fromSel,toSel]){
@@ -4343,6 +4420,10 @@ const show=!lqMode||!!lqList.querySelector(".lqnew");
 for(const el of [amtRow,outRow])if(el)el.classList.toggle("hide",!show);
 };
 function lqSet(on){
+/* Leaving the cause line up here would leave a live Burn - an irreversible
+   ragequit - clickable on a panel that no longer shows the cause it belongs to. */
+if(on){cbEl.classList.add("hide");cbDao="";cbAmt=0n;cbReady=0n}
+
 lqMode=on;
 if(on&&lnMode)lnSet(false);
 if(on&&wnMode)wnSet(false);
@@ -5231,6 +5312,247 @@ for(const k of Object.keys(fcFloorPx))delete fcFloorPx[k];
 fcSync();
 }catch(e){err(e);b.disabled=false;b.textContent="Collect"}
 }
+/* CAUSE LOOT — burn back for a share of the treasury.
+   A cause raised through the DAICO launcher sells `loot`: a plain ERC20 that
+   is a claim on the DAO's ether rather than a position in a market. Nothing
+   pools it and nothing quotes it, so this line is the only price the page can
+   show for such a token - and it is the real one. Ragequit pays exactly this,
+   pro rata across shares and loot together, out of whatever ether the cause's
+   beneficiary has not drawn down yet. */
+const SEL_DAOOF="98fabd3a",SEL_LOOTOF="9b7b2ab0",SEL_SHARESOF="03314efa",
+SEL_TSUP="18160ddd",SEL_RAGEQUIT="29f64d1a";
+const SEL_SALES="c6b9f06a",SEL_REMAINING="b399b0bc",SEL_BUY="cce7ec13";
+const SEL_TAPS="6144452a",SEL_TAPCLAIM="1e83409a",SEL_DAOALLOW="dd62ed3e";
+const cbSeen={};
+let cbDao="",cbAmt=0n,cbCost=0n,cbBuy=false,cbDrawn=0,cbSold=0n,cbReady=0n,cbSeq=0;
+const cbWord=h=>{const b=strip0x(h||"");return b.length>=64?"0x"+b.slice(24,64):""};
+/* A token counts as cause loot only when its DAO names it back. Reading DAO()
+   off the token alone would accept any contract that happens to have that
+   getter, and then quote a burn against a treasury it has no claim on. */
+async function cbLook(tok){
+const key=tok.toLowerCase();
+if(cbSeen[key])return cbSeen[key];
+let out={dao:"",shares:""};
+try{
+const dao=cbWord(await rpc(C,[{to:tok,data:"0x"+SEL_DAOOF},L]));
+if(/^0x[0-9a-f]{40}$/i.test(dao)&&!/^0x0{40}$/i.test(dao)){
+const [lt,sh]=await mc3Deep([{to:dao,data:"0x"+SEL_LOOTOF},{to:dao,data:"0x"+SEL_SHARESOF}]);
+if(cbWord(lt).toLowerCase()===key){out={dao,shares:cbWord(sh)};
+/* The list has to learn it too: a cause is not the same KIND of thing as the
+   rest of the tokens, and grouping it with them invites someone to look for a
+   price it does not have. */
+const ix=TOKENS.findIndex(t=>t.addr&&t.addr.toLowerCase()===key);
+if(ix>=0&&!TOKENS[ix].cause){TOKENS[ix].cause=1;rebuild()}}
+}
+}catch{
+/* A read that FAILED is not a token that is not a cause. Caching the failure
+   would remove the only price and the only redemption path this token has, for
+   the life of the page, over one flaky RPC. */
+return out;
+}
+return cbSeen[key]=out;
+}
+async function cbSync(){
+const my=++cbSeq;
+cbDao="";cbAmt=0n;cbBuy=false;
+const f=TOKENS[fromSel.value],t=TOKENS[toSel.value];
+if(lnMode||lqMode||wnMode||tab!=="swap"||!f||!t){cbEl.classList.add("hide");return}
+/* Backing is ether in and the cause's token out; burning is the same trade run
+   backwards. One line serves both because they are one relationship seen from
+   either end, and a cause has no third thing you can do with it. */
+/* THE RECEIVING SIDE DECIDES what this is. If a cause is what you are trying
+   to get, you are backing it - whatever you happen to be holding - and the
+   page owes you an answer about the ether, not silence about the token you
+   picked. Reading the paying side first meant a USDC holder got nothing at
+   all, which is the same screen as "this is not a cause". */
+const real=x=>x&&x.addr&&x.addr!==ZERO&&x.std!=="nft";
+/* ETHER IN, AND NOTHING ELSE, and that is a contract limit rather than a
+   choice. ShareOffering.buy credits `msg.sender`, so a router that swapped
+   your token to ether and then bought would itself be the buyer and the
+   backing would land at the router. There is no buyFor. What DOES work is an
+   EIP-5792 batch - swap, then buy, both sent from your own account, so
+   msg.sender stays you - and that is where this goes next. Until then the
+   page says what to switch instead of offering a button that cannot work. */
+const cbEth=f.addr===ZERO||(f.addr||"").toLowerCase()===WETH.toLowerCase();
+let hit=null,tok=null,buy=false;
+if(real(t)){const h=await cbLook(t.addr);if(my!==cbSeq)return;
+if(h.dao){hit=h;tok=t;buy=true}}
+if(!hit&&real(f)){const h=await cbLook(f.addr);if(my!==cbSeq)return;
+if(h.dao){hit=h,tok=f}}
+if(!hit||!hit.shares||!tok){cbEl.classList.add("hide");return}
+let eth=0n,sup=0n,price=0n,dl=0n,left=0n,cap=0n;
+const now2=BigInt(Math.floor(Date.now()/1000));
+cbReady=0n;
+try{
+const [b,r]=await Promise.all([
+rpc("eth_getBalance",[hit.dao,L]),
+mc3Deep([{to:hit.shares,data:"0x"+SEL_TSUP},{to:tok.addr,data:"0x"+SEL_TSUP},
+{to:COFF,data:"0x"+SEL_SALES+encAddr(hit.dao)},
+{to:COFF,data:"0x"+SEL_REMAINING+encAddr(hit.dao)},
+{to:CTAP,data:"0x"+SEL_TAPS+encAddr(hit.dao)},
+{to:hit.dao,data:"0x"+SEL_DAOALLOW+encAddr(ZERO)+encAddr(CTAP)}])]);
+eth=BigInt(b||"0x0");
+const shr=BigInt(r[0]||"0x0"),lot=BigInt(r[1]||"0x0");
+sup=shr+lot;
+const sale=strip0x(r[2]||"");
+/* THE SALE HAS TO BE THE ONE THIS LINE IS DESCRIBING. sales() returns the mint
+   sentinel first and the pay token second, and a DAO is free to run a sale that
+   mints SHARES, or one priced in an ERC20. Reading only the price and the
+   deadline would quote both of those as if they were this loot token for ether
+   - and then send ether to buy something else entirely. Anything but
+   loot-for-ether is left unpriced: the burn still works, the backing does not. */
+if(sale.length>=320
+&&("0x"+sale.slice(24,64)).toLowerCase()===CLOOT
+&&/^0+$/.test(sale.slice(64,128))){
+dl=BigInt("0x"+sale.slice(128,192));price=BigInt("0x"+sale.slice(192,256));
+cap=BigInt("0x"+sale.slice(256,320))}
+cbSold=lot;
+left=BigInt(r[3]||"0x0");
+/* WHAT THE TAP WILL PAY IF SOMEONE ASKS IT TO. Vesting does not move on its
+   own - the ether sits in the treasury, counting as refundable, until a claim
+   transaction is sent. TapVest pays advance*rate where
+   advance = floor(min(owed, allowance, balance) / rate), so the whole-second
+   flooring has to be reproduced here or the line promises more than arrives. */
+const tp=strip0x(r[4]||"");
+if(tp.length>=256){
+const rate=BigInt("0x"+tp.slice(128,192)),lastC=BigInt("0x"+tp.slice(192,256));
+const allow=BigInt(r[5]||"0x0");
+if(rate>0n&&now2>lastC){
+let av=(now2-lastC)*rate;
+if(av>allow)av=allow;
+if(av>eth)av=eth;
+cbReady=av/rate*rate;
+}}
+/* What the tap has already drawn, said as a share of what was actually
+   raised. The goal never reaches the chain, so the honest denominator is what
+   backers paid - sold units at the sale price - and the numerator is the part
+   of it that is no longer in the treasury. */
+cbDrawn=lot>0n&&price>0n?(()=>{const raised=(lot*price+CONE-1n)/CONE;
+return raised>eth?Number((raised-eth)*100n/raised):0})():0;
+}catch{}
+if(my!==cbSeq)return;
+if(sup<=0n){cbEl.classList.add("hide");return}
+const now=BigInt(Math.floor(Date.now()/1000));
+const open=price>0n&&(dl===0n||dl>now);
+/* Days LEFT is how many days you can still act in, so it rounds up: flooring
+   made a raise set to thirty days read "29 days left" a second after it
+   launched, which looks like an off-by-one and understates the window. */
+const days=dl>now?Number((dl-now+86399n)/86400n):0;
+cbDao=hit.dao;cbBuy=buy;
+/* HOW FULL, and HOW MUCH IS STILL THERE. Two different questions, and a cause
+   needs both: the first says whether it is working, the second says what your
+   claim is worth. Progress is sold units over the ceiling, which needs no
+   price and cannot be flattered - and the goal is that ceiling priced out, so
+   the number on the launch form comes back without ever being stored. */
+const pct=cap>0n?Number(cbSold*1000n/cap)/10:0;
+const goal=cap>0n&&price>0n?cap*price/CONE:0n;
+const head=goal>0n
+?`<span>${trimAmt(cbSold*price/CONE,18)} of ${trimAmt(goal,18)} ETH backed</span>`
++`<span>${open?days+" days left":"closed"}${cbDrawn>0?" · "+cbDrawn+"% released":""}</span>`
+:"";
+const bar=goal>0n
+?`<div class="lqbar fill" style="--at:${Math.max(0,Math.min(100,pct)).toFixed(1)}%" aria-hidden="true"><b></b></div>`
+:"";
+/* THE TAP DOES NOT MOVE ON ITS OWN. Vesting only accrues; the ether stays in
+   the treasury - still refundable, still counted in every burn quote - until
+   somebody sends a claim. TapVest.claim takes no caller check and pays the
+   beneficiary either way, so this is offered to everyone, exactly as fee
+   collection is for a launched coin.
+   It is shown to backers too rather than hidden from them, because it is the
+   one number on this line that a backer would rather not press: releasing is
+   what makes their burn worth less. Concealing a permissionless button does
+   not stop it being pressed, it only stops them knowing it exists. */
+const rel=cbReady>0n
+?`<span class="cbrow"><span>${trimAmt(cbReady,18)} ETH vested and unreleased</span>`
++`<button type="button" id="cbRel" class="fclink">Release</button></span>`
+:"";
+const top=(head?`<span class="cbrow">${head}</span>${bar}`:"")+rel;
+/* Every branch below paints and returns through here, so a button can never be
+   rendered without its handler - which is what an early return past the
+   binding at the bottom used to do. */
+const paint=(html,tip)=>{
+cbEl.innerHTML=top+html;
+cbEl.title=tip;
+cbEl.classList.remove("hide");
+const gi=i=>document.getElementById(i);
+const g=gi("cbGo"),r=gi("cbRel");
+if(g)g.onclick=cbAct;
+if(r)r.onclick=cbRelease;
+};
+if(buy){
+if(!open||left<=0n)
+return paint(`Backing for ${safeSym(tok.sym)} has closed — it can still be burned back`,CB_TIP);
+if(!cbEth)
+return paint(`Back ${safeSym(tok.sym)} with ether — switch the top token to ETH`,CB_TIP);
+let pay=0n;try{pay=parseUnits(amt.value.trim()||"0",18)}catch{}
+if(pay<=0n)
+return paint(`1 ETH backs ${trimAmt(CONE*CONE/price,tok.dec)} ${safeSym(tok.sym)}`,CB_TIP);
+let units=pay*CONE/price;
+if(units>left)units=left;
+if(units<=0n){cbEl.classList.add("hide");return}
+cbAmt=units;
+/* Round the cost up exactly as ShareOffering does, or the buy reverts for a
+   wei on every amount that does not divide evenly. */
+cbCost=(units*price+CONE-1n)/CONE;
+return paint(`Back with ${trimAmt(cbCost,18)} ETH for ${trimAmt(units,tok.dec)} ${safeSym(tok.sym)} `
++`<button type="button" id="cbGo" class="fclink">Back</button>`,CB_TIP);
+}
+let want=0n;try{want=parseUnits(amt.value.trim()||"0",tok.dec)}catch{}
+if(want<=0n)want=fromBalance;
+if(want<=0n){
+/* Holding none is the case where the redemption rate matters MOST: it is what
+   someone deciding whether to back reads, and what a disconnected visitor sees.
+   Hiding it left the page's only honest price visible only to people who had
+   already paid it. */
+return paint(`1 ${safeSym(tok.sym)} redeems for ${trimAmt(eth*CONE/sup,18)} ETH`,CB_TIP);}
+cbAmt=want;
+return paint(`Burn ${trimAmt(want,tok.dec)} ${safeSym(tok.sym)} for ${trimAmt(eth*want/sup,18)} ETH `
++`<button type="button" id="cbGo" class="fclink">Burn</button>`,
+"This token is a claim on a cause's treasury, not a position in a market. "
++"Burning it pays your share of the ether the cause has not drawn down yet, counted "
++"pro rata across every share and unit of loot. It cannot be undone.");
+}
+const CB_TIP="Backing a cause is not a trade and there is no market to leave through. "
++"What you get is a claim: burn it back at any time for your share of the ether the cause "
++"has not drawn down yet, which is the number this line shows once you hold some.";
+/* Anyone may release a cause's vested ether, and it goes to the beneficiary
+   however presses it - the same shape as collecting a launched coin's fees.
+   The tap accrues on a clock but moves only when asked, so without this the
+   ether simply sits there and a creator has to go elsewhere to draw it. */
+async function cbRelease(){
+if(!cbDao||cbReady<=0n)return;
+const b=document.getElementById("cbRel");if(!b||b.disabled)return;
+try{
+if(!account)return connect();
+b.disabled=true;b.textContent="Releasing…";
+const req={from:account,to:CTAP,value:"0x0",data:"0x"+SEL_TAPCLAIM+encAddr(cbDao)};
+await rpc(C,[req,L]);
+await waitTx(await sendTx([req]));sGot();
+stat.textContent="Released to the cause.";
+cbSync();
+}catch(e){err(e);b.disabled=false;b.textContent="Release"}
+}
+async function cbAct(){
+if(!cbDao||cbAmt<=0n)return;
+const b=document.getElementById("cbGo");if(!b||b.disabled)return;
+const label=b.textContent;
+try{
+if(!account)return connect();
+b.disabled=true;b.textContent=cbBuy?"Backing…":"Burning…";
+const req=cbBuy
+?{from:account,to:COFF,value:"0x"+cbCost.toString(16),
+data:"0x"+SEL_BUY+encAddr(cbDao)+encUint(cbAmt)}
+/* ragequit(address[] tokens, uint256 shares, uint256 loot). The array holds
+   the one token being claimed - the zero address, meaning ether. */
+:{from:account,to:cbDao,value:"0x0",
+data:"0x"+SEL_RAGEQUIT+encUint(96)+encUint(0)+encUint(cbAmt)+encUint(1)+encAddr(ZERO)};
+await rpc(C,[req,L]);
+await waitTx(await sendTx([req]));sGot();
+stat.textContent=cbBuy?"Backed · burn it back any time for what is left."
+:"Burned · the ether is in your wallet.";
+refreshBalance();cbSync();
+}catch(e){err(e);b.disabled=false;b.textContent=label}
+}
 const LN_MIME={"image/png":0,"image/webp":1,"image/svg+xml":2,"image/gif":3,"image/jpeg":4};
 const MIME_NAME=["image/png","image/webp","image/svg+xml","image/gif","image/jpeg","image/avif"];
 const LN_MAX_ART=24575;
@@ -5253,8 +5575,236 @@ head=heads.slice(0,3).join("")+statics.slice(0,4).join("")
 +(art?heads[3]+statics[4]:"");
 return "0x"+(art?SEL_LAUNCHART:SEL_LAUNCH)+head+tail;
 };
+/* Who the launch belongs to - the coin's creator, or the cause's beneficiary.
+   One field, one resolver, because it is the same question either way. */
+async function lnOwner(){
+const rv=rc.value.trim();
+if(!rv)return account;
+if(/^0x[0-9a-fA-F]{40}$/.test(rv)){
+if(/^0x0{40}$/i.test(rv))throw Error("That cannot be the zero address.");
+return rv;
+}
+if(!/\.(g?wei|eth)$/i.test(rv))throw Error("That must be an address, or a .eth / .wei name.");
+rcvEl.textContent="resolving\u2026";
+let r="";try{r=await nameFwd(rv.toLowerCase())}catch{r=""}
+rcvEl.textContent="";
+if(!r||/^0x0{40}$/i.test(r))throw Error("That name is not registered.");
+return r;
+}
+
+/* CAUSE LAUNCH — the launcher's B-side.
+
+   A coin launch opens a market. A cause launch opens a fund, and nothing else:
+   ten million units of non-voting `loot` are offered at a fixed price in ether,
+   the ether reaches the beneficiary as a stream rather than a lump, and every
+   unit can be burned back for its share of whatever has not been streamed yet.
+   No pool is created and no market exists - the burn IS the price, which is
+   why the form has four fields and no notion of slippage, supply or valuation.
+
+   WHY THE CALLDATA IS A TEMPLATE AND NOT AN ENCODER. safeSummonDAICO takes
+   four structs, and all four are static tuples, so they sit inline in the head
+   - fifty-two words before the first byte of a string. Of those fifty-two,
+   every governance word is a constant of this format: the same quorum, the
+   same threshold, the same seven zeros where a share sale would go, the same
+   eight where an LP seed would. A general tuple encoder would spend a
+   kilobyte of page teaching the dapp to say numbers it can never vary. So the
+   head is written out as it is, and only the seven words that can differ - the
+   offsets, the salt, and the tap's budget, beneficiary and rate - are spliced.
+   What the form can change is exactly what appears as a variable below. */
+const CSUM="0x00000000004473e1f31C8266612e7FD5504e6f2a";
+const CMSUM="0x0000000000330B8df9E3bc5E553074DA58eE9138";
+const CIMPL="643a45b599d81be3f3a68f37eb3de55ff10673c1";
+const CRND="0x000000000011C799980827F52d3137b4abD6E654";
+const COFF="0x000000A4Ad929C9E108aD2B1D2fBeDe0C2Ae57e1";
+const CTAP="0x0000000060cdD33cbE020fAE696E70E7507bF56D";
+/* ShareOffering keys a sale to a mint sentinel. address(1007) mints loot;
+   the DAO's own address would mint shares, and shares carry the vote. */
+const CLOOT="0x00000000000000000000000000000000000003ef";
+const SEL_DAICO="4e1e3b11",SEL_SETALLOW="da46098c",SEL_CONFIGURE="fca53be5";
+/* Ten million units, of which the founder's single share is one - so 9,999,999
+   are for sale and the raise comes to the number on the form. Shares and loot
+   are counted apart, so the loot ceiling is the sellable amount outright. */
+const CUNITS=10000000n,CONE=10n**18n,CMAX=(1n<<256n)-1n;
+/* Inline metadata is stored in the DAO's own storage rather than as contract
+   code, which costs roughly three times what the coin launcher's art does per
+   byte. A cause's mark is worth a few kilobytes, not twenty-four. */
+const CAU_MAX_ART=4096;
+const CAU_MAX_DAYS=3650;
+
+const cPad=h=>h.padEnd(Math.ceil(h.length/64)*64,"0");
+const cTail=h=>{h=strip0x(h);return encUint(h.length/2)+cPad(h)};
+/* One (address,uint256,bytes) element. The tuple is dynamic because of the
+   bytes, so its own head carries an offset of 0x60 to the calldata. */
+const cCall=(to,data)=>encAddr(to)+encUint(0)+encUint(96)+cTail(data);
+const cCalls=cs=>{let off=cs.length*32,head="",tail="";
+for(const c of cs){head+=encUint(off);off+=c.length/2;tail+=c}
+return encUint(cs.length)+head+tail};
+
+/* The DAO's address, known before it exists: the summoner CREATE2s a minimal
+   proxy under a salt derived from the founding holders. It has to be known,
+   because the sale is configured against it inside the very transaction that
+   creates it. */
+/* The loot token's address, which is a CREATE2 child of the DAO itself: salt is
+   bytes32(bytes20(dao)) and the only thing separating loot from shares is the
+   implementation in the proxy. Derived rather than read, because the receipt has
+   to name the token in the same transaction that creates it. */
+const CLIMPL="6f1f2af76a3add953277e9f369242697c87bc6a5";
+const cProxy=impl=>strip0x(keccak(hexToBytes(
+"602d5f8160095f39f35f5f365f5f37365f73"+impl+"5af43d5f5f3e6029573d5ffd5b3d5ff3")));
+const cLoot=dao=>{const d=strip0x(dao).toLowerCase();
+return "0x"+keccak(hexToBytes("ff"+d+d+"0".repeat(24)+cProxy(CLIMPL))).slice(26)};
+const cPredict=(owner,salt)=>{
+const inner=encUint(96)+encUint(160)+strip0x(salt)
++encUint(1)+encAddr(owner)+encUint(1)+encUint(CONE);
+const ss=strip0x(keccak(hexToBytes(inner)));
+const ih=cProxy(CIMPL);
+return "0x"+keccak(hexToBytes("ff"+strip0x(CMSUM)+ss+ih)).slice(26);
+};
+
+const encCause=(name,sym,uri,salt,owner,ben,dao,goal,rate,price,deadline,cap)=>{
+const T=new TextEncoder(),Z=encUint(0);
+const dyn=[lnTail(T.encode(name)),lnTail(T.encode(sym)),lnTail(T.encode(uri)),
+encUint(1)+encAddr(owner),encUint(1)+encUint(CONE),encUint(0),
+cCalls([
+/* Both calls run from the DAO's own context during init: setAllowance is
+   onlyDAO, and configure keys the sale to msg.sender, so the DAO has to be the
+   one making them. That costs no extra transaction and no extra signature. */
+cCall(dao,SEL_SETALLOW+encAddr(COFF)+encAddr(CLOOT)+encUint(CMAX)),
+cCall(COFF,SEL_CONFIGURE+encAddr(CLOOT)+encAddr(ZERO)+encUint(price)
++encUint(deadline)+encUint(cap))])];
+/* proposalThreshold, proposalTTL, timelockDelay, quorumAbsolute, then seventeen
+   words of features this format does not use: no futarchy, no share sale, no
+   auto-burn, no rollback guardian, nothing locked. */
+const cfg=encUint(CONE)+encUint(604800)+encUint(172800)+encUint(CONE)+Z.repeat(17);
+/* The tap. Budget is the whole goal and the rate spends it over the same
+   window backing is open for, so "runs for 30 days" is one clock said twice. */
+const tap=encAddr(CTAP)+Z+encUint(goal)+encAddr(ben)+encUint(rate);
+let off=52*32,heads=[],tail="";
+for(const d of dyn){heads.push(encUint(off));off+=d.length/2;tail+=d}
+return "0x"+SEL_DAICO
++heads[0]+heads[1]+heads[2]
++encUint(1000)+encUint(1)+encAddr(CRND)+strip0x(salt)
++heads[3]+heads[4]+heads[5]
++cfg+Z.repeat(7)+tap+Z.repeat(8)+heads[6]+tail;
+};
+
+/* Metadata as a data: URI, held in the DAO's storage. There is no pinning
+   service in this page and there will not be one: a cause that depends on a
+   gateway staying up is a cause with an off switch somebody else holds. */
+const cauURI=(name,sym)=>{
+let img="";
+if(lnArtBytes){let s="";for(const x of lnArtBytes)s+=String.fromCharCode(x);
+img="data:"+MIME_NAME[lnArtMime]+";base64,"+btoa(s)}
+return "data:application/json,"+encodeURIComponent(
+JSON.stringify({name,symbol:sym,image:img,launchType:"cause"}));
+};
+
+/* What the form is worth, read once so the preview and the transaction cannot
+   disagree. Returns null when the numbers are not yet usable. */
+function cauTerms(){
+const g=String(lnGoal.value||"").replace(/[, ]/g,"").trim();
+const d=String(lnDays.value||"").replace(/[, ]/g,"").trim();
+if(!/^\d+(\.\d+)?$/.test(g)||!/^\d+(\.\d+)?$/.test(d))return null;
+let goal;try{goal=parseUnits(g,18)}catch{return null}
+const secs=BigInt(Math.round(Number(d)*86400));
+if(goal<=0n||secs<3600n||Number(d)>CAU_MAX_DAYS)return null;
+/* Integer division floors, and a price of zero would mint the whole ceiling
+   to whoever called first, for nothing. */
+const price=goal/CUNITS;
+if(price<=0n)return null;
+/* TapVest pays min(rate * elapsed, budget, treasury), so a rate of zero would
+   strand the raise in the treasury forever. */
+/* THE RELEASE CLOCK IS NOT THE RAISE CLOCK, and conflating them was a real
+   bug. TapVest accrues from the moment of the summon on wall-clock time,
+   never from when the money turns up - so vesting over the raise window means
+   the whole budget is claimable exactly when backing closes, and a backer who
+   arrives late can be drained the instant they arrive. The release therefore
+   runs well past the raise, and the difference is what the burn is worth. */
+const rate=goal/BigInt(lnVest.value)||1n;
+return{goal,secs,price,rate,cap:(CUNITS-1n)*CONE};
+}
+
+const lnKindQuote=()=>lnKind.value==="cause"?cauQuote():lnQuote();
+function cauQuote(){
+lnGo.textContent=account?"Launch":"Connect Wallet";
+const t=cauTerms();
+if(!t){lnNote.textContent="";return}
+const per=(+formatUnits(t.price,18));
+lnNote.textContent=`1 ETH backs ${trimNum(1/per)} units`
++` · ${trimNum(+formatUnits(t.rate*86400n,18))} ETH a day reaches you over `
++lnVest.options[lnVest.selectedIndex].textContent
++` · backers burn back for the rest`
++(lnArtBytes?` · logo ${(lnArtBytes.length/1024).toFixed(1)} KB`:"");
+lnNote.style.color="";
+}
+
+/* Coin fields and cause fields share one panel, because they are one decision
+   made two ways rather than two products. Name, symbol and logo are asked once
+   and mean the same thing either way. */
+function cauKind(){
+const on=lnKind.value==="cause";
+for(const el of [lnMktL,lnSupplyL,lnMcapL,lnAllocL])el.classList.toggle("hide",on);
+for(const el of [lnGoalL,lnDaysL,lnVestL])el.classList.toggle("hide",!on);
+/* The header names what is being made. Leaving it reading "Launch a coin"
+   over a goal and a deadline was the single most confusing thing on the panel:
+   every other word agreed it was a cause and the heading did not. */
+lnTitle.textContent=on?"Launch a cause":"Launch a coin";
+lnSub.textContent=on?"refundable until you spend it"
+:"you earn 0.4% of every trade, forever";
+/* Placeholders are examples, and an example of a cause is not a cat. */
+lnName.placeholder=on?"Feed Ducks":"Zero Cat";
+lnSym.placeholder=on?"DUCK":"ZCAT";
+rc.placeholder=on?"Beneficiary — defaults to you":"Creator — defaults to you";
+rc.title=on?"Who the ether streams to. Leave blank and it is you. Worth setting to a multisig if the cause has one."
+:"Who the token belongs to: receives the creator allocation, collects the creator share of trading fees for the life of the token, and may edit its name, symbol and logo. Leave blank and it is you. Worth setting to a multisig if the project has one.";
+stat.textContent="";
+on?cauQuote():lnQuote();
+}
+
+async function cauGo(){
+const name=lnName.value.trim(),sym=lnSym.value.trim().toUpperCase();
+if(!name||!sym)throw Error("A name and a symbol, please.");
+const utf8=v=>new TextEncoder().encode(v).length;
+if(utf8(name)>64)throw Error(`That name is ${utf8(name)} bytes and the limit is 64.`);
+if(utf8(sym)>16)throw Error(`That symbol is ${utf8(sym)} bytes and the limit is 16.`);
+if(lnArtBytes&&lnArtBytes.length>CAU_MAX_ART)
+throw Error(`A cause's logo is stored in the DAO itself, so it is capped at 4 KB. `
++`That one is ${(lnArtBytes.length/1024).toFixed(1)} KB — pick something simpler.`);
+const t=cauTerms();
+if(!t)throw Error("A goal in ether, and how long it runs for — at least an hour, at most ten years.");
+/* TWO DIFFERENT PEOPLE, and conflating them handed the whole electorate away.
+   `owner` is where the ether streams - a multisig, a treasury, someone else
+   entirely. The founding share is not that: it is bought with the launcher's
+   own ether at the price a backer pays, and it carries the only vote the DAO
+   has. It belongs to whoever signed this transaction. */
+const ben=await lnOwner();
+const owner=account;
+const salt=wnSecret();
+const dao=cPredict(owner,salt);
+const deadline=BigInt(Math.floor(Date.now()/1000))+t.secs;
+stat.textContent="Launching…";
+const req={from:account,to:CSUM,
+/* The founder's one share is bought at the same price a backer pays, so their
+   claim on the treasury is the same shape as everyone else's. */
+value:"0x"+t.price.toString(16),
+data:encCause(name,sym,cauURI(name,sym),salt,owner,ben,dao,t.goal,t.rate,t.price,deadline,t.cap)};
+await rpc(C,[req,L]);
+await waitTx(await sendTx([req]));sGot();
+lnArtBytes=null;lnArtNote.textContent="none";lnArtNote.classList.remove("set");
+lnPrev.classList.remove("set");lnArt.value="";
+const loot=cLoot(dao);
+try{const ix=await addCustomToken(loot);TOKENS[ix].cause=1;rebuild()}catch{}
+stat.innerHTML=`${safeSym(sym)} is raising at `
++`<a href="https://etherscan.io/token/${loot}" target="_blank" rel="noreferrer">${short(loot)}</a>`
++` · ${trimNum(+formatUnits(t.goal,18))} ETH over ${trimNum(Number(t.secs)/86400)} days`
++` · backers can burn back for whatever you have not drawn`;
+}
 let lnMode=false,lnArtBytes=null,lnArtMime=0;
 function lnSet(on){
+/* Leaving the cause line up here would leave a live Burn - an irreversible
+   ragequit - clickable on a panel that no longer shows the cause it belongs to. */
+if(on){cbEl.classList.add("hide");cbDao="";cbAmt=0n;cbReady=0n}
+
 lnMode=on;
 if(on&&lqMode)lqSet(false);
 if(on&&wnMode)wnSet(false);
@@ -5269,7 +5819,7 @@ rc.title=on?"Who the token belongs to: receives the creator allocation, collects
 rc.placeholder=on?"Creator — defaults to you"
 :"Recipient (optional) — 0x or .eth/.(g)wei";
 stat.textContent="";lnNote.textContent="";
-if(on)lnQuote();
+if(on)cauKind();
 }
 function lnQuote(){
 lnGo.textContent=account?"Launch":"Connect Wallet";
@@ -5336,6 +5886,7 @@ try{
 const r=await lnPrepare(f);
 lnArtBytes=r.bytes;lnArtMime=r.mime;
 lnArtNote.textContent=`${(r.bytes.length/1024).toFixed(1)} KB`;
+lnKindQuote();
 lnArtNote.classList.add("set");
 let b64="";for(const x of r.bytes)b64+=String.fromCharCode(x);
 lnPrev.src="data:"+MIME_NAME[r.mime]+";base64,"+btoa(b64);
@@ -5361,7 +5912,13 @@ if(/\d/.test(out[i])&&++seen===digitsBefore){pos=i+1;break}
 try{el.setSelectionRange(pos,pos)}catch{}
 };
 lnSupply.oninput=()=>{lnGroup(lnSupply);lnQuote()};
-for(const el of [lnName,lnSym,lnMcap,lnAlloc])el.oninput=lnQuote;
+/* One dispatcher. Name, symbol and the logo are shared by both kinds, so wiring
+   them straight to lnQuote replaced the cause preview with coin economics
+   computed from the hidden Supply and Market-cap fields. */
+for(const el of [lnName,lnSym,lnMcap,lnAlloc])el.oninput=lnKindQuote;
+lnKind.onchange=cauKind;
+for(const el of [lnGoal,lnDays])el.oninput=cauQuote;
+lnVest.onchange=cauQuote;
 ln.onclick=()=>{sBlip();lnSet(!lnMode)};
 let wnMode=false,wnQ=null,wnSeq=0,wnTimer=0,wnRound=0n,wnStampTry=0;
 const wnOk=l=>/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(l)&&new TextEncoder().encode(l).length<256;
@@ -5469,6 +6026,10 @@ for(const el of [document.querySelector(".panel"),rcvPanel])if(el)el.classList.t
 for(const el of [wnPanel,wnGo,wnRollPanel])el.classList.toggle("hide",!on);
 for(const el of [rc,rcvEl])if(el)el.classList.toggle("hide",on)};
 function wnSet(on){
+/* Leaving the cause line up here would leave a live Burn - an irreversible
+   ragequit - clickable on a panel that no longer shows the cause it belongs to. */
+if(on){cbEl.classList.add("hide");cbDao="";cbAmt=0n;cbReady=0n}
+
 wnMode=on;
 if(on&&lqMode)lqSet(false);
 if(on&&lnMode)lnSet(false);
@@ -5692,6 +6253,7 @@ if(!account)return void connect();
 lnGo.disabled=true;
 try{
 await checkWallet();
+if(lnKind.value==="cause")return await cauGo();
 const name=lnName.value.trim(),sym=lnSym.value.trim().toUpperCase();
 if(!name||!sym)throw Error("A name and a symbol, please.");
 const utf8=v=>new TextEncoder().encode(v).length;
@@ -5710,20 +6272,7 @@ const pooled=supply-supply*BigInt(alloc)/10000n;
 if(pooled<LN_MIN_POOLED)throw Error("Too little supply reaches the pool to price a market.");
 if(pooled>mcap*10n**36n)throw Error("That supply is too large for that opening valuation \u2014 raise the valuation.");
 if(pooled*10n**24n<mcap)throw Error("That opening valuation is too large for that supply \u2014 lower it, or mint more.");
-let owner=account;
-const rv=rc.value.trim();
-if(rv){
-if(/^0x[0-9a-fA-F]{40}$/.test(rv)){
-if(/^0x0{40}$/i.test(rv))throw Error("The creator cannot be the zero address.");
-owner=rv;
-}else if(/\.(g?wei|eth)$/i.test(rv)){
-rcvEl.textContent="resolving\u2026";
-let r="";try{r=await nameFwd(rv.toLowerCase())}catch{r=""}
-rcvEl.textContent="";
-if(!r||/^0x0{40}$/i.test(r))throw Error("That name is not registered.");
-owner=r;
-}else throw Error("The creator must be an address, or a .eth / .wei name.");
-}
+const owner=await lnOwner();
 stat.textContent="Launching\u2026";
 const req={from:account,to:PLAUNCH,value:"0x0",
 data:encLaunch(name,sym,"",supply,BigInt(alloc),mcap,owner,lnArtBytes,lnArtMime)};

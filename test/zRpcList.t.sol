@@ -40,8 +40,8 @@ contract zRpcListTest is Test {
     }
 
     function _newZSwap() internal returns (zSwap) {
-        address[14] memory p;
-        for (uint256 k; k < 14; ++k) {
+        address[16] memory p;
+        for (uint256 k; k < 16; ++k) {
             p[k] = _writeChunk(bytes.concat(bytes32(uint256(k))));
         }
         return new zSwap(admin, address(0), p);
@@ -68,14 +68,14 @@ contract zRpcListTest is Test {
         );
         assertEq(
             z.SOLVERS(),
-            0xC90137c6754d7134b6721D3a953adBf9e2DB3F09,
+            0x1Dfbb2f41B596F72187370469074C46de60dA2e3,
             "the version points at a different solver roster than the deployed one"
         );
         // The pin that matters most: the page must refuse any lane whose
         // adapter is not this, or the roster gets to choose what code runs.
         assertEq(
             z.SOLVER_FILL(),
-            0x7C310e23fB5EA04414Cd2664F84be4749dF86488,
+            0xA9ff2ffF37576304eCb108E313e9364Bc92412a1,
             "the version pins a different adapter than the deployed one"
         );
     }

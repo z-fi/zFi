@@ -38,7 +38,7 @@ const FIXTURES = path.join(ROOT, 'test', 'fixtures', 'quoter.json');
 const TAPE_FIXTURES = path.join(ROOT, 'test', 'fixtures', 'tape.json');
 
 const EIP170 = 24576;
-const CHUNKS = 12;
+const CHUNKS = 16;
 
 const html = fs.readFileSync(HTML_PATH, 'utf8');
 const bytes = Buffer.byteLength(html, 'utf8');
@@ -312,7 +312,7 @@ check('element ids addressed by string exist in the markup', () => {
 // top-level code is inert and the pure helpers become reachable.
 const HELPERS = [
   'decQ', 'parseUnits', 'formatUnits', 'trimAmt', 'maxAmt', 'merge', 'hasAtomicBatch', 'encCalls',
-  'encUint', 'encAddr', 'pad32', 'strip0x', 'keccak', 'namehash',
+  'encUint', 'encAddr', 'pad32', 'strip0x', 'keccak', 'namehash', 'nftIdIn', 'weiName',
   'decodeString', 'idTok', 'idDelay',
   'decViewPage', 'planBookExactIn', 'planBookExactOut', 'decBar', 'rollUp', 'mergeTapes',
   'encFillPlan', 'encFillPlanAndSwap', 'encSnwap', 'encSweep',
@@ -425,7 +425,7 @@ if (exported) {
       'wallet_switchEthereumChain', 'wallet_sendCalls', 'wallet_getCapabilities',
       'wallet_getCallsStatus', 'wallet_revokePermissions'];
     const toNode = ['eth_call', 'eth_getCode', 'eth_gasPrice', 'eth_getBalance',
-      'eth_blockNumber', 'eth_getTransactionReceipt'];
+      'eth_blockNumber', 'eth_getTransactionReceipt', 'eth_getBlockByNumber'];
     for (const m of toWallet) if (!wcToWallet(m)) throw Error(`${m} would leave the wallet`);
     for (const m of toNode) if (wcToWallet(m)) throw Error(`${m} would go to the wallet, not the node`);
     // Everything the page actually calls must be classified deliberately.
@@ -436,14 +436,154 @@ if (exported) {
     return `${toWallet.length} to wallet, ${toNode.length} to node`;
   });
 
-  check('the page makes no network call outside the WalletConnect read path', () => {
+  // The mode toggles are styled by an ID LIST, not a class, so a new one is
+  // styled by being added to every rule by hand. Miss one and the button does
+  // not fall back to something plain - it falls through to the generic button
+  // style and renders as though it were already active, which is exactly what
+  // happened when the names tile was added.
+  // A .wei name IS its token id, so the orderbook takes either. The vector is
+  // namehash("zswap.wei"), read off mainnet with the registry's own computeId -
+  // if the page's translation drifts from that, a seller lists a token nobody
+  // owns and the order can never fill.
+  check('a .wei name translates to the token id the registry computes', () => {
+    const { nftIdIn, weiName } = exported;
+    const WNS_ADDR = '0x0000000000696760E15f265e828DB644A0c242EB';
+    const ZSWAP = '95757810246727142776820935661369213788604158333963580832835135607957837739243';
+    if (nftIdIn(WNS_ADDR, 'zswap.wei') !== ZSWAP) throw Error('a full name did not translate');
+    if (nftIdIn(WNS_ADDR, 'zswap') !== ZSWAP) throw Error('a bare label did not translate');
+    if (nftIdIn(WNS_ADDR, 'ZSwap.Wei') !== ZSWAP) throw Error('case is not folded before hashing');
+    if (nftIdIn(WNS_ADDR, ZSWAP) !== ZSWAP) throw Error('a numeric id did not pass through');
+    if (nftIdIn(WNS_ADDR, '') !== '') throw Error('empty must stay empty — it means the whole collection');
+    // Against any other collection a name is a typo, not an id: translating it
+    // would list a token id that has nothing to do with what was typed.
+    if (nftIdIn('0x' + '11'.repeat(20), 'zswap.wei') !== 'zswap.wei')
+      throw Error('a name was translated for a collection that is not the registry');
+    if (weiName('zswap') !== 'zswap.wei' || weiName('zswap.wei') !== 'zswap.wei')
+      throw Error('weiName is not idempotent');
+    return 'name, bare label, mixed case and id all agree with mainnet';
+  });
+
+  // The READMEs are the deploy runbook: they name the chunk count, the file
+  // range to deploy and the constructor arity. `build-zSwap.mjs` refreshes the
+  // BYTE COUNTS in them but not this prose, so it silently kept saying
+  // fourteen chunks and six data contracts long after the count was thirteen -
+  // in the same paragraphs whose sizes it had just updated. Somebody following
+  // it would deploy the wrong number of contracts.
+  check('the deploy runbook agrees about the chunk count', () => {
+    const WORDS = { 6: 'six', 12: 'twelve', 13: 'thirteen', 14: 'fourteen', 15: 'fifteen' };
+    const want = WORDS[CHUNKS];
+    const bad = [];
+    for (const f of ['README.md', 'docs/src/README.md']) {
+      const txt = fs.readFileSync(path.join(ROOT, f), 'utf8');
+      for (const m of txt.matchAll(/chunk(\d+)/g))
+        if (Number(m[1]) !== 1 && Number(m[1]) !== CHUNKS) bad.push(`${f}: chunk${m[1]}`);
+      // `chunk1..14` - the upper bound of a range is not preceded by the word.
+      for (const m of txt.matchAll(/chunk\d+\s*\.\.\s*(\d+)/g))
+        if (Number(m[1]) !== CHUNKS) bad.push(`${f}: chunk range ends at ${m[1]}`);
+      // `DATA1`…`DATA13` carries backticks and an ellipsis between the two.
+      for (const m of txt.matchAll(/DATA1\D{0,6}DATA(\d+)/g))
+        if (Number(m[1]) !== CHUNKS) bad.push(`${f}: DATA1…DATA${m[1]}`);
+      // Sentence-scoped rather than a proximity window: "unless all fourteen
+      // are present, non-empty and distinct" puts thirty characters between
+      // the count and the noun, which a short window walks straight past.
+      for (const sent of txt.split(/(?<=[.!?])\s+|\n/)) {
+        if (!/chunk|data contract|immutable|constructor/i.test(sent)) continue;
+        for (const [n, w] of Object.entries(WORDS)) {
+          if (Number(n) === CHUNKS) continue;
+          if (new RegExp(`\\b${w}\\b`, 'i').test(sent))
+            bad.push(`${f}: "${w}" in "${sent.trim().slice(0, 60)}…"`);
+        }
+      }
+    }
+    if (bad.length) throw Error(`the runbook contradicts CHUNKS=${CHUNKS}:\n      ${bad.join('\n      ')}`);
+    return `both READMEs agree on ${want} (${CHUNKS})`;
+  });
+
+  check('the game keeps its score out of reach of the console', () => {
+    // `sc = 999999` in devtools does nothing only because the game lives inside
+    // invPlay(): the assignment makes an unrelated global. Hoist any of this to
+    // the top level for tidiness and the cheapest cheat there is opens up again,
+    // silently, with every test still passing.
+    const from = html.indexOf('function invPlay');
+    const to = html.indexOf('invOff=quit;born();hud2();', from);
+    if (from < 0 || to < 0) throw Error('could not find the game body');
+    for (const name of ['sc', 'lv', 'wv', 'tEnd', 'minted', 'runId']) {
+      const inside = new RegExp(`(?:let|const|var)[^;\\n]*\\b${name}\\s*=`).test(html.slice(from, to));
+      if (!inside) throw Error(`${name} is no longer declared inside the game`);
+      // Whether it is ALSO reachable as a global is a runtime property, and
+      // the page is stored stripped so line position proves nothing here.
+      // test/browser/game-cheat.test.mjs asserts the reachability directly.
+    }
+  });
+
+  check('the game does not shadow the RPC method constants', () => {
+    // `const C=6` for invader columns shadowed `const C="eth_call"`, so the
+    // score mint called `request({method: 6})` and every wallet refused it with
+    // "args.method must be a non-empty string". The page evaluates fine, the
+    // jsdom suite passes, and the fork simulation passed too - because lifting
+    // mint() out of the game scope is exactly what hides this.
+    const short = [...html.matchAll(/const ([A-Z])="(eth_[a-z]+|latest|wallet_[a-zA-Z]+)"/g)]
+      .map(m => m[1]);
+    if (!short.length) throw Error('expected the short RPC constants (C, S, L, I)');
+    const from = html.indexOf('function invPlay');
+    const to = html.indexOf('invOff=quit;born();hud2();', from);
+    if (from < 0 || to < 0) throw Error('could not find the game body');
+    const game = html.slice(from, to);
+    for (const name of short) {
+      const decl = new RegExp(`(?:const|let|var)[^;\\n]*?\\b${name}\\s*=`);
+      if (decl.test(game)) {
+        throw Error(`the game declares ${name}, which shadows the RPC constant of that name`);
+      }
+    }
+  });
+
+  check('every mode toggle shares the toggle styling', () => {
+    // Every control in the meta row, not just the mode toggles: the sound
+    // button fell through the SAME way the names tile did, because it is a
+    // second ID list and nothing checks a new id is in it.
+    const toggles = ['lq', 'ln', 'wn'];
+    const metaCtl = ['th', 'lk', 'lq', 'ln', 'wn'];
+    const css = [...html.matchAll(/<style>([\s\S]*?)<\/style>/g)].map(m => m[1]).join('\n');
+    if (!css) throw Error('found no stylesheet in the page');
+    // `#lq` must end the identifier here: `#lqPxRow` is a different element,
+    // and matching it would drag JS string literals in as if they were rules.
+    const rules = [...css.matchAll(/#lq(?![\w-])[^{}]*\{[^}]*\}/g)].map(m => m[0]);
+    if (!rules.length) throw Error('found no #lq rules at all — the selector shape changed');
+    const missing = [];
+    for (const rule of rules) {
+      for (const id of toggles) if (!rule.includes('#' + id)) missing.push(`${id} in ${rule.slice(0, 48)}…`);
+    }
+    if (missing.length) throw Error(`a toggle is missing from its own styling:\n      ${missing.join('\n      ')}`);
+
+    // The shared meta-row rules: whatever `#th` is in, every sibling must be.
+    const shared = [...css.matchAll(/#th(?![\w-])[^{}]*\{[^}]*\}/g)].map(m => m[0]);
+    const gaps = [];
+    for (const rule of shared) {
+      for (const id of metaCtl) if (!rule.includes('#' + id)) gaps.push(`${id} in ${rule.slice(0, 44)}…`);
+    }
+    if (gaps.length) throw Error(`a meta control is missing from a shared rule:\n      ${gaps.join('\n      ')}`);
+    return `${toggles.length} toggles across ${rules.length} rules, ${metaCtl.length} controls across ${shared.length} shared`;
+  });
+
+  check('every fetch lives in the shared read layer, and signing never reaches it', () => {
     const hits = [...html.matchAll(/\bfetch\s*\(/g)].length;
     if (hits !== 1) throw Error(`expected exactly one fetch(, found ${hits}`);
-    const fn = html.match(/async function wcRpc\(method,params\)\{[\s\S]*?\n\}/);
-    if (!fn || !/\bfetch\s*\(/.test(fn[0])) throw Error('the only fetch is not the one inside wcRpc');
+    const fn = html.match(/const httpRead=async\(u,method,params\)=>\{[\s\S]*?\nconst j=/);
+    if (!fn || !/\bfetch\s*\(/.test(fn[0])) throw Error('the only fetch is not the one inside httpRead');
     if (/XMLHttpRequest|EventSource|navigator\.sendBeacon/.test(html))
       throw Error('another network primitive appeared in the page');
-    return 'one fetch, inside wcRpc';
+    // The read layer serves walletless visitors through curated public nodes.
+    // Those nodes must never learn a signature, a transaction, or an account:
+    // the only methods nodeRead may carry are reads, and a CONNECTED user's
+    // reads stay with the wallet's provider entirely - the pool is the
+    // walletless path, never a fallback appended to someone's provider.
+    const guard = html.match(/const isSign=m=>m===S\|\|m\.indexOf\("wallet_"\)===0\|\|m==="eth_requestAccounts"\|\|m==="eth_accounts"\|\|WC_SIGN\.indexOf\(m\)>=0;/);
+    if (!guard) throw Error('the signing/account-method guard is missing from the read wiring');
+    if (!/return e\?e\.request\(\{method,params\}\)\s*\r?\n?:isSign\(method\)\?Promise\.reject\(/.test(html))
+      throw Error('rpc() must answer provider reads with the provider alone - no pool fallback for connected users');
+    if (/nodeRead\("eth_send|nodeRead\(S\b/.test(html))
+      throw Error('nodeRead is called with a signing method directly');
+    return 'one fetch, inside httpRead; pool is walletless-only and refuses signing and accounts';
   });
 
   check('WalletConnect protocol tags match the spec', () => {

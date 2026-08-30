@@ -4,14 +4,14 @@ pragma solidity ^0.8.36;
 
 /// @title zSwap v0.3
 /// @notice Permanently-deployed onchain HTML swap dapp for Ethereum mainnet.
-/// @dev Architecture: the HTML payload (326104 B) is the runtime bytecode of
+/// @dev Architecture: the HTML payload (355356 B) is the runtime bytecode of
 ///      14 data contracts, deployed separately and passed to the constructor.
 ///      html() reassembles them via EXTCODECOPY with proper ABI encoding
 ///      (offset + length + padded data) so any RPC client decodes directly.
 ///      request() implements ERC-5219 for first-class web3:// gateway
-///      compatibility (ERC-4804). Splitting the page across 14 data contracts
+///      compatibility (ERC-4804). Splitting the page across 15 data contracts
 ///      means EIP-170 caps each chunk, not the dapp
-///      (24576 B per chunk, 17960 B headroom).
+///      (24576 B per chunk, 13284 B headroom).
 ///
 ///      The chunk count is fixed in the constructor arity and the page is
 ///      immutable, so it is sized to ceil(len/14) with headroom for a release
@@ -206,6 +206,19 @@ contract zSwap {
     ///      moves the address this version deploys to.
     address public immutable DATA14;
 
+    /// @dev A fifteenth chunk. The cause launcher and the burn-back line took
+    ///      the page past what fourteen hold. Same arithmetic as every count
+    ///      before it, and the same cost: a new arity is a new address.
+    address public immutable DATA15;
+    /// @dev A sixteenth. The solver lanes and the venue comparison took it past
+    ///      fifteen within the same week fifteen was adopted, which is the more
+    ///      useful fact: this number has moved three times and will move again.
+    ///      It is not a size limit anyone chose - it is ceil(page / 24576) - so
+    ///      the only real guard is that `script/build-zSwap-chunks.mjs` and
+    ///      this arity are checked against each other before a deploy rather
+    ///      than after one. Sixteen leaves ~20KB, which is room for a while.
+    address public immutable DATA16;
+
     /// @dev A missing or duplicated data chunk would permanently serve broken HTML.
     error InvalidData();
 
@@ -239,7 +252,7 @@ contract zSwap {
     ///      and beat the on-chain best by that margin before anything is
     ///      offered. zQuoter, the precision pools and the orderbook are never
     ///      a fallback this switches to - they are a lane that always runs.
-    address public constant SOLVERS = 0xC90137c6754d7134b6721D3a953adBf9e2DB3F09;
+    address public constant SOLVERS = 0x1Dfbb2f41B596F72187370469074C46de60dA2e3;
 
     /// @notice The ONE adapter the page will execute a solver's route through.
     ///
@@ -261,7 +274,7 @@ contract zSwap {
     ///      zSolverFill itself has no owner, no pause and no upgrade path, and
     ///      routes every untrusted call through a stateless executor that
     ///      holds no allowance from anyone. See src/utils/zSolverFill.sol.
-    address public constant SOLVER_FILL = 0x7C310e23fB5EA04414Cd2664F84be4749dF86488;
+    address public constant SOLVER_FILL = 0xA9ff2ffF37576304eCb108E313e9364Bc92412a1;
 
     // ------------------------------------------------------------- LINEAGE
     //
@@ -382,14 +395,14 @@ contract zSwap {
     ///      `abi.encode(dao, previous, chunks)` is byte-identical to the
     ///      positional form every existing deploy artifact already appends.
     ///      It also means the next change to the count touches one number here
-    ///      instead of a parameter list, a temporary array and 15 assignments.
-    constructor(address dao, address previous, address[14] memory d) {
+    ///      instead of a parameter list, a temporary array and 16 assignments.
+    constructor(address dao, address previous, address[16] memory d) {
         if (previous != address(0) && msg.sender != previous) revert InvalidData();
         DAO = dao;
         PREVIOUS = previous;
-        for (uint256 i; i != 14; ++i) {
+        for (uint256 i; i != 16; ++i) {
             if (d[i].code.length == 0) revert InvalidData();
-            for (uint256 j = i + 1; j != 14; ++j) {
+            for (uint256 j = i + 1; j != 16; ++j) {
                 if (d[i] == d[j]) revert InvalidData();
             }
         }
@@ -407,6 +420,8 @@ contract zSwap {
         DATA12 = d[11];
         DATA13 = d[12];
         DATA14 = d[13];
+        DATA15 = d[14];
+        DATA16 = d[15];
     }
 
     /// @notice Deploy the next version, at an address known before it exists.
@@ -566,15 +581,22 @@ contract zSwap {
     /// cursor advances by construction, so the tenth chunk lands after the
     /// ninth for the same reason the second lands after the first.
     function _html() private view returns (string memory s) {
-        address[14] memory d = [
+        address[16] memory d = [
             DATA1, DATA2, DATA3, DATA4, DATA5, DATA6, DATA7, DATA8, DATA9, DATA10, DATA11, DATA12,
-            DATA13, DATA14
+            DATA13, DATA14, DATA15, DATA16
         ];
         assembly ("memory-safe") {
             s := mload(0x40)
             let body := add(s, 0x20)
             let at := body
-            for { let i := 0 } lt(i, 14) { i := add(i, 1) } {
+            // The bound is the arity, and it is a LITERAL because assembly has
+            // no view of `d.length` - which makes it the one place a chunk can
+            // be dropped without anything failing to compile. It has happened:
+            // this read 15 while the array above held 16, and `html()` served a
+            // page short of its last slice. If you change the count, change it
+            // here, and let the length assertions in test/zSwap.t.sol catch you
+            // if you do not.
+            for { let i := 0 } lt(i, 16) { i := add(i, 1) } {
                 let a := mload(add(d, shl(5, i)))
                 let n := extcodesize(a)
                 extcodecopy(a, at, 0, n)

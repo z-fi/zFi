@@ -72,6 +72,9 @@ contract zSolverExec {
     ///      holding nothing, which is the invariant the whole split exists to
     ///      preserve - a balance left here is a balance the next arbitrary
     ///      call could hand to whoever asked for it.
+    /// @return got The `tokenOut` this route actually produced, measured here
+    ///         and RETURNED rather than left for the caller to infer from a
+    ///         balance. That distinction is the whole fix for the hole below.
     function run(
         address target,
         address spender,
@@ -79,7 +82,7 @@ contract zSolverExec {
         uint256 amountIn,
         address tokenOut,
         bytes calldata data
-    ) public payable {
+    ) public payable returns (uint256 got) {
         if (msg.sender != FILL) revert NotFill();
 
         // SNAPSHOT BEFORE THE ROUTE RUNS, AND SWEEP ONLY THE DIFFERENCE. An
@@ -126,14 +129,14 @@ contract zSolverExec {
             if (dust != 0) tokenIn.safeTransfer(FILL, dust);
         }
         if (tokenOut != address(0)) {
-            uint256 got = tokenOut.balanceOf(address(this)) - outBefore;
+            got = tokenOut.balanceOf(address(this)) - outBefore;
             if (got != 0) tokenOut.safeTransfer(FILL, got);
             // Unspent ETH on a token-out route is change, and all of it goes
             // back: the caller sent it, and FILL returns it from there.
             uint256 eth = address(this).balance;
             if (eth != 0) FILL.safeTransferETH(eth);
         } else {
-            uint256 got = address(this).balance - outBefore;
+            got = address(this).balance - outBefore;
             if (got != 0) FILL.safeTransferETH(got);
         }
     }
@@ -308,14 +311,18 @@ contract zSolverFill {
         bool ethIn = tokenIn == ETH;
         if (msg.value != (ethIn ? amountIn : 0)) revert BadValue();
 
-        // Snapshot before anything moves. On the ETH-out path `msg.value` is
-        // zero by the check above - `tokenIn == tokenOut` is already rejected,
-        // so an ETH output implies a token input - which is what makes reading
-        // `address(this).balance` here correct rather than lucky.
-        uint256 before = _balance(tokenOut);
-
+        // MEASURE WHERE THE ROUTE CANNOT REACH. An earlier version took this
+        // contract's own `tokenOut` balance before and after, which looked
+        // equivalent and was not: `target` runs between those two reads and can
+        // simply transfer `tokenOut` straight here, so a route that swapped
+        // nothing could plant a wei, have it read as output, clear a bound of a
+        // wei, and commit whatever else the arbitrary call did. The executor's
+        // delta is the only number the route cannot forge - it is measured
+        // around the call, inside the contract the call runs as - so `held` is
+        // what `run` REPORTS, not what this balance says.
         if (!ethIn) tokenIn.safeTransferFrom(msg.sender, exec, amountIn);
-        zSolverExec(payable(exec)).run{value: msg.value}(target, spender, tokenIn, amountIn, tokenOut, data);
+        uint256 held =
+            zSolverExec(payable(exec)).run{value: msg.value}(target, spender, tokenIn, amountIn, tokenOut, data);
 
         // REFUND THE INPUT BEFORE MEASURING THE OUTPUT. Ordering, not
         // decoration: if `tokenIn` and `tokenOut` are two addresses over one
@@ -336,7 +343,6 @@ contract zSolverFill {
             if (back != 0) msg.sender.forceSafeTransferETH(back);
         }
 
-        uint256 held = _balance(tokenOut) - before;
         if (held == 0) revert Insufficient(0, minOut);
 
         // THE BOUND IS CHECKED WHERE THE USER IS. Measuring only what arrived

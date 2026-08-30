@@ -44,6 +44,12 @@ export const A = {
   ZROUTER: '0x000000000000FB114709235f1ccBFfb925F600e4',
   PERMIT2: '0x000000000022D473030F116dDEE9F6B43aC78BA3',
   MC3: '0xcA11bde05977b3631167028862bE2a173976CA11',
+  // Whatever a simulated safeSummonDAICO answers. The page never reads it.
+  CAUSE_DAO: '0x00000000000000000000000000000000da0da0da',
+  // ShareOffering — where a cause is bought, as the page pins it.
+  OFFERING: '0x000000A4Ad929C9E108aD2B1D2fBeDe0C2Ae57e1',
+  // TapVest — the singleton that releases a cause's vested ether.
+  TAPVEST: '0x0000000060cdD33cbE020fAE696E70E7507bF56D',
   SLOW: '0x000000000000888741B254d37e1b27128AfEAaBC',
   SLOW_GATE: '0xb8B546b93a82f4Aa6f0345142dF5679B659ef3D4',
   SB2: '0x000000dA7bb4B2A9E3e80e9A4D4157E26CA6189b',
@@ -292,6 +298,17 @@ export function encodeTapeBar({ bucket, open, high, low, close, volume, count = 
  * test set; anything unhandled throws loudly rather than returning zero, so a
  * silently-wrong fixture surfaces as a failure instead of an empty balance.
  */
+// Moloch's side of a cause: the loot token names its DAO, and the DAO names
+// the loot and shares back, which is the only way to tell cause loot from any
+// other contract that happens to publish a DAO() getter.
+// Moloch's mint sentinel for loot: address(1007).
+export const LOOT_SENTINEL = '0x00000000000000000000000000000000000003ef';
+
+const SEL_CAUSE = {
+  DAO: '98fabd3a', LOOT: '9b7b2ab0', SHARES: '03314efa',
+  RAGEQUIT: '29f64d1a',
+};
+
 export class MockChain {
   constructor(opts = {}) {
     this.chainId = opts.chainId ?? '0x1';
@@ -364,6 +381,8 @@ export class MockChain {
     // registry's own listing order.
     this.conviction = null;
     this.nftOwner = new Map();     // `${collection}:${id}` -> holder
+    // loot token -> {dao, shares, sharesSupply, lootSupply}, via setCause().
+    this.causes = new Map();
     // zSwap address -> what its `latest()` answers. Unset means the address is
     // its own tip: no successor, so the page has nothing to announce.
     this.lineage = new Map();
@@ -423,6 +442,39 @@ export class MockChain {
   }
 
   // -- state setters -------------------------------------------------------
+  /**
+   * A cause DAO and the loot token that claims against it.
+   *
+   * Registered by the LOOT address, because that is the only address the page
+   * ever starts from: a cause token arrives in the list like any other ERC20
+   * and has to identify itself. The DAO answers loot() and shares() so the
+   * page can confirm the claim runs both ways before it prices a burn.
+   */
+  setCause(loot, { dao, shares, sharesSupply = 0n, lootSupply = 0n, treasury = 0n,
+                   price = 0n, deadline = 0n, remaining = 0n,
+                   ratePerSec = 0n, lastClaim = 0n, tapBudget = 0n, beneficiary = A.ACCOUNT,
+                   /* What the sale actually SELLS and takes payment in. These
+                      default to the loot-for-ether shape the launcher makes,
+                      but a DAO may configure either differently — and hardcoding
+                      them here is exactly why the suite could not see a sale
+                      that mints shares being priced as if it minted loot. */
+                   saleToken = LOOT_SENTINEL, salePayToken = A.ZERO,
+                   cap = 9_999_999n * 10n ** 18n }) {
+    this.causes.set(loot.toLowerCase(), {
+      dao: dao.toLowerCase(), shares: shares.toLowerCase(),
+      sharesSupply: BigInt(sharesSupply), lootSupply: BigInt(lootSupply),
+      // The live sale, as ShareOffering holds it. `price` of 0 means no sale
+      // was ever configured, which is how a closed or unconfigured cause reads.
+      price: BigInt(price), deadline: BigInt(deadline), remaining: BigInt(remaining),
+      saleToken, salePayToken, cap: BigInt(cap),
+      // The tap: a rate, when it last paid out, and what the DAO still allows it.
+      ratePerSec: BigInt(ratePerSec), lastClaim: BigInt(lastClaim),
+      tapBudget: BigInt(tapBudget), beneficiary,
+    });
+    this.setNative(dao, treasury);
+    return this;
+  }
+
   setNative(who, wei) { this.native.set(who.toLowerCase(), BigInt(wei)); return this; }
   setErc20(token, holder, units) {
     this.erc20.set(`${token.toLowerCase()}:${holder.toLowerCase()}`, BigInt(units)); return this;
@@ -950,6 +1002,60 @@ export class MockChain {
       const body = '0x' + data.slice(8);
       const rows = this.pools.get(`${wordAddr(body, 0)}:${wordAddr(body, 1)}`) || [];
       return '0x' + u256(this.pairCount ?? rows.length);
+    }
+    /* SafeSummoner.safeSummonDAICO, simulated. The page pre-flights the launch
+       with an eth_call so a summon the chain would refuse costs nothing;
+       without an answer here that preflight throws and no cause is ever sent.
+       The page predicts the DAO address itself rather than reading this, so
+       what comes back only has to be well-formed. */
+    if (sel === '4e1e3b11') return '0x' + addrWord(A.CAUSE_DAO);
+    /* ShareOffering, which is where a cause is BOUGHT. Keyed by DAO, so the
+       fixture is found through the cause whose dao matches the argument. */
+    if (to === A.OFFERING.toLowerCase() && (sel === 'c6b9f06a' || sel === 'b399b0bc' || sel === 'cce7ec13')) {
+      if (sel === 'cce7ec13') return '0x';   // buy() is state-changing; this is the pre-flight
+      const dao = wordAddr('0x' + data.slice(8), 0).toLowerCase();
+      const c = [...this.causes.values()].find(x => x.dao === dao);
+      if (!c) return '0x' + u256(0);
+      if (sel === 'b399b0bc') return '0x' + u256(c.remaining);
+      // sales(dao) -> (token, payToken, deadline, price, cap)
+      return '0x' + addrWord(c.saleToken) + addrWord(c.salePayToken)
+        + u256(c.deadline) + u256(c.price) + u256(c.cap);
+    }
+    /* TapVest. The tap accrues but never moves on its own, so the page reads
+       `taps` and the DAO's allowance to work out what a claim would actually
+       pay - and reproduces TapVest's whole-second flooring while doing it. */
+    if (to === A.TAPVEST.toLowerCase()) {
+      if (sel === '1e83409a') return '0x' + u256(0);   // claim(dao) — pre-flight
+      if (sel === '6144452a') {                        // taps(dao)
+        const c = [...this.causes.values()].find(x => x.dao === wordAddr('0x' + data.slice(8), 0).toLowerCase());
+        if (!c) return '0x' + u256(0).repeat(4);
+        // (token, beneficiary, ratePerSec, lastClaim)
+        return '0x' + addrWord(A.ZERO) + addrWord(c.beneficiary ?? A.ACCOUNT)
+          + u256(c.ratePerSec ?? 0n) + u256(c.lastClaim ?? 0n);
+      }
+    }
+    /* A cause DAO and its loot, which have to be answered ahead of the pool
+       and ERC20 paths below: a loot token's totalSupply is neither a pool's
+       liquidity nor a seeded supply, and an address with no fixture code
+       answers '0x' down there, which the page would read as no cause at all. */
+    const asLoot = this.causes.get(to);
+    if (asLoot && sel === SEL_CAUSE.DAO) return '0x' + addrWord(asLoot.dao);
+    const asDao = [...this.causes.values()].find(c => c.dao === to);
+    if (asDao) {
+      if (sel === SEL_CAUSE.LOOT) {
+        return '0x' + addrWord([...this.causes.entries()].find(([, c]) => c === asDao)[0]);
+      }
+      if (sel === SEL_CAUSE.SHARES) return '0x' + addrWord(asDao.shares);
+      // Moloch's allowance[token][spender] — the tap's remaining budget.
+      if (sel === SEL.ALLOWANCE) return '0x' + u256(asDao.tapBudget ?? 0n);
+      // ragequit is state-changing; the page pre-flights it before signing.
+      if (sel === SEL_CAUSE.RAGEQUIT) return '0x';
+    }
+    if (sel === SEL.TOTALSUPPLY) {
+      const byLoot = this.causes.get(to);
+      if (byLoot) return '0x' + u256(byLoot.lootSupply);
+      const byShares = [...this.causes.values()].find(c => c.shares === to);
+      if (byShares) return '0x' + u256(byShares.sharesSupply);
     }
     // totalSupply on a pool. The create form asks the PREDICTED address, and a
     // CREATE2 address with no code answers an eth_call with EMPTY returndata
@@ -1817,10 +1923,22 @@ export async function loadPage(opts = {}) {
         });
       }
 
-      if (!window.crypto?.getRandomValues) {
-        window.crypto = {
-          getRandomValues: a => { for (let i = 0; i < a.length; i++) a[i] = (i * 7 + 13) & 0xff; return a; },
-        };
+      /* jsdom supplies a REAL getRandomValues, so this stub normally never
+         installs and anything salted is different on every run — which is
+         correct for the page and fatal for a fixture that has to be compared
+         byte for byte. `fixedRandom` forces the deterministic one in, so a
+         caller that needs reproducible calldata can have it. */
+      if (opts.fixedRandom || !window.crypto?.getRandomValues) {
+        const fixed = a => { for (let i = 0; i < a.length; i++) a[i] = (i * 7 + 13) & 0xff; return a; };
+        /* `window.crypto` is a read-only accessor in jsdom, so a plain
+           assignment silently does nothing and the page keeps the real one —
+           which is how this stub appeared to work while changing nothing. */
+        if (window.crypto) Object.defineProperty(window.crypto, 'getRandomValues', {
+          value: fixed, configurable: true, writable: true,
+        });
+        else Object.defineProperty(window, 'crypto', {
+          value: { getRandomValues: fixed }, configurable: true, writable: true,
+        });
       }
     },
   });

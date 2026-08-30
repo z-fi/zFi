@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 /**
- * Deploy zSwap v0.2: the twelve data chunks, then the calldata the DAO needs.
+ * Deploy the next zSwap generation: the fourteen data chunks, then the calldata
+ * the DAO needs.
  *
  * WHAT THIS DOES AND DOES NOT DO. The chunks are plain data contracts - no
  * owner, no authority, nothing but bytes - so whoever pays the gas is
- * irrelevant to what the page becomes. This script sends those twelve, checks
+ * irrelevant to what the page becomes. This script sends those thirteen, checks
  * each one's deployed code against the payload byte for byte, and stops.
  *
  * It CANNOT deploy the successor. `deployNext` reverts `NotDAO` for anyone but
@@ -26,7 +27,7 @@ import { JsonRpcProvider, Wallet, formatEther } from 'ethers';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.join(HERE, '..');
 const OUT = path.join(ROOT_DIR, 'out');
-const CHUNKS = 12;
+const CHUNKS = 16;
 
 const argv = process.argv.slice(2);
 const DRY = argv.includes('--dry-run');
@@ -93,4 +94,5 @@ for (let i = 0; i < CHUNKS; i++) {
 fs.writeFileSync(path.join(OUT, 'zSwapNext.chunks.txt'), deployed.join('\n') + '\n');
 console.log(`\nall ${CHUNKS} chunks deployed and verified -> out/zSwapNext.chunks.txt`);
 console.log(`\nnext, build the proposal payload:\n  node script/build-zSwapNext.mjs ${deployed.join(' ')}`);
-console.log(`\nthen the DAO calls deployNext on the root. No key here can do that step.`);
+console.log(`\nthen the DAO calls deployNext on the CURRENT TIP - the contract the emitted calldata targets,`);
+console.log(`not the lineage root. No key here can do that step.`);

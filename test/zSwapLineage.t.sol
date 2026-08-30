@@ -18,7 +18,7 @@ contract zSwapLineageTest is Test {
     address dao = makeAddr("dao");
     address stranger = makeAddr("stranger");
 
-    uint256 constant CHUNKS = 12;
+    uint256 constant CHUNKS = 16;
 
     address[CHUNKS] chunks;
 
@@ -40,9 +40,17 @@ contract zSwapLineageTest is Test {
     }
 
     function _initcode(address previous) internal view returns (bytes memory) {
+        return _initcodeFor(dao, previous);
+    }
+
+    /// @dev The same initcode with the DAO chosen by the caller - which is the
+    ///      exact shape of the allegiance attack `deployNext` must refuse: a
+    ///      succession payload whose constructor args look right in every way
+    ///      the walk can see, but whose version answers to a different admin.
+    function _initcodeFor(address g, address previous) internal view returns (bytes memory) {
         return abi.encodePacked(
             type(zSwap).creationCode,
-            abi.encode(dao, previous, chunks)
+            abi.encode(g, previous, chunks)
         );
     }
 
@@ -188,6 +196,20 @@ contract zSwapLineageTest is Test {
         assertEq(v1.latest(), address(v1), "the walk still terminates");
     }
 
+    /// The two probes above verify the successor's shape; this one verifies
+    /// its allegiance. A real zSwap whose constructor was handed a DIFFERENT
+    /// DAO answers `PREVIOUS()` and `successor()` perfectly - the walk would
+    /// love it - but its admin is a governance this lineage never chose. One
+    /// DAO address, for the life of the lineage, or there is no lineage.
+    function test_deployNextRefusesASuccessorThatAnswersToAnotherDAO() public {
+        zSwap v1 = _root();
+        bytes memory init = _initcodeFor(stranger, address(v1));
+        vm.prank(dao);
+        vm.expectRevert(zSwap.NotASuccessor.selector);
+        v1.deployNext(init, bytes32(uint256(15)));
+        assertEq(v1.successor(), address(0));
+    }
+
     /// The salt is the point of CREATE2 here: the DAO can publish the next
     /// address before the code exists.
     function test_successorAddressIsKnownBeforeItIsDeployed() public {
@@ -205,6 +227,6 @@ contract zSwapLineageTest is Test {
     /// not read for behaviour, which is exactly why it drifts: v0.2 was built
     /// still calling itself "0.1" and nothing failed until this was checked.
     function test_versionStringMatchesTheBuild() public {
-        assertEq(_root().VERSION(), "0.2");
+        assertEq(_root().VERSION(), "0.3");
     }
 }

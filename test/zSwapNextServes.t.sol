@@ -9,38 +9,52 @@ import {zSwap} from "../src/zSwap.sol";
 ///
 ///         The succession test asserts a hash, which is proof but not evidence:
 ///         it says the bytes match without ever showing them. This deploys the
-///         successor from the SAME initcode the proposal carries, asks it for
-///         the page over the ABI exactly as a gateway would, and writes the
-///         result to out/. Whether that file is the dapp is then a question
-///         anyone can answer with `cmp`, not one they have to take on trust.
+///         successor from the SAME shape of initcode the proposal carries,
+///         asks it for the page over the ABI exactly as a gateway would, and
+///         writes the result to out/. Whether that file is the dapp is then a
+///         question anyone can answer with `cmp`, not one they have to take on
+///         trust.
+///
+///         The chunks are deployed locally from zSwap.html - see
+///         zSwapNextDeployTest for why, and for the repointing rule for TIP.
 contract zSwapNextServesTest is Test {
-    address constant ROOT = 0x00000095643CFfA7D9fae407a84dfCB6406456c6;
+    /// The current tip: zSwap v0.2, live since 2026-08-20.
+    address constant TIP = 0xe686952842627A2cf81DF42CCaD54ef98046DB8D;
     address constant DAO = 0x5E58BA0e06ED0F5558f83bE732a4b899a674053E;
 
-    address[12] CHUNKS = [
-        0xe8A6E96efa3A5E8b06F072936A5b7dC1278944Ab,
-        0x67F406e883Bc9cD05D7B618B5ec16BA83ee09F5B,
-        0x6cFC5f0539A986eB640E9Db074cd3DAa0474382b,
-        0x3905E01f67035D16d02Eb0f3344fAb4f55a35d75,
-        0x6aFb20DEa71EAE05Dc7193A98b7C0e4dF10141e0,
-        0xf71757E2e2dA6fCCcD5fcfc5D4C415668b491EaF,
-        0x8fDF890D97F3E1a6d85991e08f22e0b9080f1048,
-        0x6E4403120FEC9b37a19D6ae5815b45eFBffCBd5c,
-        0x88360aAAd9E9fA9986AbFF5Aec17f39393Bf222D,
-        0xbD41F78D316615d7aAabCfaB50071BEFE9a7Cb7c,
-        0xc346949a9C150BE962Ac073e3883878078d9981A,
-        0xEbDD95e957D383b148c6589338Ed39E681D29064
-    ];
+    uint256 constant CHUNKS = 16;
 
     function setUp() public {
         vm.createSelectFork(vm.envOr("ETH_RPC_URL", string("https://ethereum.publicnode.com")));
     }
 
+    function _writeChunk(bytes memory data) internal returns (address p) {
+        bytes memory initcode = bytes.concat(hex"61", bytes2(uint16(data.length)), hex"80600a5f395ff3", data);
+        assembly ("memory-safe") {
+            p := create(0, add(initcode, 0x20), mload(initcode))
+        }
+        require(p != address(0), "chunk deploy failed");
+    }
+
+    function _deployChunks() internal returns (address[CHUNKS] memory p) {
+        bytes memory html = vm.readFileBinary("zSwap.html");
+        uint256 per = (html.length + CHUNKS - 1) / CHUNKS;
+        for (uint256 k; k < CHUNKS; ++k) {
+            uint256 start = k * per;
+            uint256 end = start + per > html.length ? html.length : start + per;
+            bytes memory part = new bytes(end - start);
+            for (uint256 i; i < end - start; ++i) {
+                part[i] = html[start + i];
+            }
+            p[k] = _writeChunk(part);
+        }
+    }
+
     function test_theSuccessorServesTheDappAndWritesItOut() public {
-        bytes memory initcode = bytes.concat(type(zSwap).creationCode, abi.encode(DAO, ROOT, CHUNKS));
+        bytes memory initcode = bytes.concat(type(zSwap).creationCode, abi.encode(DAO, TIP, _deployChunks()));
 
         vm.prank(DAO);
-        address next = zSwap(ROOT).deployNext(initcode, bytes32(0));
+        address next = zSwap(TIP).deployNext(initcode, bytes32(0));
 
         // Over the same ABI a gateway calls, not by reading the chunks directly.
         string memory page = zSwap(next).html();

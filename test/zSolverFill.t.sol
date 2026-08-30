@@ -88,11 +88,19 @@ contract ShrinkToken is MockERC20 {
     }
 }
 
-/// @dev Grants an allowance on a token that has nothing to do with the fill -
-///      the side effect an attacker wants out of a free arbitrary call.
-contract Planter {
-    function plant(address token, address to) public {
-        MockERC20(token).approve(to, type(uint256).max);
+/// @dev The route plants the "output" ITSELF, straight into the adapter, in the
+///      window between the adapter's before and after reads. This is what made
+///      measuring the adapter's own balance wrong: the untrusted call runs
+///      between those two reads and can write to the thing being measured.
+///      It records a flag so a test can tell whether the arbitrary call's side
+///      effects were committed, rather than asserting on something incidental.
+contract PlantIntoFill {
+    bool public sideEffectCommitted;
+
+    function attack(address tokenOut, address fill) public payable {
+        sideEffectCommitted = true;
+        if (tokenOut == address(0)) payable(fill).transfer(1);
+        else MockERC20(tokenOut).transfer(fill, 1);
     }
 }
 
@@ -334,28 +342,71 @@ contract zSolverFillTest is Test {
         vm.stopPrank();
     }
 
-    function test_theFreeArbitraryCallCannotCommitItsSideEffects() public {
-        // The side effect is the point: a fill that succeeds commits whatever
-        // the arbitrary call did. It must not succeed on a planted balance.
-        Planter planter = new Planter();
-        tokenOut.mint(address(exec), 1);
+    function test_aRouteCannotPlantItsOwnOutputIntoTheAdapter() public {
+        // THE HOLE THE FIRST FIX MISSED. Snapshotting inside the executor was
+        // the prescribed change and it closed nothing on its own, because the
+        // adapter still derived the fill from its OWN balance - which the
+        // route can write to directly, skipping the executor entirely.
+        PlantIntoFill p = new PlantIntoFill();
+        tokenOut.mint(address(p), 10);
         tokenIn.mint(attacker, 1);
 
         vm.startPrank(attacker);
         tokenIn.approve(address(fill), 1);
-        vm.expectRevert();
+        vm.expectRevert(abi.encodeWithSelector(zSolverFill.Insufficient.selector, 0, 1));
         fill.fill(
-            address(planter),
-            address(planter),
+            address(p),
+            address(p),
             address(tokenIn),
             1,
             address(tokenOut),
             1,
             attacker,
-            abi.encodeCall(Planter.plant, (address(tokenOut), attacker))
+            abi.encodeCall(PlantIntoFill.attack, (address(tokenOut), address(fill)))
         );
         vm.stopPrank();
-        assertEq(tokenOut.allowance(address(exec), attacker), 0, "an allowance was planted from the executor");
+        assertFalse(p.sideEffectCommitted(), "the arbitrary call's side effects were committed");
+    }
+
+    function test_aRouteCannotPlantEthIntoTheAdapterEither() public {
+        // Same shape on the ETH-out branch, which measured the same way.
+        PlantIntoFill p = new PlantIntoFill();
+        vm.deal(address(p), 10);
+        tokenIn.mint(attacker, 1);
+
+        vm.startPrank(attacker);
+        tokenIn.approve(address(fill), 1);
+        vm.expectRevert(abi.encodeWithSelector(zSolverFill.Insufficient.selector, 0, 1));
+        fill.fill(
+            address(p),
+            address(p),
+            address(tokenIn),
+            1,
+            address(0),
+            1,
+            attacker,
+            abi.encodeCall(PlantIntoFill.attack, (address(0), address(fill)))
+        );
+        vm.stopPrank();
+        assertFalse(p.sideEffectCommitted(), "the ETH-out branch committed the side effects");
+    }
+
+    function test_ethDonatedToTheExecutorIsNotFillOutput() public {
+        vm.deal(address(exec), 5 ether);
+        vm.startPrank(user);
+        tokenIn.approve(address(fill), 1 ether);
+        vm.expectRevert();
+        fill.fill(
+            address(router),
+            address(router),
+            address(tokenIn),
+            1 ether,
+            address(0),
+            1 ether,
+            user,
+            abi.encodeCall(GoodRouter.swap, (address(tokenIn), 1 ether, address(0), 0, address(exec)))
+        );
+        vm.stopPrank();
     }
 
     function test_aShrinkingRecipientCannotUnderflowPastTheBound() public {
