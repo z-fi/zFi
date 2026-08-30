@@ -1057,8 +1057,16 @@ const SOLVER_SHAPES_OUT={
 const q=new URLSearchParams({chainId:"1",sellToken:f===ZERO?OX_ETH:f,buyToken:t===ZERO?OX_ETH:t,
 buyAmount:amt.toString(),taker:solverExec,slippageBps:String(slip)});
 const j=await laneGet("0x",`${ep}/swap/allowance-holder/quote?${q}`,ms);
-if(!j||!j.transaction||!j.sellAmount)return null;
-return{inp:BigInt(j.sellAmount),target:j.transaction.to,spender:j.transaction.to,data:j.transaction.data}},
+// A BUY-SIDE QUOTE HAS NO `sellAmount`. It reports `estimatedNetSellAmount`
+// for what it expects to spend and `maxSellAmount` for what it will not
+// exceed - and the second is 0x's OWN ceiling, tighter and more honest than
+// one derived by multiplying the first by the slippage we asked for. Reading
+// the wrong field here does not fail loudly: the lane returns null and never
+// wins, silently, forever. This one did, until the API was actually asked.
+if(!j||!j.transaction||!j.estimatedNetSellAmount)return null;
+return{inp:BigInt(j.estimatedNetSellAmount),
+cap:j.maxSellAmount?BigInt(j.maxSellAmount):0n,
+target:j.transaction.to,spender:j.allowanceTarget||j.transaction.to,data:j.transaction.data}},
 "ParaSwap":async(ep,f,t,amt,slip,ms)=>{
 const q=new URLSearchParams({srcToken:f===ZERO?OX_ETH:f,destToken:t===ZERO?OX_ETH:t,
 amount:amt.toString(),srcDecimals:"18",destDecimals:"18",side:"BUY",network:"1",version:"6.2"});
@@ -1070,17 +1078,12 @@ srcDecimals:route.srcDecimals,destDecimals:route.destDecimals,
 priceRoute:route,userAddress:solverExec,slippage:Number(slip)},ms);
 if(!j||!j.to||!j.data)return null;
 return{inp:BigInt(route.srcAmount),target:j.to,spender:route.tokenTransferProxy||j.to,data:j.data}},
-"Bebop":async(ep,f,t,amt,slip,ms)=>{
-if(f===ZERO||t===ZERO)return null;
-const q=new URLSearchParams({sell_tokens:f,buy_tokens:t,buy_amounts:amt.toString(),
-taker_address:solverExec,gasless:"false",approval_type:"Standard"});
-const j=await laneGet("Bebop",`${ep}/quote?${q}`,ms);
-const rs=j&&j.routes;if(!rs||!rs.length)return null;
-const route=rs.find(x=>x.type===j.bestPrice)||rs[0];
-const qq=route&&route.quote;if(!qq||!qq.tx||!qq.sellTokens)return null;
-const info=Object.values(qq.sellTokens)[0];
-if(!info||!info.amount||!qq.tx.to)return null;
-return{inp:BigInt(info.amount),target:qq.tx.to,spender:qq.tx.to,data:qq.tx.data}},
+// BEBOP IS NOT HERE, and the reason is that I could not verify it. Asking the
+// live API for `buy_amounts` returns "No routes found" for the pairs tried, so
+// the response shape a buy-side quote takes is unknown - which means the field
+// names below would have been a guess, and a wrong guess in a lane shape does
+// not fail loudly. It returns null and loses every race in silence. A lane
+// nobody can prove works is worse than a lane that is absent.
 };
 
 const SOLVER_SHAPES={
@@ -1089,7 +1092,12 @@ const q=new URLSearchParams({chainId:"1",sellToken:f===ZERO?OX_ETH:f,buyToken:t=
 sellAmount:amt.toString(),taker:solverExec,slippageBps:String(slip)});
 const j=await laneGet("0x",`${ep}/swap/allowance-holder/quote?${q}`,ms);
 if(!j||!j.transaction||!j.buyAmount)return null;
-return{out:BigInt(j.buyAmount),target:j.transaction.to,spender:j.transaction.to,data:j.transaction.data}},
+// `allowanceTarget` is the contract that pulls the input, and it is published
+// separately for a reason even though it equals `transaction.to` today.
+// Approving the router because the two happen to match is a coincidence to
+// rely on, not a fact.
+return{out:BigInt(j.buyAmount),target:j.transaction.to,
+spender:j.allowanceTarget||j.transaction.to,data:j.transaction.data}},
 // Two-step lanes: a price call to learn the route, then a build call to turn
 // it into calldata. Both legs share the deadline, so a slow first leg simply
 // costs the lane its turn rather than the whole quote.
@@ -2888,7 +2896,10 @@ laneCached(`${x.name}|${ck}`,
 let win=null;
 for(const c of tried){
 if(!c||!c.inp||!isAddr(c.target)||!/^0x[0-9a-fA-F]*$/.test(c.data||""))continue;
-const ceil=c.inp+(c.inp*slipBps)/10000n;
+// The lane's own published ceiling if it has one - it is what the lane will
+// actually refuse to exceed - and otherwise the input grossed up by the
+// slippage the user set.
+const ceil=c.cap&&c.cap>0n?c.cap:c.inp+(c.inp*slipBps)/10000n;
 if(laneOverride){
 if(c.lane.name!==laneOverride)continue;
 win={...c,ceil,forced:1};break;

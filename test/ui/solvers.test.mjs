@@ -291,8 +291,11 @@ describe('the solver lanes', () => {
     wire(chain, [lane('0x', 'https://o.example', FILL)]);
     // The chain wants ~1 ETH for 3000 USDC; this lane wants 0.9.
     chain.lanes = {
+      // The real 0x buy-side response: no `sellAmount`, an estimate and a cap.
       'o.example': {
-        sellAmount: (9n * 10n ** 17n).toString(),
+        estimatedNetSellAmount: (9n * 10n ** 17n).toString(),
+        maxSellAmount: (95n * 10n ** 16n).toString(),
+        allowanceTarget: ROUTER,
         transaction: { to: ROUTER, data: '0xfeed' },
       },
     };
@@ -311,8 +314,10 @@ describe('the solver lanes', () => {
     const d = iface.parseTransaction({ data: q.callData });
     // amountIn is the CEILING the user could spend; minOut is the exact output.
     assert.equal(d.args[5], 3000n * USDC, 'minOut is not the exact output asked for');
-    assert.ok(d.args[3] > 9n * 10n ** 17n, 'amountIn is not a ceiling above the quote');
+    // The ceiling is 0x's OWN maxSellAmount, not one we derived from slippage.
+    assert.equal(d.args[3], 95n * 10n ** 16n, 'amountIn is not the lane published ceiling');
     assert.ok(d.args[3] < 10n ** 18n, 'the ceiling is not cheaper than the chain');
+    assert.equal(d.args[1].toLowerCase(), ROUTER.toLowerCase(), 'spender is not the allowanceTarget');
     p.close();
   });
 
