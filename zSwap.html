@@ -524,8 +524,13 @@ const RETH_ICON=`<svg width="20" height="20" viewBox="0 0 32 32"><circle cx="16"
 const BOLD_ICON=`<svg width="20" height="20" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="#63D77D"/><path fill-rule="evenodd" clip-rule="evenodd" d="M12.1719 4.56641H8.58203V26.1016H15.7617V25.2422C16.8398 25.793 18.0586 26.1055 19.3555 26.1055C23.7148 26.1055 27.25 22.5703 27.25 18.207C27.25 13.8438 23.7148 10.3086 19.3555 10.3086C18.0586 10.3086 16.8398 10.6211 15.7617 11.1719V4.56641H12.1719ZM15.7617 11.1719C13.207 12.4805 11.457 15.1406 11.457 18.207C11.457 21.2734 13.207 23.9336 15.7617 25.2422V11.1719Z" fill="#1C1D4F"/></svg>`;
 const TOKENS=[
 {sym:"ETH",   addr:ZERO, dec:18, icon:ETH_ICON},
-{sym:"WETH",  addr:WETH, dec:18, icon:ETH_ICON},
+/* SECOND, TO MATCH THE RANKING. The built-in list is what the page shows for
+   the moment before zList answers, and every index-based fallback here reads
+   the same slot in both - so a slot holding one token now and another in a
+   second is a visible jump for no reason. wstETH is rank 1 on chain; it is
+   rank 1 here too, and WETH moves down a place to make room. */
 {sym:"wstETH",addr:"0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0",dec:18,icon:WSTETH_ICON},
+{sym:"WETH",  addr:WETH, dec:18, icon:ETH_ICON},
 {sym:"rETH",  addr:"0xae78736cd615f374d3085123a210448e74fc6393",dec:18,icon:RETH_ICON},
 {sym:"WBTC",  addr:"0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",dec:8, icon:WBTC_ICON},
 {sym:"USDC",  addr:"0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",dec:6, icon:USDC_ICON},
