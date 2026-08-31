@@ -1,0 +1,88 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>zSwap invaders — dev harness</title>
+<style>
+  :root{--b:#0e0e0e;--m:#888}
+  body{margin:0;background:#080808;color:#ddd;font:13px system-ui;display:flex;
+       flex-direction:column;align-items:center;gap:14px;padding:24px}
+  .card{position:relative;width:340px;height:260px;background:#0e0e0e;border:1px solid #222;border-radius:.5em}
+  .row{display:flex;gap:8px;align-items:center}
+  button{font:inherit;background:#161616;color:#ddd;border:1px solid #2a2a2a;border-radius:6px;padding:6px 12px;cursor:pointer}
+  small{color:#777;max-width:340px;text-align:center;line-height:1.5}
+</style>
+<h3 style="margin:0">zSwap invaders</h3>
+<div class="card" id="card"></div>
+<div class="row" style="gap:14px">
+  <span style="opacity:.6">hold the tile \u2192</span>
+  <button id="wn" title="click toggles names \u00b7 hold opens the game"
+    style="width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;
+           background:transparent;border:0;color:#888;opacity:.55;border-radius:6px"></button>
+  <span id="tile" style="opacity:.6">names mode: off</span>
+</div>
+<div class="row">
+  <button id="go">New game</button>
+  <button id="few">Only 3 tokens (WEI fills in)</button>
+  <button id="reload">Re-read chain</button>
+</div>
+<small id="note">loading…</small>
+<small>Arrows move, space fires, escape leaves. Drag to steer and tap to fire on touch.
+This harness is dev-only — it is not part of the deployed page.</small>
+<script type="module">
+import { invaders, weiSprite, INVADERS_CSS, armLongPress } from './invaders.mjs';
+import { liveTokens, zListTokens, launchedTokens } from './tokens.mjs';
+
+const style = document.createElement('style');
+style.textContent = INVADERS_CSS;
+document.head.appendChild(style);
+
+const ETH_ICON = `<svg width="22" height="22" viewBox="0 0 32 32"><g fill="none" fill-rule="evenodd"><circle cx="16" cy="16" r="16" fill="#627EEA"/><g fill="#FFF" fill-rule="nonzero"><path fill-opacity=".602" d="M16.498 4v8.87l7.497 3.35z"/><path d="M16.498 4L9 16.22l7.498-3.35z"/><path fill-opacity=".602" d="M16.498 21.968v6.027L24 17.616z"/><path d="M16.498 27.995v-6.028L9 17.616z"/><path fill-opacity=".2" d="M16.498 20.573l7.497-4.353-7.497-3.348z"/><path fill-opacity=".602" d="M9 16.22l7.498 4.353v-7.701z"/></g></g></svg>`;
+
+const note = document.getElementById('note');
+let game = null, roster = [];
+const start = icons => {
+  if (game) game.stop();
+  game = invaders(document.getElementById('card'), {
+    icons, ship: ETH_ICON, onExit: () => { game = null; },
+  });
+};
+
+// Real logos, read from the same two places the page reads them: zList for the
+// curated tokens and the pool factory for coins launched through PLAUNCH.
+async function load() {
+  note.textContent = 'reading zList and recent launches from chain…';
+  try {
+    const [listed, born] = await Promise.all([zListTokens(), launchedTokens()]);
+    roster = [];
+    const seen = new Set();
+    for (const t of [...listed, ...born]) {
+      const k = t.sym.toLowerCase();
+      if (seen.has(k)) continue;
+      seen.add(k); roster.push(t);
+    }
+    note.textContent = `${listed.length} curated · ${born.length} launched · ${roster.length} distinct faces`;
+    start(roster);
+  } catch (e) {
+    note.textContent = 'chain unreachable — playing with placeholders: ' + e.message;
+    start([{ sym: 'WEI', html: weiSprite() }]);
+  }
+}
+
+document.getElementById('go').onclick = () => start(roster.length ? roster : [{ sym: 'WEI', html: weiSprite() }]);
+document.getElementById('few').onclick = () => start(roster.slice(0, 3));
+document.getElementById('reload').onclick = load;
+
+// The trigger, exactly as it will behave in the page: a short click toggles
+// names mode, a hold opens the game and swallows the click that follows.
+const wn = document.getElementById('wn');
+wn.innerHTML = weiSprite(16);
+let namesOn = false;
+const sync = () => {
+  document.getElementById('tile').textContent = `names mode: ${namesOn ? 'ON' : 'off'}`;
+  wn.style.opacity = namesOn ? '1' : '.55';
+};
+wn.addEventListener('click', () => { namesOn = !namesOn; sync(); });
+armLongPress(wn, { ms: 550, onHold: () => start(roster.length ? roster : [{ sym: 'WEI', html: weiSprite() }]) });
+sync();
+
+load();
+</script>
