@@ -7,7 +7,7 @@
 <style>:root{color-scheme:light;--b:#fff;--c:#fff;--p:#fff;--f:#000;--m:#666;--n:#666;--e:#ddd;--k:#000;--kf:#fff;--kh:#333;--fh:#f5f5f5;--e2:#ddd;--w:#c33;--hd:#000;--dm:#999}
 .d{color-scheme:dark;--b:#0a0a0a;--c:#0a0a0a;--p:#0a0a0a;--f:#e8e8e0;--m:#888;--n:#888;--e:#2a2a2a;--k:#e8e8e0;--kf:#0a0a0a;--kh:#ccc;--fh:#161616;--e2:#2a2a2a;--w:#e57373;--hd:#333;--dm:#5f5f5f}
 :focus-visible{outline:2px solid var(--f);outline-offset:2px}
-@media(prefers-reduced-motion:reduce){*{transition:none!important}.flip:hover{transform:none}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}.flip:hover{transform:none}}
 body{background:var(--b);color:var(--f);font-family:Helvetica,Arial,sans-serif;min-height:100dvh;margin:0;padding:1em .85em;display:flex;flex-direction:column;box-sizing:border-box}
 .card{position:relative;border:1px solid var(--hd);padding:1em .95em;background:var(--c);max-width:22em;width:100%;margin:auto;box-sizing:border-box}.inv{position:absolute;inset:0;background:var(--c);overflow:hidden;outline:0;touch-action:none;z-index:5;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}#wn{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}.invx{position:absolute;width:20px;height:20px;transition:opacity .12s}.invx.pop{opacity:0}.invs{position:absolute;width:22px;height:20px;display:flex;align-items:flex-start;justify-content:center}
 .invs svg{width:20px;height:20px}
@@ -83,6 +83,15 @@ left:var(--at,50%);transform:translateX(-1.5px)}
 left:0;right:0}
 .lqnew .primary{margin-top:.5em;min-height:2.6em;font-size:.85em}
 #listNote{max-width:22em;margin:.5em auto 0;font-size:10px;color:var(--dm);letter-spacing:.06em;text-align:center}
+/* The list arrives over an RPC, so on a cold load the built-in names sit there
+   for a beat and then are replaced. Saying nothing reads as finished; a spinner
+   says the page is still asking, and the rows fade rather than snap when the
+   answer lands. Both stop under prefers-reduced-motion. */
+.spin{display:inline-block;width:.75em;height:.75em;margin-left:.45em;vertical-align:-.1em;
+border:1px solid var(--e2);border-top-color:var(--m);border-radius:50%;animation:sp .7s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+@keyframes fadein{from{opacity:0}to{opacity:1}}
+#tkList.fresh>*{animation:fadein .22s ease-out both}
 .lqbtn{font-size:.8em;padding:.45em .7em;cursor:pointer;border:1px solid var(--e);background:transparent;color:var(--f);font-family:inherit;font-weight:400;letter-spacing:.08em;text-transform:uppercase;
 white-space:nowrap;flex:0 0 auto;text-align:center;transition:background .15s,color .15s,border-color .15s}
 .lqbtn:hover:not(:disabled),.lqbtn:focus-visible:not(:disabled){border-color:var(--f)}
@@ -744,6 +753,9 @@ const setListNote=t=>{
 const el=document.getElementById("listNote");
 if(!el)return;
 el.textContent=t||"";
+// A trailing ellipsis is this page's mark for "still waiting", so the spinner
+// follows it rather than needing a second flag to keep in step.
+if(t&&/\u2026$/.test(t)){const s=document.createElement("span");s.className="spin";el.appendChild(s)}
 el.classList.toggle("hide",!t)};
 const setListSource=w=>setListNote(w?"Built-in token list — "+w:"");
 let rankFellBack=false,listLive=false;
@@ -1601,8 +1613,10 @@ syncDisabled();syncIcons();
 return true;
 };
 const settlePair=keep=>{if(pairChosen)restorePair(keep);else rankedDefaults()};
+let listFresh=false;
 const adoptList=keep=>{
 cbDisarm();
+listFresh=true;
 rebuild();
 settlePair(keep);
 if(!TOKENS[fromSel.value])fromSel.value=0;
@@ -1722,6 +1736,8 @@ d.textContent=(e&&e.message)||"could not read that address"}};
 frag.appendChild(r);
 }else{const e=document.createElement("div");e.className="tkempty";e.textContent="No token matches that.";frag.appendChild(e)}
 }
+tkList.classList.toggle("fresh",listFresh);
+listFresh=false;
 tkList.appendChild(frag);
 tkCur=-1;
 };
@@ -5826,8 +5842,15 @@ lnNote.textContent=`1 ETH backs ${trimNum(1/per)} units`
 +lnVest.options[lnVest.selectedIndex].textContent
 +(tenthDays>0?` · at a tenth of the goal it empties in ${trimNum(tenthDays)} days`:"")
 +` · backers burn back for the rest`
-+(lnArtBytes?` · logo ${(lnArtBytes.length/1024).toFixed(1)} KB`:"");
-lnNote.style.color="";
+/* SAY IT AT THE PICKER, NOT AT THE LAUNCH BUTTON. `lnPrepare` enforces only
+   the coin's 24 KB ceiling, so in cause mode a 20 KB logo is accepted,
+   previewed and shown in green - then refused at the click, after the whole
+   form is filled in. A cause's logo is base64 inside the DAO's own URI rather
+   than an SSTORE2 pointer, so the cap is real and much smaller; state it as
+   soon as it is knowable. */
++(lnArtBytes?` · logo ${(lnArtBytes.length/1024).toFixed(1)} KB`
++(lnArtBytes.length>CAU_MAX_ART?` — over the 4 KB a cause allows, pick something simpler`:""):"");
+lnNote.style.color=lnArtBytes&&lnArtBytes.length>CAU_MAX_ART?"#c33":"";
 }
 function cauKind(){
 const on=lnKind.value==="cause";
