@@ -411,6 +411,7 @@ background:var(--e);margin:.5em auto .1em}
 <p><b>So a cause that raises less than its goal empties faster than the window suggests.</b> Raise a tenth of the goal and the treasury is drained in a tenth of the time &mdash; a tenth of a year, not a year. Since what has not been released is exactly what a backer can still burn back for, an under-subscribed cause can leave its backers with nothing well before the release window is over. Set the window long enough that a partial raise still leaves something behind, and read the daily figure below as the speed at full funding.</p>
 <p>The release clock starts the moment you launch and runs whether or not anyone has backed you yet, which is why it wants to be much longer than the raise. Release over the same thirty days you raise for and the whole treasury is yours the day backing closes &mdash; and somebody who backed you on the last day gets nothing back, because there is nothing left unreleased.</p>
 <p>That is what makes the token worth something on its own: <b>whatever has not been released yet can be burned back for</b>. A backer who changes their mind, or who watches a cause go quiet, redeems their share of the untouched treasury and takes their ether home. Nobody has to agree and nothing has to be voted on.</p>
+<p><b>The creator can switch that right off.</b> Burning calls <code>ragequit</code>, which reverts unless the DAO has left it enabled, and on a cause the creator holds the only share &mdash; so turning it off is one transaction they can send alone, at any time, and it does not need anyone&rsquo;s agreement either. The page checks the flag and refuses to offer a burn it cannot deliver, but that is a warning after the fact: backing a cause means trusting whoever launched it not to close the exit. Nothing here can stop them, so it is said plainly rather than left to be discovered.</p>
 <p>Backers hold <b>loot</b>, which carries that claim and no vote. You keep a single share and the vote that comes with it, and you buy that share at the same price everyone else pays &mdash; so your claim on the treasury is the same shape as theirs.</p>
 <p>Paste a cause’s token into the swap and the page prices the burn for you, against the treasury rather than against a market. It is the only price such a token has, and it is the honest one.</p></details>
 <details><summary>Fees</summary>
@@ -5589,8 +5590,16 @@ if(g)g.onclick=cbAct;
 if(r)r.onclick=cbRelease;
 };
 if(buy){
+/* CHECK THE FLAG BEFORE PROMISING THE BURN. This branch returned first, so a
+   cause whose creator has switched `ragequittable` off and whose sale has
+   since closed was told "it can still be burned back" - and CB_TIP adds "at
+   any time". Both are false: `ragequit` reverts. The honest sentence already
+   existed four lines down and was simply unreachable in this state. */
 if(!open||left<=0n)
-return paint(msg(`Backing for ${safeSym(tok.sym)} has closed — it can still be burned back`),CB_TIP);
+return rqOff
+?paint(msg(`Backing for ${safeSym(tok.sym)} has closed, and burn-back is switched off \u2014 it cannot be redeemed`),
+"This DAO has set ragequittable to false, so ragequit reverts and the treasury cannot be claimed against. Only the DAO can switch it back on.")
+:paint(msg(`Backing for ${safeSym(tok.sym)} has closed — it can still be burned back`),CB_TIP);
 if(rqOff)
 return paint(msg(`This cause has switched burn-back off \u2014 backing it cannot be redeemed`),
 "Backing pays ether for loot whose only value is the right to burn it back. This DAO has turned that right off, so there is no way out of the position.");
@@ -5613,6 +5622,7 @@ return paint(msg(`Burn-back has been switched off by this cause \u2014 ${safeSym
 +"cannot be claimed against. Only the DAO can switch it back on.");
 let want=0n;try{want=parseUnits(amt.value.trim()||"0",tok.dec)}catch{}
 if(want<=0n)want=fromBalance;
+
 if(want<=0n){
 return paint(msg(`1 ${safeSym(tok.sym)} redeems for ${trimAmt(eth*CONE/sup,18)} ETH`),CB_TIP);}
 cbAmt=want;
