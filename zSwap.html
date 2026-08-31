@@ -329,10 +329,10 @@ background:var(--e);margin:.5em auto .1em}
 <div class="tabs" role="tablist"><button id="tabSwap" class="on" role="tab" aria-selected="true">Swap</button><button id="tabSend" role="tab" aria-selected="false">Send</button><button id="tabBook" role="tab" aria-selected="false">Orders</button></div>
 <div class="panel"><div class="hdr"><small id="payL">You pay</small><span class="pill"><span id="fromIcon"></span><select id="fromSel"></select><button type="button" class="tkb" id="fromPick" aria-haspopup="listbox" aria-expanded="false"><span class="tkbs"></span><span class="tkbc">▾</span></button></span></div><div class="row" id="amtRow"><input id="amt" type="text" inputmode="decimal" placeholder="0.0" aria-label="Amount to pay" autocomplete="off" spellcheck="false"></div><small id="bal"></small></div>
 <button id="flip" class="flip" title="Flip tokens" aria-label="Flip tokens"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14m-5-5 5 5 5-5"/></svg></button>
-<div class="panel" id="rcvPanel"><div class="hdr"><small id="rcvHdr">You receive</small><span class="pill"><span id="toIcon"></span><select id="toSel"></select><button type="button" class="tkb" id="toPick" aria-haspopup="listbox" aria-expanded="false"><span class="tkbs"></span><span class="tkbc">▾</span></button></span></div><div class="row" id="outRow"><input id="outAmt" type="text" inputmode="decimal" placeholder="0.0" aria-label="Amount to receive" autocomplete="off" spellcheck="false"></div><small id="bal1" class="hide"></small><small id="rate"></small><small id="rankBox" class="rank hide"></small></div>
+<div class="panel" id="rcvPanel"><div class="hdr"><small id="rcvHdr">You receive</small><span class="pill"><span id="toIcon"></span><select id="toSel"></select><button type="button" class="tkb" id="toPick" aria-haspopup="listbox" aria-expanded="false"><span class="tkbs"></span><span class="tkbc">▾</span></button></span></div><div class="row" id="outRow"><input id="outAmt" type="text" inputmode="decimal" placeholder="0.0" aria-label="Amount to receive" autocomplete="off" spellcheck="false"></div><small id="bal1" class="hide"></small><small id="rate" role="status" aria-live="polite"></small><small id="rankBox" class="rank hide"></small></div>
 <div id="lqPanel" class="hide"><div class="hdr"><small>Liquidity</small><small id="lqSub"></small></div><div id="lqList"></div></div>
 <div id="lnPanel" class="hide">
-<div class="hdr lnhdr"><small id="lnTitle">Launch a coin</small><small id="lnSub">you earn 0.4% of every trade, forever</small></div>
+<div class="hdr lnhdr"><small id="lnTitle">Launch a coin</small><small id="lnSub">0.4% of each trade goes to the creator</small></div>
 <label class="dly" id="lnKindL" title="A coin opens a market: supply is minted and seeded into a pool that trades from the first block. A cause opens a fund: backers pay ether for a token that can always be burned back for its share of whatever the cause has not spent.">Launch<select id="lnKind"><option value="coin">Coin</option><option value="cause">Cause</option></select></label>
 <label class="dly">Name<input id="lnName" maxlength="64" placeholder="Zero Cat" autocomplete="off" spellcheck="false"></label>
 <label class="dly">Symbol<input id="lnSym" maxlength="16" placeholder="ZCAT" autocomplete="off" spellcheck="false"></label>
@@ -2957,7 +2957,11 @@ const pinNow=lanePin();
 if(x.n===pinNow)row.className+=" p";
 row.title=x.n===pinNow?"Pinned \u2014 click again for the best floor"
 :x.f===top&&x.n!==used?"Best floor \u2014 click to use it":"Use this venue";
-row.onclick=()=>{const on=lanePin()===x.n;laneOverride=on?null:x.n;laneOverrideFor=on?"":laneScope();update()};
+const pick=()=>{const on=lanePin()===x.n;laneOverride=on?null:x.n;laneOverrideFor=on?"":laneScope();update()};
+row.onclick=pick;
+row.setAttribute("role","button");
+row.tabIndex=0;
+row.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();pick()}};
 const n=document.createElement("span");
 n.textContent=safeSym(x.n).slice(0,16);
 const v=document.createElement("u");
@@ -3025,7 +3029,18 @@ const car=document.createElement("span");
 car.className="rk";
 car.textContent="\u25be";
 car.title="Compare venues";
-car.onclick=()=>rankBox.classList.toggle("hide");
+/* REACHABLE WITHOUT A MOUSE. This caret is the only control that opens the
+   venue table, and the docs tell people to open it - so an onclick on a bare
+   span made that instruction impossible to follow on a keyboard. Kept as a
+   span to leave the type scale alone; given the role, the tab stop and the
+   two keys a button would have answered to. */
+car.setAttribute("role","button");
+car.tabIndex=0;
+car.setAttribute("aria-expanded",rankBox.classList.contains("hide")?"false":"true");
+const carToggle=()=>{const open=rankBox.classList.toggle("hide");
+car.setAttribute("aria-expanded",open?"false":"true")};
+car.onclick=carToggle;
+car.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();carToggle()}};
 rate.appendChild(document.createTextNode(" "));
 rate.appendChild(car);
 }
@@ -5167,6 +5182,13 @@ const to=await lqTo();
 if(!to)return;
 ++busy;go.disabled=true;
 try{
+/* DELIBERATELY TIGHTER THAN THE SWAP SETTING, and not a copy of it. A seed's
+   LP is a pure function of the band, the price and the amounts - no chain
+   state enters it - so there is nothing here to tolerate the way a swap
+   tolerates drift, and `minLP` is the only thing that would notice the pool
+   being seeded out from under us during the factory's own transfer. A 10%
+   swap setting must not become a 10% seed bound; test/ui/liquidity.test.mjs
+   holds this to 0.5%. */
 const bps=BigInt(Math.round(Math.min(.5,Math.max(.01,+slip.value||.5))*100));
 const lp=BigInt(box.dataset.lp||0);
 if(lp<=0n){out.textContent="Preview the band first.";return}
@@ -5756,8 +5778,14 @@ const on=lnKind.value==="cause";
 for(const el of [lnMktL,lnSupplyL,lnMcapL,lnAllocL])el.classList.toggle("hide",on);
 for(const el of [lnGoalL,lnDaysL,lnVestL])el.classList.toggle("hide",!on);
 lnTitle.textContent=on?"Launch a cause":"Launch a coin";
-lnSub.textContent=on?"refundable until you spend it"
-:"you earn 0.4% of every trade, forever";
+/* NOT "refundable". Burn-back returns a pro-rata share of what the cause has
+   NOT yet drawn, and the DAO can switch the right off entirely - this page
+   says so itself a few hundred lines down. A word that promises the whole
+   amount back, sitting where a backer reads it as their own protection, is the
+   one piece of copy here that could cost somebody the difference. Say what the
+   contract actually does, in the same words used everywhere else. */
+lnSub.textContent=on?"backers burn back for whatever you have not drawn"
+:"0.4% of each trade goes to the creator";
 lnName.placeholder=on?"Feed Ducks":"Zero Cat";
 lnSym.placeholder=on?"DUCK":"ZCAT";
 rc.placeholder=on?"Beneficiary — defaults to you":"Creator — defaults to you";

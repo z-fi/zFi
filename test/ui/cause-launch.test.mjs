@@ -93,7 +93,13 @@ test('launching a cause', async (t) => {
     // update. Left saying "coin" over a goal and a deadline, it contradicts
     // every other word on the panel.
     assert.equal(p.text('lnTitle'), 'Launch a cause');
-    assert.match(p.text('lnSub'), /refundable until you spend it/);
+    // NOT "refundable". Burn-back returns a pro-rata share of what the cause
+    // has not yet drawn, and the DAO can switch the right off entirely - the
+    // panel says so itself further down. A word promising the whole amount
+    // back, where a backer reads it as their own protection, is the one line
+    // of copy here that could cost somebody the difference.
+    assert.match(p.text('lnSub'), /burn back for whatever you have not drawn/);
+    assert.doesNotMatch(p.text('lnSub'), /refundable/i);
     assert.equal(p.$('lnName').placeholder, 'Feed Ducks');
     assert.equal(p.$('lnSym').placeholder, 'DUCK');
     assert.match(p.$('rc').placeholder, /Beneficiary/);
@@ -101,7 +107,10 @@ test('launching a cause', async (t) => {
     p.select('lnKind', 'coin');
     await p.settle();
     assert.equal(p.text('lnTitle'), 'Launch a coin');
-    assert.match(p.text('lnSub'), /0\.4% of every trade/);
+    // Not "forever": the fee accrues only if the market trades, and a tithe
+    // comes off the top. State the fact; this file does not sell anywhere else.
+    assert.match(p.text('lnSub'), /0\.4% of each trade goes to the creator/);
+    assert.doesNotMatch(p.text('lnSub'), /forever/i);
     assert.equal(p.$('lnName').placeholder, 'Zero Cat');
     assert.match(p.$('rc').placeholder, /Creator/);
   });

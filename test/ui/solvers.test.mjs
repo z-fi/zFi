@@ -23,7 +23,6 @@ const chainWithQuote = () => {
 // rather than the roster deciding for it.
 describe('the solver lanes', () => {
   const SELF = '0x' + 'ab'.repeat(20);
-  const LIST = '0x' + 'cd'.repeat(20);
   // THE ADAPTER IS PINNED IN THE PAGE'S OWN BYTES, so a test that invents an
   // address tests nothing: the page correctly refuses it and abandons the
   // solver path, which is how a whole suite went red without anything being
@@ -40,6 +39,12 @@ describe('the solver lanes', () => {
   };
   const FILL = pin('SOLVER_FILL_PIN');
   const EXEC = pin('SOLVER_EXEC_PIN');
+  // The roster address is pinned too now. It used to be read off whichever
+  // contract served the page, which meant working out that contract's address
+  // from the hostname first - impossible on any host but an address subdomain,
+  // so every published name lost its lanes in silence. Serve the roster where
+  // the page actually looks for it.
+  const LIST = pin('SOLVERS_PIN');
   const ROUTER = '0x' + '77'.repeat(20);
 
   // (name, endpoint, adapter, handicapBps, enabled)
@@ -50,10 +55,6 @@ describe('the solver lanes', () => {
     const ethCall = chain.ethCall.bind(chain);
     chain.ethCall = (tx, block) => {
       const to = (tx.to || '').toLowerCase();
-      if (to === SELF) {
-        if (tx.data.startsWith('0x0576137c')) return coder.encode(['address'], [LIST]);   // SOLVERS()
-        if (tx.data.startsWith('0x4f3391f6')) return coder.encode(['address'], [FILL]);   // SOLVER_FILL()
-      }
       if (to === FILL && tx.data.startsWith('0x495c73b0')) return coder.encode(['address'], [EXEC]); // EXEC()
       if (to === LIST && tx.data.startsWith('0xe3b06401')) return coder.encode(LANE_T, [lanes]);     // solvers()
       return ethCall(tx, block);
