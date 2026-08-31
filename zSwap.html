@@ -94,7 +94,7 @@ white-space:nowrap;flex:0 0 auto;text-align:center;transition:background .15s,co
 .lqpv{font-size:.7em;opacity:.7;min-height:1.2em;line-height:1.5}
 .lqadd .lqbtn{margin-left:0;align-self:stretch;font-size:.75em;padding:.5em .8em}
 .rcpt.bad{border-color:var(--w)}
-#rcvEl{display:block;font-size:.7em;color:var(--m);margin-top:.35em;word-break:break-all;text-align:center}
+#rcvEl{display:block;font-size:.7em;color:var(--m);margin:.35em 0 .6em;word-break:break-all;text-align:center}
 #rcvEl:empty{display:none}
 #stat{font-size:.8em;color:var(--n);word-break:break-all;margin-top:.75em;text-align:center}
 #stat:not(:empty){margin-bottom:.5em}
@@ -910,7 +910,7 @@ let PROV=null;
 const prov=()=>PROV||window.ethereum;
 const RPC_SEED=["https://ethereum-rpc.publicnode.com","https://eth-mainnet.public.blastapi.io"];
 let rpcPool=RPC_SEED.slice(),rpcPi=0,curated=0,curating=0,curatedTry=0;
-const SEL_RPCS="0b6feb61",SEL_LIST="d77e4c79";
+const SEL_LIST="d77e4c79";
 const decStrArr=h=>{const b=strip0x(h||"");if(b.length<128)return[];
 const W=i=>parseInt(b.slice(i*64,i*64+64),16);
 const off=W(0)/32;if(!Number.isInteger(off))return[];
@@ -941,10 +941,7 @@ const loadCurated=async()=>{
 if(curating||Date.now()-curatedTry<60000)return;
 curating=1;curatedTry=Date.now();
 try{
-const self=selfFromUrl()||ZSWAP_SELF;if(!self)return;
-const ra=await httpRead(rpcPool[rpcPi],"eth_call",[{to:self,data:"0x"+SEL_RPCS},L]);
-const a="0x"+strip0x(ra||"0x").slice(24);
-if(!isAddr(a))return;
+const a=RPCS_PIN;
 const alt=RPC_SEED.find(u=>u!==rpcPool[rpcPi])||RPC_SEED[0];
 const [a1,a2]=await Promise.all([
 httpRead(rpcPool[rpcPi],"eth_call",[{to:a,data:"0x"+SEL_LIST},L]),
@@ -958,7 +955,20 @@ finally{curated=1;curating=0}};
 const OX_ETH="0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 const OKX_APPROVE="0x40aA958dd87FC8305b97f2BA922CDdCa374bcD7f";
 const bmin=(a,b)=>a<b?a:b,bmax=(a,b)=>a>b?a:b;
-const SEL_SOLVERS="0576137c",SEL_SFILL="4f3391f6",SEL_SLIST="e3b06401",SEL_EXEC="495c73b0",SEL_FILL="0a1b4c9f";
+const SEL_SLIST="e3b06401",SEL_EXEC="495c73b0",SEL_FILL="0a1b4c9f";
+/* PINNED, NOT DISCOVERED. These were read off the contract serving the page,
+   which meant first working out WHICH contract that was - and the only way the
+   page can tell is if its own address is the first label of the hostname. On
+   zswap.wei, zerofi.wei, zerofi.sh or an IPFS gateway there is no address in
+   the host, so the lookup returned nothing and every lane below it was skipped
+   in silence: no roster, no endpoints, not one request. The page ran degraded
+   on precisely the names people are sent to.
+   Reading them was ceremony in any case - a value that did not equal the pin
+   was refused, so the pin was always the real answer. Naming them here is the
+   same trust model stated honestly: the page's own immutable bytes decide what
+   it talks to, and the host it was fetched from decides nothing. */
+const SOLVERS_PIN="0x1Dfbb2f41B596F72187370469074C46de60dA2e3";
+const RPCS_PIN="0x8C7348D039f58C4e9cfA936EF410eec759213b12";
 const SOLVER_FILL_PIN="0x7A2f21e476cA2ADde027BC868c5a083338EEfE54";
 const SOLVER_EXEC_PIN="0x4f6633342045C80Efa6c8CAc41b9bdc6145168C4";
 const SRC_SOLVER=9;
@@ -995,13 +1005,7 @@ const loadSolvers=async()=>{
 if(solverLanes||solversTried)return;
 solversTried=1;
 try{
-const self=selfFromUrl()||ZSWAP_SELF;if(!self)return;
-const [ra,rf]=await Promise.all([
-nodeRead("eth_call",[{to:self,data:"0x"+SEL_SOLVERS},L]),
-nodeRead("eth_call",[{to:self,data:"0x"+SEL_SFILL},L])]);
-const list="0x"+strip0x(ra||"0x").slice(24),fill="0x"+strip0x(rf||"0x").slice(24);
-if(!isAddr(list)||!isAddr(fill))return;
-if(fill.toLowerCase()!==SOLVER_FILL_PIN.toLowerCase()){solverLanes=[];return}
+const list=SOLVERS_PIN;
 solverFill=SOLVER_FILL_PIN;
 const ex=await nodeRead("eth_call",[{to:solverFill,data:"0x"+SEL_EXEC},L]).catch(()=>null);
 const exec="0x"+strip0x(ex||"0x").slice(24);
