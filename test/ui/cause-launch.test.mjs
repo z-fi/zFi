@@ -179,7 +179,11 @@ test('launching a cause', async (t) => {
     // then seventeen words of features this format does not use.
     assert.equal(word(data, 10), ONE, 'proposalThreshold');
     assert.equal(word(data, 11), 604800n, 'proposalTTL');
-    assert.equal(word(data, 12), 172800n, 'timelockDelay');
+    // Three days, not two. Moloch has no voting period, and the creator holds
+    // the only share against a one-share quorum, so a proposal succeeds the
+    // moment they vote. This delay is the whole of the notice a backer gets to
+    // burn out before the exit is closed.
+    assert.equal(word(data, 12), 259200n, 'timelockDelay');
     assert.equal(word(data, 13), ONE, 'quorumAbsolute');
     for (let i = 14; i <= 30; i++) assert.equal(word(data, i), 0n, `SafeConfig word ${i}`);
 

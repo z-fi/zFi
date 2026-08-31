@@ -411,7 +411,7 @@ background:var(--e);margin:.5em auto .1em}
 <p><b>So a cause that raises less than its goal empties faster than the window suggests.</b> Raise a tenth of the goal and the treasury is drained in a tenth of the time &mdash; a tenth of a year, not a year. Since what has not been released is exactly what a backer can still burn back for, an under-subscribed cause can leave its backers with nothing well before the release window is over. Set the window long enough that a partial raise still leaves something behind, and read the daily figure below as the speed at full funding.</p>
 <p>The release clock starts the moment you launch and runs whether or not anyone has backed you yet, which is why it wants to be much longer than the raise. Release over the same thirty days you raise for and the whole treasury is yours the day backing closes &mdash; and somebody who backed you on the last day gets nothing back, because there is nothing left unreleased.</p>
 <p>That is what makes the token worth something on its own: <b>whatever has not been released yet can be burned back for</b>. A backer who changes their mind, or who watches a cause go quiet, redeems their share of the untouched treasury and takes their ether home. Nobody has to agree and nothing has to be voted on.</p>
-<p><b>The creator can close that exit, but not quietly and not quickly.</b> Burning calls <code>ragequit</code>, which the DAO can disable &mdash; and since the creator holds the only share, they alone can propose it and carry the vote. What they cannot do is act on it at once: the change has to go through the DAO, which queues it on chain and then waits out a <b>two-day timelock</b> before it can be executed. That queue is public from the moment it is entered, and burning back stays open the whole time. So the protection is not that nobody can take the exit away; it is that taking it away is visible, and slower than leaving.</p>
+<p><b>The creator can close that exit, but not quietly and not quickly.</b> Burning calls <code>ragequit</code>, which the DAO can disable &mdash; and since the creator holds the only share, they alone can propose it and carry the vote. What they cannot do is act on it at once: the change has to go through the DAO, which queues it on chain and then waits out a <b>three-day timelock</b> before it can be executed. That queue is public from the moment it is entered, and burning back stays open the whole time. So the protection is not that nobody can take the exit away; it is that taking it away is visible, and slower than leaving.</p>
 <p>Backers hold <b>loot</b>, which carries that claim and no vote. You keep a single share and the vote that comes with it, and you buy that share at the same price everyone else pays &mdash; so your claim on the treasury is the same shape as theirs.</p>
 <p>Paste a cause’s token into the swap and the page prices the burn for you, against the treasury rather than against a market. It is the only price such a token has, and it is the honest one.</p></details>
 <details><summary>Fees</summary>
@@ -5769,7 +5769,16 @@ cCalls([
 cCall(dao,SEL_SETALLOW+encAddr(COFF)+encAddr(CLOOT)+encUint(CMAX)),
 cCall(COFF,SEL_CONFIGURE+encAddr(CLOOT)+encAddr(ZERO)+encUint(price)
 +encUint(deadline)+encUint(cap))])];
-const cfg=encUint(CONE)+encUint(604800)+encUint(172800)+encUint(CONE)+Z.repeat(17);
+/* THE TIMELOCK IS THE ONLY REAL DELAY, so it is worth more than the default.
+   Moloch has no voting period and no voting delay - `state` is decided on the
+   tallies alone - and on a cause the creator holds the only share against a
+   quorum of exactly one share. So a proposal reaches Succeeded the moment they
+   vote for it, in the same block if they like. Nothing between proposing and
+   executing is a waiting period EXCEPT this: the first `execute` only queues,
+   and the delay must elapse before a second one performs it. Three days rather
+   than two, because that queue is the entire notice a backer gets to burn out
+   before the exit closes, and it has to survive a weekend. */
+const cfg=encUint(CONE)+encUint(604800)+encUint(259200)+encUint(CONE)+Z.repeat(17);
 const tap=encAddr(CTAP)+Z+encUint(goal)+encAddr(ben)+encUint(rate);
 let off=52*32,heads=[],tail="";
 for(const d of dyn){heads.push(encUint(off));off+=d.length/2;tail+=d}
