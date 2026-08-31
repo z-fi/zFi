@@ -55,11 +55,18 @@ const NAMED_HOSTS = /^(?:[a-z0-9-]+\.)?(?:zfi|zerofi|zswap)\./i;
 // host IS the contract serving the bytes.
 const NAMED_SUFFIXES = ['.wei.limo', '.wei.is'];
 
+// A DOMAIN WE OWN OUTRIGHT, so the name itself is the authorisation - there is
+// no gateway in front of it and no other tenant on it. Apex and one subdomain
+// label, https only; `zerofi.sh.evil.com` is not a match because the test is an
+// exact host, not a suffix.
+const OWN_HOSTS = /^(?:[a-z0-9-]+\.)?zerofi\.sh$/i;
+
 function originAllowed(origin) {
   if (ALLOWED_ORIGINS.includes(origin)) return true;
   let u;
   try { u = new URL(origin); } catch { return false; }
   if (u.protocol !== 'https:') return false;
+  if (OWN_HOSTS.test(u.hostname)) return true;
   if (!ORIGIN_SUFFIXES.some((sfx) => u.hostname.endsWith(sfx))) return false;
   // Only an address-shaped subdomain, so a suffix match cannot hand the keys to
   // an unrelated host that merely lives on the same gateway.
