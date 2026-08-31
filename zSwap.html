@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>zSwap</title>
+<title>zFi</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400' width='400' height='400'%3E%3Crect width='400' height='400' fill='%23000'/%3E%3CclipPath id='frame'%3E%3Crect width='400' height='400'/%3E%3C/clipPath%3E%3Cg clip-path='url(%23frame)'%3E%3Cpath d='M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z' fill='white'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml">
 <meta name="theme-color" id="tc" content="#fafafa">
 <style>:root{color-scheme:light;--b:#fff;--c:#fff;--p:#fff;--f:#000;--m:#666;--n:#666;--e:#ddd;--k:#000;--kf:#fff;--kh:#333;--fh:#f5f5f5;--e2:#ddd;--w:#c33;--hd:#000;--dm:#999}
@@ -22,8 +22,6 @@ pointer-events:none;z-index:1}
 #logo rect{fill:var(--f)}
 #logo path{fill:var(--b)}
 @media(max-width:32em){#logo{display:none}}
-/* Two arcs that cross at the tail. Decorative, inert, and drawn rather than
-   fetched - like everything else here, it costs no request. */
 #fish{position:fixed;z-index:1;pointer-events:none;color:var(--m);opacity:.12;
 left:calc(.9em + env(safe-area-inset-left,0px));
 bottom:calc(.9em + env(safe-area-inset-bottom,0px));
@@ -184,8 +182,6 @@ letter-spacing:.02em;color:var(--f);display:flex;justify-content:space-between;a
 .lqbar.fill>b{right:auto;width:var(--at);opacity:.9}
 #cbEl{display:block;font-size:.75em;line-height:1.5;color:var(--m);margin-top:.6em}
 .cbrow{display:flex;justify-content:space-between;gap:.6em;align-items:baseline}
-/* The status above is a reading; this is the irreversible part. A hairline is
-   the page's cheapest way to say they are not the same sentence. */
 .cbact{display:flex;justify-content:space-between;align-items:center;gap:.7em;
 margin-top:.55em;padding-top:.55em;border-top:1px solid var(--e);color:var(--f)}
 .cbact>span{min-width:0}
@@ -293,33 +289,17 @@ display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hi
 .sc b{display:block;color:var(--f);font-size:1.15em;word-break:break-all}
 .sc .scw{color:var(--w)}
 .sc button{margin-top:.5em;padding:.4em .8em;font-size:1em}
-/* The meta row carries seven controls. On a phone the "Slippage" word is the
-   one that can go - the input keeps its % and its title - and dropping it is
-   what buys "Connect" enough room to be read. This breakpoint was 24em, which
-   is under every current phone (a 390px iPhone is 24.4em), so the rule existed
-   and never fired where it was needed. */
 @media(max-width:30em){#slipL span{display:none}}
 @media(pointer:coarse){
-/* TOUCH TARGETS ARE SIZED IN px, NOT em, ON PURPOSE. Every control on this
-   card sits inside a shrunken type scale, so a `2.4em` bump resolves against
-   .meta's .85em and lands at 32px - the rule looked like it asked for a
-   comfortable target and quietly delivered a small one. Anything a thumb has
-   to hit is given a px floor here so the number in the rule is the number on
-   the glass. */
 #th,#lk,#lq,#ln,#wn{width:36px;height:36px}
-/* Five toggles plus slippage have to share ~322px of card, so 36px is the
-   honest ceiling for the row; the controls with room to grow take the full 44. */
 #sd{width:44px;height:44px;top:.35em;right:.35em}
 #addr{padding:.55em 0;margin:-.55em 0}
-/* The token picker is the most-tapped control on the page and shipped a 16px
-   tall hit box. It has room in the panel header; give it the full target. */
 .tkb{padding:.7em 0 .7em .5em;margin:-.7em 0}
 .flip{width:2.4em;height:2.4em;margin:-1.2em auto}
 #slip{padding:.5em .1em}
 .chtog{padding:1em .1em}
 .fclink{padding:.55em 0;margin:-.55em 0 -.55em .35em}
 .docs summary{padding:1em .2em}
-
 body:has(.tkp:not(.hide))::before{content:"";position:fixed;inset:0;z-index:39;
 pointer-events:none;background:#0000008c}
 .tkp{position:fixed;left:0;right:0;bottom:0;top:auto;width:100%;max-width:none;
@@ -331,23 +311,13 @@ background:var(--e);margin:.5em auto .1em}
 .tkd{-webkit-line-clamp:1}
 .tkr{padding:.75em .9em}
 #tkFind{padding:.85em .9em;font-size:16px}.rcpt,.meta input,.dly input,.lqin{font-size:16px}.lnbtn{padding:.4em .8em}.p button,.o button,.lqbtn{padding:.6em .8em}.chtf button{padding:.5em}
-/* Declared after the shared button rule above, which used to reset it. */
 .tabs button{padding:.95em .5em}
-/* The label IS the target on these rows - tapping the text focuses the
-   control it wraps - so the row height is the real tap size, not the input. */
 .dly{padding:.9em .8em}
 .wnbtn{padding:.95em .8em}
 #amt,#outAmt{padding:.3em 0}
-
 .invh{font-size:11px;top:6px;left:10px;right:10px;gap:.3em;flex-wrap:wrap;row-gap:3px}
 .invq{padding:10px 11px;margin:-10px -6px;opacity:1}
 .invm,.invsh{padding:10px 3px;margin:-10px -1px}}
-/* Declared after the coarse block above, whose 36px rule would otherwise
-   win on source order. Below ~24em (a 375px iPhone SE and down) seven controls genuinely do not fit
-   the row at full size, and the item that loses is the one that matters most -
-   "Connect" was rendering as a 13px sliver. Tighten the gap and the toggles
-   just on these widths so the label survives; 32px is still the size the row
-   shipped with everywhere before this pass. */
 @media(pointer:coarse) and (max-width:24em){
 .meta{gap:.12em}#th,#lk,#lq,#ln,#wn{width:32px;height:32px}#slip{width:2em}}</style>
 <script>const H=document.documentElement;let LS;try{LS=localStorage}catch{LS={}}if(LS.t?LS.t=='d':matchMedia('(prefers-color-scheme:dark)').matches)H.className='d'</script>
@@ -392,7 +362,7 @@ background:var(--e);margin:.5em auto .1em}
 <button id="wnGo" class="primary hide">Register</button>
 <div id="wnRollPanel" class="hide"><div class="lngap">roll.wei</div><small id="wnRollEl" role="status" aria-live="polite"></small><button id="wnEnter" class="wnbtn hide">Enter the roll</button></div>
 <label class="dly hide" id="kindL">Order type<select id="kind"><option value="fixed">Fixed limit</option><option value="dutch">Dutch decay</option><option value="floor">Climbing bid</option></select></label>
-<label class="dly hide" id="dlyL">SLOW<select id="dly"><option value="0">Instant</option><option value="3600">1 hour</option><option value="86400">1 day</option><option value="259200">3 days</option><option value="604800">7 days</option></select></label>
+<label class="dly hide" id="dlyL">SLOW<select id="dly"><option value="0">Instant</option><option value="600">10 minutes</option><option value="3600">1 hour</option><option value="86400">1 day</option><option value="259200">3 days</option><option value="604800">7 days</option></select></label>
 <label class="dly hide" id="tipL" title="A time-locked transfer does not move on its own: once the lock expires somebody has to send the claim transaction. Tick this and the page posts a small ETH tip alongside the deposit, which pays a keeper to claim it for the recipient the moment it matures. The tip is refundable — if you reverse the transfer, the ether comes back to you.">Auto-claim<span class="tipr"><small id="tipNote"></small><input id="tipCk" type="checkbox" aria-describedby="tipNote"></span></label>
 <label class="dly hide" id="fillL">Fill<select id="fill"><option value="1">Any amount</option><option value="0">All or nothing</option></select></label>
 <label class="dly hide" id="floorL">Floor total<input id="floorAmt" inputmode="decimal" placeholder="0.0"></label>
@@ -650,14 +620,6 @@ outDiffers:(tA===ZERO)!==(t.addr===ZERO)};
 }
 const routableReq=pools=>({to:PPOLICY,
 data:"0x"+SEL_ROUTABLE+encUint(32)+encUint(BigInt(pools.length))+pools.map(encAddr).join("")});
-/* FAIL OPEN, DELIBERATELY. Every early return here says "not refused", so an
-   answer the page cannot read - no returndata, a short array, a length that
-   disagrees with what was asked - leaves the venue in the contest rather than
-   removing it. This looks like the wrong direction and is not: the policy is
-   an owner's blocklist, not a safety check, and a flaky read of it would
-   otherwise disable a whole first-party venue for everyone. The cost of being
-   wrong is one reverting simulation, which the pre-flight catches before it is
-   signed. `test/ui/harness.mjs` exercises this path through `policyUnreadable`. */
 function policyRefuses(raw,n){
 if(!raw)return false;
 const h=strip0x(raw);
@@ -804,13 +766,6 @@ async function loadTokenList(){
 if(TOKENLIST===ZERO)return setListSource("registry address not set");
 setListNote("Built-in token list \u2014 checking zList\u2026");
 try{
-/* THE TWO HALVES OF THIS LIST ARE INDEPENDENT UNTIL THE DEDUP AT THE END.
-   The launched-coin scan used to wait for the ranking read AND all 64 zList
-   rows before it asked its first question, which put three round trips in a
-   line that never needed to be one. Started here, it runs alongside them and
-   is simply awaited where it was already used. Its own try/catch below is
-   still the thing that handles a failure; the bare catch attached here only
-   keeps a rejection from going unhandled if the rows throw first. */
 const cntJob=rpc(C,[{to:PFACTORY,data:"0x"+SEL_BYCREATOR_N+encAddr(PLAUNCH)},L]);
 cntJob.catch(()=>{});
 const ids=await rankedIds();
@@ -893,13 +848,6 @@ setListNote(rankFellBack?"Ranked by listing order — conviction unavailable":""
 }catch(e){setListSource("could not be reached")}
 }
 const strip0x=h=>h.startsWith("0x")?h.slice(2):h;
-/* `padStart` PADS; IT NEVER TRUNCATES. A value wider than a word therefore
-   produced an over-long field, and since these are concatenated positionally
-   every word after it shifts by the overflow - the amounts, the bounds, the
-   recipient. The result is not a rejected transaction but a differently-shaped
-   one, and it was only ever caught downstream by a simulation that happened to
-   revert. A word that will not fit in a word is a bug in the caller, so it
-   throws here rather than encoding something adjacent to what was meant. */
 const pad32=h=>{const x=strip0x(h);
 if(x.length>64)throw Error("ABI word overflow");
 return x.padStart(64,"0")};
@@ -931,10 +879,6 @@ const fp=s.slice(-dec).replace(/0+$/,"");
 return fp?`${ip}.${fp}`:ip;
 };
 const trimAmt=(v,dec)=>{const s=formatUnits(v,dec),i=s.indexOf(".");if(i<0)return s;const r=s.slice(0,i+7).replace(/\.?0+$/,"");return r==="0"&&v?s:r};
-// Fixed decimal places are the honest unit for an amount field, and useless
-// for a comparison: on a token like WBTC every venue in the list renders as
-// "0.000031" and the reader is left reading percentages. This keeps enough
-// significant digits to separate them, whatever the token's scale.
 const sigAmt=(v,dec,sig=6)=>{
 const s=formatUnits(v,dec),i=s.indexOf(".");
 if(i<0||v===0n)return s;
@@ -953,11 +897,6 @@ if(el.style.fontSize!==s)el.style.fontSize=s;
 };
 const decQ=(hex,slip,eo,u,v,S,mv)=>{
 const h=strip0x(hex),num=i=>BigInt("0x"+h.slice(i*64,(i+1)*64)),E=()=>{throw Error("bad quote")};
-// The guard has to cover every word this function goes on to READ, and `mv`
-// can sit past `v+1`. Short by one word, a truncated response reached
-// `BigInt("0x")` and threw - caught upstream into a silent dropped venue
-// rather than the intended `bad quote`, which is the difference between a
-// venue that failed and a venue that was never counted.
 if(h.length<Math.max(v+2,(mv||v+1)+1)*64)E();
 const o=Number(num(v))*2;if(o+64>h.length)E();
 const n=Number(BigInt("0x"+h.slice(o,o+64)));if(!n||o+64+n*2>h.length)E();
@@ -972,10 +911,6 @@ const prov=()=>PROV||window.ethereum;
 const RPC_SEED=["https://ethereum-rpc.publicnode.com","https://eth-mainnet.public.blastapi.io"];
 let rpcPool=RPC_SEED.slice(),rpcPi=0,curated=0,curating=0,curatedTry=0;
 const SEL_RPCS="0b6feb61",SEL_LIST="d77e4c79";
-// The satellite returns `string[]`, not a `|`-packed string: a mis-split is a
-// silent failure - an entry that loses its scheme is not a malformed URL, it
-// is a request somewhere else - so the page decodes the ABI rather than a
-// separator. Bounded on purpose: a roster longer than this is not curation.
 const decStrArr=h=>{const b=strip0x(h||"");if(b.length<128)return[];
 const W=i=>parseInt(b.slice(i*64,i*64+64),16);
 const off=W(0)/32;if(!Number.isInteger(off))return[];
@@ -1005,21 +940,11 @@ return j?j.result:null;
 const loadCurated=async()=>{
 if(curating||Date.now()-curatedTry<60000)return;
 curating=1;curatedTry=Date.now();
-// `curated` is set on EVERY exit, including the failures. It used to be set
-// only on the success paths, so a satellite that could not be read - a version
-// that predates it, a node that refuses eth_call - left the page retrying the
-// same two calls every 60s for the life of the session, silently, forever.
 try{
 const self=selfFromUrl()||ZSWAP_SELF;if(!self)return;
 const ra=await httpRead(rpcPool[rpcPi],"eth_call",[{to:self,data:"0x"+SEL_RPCS},L]);
 const a="0x"+strip0x(ra||"0x").slice(24);
 if(!isAddr(a))return;
-// QUORUM, NOT TRUST. The roster tells the page where to read, and the page
-// learns the roster by reading - so a single node that answers this call
-// answers the question of whom to believe next, and every read after it. Two
-// independent endpoints must agree, and the second is always one of the page's
-// own baked-in seeds, which no curation can displace: a curated pool that has
-// drifted entirely to one operator can then never certify its own successor.
 const alt=RPC_SEED.find(u=>u!==rpcPool[rpcPi])||RPC_SEED[0];
 const [a1,a2]=await Promise.all([
 httpRead(rpcPool[rpcPi],"eth_call",[{to:a,data:"0x"+SEL_LIST},L]),
@@ -1027,78 +952,24 @@ httpRead(alt,"eth_call",[{to:a,data:"0x"+SEL_LIST},L])]);
 if(!a1||!a2||strip0x(a1)!==strip0x(a2))return;
 const urls=decStrArr(a1).map(s=>s.trim()).filter(s=>/^https:\/\/\S+$/.test(s));
 if(!urls.length)return;
-// Curated entries go in front, but the seeds stay in the pool behind them -
-// the page never ends a session unable to reach a node it shipped with.
 rpcPool=[...new Set(urls.concat(rpcPool,RPC_SEED))];
 }catch{}
 finally{curated=1;curating=0}};
-// ---------------------------------------------------------- SOLVER LANES
-//
-// The off-chain aggregators this page may race its own venues against. The
-// roster is on chain (zSolverList) so it can change without a new page, but
-// THREE things are pinned in the page's own immutable server and are not the
-// roster's to choose:
-//
-//   SOLVERS()      which roster to read
-//   SOLVER_FILL()  the ONLY adapter a route may execute through
-//   EXEC()         where that adapter expects the output to land
-//
-// The pin is the whole reason a roster read over an untrusted node is safe. A
-// hostile RPC can hand back any `solvers()` it likes; it cannot make the page
-// call an adapter the page was not built with. A lane naming any other adapter
-// is dropped, silently and always.
-//
-// AND THE PIN MUST BE IN THE PAGE. Reading SOLVER_FILL() back over the same
-// untrusted node the roster came from pins nothing: one hostile node answers
-// both calls and the "pin" becomes whatever it says. These two constants are
-// the immutable values from src/zSwap.sol and src/utils/zSolverFill.sol, and
-// they are what the node's answer is checked AGAINST. A mismatch is not a
-// lane to drop - it means the node is lying about the page's own server, so
-// the entire solver path is abandoned for the session.
-//
-// A lane also cannot teach the page a new protocol. Only the shapes below are
-// understood; an unrecognised name is skipped. Adding a record can re-point a
-// protocol the page already speaks - never introduce one it does not.
 const OX_ETH="0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 const OKX_APPROVE="0x40aA958dd87FC8305b97f2BA922CDdCa374bcD7f";
 const bmin=(a,b)=>a<b?a:b,bmax=(a,b)=>a>b?a:b;
 const SEL_SOLVERS="0576137c",SEL_SFILL="4f3391f6",SEL_SLIST="e3b06401",SEL_EXEC="495c73b0",SEL_FILL="0a1b4c9f";
-// zSwap.SOLVER_FILL (immutable constant) and the zSolverExec it deployed.
 const SOLVER_FILL_PIN="0x7A2f21e476cA2ADde027BC868c5a083338EEfE54";
 const SOLVER_EXEC_PIN="0x4f6633342045C80Efa6c8CAc41b9bdc6145168C4";
 const SRC_SOLVER=9;
 const SOLVER_DEADLINE=1500,SOLVER_STRIKES=3;
 let solverLanes=null,solverFill=null,solverExec=null,solversTried=0;
 const _strikes=new Map();
-// A lane answering 401/403/429 is refusing this origin, not rate-limiting one
-// request. Three refusals and it sits out the session; anything that recovers
-// on its own is reset by the first answer that is not a refusal.
 const laneDown=n=>(_strikes.get(n)||0)>=SOLVER_STRIKES;
 const laneSaw=(n,st)=>{if(st===401||st===403||st===429)_strikes.set(n,(_strikes.get(n)||0)+1);else _strikes.delete(n)};
-/* A REFUSAL THE BROWSER WILL NOT LET US READ IS STILL A REFUSAL. A 403 without
-   an access-control-allow-origin header does not resolve into a Response - the
-   fetch REJECTS - so the status check above never ran, no strike was ever
-   recorded, and four lanes that are refused from the deployed origin were
-   re-queried on every quote for the whole session, spending the full deadline
-   each time. A timeout is a slow lane and must not be struck; anything else
-   that throws is the lane declining to talk to us. */
 const laneThrew=(n,e)=>{if(!e||e.name!=="AbortError")_strikes.set(n,(_strikes.get(n)||0)+1)};
-/* ONE PREDICATE FOR BOTH THE CONTEST AND THE TABLE. Selection rejected a
-   candidate with a bad target or bad data; ranking only checked that it
-   carried a number. So a lane nobody could ever trade against could still sort
-   to the top of the list and become `top` - the baseline every printed gap is
-   measured from, and the row captioned "Best floor - click to use it".
-   `spender` is checked here too. `encAddr` would throw on a malformed one, but
-   that throw lands deep in the build, after the row has already been printed
-   as the best floor and clicked; rejecting it here drops the candidate before
-   it can be offered. */
 const laneOk=c=>!!c&&isAddr(c.target)&&(c.spender==null||isAddr(c.spender))
 &&/^0x[0-9a-fA-F]*$/.test(c.data||"")&&strip0x(c.data||"").length%2===0;
-
-// Decode `solvers()` -> (string name, string endpoint, address adapter,
-// uint16 handicapBps, bool enabled)[]. Hand-rolled because the page carries no
-// ABI library, and bounded at every step: a malformed answer yields fewer
-// lanes, never a thrown quote.
 const decSolvers=h=>{const b=strip0x(h||"");if(b.length<128)return[];
 const W=i=>parseInt(b.slice(i*64,i*64+64),16);
 const str=w=>{const n=W(w);if(!(n>=0&&n<=256))return null;let o="";const base=(w+1)*64;
@@ -1120,7 +991,6 @@ handicapBps:BigInt(W(t+3)),
 enabled:W(t+4)===1});
 }
 return out}catch{return[]}};
-
 const loadSolvers=async()=>{
 if(solverLanes||solversTried)return;
 solversTried=1;
@@ -1131,7 +1001,6 @@ nodeRead("eth_call",[{to:self,data:"0x"+SEL_SOLVERS},L]),
 nodeRead("eth_call",[{to:self,data:"0x"+SEL_SFILL},L])]);
 const list="0x"+strip0x(ra||"0x").slice(24),fill="0x"+strip0x(rf||"0x").slice(24);
 if(!isAddr(list)||!isAddr(fill))return;
-// The node does not get to name the adapter. It may only agree with the page.
 if(fill.toLowerCase()!==SOLVER_FILL_PIN.toLowerCase()){solverLanes=[];return}
 solverFill=SOLVER_FILL_PIN;
 const ex=await nodeRead("eth_call",[{to:solverFill,data:"0x"+SEL_EXEC},L]).catch(()=>null);
@@ -1140,25 +1009,17 @@ if(!isAddr(exec))return;
 if(exec.toLowerCase()!==SOLVER_EXEC_PIN.toLowerCase()){solverLanes=[];return}
 solverExec=SOLVER_EXEC_PIN;
 const raw=await nodeRead("eth_call",[{to:list,data:"0x"+SEL_SLIST},L]);
-// THE PIN. Anything not naming the built-in adapter is not a lane.
 solverLanes=decSolvers(raw).filter(x=>x.enabled
 &&x.adapter.toLowerCase()===SOLVER_FILL_PIN.toLowerCase()
 &&/^https:\/\/\S+$/.test(x.endpoint)
 &&SOLVER_SHAPES[x.name]);
 }catch{solverLanes=[]}};
-
 const lanePost=async(name,url,body,ms)=>{
 const ac=new AbortController(),k=setTimeout(()=>ac.abort(),ms);
 try{const r=await fetch(url,{method:"POST",headers:{"content-type":"application/json"},
 body:JSON.stringify(body),signal:ac.signal});laneSaw(name,r.status);
 if(!r.ok)return null;return await r.json()}
 catch(e){laneThrew(name,e);return null}finally{clearTimeout(k)}};
-// One quote per keystroke used to mean seven heavy round trips per keystroke.
-// A short TTL plus in-flight dedup turns a burst of typing into one request per
-// lane per pair-and-amount, which is the difference between a lane answering
-// and a lane being rate-limited into silence. The window is deliberately short:
-// a stale route is worse than a slow one, and the adapter's bound is what makes
-// a slightly stale QUOTE safe, not this.
 const LANE_TTL=15000,LANE_MAX=64;
 const _laneHit=new Map(),_laneWait=new Map();
 const laneCached=(k,go)=>{
@@ -1168,61 +1029,23 @@ const w=_laneWait.get(k);
 if(w)return w;
 const pr=go().then(v=>{
 _laneWait.delete(k);
-/* Cache an ANSWER, not a failure. A single timeout used to bench a working
-   lane for the full TTL, so one slow moment cost it every quote for fifteen
-   seconds. In-flight dedup above still collapses the burst either way. */
 if(v!==null&&v!==undefined){_laneHit.set(k,{v,t:Date.now()});
 if(_laneHit.size>LANE_MAX)_laneHit.delete(_laneHit.keys().next().value);}
 return v},e=>{_laneWait.delete(k);throw e});
 _laneWait.set(k,pr);return pr};
-
-// Which venue the user has pinned by hand, if any. Null is the default and
-// means "whichever floor is highest", which is the honest answer; this exists
-// because somebody who wants a particular venue is entitled to it, not because
-// overriding is usually a good idea. See where it is applied.
 let laneOverride=null,laneOverrideFor="";
-/* A PIN BELONGS TO THE TRADE IT WAS MADE ON. Nothing ever cleared this, so a
-   venue picked by hand on one pair stayed pinned through a change of pair, of
-   amount, of direction and of tab - still skipping the floor test and the
-   handicap, on a trade the user never picked it for, and still drawn as
-   "Pinned" so it looked deliberate. Scoped to the pair and direction instead
-   of cleared on a list of events, because the list is what goes stale. */
 const laneScope=()=>`${fromSel.value}|${toSel.value}|${tab}|${mode}`;
 const lanePin=()=>laneOverride&&laneOverrideFor===laneScope()?laneOverride:null;
-
 const laneGet=async(name,url,ms)=>{
 const ac=new AbortController(),k=setTimeout(()=>ac.abort(),ms);
 try{const r=await fetch(url,{signal:ac.signal});laneSaw(name,r.status);
 if(!r.ok)return null;return await r.json()}
 catch(e){laneThrew(name,e);return null}finally{clearTimeout(k)}};
-
-// Each shape returns {out, target, spender, data}. `out` is what the lane
-// CLAIMS; nothing downstream trusts it beyond ranking, because the adapter
-// measures what actually arrives and the floor comparison below is what
-// decides whether the claim was worth acting on.
-//
-// Every lane is asked to pay EXEC, never the user: a delta measured anywhere
-// else could be forged by an unrelated transfer in the same block, so a route
-// that pays the user directly measures nothing and reverts by design.
-// EXACT OUTPUT, where the lane supports it. Three of the seven do: 0x takes
-// `buyAmount`, ParaSwap takes `side=BUY`, Bebop takes `buy_amounts`. 1inch,
-// KyberSwap and Enso are sell-side only, and OKX's buy mode is not the same
-// call - so on an exact-output quote those four simply do not run. That is
-// four fewer challengers, not a broken quote: the chain still priced it.
-//
-// The shape returns {inp, target, spender, data} - what the lane says it needs
-// to SPEND. Lower is better here, which inverts every comparison downstream.
 const SOLVER_SHAPES_OUT={
 "0x":async(ep,f,t,amt,slip,ms)=>{
 const q=new URLSearchParams({chainId:"1",sellToken:f===ZERO?OX_ETH:f,buyToken:t===ZERO?OX_ETH:t,
 buyAmount:amt.toString(),taker:solverExec,slippageBps:String(slip)});
 const j=await laneGet("0x",`${ep}/swap/allowance-holder/quote?${q}`,ms);
-// A BUY-SIDE QUOTE HAS NO `sellAmount`. It reports `estimatedNetSellAmount`
-// for what it expects to spend and `maxSellAmount` for what it will not
-// exceed - and the second is 0x's OWN ceiling, tighter and more honest than
-// one derived by multiplying the first by the slippage we asked for. Reading
-// the wrong field here does not fail loudly: the lane returns null and never
-// wins, silently, forever. This one did, until the API was actually asked.
 if(!j||!j.transaction||!j.estimatedNetSellAmount)return null;
 return{inp:BigInt(j.estimatedNetSellAmount),
 cap:j.maxSellAmount?BigInt(j.maxSellAmount):0n,
@@ -1238,40 +1061,18 @@ srcToken:f===ZERO?OX_ETH:f,destToken:t===ZERO?OX_ETH:t,
 srcDecimals:route.srcDecimals,destDecimals:route.destDecimals,
 priceRoute:route,userAddress:solverExec,slippage:Number(slip)},ms);
 if(!j||!j.to||!j.data)return null;
-/* Buy side, same reasoning inverted: what you PAY is whichever of the two is
-   larger. They are equal today and the direction of the fee is ParaSwap's to
-   change, so take the pessimistic one rather than the one that reads right. */
 return{inp:bmax(BigInt(route.srcAmount),BigInt(route.srcAmountAfterFee||route.srcAmount)),
 target:j.to,spender:route.tokenTransferProxy||j.to,data:j.data}},
-// BEBOP IS NOT HERE, and the reason is that I could not verify it. Asking the
-// live API for `buy_amounts` returns "No routes found" for the pairs tried, so
-// the response shape a buy-side quote takes is unknown - which means the field
-// names below would have been a guess, and a wrong guess in a lane shape does
-// not fail loudly. It returns null and loses every race in silence. A lane
-// nobody can prove works is worse than a lane that is absent.
 };
-
 const SOLVER_SHAPES={
 "0x":async(ep,f,t,amt,slip,ms)=>{
 const q=new URLSearchParams({chainId:"1",sellToken:f===ZERO?OX_ETH:f,buyToken:t===ZERO?OX_ETH:t,
 sellAmount:amt.toString(),taker:solverExec,slippageBps:String(slip)});
 const j=await laneGet("0x",`${ep}/swap/allowance-holder/quote?${q}`,ms);
 if(!j||!j.transaction||!j.buyAmount)return null;
-// `allowanceTarget` is the contract that pulls the input, and it is published
-// separately for a reason even though it equals `transaction.to` today.
-// Approving the router because the two happen to match is a coincidence to
-// rely on, not a fact.
 return{out:BigInt(j.buyAmount),target:j.transaction.to,
 spender:j.allowanceTarget||j.transaction.to,data:j.transaction.data}},
-// Two-step lanes: a price call to learn the route, then a build call to turn
-// it into calldata. Both legs share the deadline, so a slow first leg simply
-// costs the lane its turn rather than the whole quote.
 "ParaSwap":async(ep,f,t,amt,slip,ms,fd,td)=>{
-// DECLARE THE PAIR'S REAL DECIMALS. ParaSwap validates these against its own
-// token registry, so hardcoding 18 did not fail loudly - it made the lane
-// return nothing on USDC, USDT, WBTC and every other non-18-decimal token,
-// which is to say on most of the volume. A lane that loses silently is the
-// failure this file keeps having to guard against.
 const q=new URLSearchParams({srcToken:f===ZERO?OX_ETH:f,destToken:t===ZERO?OX_ETH:t,
 amount:amt.toString(),srcDecimals:String(fd??18),destDecimals:String(td??18),
 side:"SELL",network:"1",version:"6.2"});
@@ -1282,10 +1083,6 @@ srcToken:f===ZERO?OX_ETH:f,destToken:t===ZERO?OX_ETH:t,
 srcDecimals:route.srcDecimals,destDecimals:route.destDecimals,
 priceRoute:route,userAddress:solverExec,slippage:Number(slip)},ms);
 if(!j||!j.to||!j.data)return null;
-/* `destAmount` is BEFORE the partner fee; `destAmountAfterFee` is what lands.
-   Reporting the pre-fee number over-credited ParaSwap by the fee in the win
-   test and set the floor above what arrives, which reverts on its own bound at
-   any slippage tighter than the fee. */
 return{out:bmin(BigInt(route.destAmount),BigInt(route.destAmountAfterFee||route.destAmount)),
 target:j.to,spender:route.tokenTransferProxy||j.to,data:j.data}},
 "KyberSwap":async(ep,f,t,amt,slip,ms)=>{
@@ -1310,17 +1107,8 @@ slippagePercent:(Number(slip)/100).toString(),userWalletAddress:solverExec,swapM
 const j=await laneGet("OKX",`${ep}/dex/aggregator/swap?${q}`,ms);
 const d=j&&j.code==="0"&&j.data&&j.data[0];
 if(!d||!d.tx||!d.tx.to||!d.routerResult||!d.routerResult.toTokenAmount)return null;
-/* OKX pulls through its DexTokenApproveProxy, never through the router it
-   tells you to call, and the proxy's address appears nowhere in the swap
-   payload - only in OKX's own /approve-transaction answer. Approving `tx.to`
-   reverted every ERC20 OKX fill. Pinned rather than fetched because it is one
-   more round trip inside a 1500 ms deadline for a value that has not moved;
-   `routerResult.router` is NOT this - it is a "<in>--<out>" label. */
 return{out:BigInt(d.routerResult.toTokenAmount),target:d.tx.to,
 spender:f===ZERO?null:OKX_APPROVE,data:d.tx.data}},
-// Bebop is RFQ and quotes ERC20 pairs only, so ETH is quoted as WETH. The
-// adapter is not told that - it is asked for the pair the user actually
-// picked - so an ETH leg simply has no Bebop lane rather than a wrong one.
 "Bebop":async(ep,f,t,amt,slip,ms)=>{
 if(f===ZERO||t===ZERO)return null;
 const q=new URLSearchParams({sell_tokens:f,buy_tokens:t,sell_amounts:amt.toString(),
@@ -1331,11 +1119,6 @@ const route=rs.find(x=>x.type===j.bestPrice)||rs[0];
 const qq=route&&route.quote;if(!qq||!qq.tx||!qq.buyTokens)return null;
 const info=Object.values(qq.buyTokens)[0];
 if(!info||!info.amount||!qq.tx.to)return null;
-/* THE PULLER IS NOT THE CALLEE. Bebop's best route is usually JAM, and JAM's
-   settlement contract is not the one that moves the tokens: `tx.to` is
-   0xbeb0b0..4ea6 while the allowance has to sit on `approvalTarget`
-   0xC5a3..579a. Approving `tx.to` meant every Bebop win reverted. The field is
-   in the answer; a route that omits it is not one we can approve for. */
 const bebSp=qq.approvalTarget||qq.approval_target;
 if(!isAddr(bebSp||""))return null;
 return{out:BigInt(info.amount),target:qq.tx.to,spender:bebSp,data:qq.tx.data}},
@@ -1419,14 +1202,6 @@ const retAddr=h=>{const s=strip0x(h||"");
 if(s.length!==64||/[^0-9a-fA-F]/.test(s)||/[^0]/.test(s.slice(0,24)))return"";
 const a="0x"+s.slice(24).toLowerCase();
 return /^0x0{40}$/.test(a)?"":a};
-/* ASCII ONLY, WHICH IS THE POINT - a Unicode gate here would let a homoglyph
-   label render as a name the user recognises and resolve somewhere else, and
-   this page does no ENSIP-15 normalisation to catch that. But the printable
-   range is wider than any label a normalising resolver will accept: `_ ~ ! $ +
-   / % @` and a leading or trailing hyphen all passed straight into an
-   unnormalised namehash, where they hash to a name no compliant client agrees
-   is the same one. Narrowed to what ENSIP-15 actually admits, so a name this
-   page resolves is a name every other client resolves identically. */
 const nameOk=n=>/^[a-z0-9.-]+$/.test(n)
 &&n.split(".").every(l=>l.length>0&&l[0]!=="-"&&l[l.length-1]!=="-");
 const nsFwd=async(reg,n)=>{const id=await rpc(C,[{to:reg,data:"0x"+SEL_CID+encStr(n)},L]);
@@ -1617,25 +1392,7 @@ if(ok)mcOk++;else mcFailed++;
 out.push(ok?"0x"+h.slice((lw+1)*64,(lw+1)*64+len*2):null)}
 return out};
 const mc3=async(cs,tag=L)=>cs.length?decAgg3(await rpc(C,[{to:MC3,data:encAgg3(cs)},tag])):[];
-/* WHAT A NODE WILL SWALLOW IS WORTH REMEMBERING. This cap is learned by
-   probing - start small, grow on success, halve on failure - and it used to
-   start at 4 on every single load and climb from there. A clean load runs ~150
-   sub-calls through here without a single failure and still finished at 8,
-   because growth needs four CONSECUTIVE full batches and most batches are
-   smaller than the cap, so the streak keeps resetting. The page paid for that
-   lesson on every visit and then threw it away.
-   So: persist it, and let a shorter streak carry it up. The failure path is
-   unchanged and still authoritative - a cap that is too high halves on the
-   first error and the lower value is written back immediately, so a weak node
-   is not re-learned from scratch every load either. Clamped on read because
-   localStorage is user-writable and a bogus value here means a batch that
-   never succeeds. */
 const MC3_MAX=16;
-/* A cold visitor starts at 8, not 4. Multicall3 is on every chain this page
-   speaks to and 8 is a small ask; a full clean load - quote lenses included -
-   runs ~150 sub-calls at caps up to 14 without one failure. If a node does
-   object, the catch below halves on the first error and writes the smaller
-   number back, so the cost of guessing high is one round trip, once. */
 const MC3_COLD=8;
 const mc3Clamp=n=>Number.isFinite(n)&&n>=2&&n<=MC3_MAX?Math.floor(n):MC3_COLD;
 let mc3Cap=mc3Clamp(Number(LS["zswap:mc3"]));
@@ -1697,14 +1454,6 @@ const safeSym=s=>String(s??"").replace(/[<>&"'`]/g,"")
 .replace(/[\u0000-\u001f\u007f]/g,"").trim().slice(0,16)||"?";
 const safeUrl=u=>{u=String(u??"").trim();
 return u.length<=32768&&/^(?:https:\/\/|data:image\/[a-z.+-]+;base64,)[^\s<>"'`\\]+$/i.test(u)?u:""};
-// THE CURATED LIST CANNOT REACH OFF CHAIN, BY CONSTRUCTION. `safeUrl` admits
-// https:// because an arbitrary NFT's own tokenURI may legitimately point at
-// one, and blanking those cards would be worse than fetching them. The token
-// REGISTRY is a different matter: every row in it today carries a `data:` URI,
-// artwork and all, and this page says so in its own documentation. Enforcing
-// it here turns that from a property of the current curation into a property
-// of the page - a future row naming a host cannot put that host in the render
-// path, it simply falls back to the generated letter mark.
 const safeDataUrl=u=>{u=String(u??"").trim();
 return u.length<=32768&&/^data:image\/[a-z.+-]+;base64,[A-Za-z0-9+/=]+$/i.test(u)?u:""};
 const genIcon=sym=>`<svg width="20" height="20" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#999"/><text x="16" y="21" text-anchor="middle" fill="#fff" font-size="13" font-weight="600" font-family="system-ui">${(safeSym(sym)[0]||"?").toUpperCase()}</text></svg>`;
@@ -1848,8 +1597,6 @@ return true;
 };
 const settlePair=keep=>{if(pairChosen)restorePair(keep);else rankedDefaults()};
 const adoptList=keep=>{
-/* The pair is about to move. Anything bound to the pair that is still on
-   screen is now bound to something the screen no longer shows. */
 cbDisarm();
 rebuild();
 settlePair(keep);
@@ -2693,25 +2440,8 @@ if(+chainId!==1){stat.textContent="Switch to Ethereum mainnet.";return}
 sessionStorage.removeItem("dc");
 account=accs[0];sOpen();
 const keepPair=pairAddrs();
-/* THE WALLET IS CONNECTED THE MOMENT WE HAVE AN ACCOUNT - SAY SO THEN.
-   `showAddr` used to sit behind `await loadTokenList()`, so the button read
-   "Connecting..." for as long as the list took. It is a read-heavy load and
-   nothing in it depends on the account, so the wallet was already connected
-   while the page still looked stuck. Reported from a wallet-connection trace
-   by the Freedom browser integrators, and it is worse on their stack than on
-   ours: once a provider exists EVERY read here goes through it, so that list
-   load lands on whatever routing the user has configured - a P2P light client
-   or an n-of-m quorum - rather than on our own node pool. */
 showAddr();
-/* And do not read it twice. Startup already loads the list through our own
-   pool; re-running it here repeated ~150 sub-calls, that time through the
-   wallet, for a result that cannot differ - nothing in `loadTokenList` is
-   account-dependent. Reload only when we do not have one yet, which is the
-   case where the first attempt failed or has not landed. */
 if(!listLive){
-/* Only reachable when the startup load has not landed. The address is on
-   screen by now, so "Connecting..." would be describing something that already
-   happened; name the thing actually being waited on instead. */
 swap.textContent="Loading tokens\u2026";
 await loadTokenList();
 }
@@ -2883,14 +2613,6 @@ const candJob=acct?swapCandidates(f.addr,t.addr,quoteBlock).catch(()=>{
 const x=[];x.unavailable=true;return x
 }):Promise.resolve([]);
 const gasPriceJob=acct?rpc("eth_gasPrice",[]).then(BigInt).catch(()=>0n):Promise.resolve(0n);
-// THESE TWO ARE THE VENUES ONLY THIS PAGE CAN SEE - hooked V4 pools declared
-// in the token registry, and the precision pools - so losing one to a
-// transient failure costs exactly the edge the page exists to have. Swallowing
-// the error into `null` is right (a dead venue must not take the quote down)
-// but doing it SILENTLY is not: these are single-shot, there is no retry, and
-// nothing downstream could tell the difference between "this venue had nothing
-// to offer" and "this venue was never asked". `venueLost` carries that into
-// the same disclosure the multicall degradation uses.
 let venueLost=false;
 const v4Job=isIn?quoteV4Pools(f,t,swapAmt,quoteBlock).catch(()=>{venueLost=true;return null}):Promise.resolve(null);
 const preJob=isIn?quotePrecision(f,t,swapAmt,PROUTE,quoteBlock).catch(()=>{venueLost=true;return null}):Promise.resolve(null);
@@ -2984,21 +2706,6 @@ if(!r)r=pc;
 if(!r&&curveOnlyOut)throw Object.assign(Error(`exact-output is unavailable for this pair — enter an amount to PAY instead`),{exactOut:1});
 if(!r)throw Error("bad quote");
 if(r.best.amountIn<=0n||r.best.amountOut<=0n||(!isIn&&r.amountLimit<r.best.amountIn))throw Error("bad quote");
-// FOLD V4 AND THE PRECISION POOLS IN BEFORE THE BOOK IS JUDGED, NOT AFTER.
-// The orderbook's `saving` is measured against `r`, and `r` was still the
-// zQuoter-only winner at that point - so the book was compared to the wrong
-// reference, and a hybrid could be declared a win, gas-justified and labelled
-// "Orderbook + AMM" on the strength of beating a route that was not the best
-// one available. The final selection was still a true max, so no wrong route
-// executed; the DECISION and the label were taken against the wrong baseline.
-//
-// AND ON THE RIGHT AXIS. The old comparison was `amountOut >` in both
-// directions, but on an exact-output quote every candidate carries the same
-// amountOut - it is the amount the user asked for - so that test can never be
-// true. Today the point is moot: `v4Job` and `preJob` are gated on `isIn`, so
-// both are null here on exact-out and this loop does nothing. The `amountIn <`
-// arm is kept so that the day either venue learns to quote exact-out it is
-// compared on what it COSTS, rather than silently never winning.
 for(const c of [v4c,pc]){
 if(!c||c===r)continue;
 if(isIn?c.best.amountOut>r.best.amountOut:c.best.amountIn<r.best.amountIn)r=c;
@@ -3044,15 +2751,6 @@ const q=decQ(raw,0n,eo,4,9);
 const v=isIn?q.best.amountOut:q.best.amountIn;
 if(v>0n)return v;
 }catch{}
-/* SECOND WAY TO PRICE THE SAME GAS. The quote above is the standard router's
-   ETH route, and a pair that lives only on a Precision or V4 pool has no such
-   route - the call fails for every amount, forever. Since "no gas price, no
-   book" is deliberate, that failure did not merely lose a comparison: it
-   disabled the orderbook permanently for exactly the pairs whose only AMM is a
-   first-party one. But this quote already knows what the token is worth in
-   ether, because one side of it IS ether: the winning route's own rate prices
-   the gas without asking anybody. Only when neither side touches ether is the
-   gas genuinely unpriceable, and only then does the book stand down. */
 const ethSide=f.addr===ZERO||f.addr.toLowerCase()===WETH.toLowerCase();
 const tokSide=t.addr===ZERO||t.addr.toLowerCase()===WETH.toLowerCase();
 const inA=r.best.amountIn,outA=r.best.amountOut;
@@ -3104,25 +2802,6 @@ const extraWei=gasPrice*(120000n+105000n*BigInt(p.fills.length));
 gasFloor=await gasValue(extraWei);
 }
 }
-// THE BOOK MUST OUT-EARN THE GAS IT COSTS, AND WHEN THAT CANNOT BE PRICED IT
-// DOES NOT GET A CONSOLATION RULE. The primary test is the honest one: the
-// extra output has to beat 1.2x the extra gas, where the extra gas is
-// `gasPrice * (120000 + 105000 * fills)` converted into the output token.
-//
-// The old fallback fired whenever that number was unavailable - a failed
-// gas-price read, or a `gasValue` quote that failed - and replaced it with a
-// flat 0.05% + 0.02%/fill edge carrying NO GAS TERM AT ALL. On a $50 trade
-// with three fills that is a five-cent threshold against roughly 435k gas of
-// extra execution: the page would route through the book and lose money, and
-// it fired exactly when the RPC was already degraded.
-//
-// `gasFloor === 0n` was the same bug wearing a different hat. A quote that
-// succeeds but rounds to zero - a small trade into a low-decimal output - made
-// `saving * 10 > 0` true for a saving of one wei, i.e. gas priced as free.
-//
-// So: no gas price, no book. Losing a marginal book win costs the user a few
-// basis points they never see; taking one that does not cover its own gas
-// costs them real money.
 const pricedGas=gasFloor!==null&&gasFloor>0n;
 const wins=saving>0n&&pricedGas&&saving*10n>gasFloor*12n;
 if(my!==seq)return;
@@ -3156,46 +2835,6 @@ plannerBounded=plannerBounded||!!p.bounded;
 }
 }
 }
-// ------------------------------------------------- THE SOLVER CHALLENGE
-//
-// `r` is now the best the CHAIN can do - zQuoter, the precision pools, the
-// orderbook, whichever won. The off-chain lanes are challengers to that, never
-// a replacement for it: the on-chain lane always ran, and if every lane below
-// fails, times out or loses, nothing here changes.
-//
-// FLOORS ARE COMPARED, NOT QUOTES. A solver's quoted amount is a promise, and
-// it is the number that sets its own `minOut` - so "beats the chain by a wei"
-// can still deliver less than the chain would have, every time, without ever
-// tripping the adapter's check. What both sides can actually be held to is
-// their floor: `quote * (1 - slippage)` for the solver, `amountLimit` for the
-// on-chain route. Compare those and the question becomes honest again - either
-// the lane wins or it does not.
-//
-// The handicap then does the one job left: cover the gas of the extra adapter
-// hop, so a lane cannot win by three basis points on a trade where routing
-// through it costs more than that. It is per-lane and on chain, so it retunes
-// without a new page.
-//
-// NO BASELINE, NO WIN. If the chain could not price this pair, `amountLimit`
-// is nothing to beat and a lane would win uncontested against a bound it wrote
-// itself - which is exactly the state an attacker who can degrade one lane
-// wants. Exact-output quotes are also left alone: the lanes here are asked
-// sell-side only.
-// No wallet check: `account` is null before one connects, never undefined, so
-// the guard that used to sit here gated on nothing. Leaving it as a no-op was
-// worse than either choice it looked like it was making - and running the
-// lanes walletless is the right one anyway, since the whole point of the
-// read path is that a visitor sees the real best price before connecting.
-// EXACT OUTPUT. The whole comparison turns over: a lane offers to SPEND an
-// amount rather than deliver one, and the number it can be held to is a
-// CEILING - `quoted * (1 + slippage)` - not a floor. Lower wins, and the
-// chain's `amountLimit` is already its own ceiling, so the two are compared on
-// the same terms as before, in the other direction.
-//
-// The adapter needs no change for this. `fill` is handed the ceiling as
-// `amountIn` and the exact output as `minOut`: the route spends what it needs,
-// the bound still says what the user must receive, and whatever the route did
-// not spend comes back through the same dust refund a sell-side fill uses.
 const pin=lanePin();
 if(!isIn&&r&&r.amountLimit>0n&&pin!=="On-chain"){
 try{
@@ -3208,49 +2847,26 @@ const tried=await Promise.all(lanes.map(x=>Promise.race([
 laneCached(`${x.name}|${ck}`,
 ()=>SOLVER_SHAPES_OUT[x.name](x.endpoint,f.addr,t.addr,swapAmt,Number(slipBps),SOLVER_DEADLINE,f.dec,t.dec))
 .then(q=>q?{...q,lane:x}:null).catch(()=>null),dl])));
-/* THE LANE'S CAP IS A CLAIM, THE USER'S SLIPPAGE IS AN AUTHORISATION. `cap` is
-   the counterparty's own maximum - 0x's `maxSellAmount`, set by 0x - and it was
-   taken verbatim as the amount to sign. Live it runs about 0.55% against a
-   requested 0.50%, and at a 0.10% setting it is a multiple of what the user
-   agreed to spend. Take whichever is tighter: a cap below the derived bound is
-   better information, a cap above it is somebody else spending the user's
-   money. If the route then needs more than was authorised it reverts, which is
-   the correct outcome and the one the user asked for. */
 const laneCeil=c=>{const d=c.inp+(c.inp*slipBps)/10000n;
 return c.cap&&c.cap>0n?bmin(c.cap,d):d};
 const chainCeil=r.best.amountIn+(r.best.amountIn*slipBps)/10000n;
 let win=null;
 for(const c of tried){
 if(!laneOk(c)||!c.inp)continue;
-// The LESSER of the lane's published ceiling and what the user's slippage
-// authorises. The cap alone is not enough: a lane publishing a roomier one
-// would get to spend more than was agreed to, which is the user's number to
-// set, not the counterparty's.
 const ceil=laneCeil(c);
 if(pin){
 if(c.lane.name!==pin)continue;
 win={...c,ceil,forced:1};break;
 }
-// Cheaper than the chain by at least the lane's handicap - against the
-// chain's cost at the USER's slippage, not whatever widened bound the route
-// happens to execute with. Same reasoning as the exact-in side.
 if(ceil*(10000n+c.lane.handicapBps)>=chainCeil*10000n)continue;
 if(!win||ceil<win.ceil)win={...c,ceil};
 }
 rank=[{n:"On-chain",f:chainCeil}];
 for(const c of tried){
 if(!laneOk(c)||!c.inp)continue;
-// The SAME ceiling the selection used. Ranking on a derived one while
-// selecting on the lane's published cap meant marking a row the trade was
-// not built from and printing gaps that were not the ones compared.
 rank.push({n:c.lane.name,f:laneCeil(c)});
 }
-rank.sort((a,b)=>a.f>b.f?1:a.f<b.f?-1:0); // ascending: cheapest input first
-/* NOT FUSED INTO THE WIN TEST. Written as `win && my===seq`, a superseded run
-   whose lane had actually won simply fell through with the on-chain result and
-   went on to paint it - so a stale pass did not just fail to update, it
-   actively replaced a fresh answer with a worse one. A run that is no longer
-   the current one has nothing to say about anything. */
+rank.sort((a,b)=>a.f>b.f?1:a.f<b.f?-1:0); 
 if(my!==seq)return;
 if(win){
 const ethIn=f.addr===ZERO;
@@ -3281,54 +2897,25 @@ laneCached(`${x.name}|${ck}`,
 ()=>SOLVER_SHAPES[x.name](x.endpoint,f.addr,t.addr,swapAmt,Number(slipBps),SOLVER_DEADLINE,f.dec,t.dec))
 .then(q=>q?{...q,lane:x}:null).catch(()=>null),
 deadline_])));
-// COMPARE ON A COMMON BASIS, NOT ON WHATEVER BOUND EACH SIDE HAPPENS TO CARRY.
-// `r.amountLimit` is the chain route's EXECUTION bound, and the split router is
-// deliberately quoted at a widened slippage - up to 5% - so a winning split
-// route carries a floor far below what the user asked for. Racing that against
-// a solver floor derived at the USER's slippage is not a comparison; it hands
-// the race to any lane whose quote lands in the gap. At 0.5% user slippage the
-// split floor sits 1.5% low, so a solver quoting 0.8% WORSE than the chain
-// still won, and the user lost the difference.
-//
-// So the challenge floor is rebuilt from the chain's own expected output at the
-// user's slippage. The widened `amountLimit` stays exactly where it belongs -
-// as the bound the on-chain route executes with.
 const chainFloor=r.best.amountOut-(r.best.amountOut*slipBps)/10000n;
 let win=null;
 for(const c of tried){
 if(!laneOk(c)||!c.out)continue;
-// The lane's own guaranteed minimum, on the same terms as the chain's.
 const floor=c.out-(c.out*slipBps)/10000n;
-// A HAND-PICKED VENUE SKIPS THE CONTEST, AND ONLY THAT ONE. The handicap and
-// the floor comparison exist to stop a lane winning on a number it will not
-// honour; neither is a reason to overrule somebody who asked for a venue by
-// name. What they are owed instead is the truth about what they picked, which
-// the list shows and the rate line repeats. The BOUND is not negotiable
-// either way: `minOut` is still this lane's floor, still enforced on chain, so
-// a manual pick can cost basis points and cannot cost the trade.
 if(pin2){
 if(c.lane.name!==pin2)continue;
 win={...c,floor,forced:1};
 break;
 }
-// It must clear the chain's floor by the lane's handicap, not merely reach it.
 if(floor*10000n<=chainFloor*(10000n+c.lane.handicapBps))continue;
 if(!win||floor>win.floor)win={...c,floor};
 }
-// THE FIELD, NOT JUST THE WINNER. Ranked on FLOORS - the same number the
-// selection used - because ranking the quotes would show a loser holding a
-// bigger figure than the winner and make the honest choice look like a bug.
 rank=[{n:"On-chain",f:chainFloor}];
 for(const c of tried){
 if(!laneOk(c)||!c.out)continue;
 rank.push({n:c.lane.name,f:c.out-(c.out*slipBps)/10000n});
 }
 rank.sort((a,b)=>a.f<b.f?1:a.f>b.f?-1:0);
-/* NOT FUSED INTO THE WIN TEST. Written as `win && my===seq`, a superseded run
-   whose lane had actually won simply fell through with the on-chain result and
-   went on to paint it - so a stale pass did not just fail to update, it
-   actively replaced a fresh answer with a worse one. A run that is no longer
-   the current one has nothing to say about anything. */
 if(my!==seq)return;
 if(win){
 const ethIn=f.addr===ZERO;
@@ -3345,14 +2932,6 @@ hybrid=null;
 }
 }catch{}
 }
-/* THE LAST GATE BEFORE ANYTHING IS PAINTED. Everything below writes to the
-   screen; `last` - the thing that gets signed - is not written until the
-   bottom. The only guard used to sit between them, so a superseded run was
-   free to repaint the amount, the venue, the bound and the whole rank list
-   over a fresher quote it could no longer replace, leaving the display
-   describing one route and the wallet about to send another. Two hundred
-   milliseconds of typing was enough: cached lanes make the second quote finish
-   first. The display and the signature move together or neither moves. */
 if(my!==seq)return;
 const finalIn=r.best.amountIn;
 const finalOut=r.best.amountOut;
@@ -3362,34 +2941,13 @@ const rx=(+formatUnits(finalOut,t.dec))/(+formatUnits(finalIn,f.dec));
 const s=r.best.source,raw=SOURCES[s]||"?";
 const src=r.best.source===SRC_SOLVER?`${r.best.lane} solver${r.best.forced?" \u00b7 pinned":""}`:hybrid?"Orderbook + AMM":(s===3||s===4||s===SRC_PRECISION)&&r.best.feeBps?`${raw}\u00a0${Number(r.best.feeBps)/100}%`:raw;
 rate.textContent=isFinite(rx)?`1 ${f.sym} ≈ ${rx>=1?rx.toLocaleString("en-US",{maximumFractionDigits:4}):rx.toPrecision(4)} ${t.sym} · ${src}`:"";
-// The lane's name is appended by `src` above. The guaranteed minimum is NOT
-// added here: the `Min` suffix a few lines down already says it, for every
-// route, and a solver route is not a special case that deserves the number
-// twice - it was the same `amountLimit` both times.
-//
-// THE FIELD IS AVAILABLE, NOT INSISTED UPON. Somebody who wants to know why
-// this venue won can ask; nobody has to read a table to make a swap. So the
-// list stays collapsed behind one small caret, and each row is a FLOOR with
-// its gap to the winner's - the comparison that actually decided this - never
-// a quote, because ranking quotes would show a loser holding the bigger
-// number and make the honest choice look like a bug.
-//
-// Lane names come from the on-chain roster, so they are somebody else's text
-// in this page's DOM: they go through `safeSym` and are set as textContent,
-// never parsed as markup.
 rankBox.textContent="";
 if(rank&&rank.length>1){
 const top=rank[0].f;
 const worse=isIn?"-":"+";
-// What the quote is ACTUALLY built from. Usually the best floor; not when a
-// venue has been pinned by hand, and that is exactly when marking the best
-// one instead would mislead.
 const used=r.best.source===SRC_SOLVER?r.best.lane:"On-chain";
 for(const x of rank){
 const row=document.createElement("i");
-// Mark the venue the quote is BUILT FROM, not merely the best floor. With a
-// pin active those differ, and marking the one you are not trading against
-// says you are getting something you are not.
 if(x.n===used)row.className="w";
 const pinNow=lanePin();
 if(x.n===pinNow)row.className+=" p";
@@ -3410,14 +2968,6 @@ const paysSym=r.poolOut===ZERO?"ETH":"WETH";
 rcvHdr.textContent=r.outDiffers?`You receive \u2014 as ${paysSym}`:"You receive";
 if(r.outDiffers&&rate.textContent)rate.textContent+=` \u00b7 pays ${paysSym}`;
 rate.title="";
-// SAY SO WHEN THE FIELD WAS SHORT. A failed multicall batch degrades to a row
-// of nulls and each null silently drops a venue, so a quote can be assembled
-// from four venues instead of nine and still present itself as the best of
-// them. The orderbook and the precision scan already disclose when their own
-// coverage was capped; the venue set that produced the headline number did
-// not, which is the one place it matters most. A degraded quote is not wrong -
-// it is the best of what answered - but the user is entitled to know that is
-// what they are looking at, especially before signing.
 if(venueLost||mcGaveUp>gaveUp0||(mcFailed>failed0&&mcOk===ok0))
 rate.textContent+=" \u00b7 some venues unreachable";
 if(isIn)rate.textContent+=` · Min ${trimAmt(r.amountLimit,t.dec)} ${t.sym}`;
@@ -3466,13 +3016,6 @@ const pctTxt=(Number(imp)/100).toFixed(2);
 rate.textContent+=` · Impact ${pctTxt}%`;
 if(imp>=IMPACT_WARN)stat.textContent=`High price impact: ${pctTxt}% — about ${trimAmt(lossTok,isIn?t.dec:f.dec)} ${isIn?t.sym:f.sym} worse than the market rate.`;
 }
-/* LAST, and it must STAY last. Every suffix above assigns `textContent`, which
-   discards child nodes, so a control appended before any of them is thrown
-   away without a word - and it was: the caret went in ahead of eight more
-   suffixes (the widened bound, the four capped/offline disclosures, the floor
-   line and the impact line), so `rankBox` could never be opened on exactly the
-   quotes whose ranking most deserves a look. Anything appended to `rate` from
-   here on belongs BELOW this block, or it takes the caret with it. */
 if(rankBox.firstChild){
 const car=document.createElement("span");
 car.className="rk";
@@ -3483,13 +3026,6 @@ rate.appendChild(document.createTextNode(" "));
 rate.appendChild(car);
 }
 const inApprove=isIn?swapAmt:r.msgValue||r.amountLimit;
-/* WHAT THE SCREEN SAYS, RECORDED WITH WHAT WILL BE SIGNED. Every divergence
-   this page has had took the same shape - a number computed once for the eyes
-   and once for the wallet, with nothing comparing the two. These two fields
-   are the two amounts actually on screen at the moment the quote was built;
-   `swap.onclick` re-reads them before signing, so a repaint that
-   beat a stale quote, or a stale quote that beat a repaint, is refused instead
-   of silently signed. */
 const shownPay=amt.value,shownGet=outAmt.value;
 if(acct)last={callData:r.callData,fundedCallData:r.fundedCallData,msgValue:r.msgValue,
 limit:r.amountLimit,shownPay,shownGet,
@@ -3771,13 +3307,6 @@ if(ad(iA).toLowerCase()!==row.tA.toLowerCase()
 ||ad(iB).toLowerCase()!==row.tB.toLowerCase())
 throw Error("order changed — refresh and retry");
 if(at(iA+1)>row.aA||at(iB+1)>row.aB)throw Error("order changed — refresh and retry");
-/* AND THAT IT STILL HAS ENOUGH LEFT. The two checks above catch an order that
-   GREW - a different order wearing the same id - but a partially taken one
-   shrinks, and that direction fell straight through. `getA` rides along as the
-   on-chain minimum, so the fill did not underpay; it reverted, and the user
-   paid gas to be told nothing. `preflightFills` has always compared the
-   remaining amount against what is about to be paid; this is the same check,
-   which this path simply never received the amount to make. */
 if(pay!==undefined&&at(iB+1)<pay)throw Error("order partly taken — refresh and retry");
 }
 const SEL_ORDER_FIXED="bcdb7936",SEL_ORDER_DUTCH="bbd94e1a",SEL_CHECKPOINT="a972985e";
@@ -4173,10 +3702,6 @@ const p=decViewPage(await rpc(C,[{to:SBVIEW,data},L]));
 out.push(...p.rows.map(r=>({...r,v2:b.v2||0,dutch:b.dutch||0})));
 cursor=p.next;
 }while(cursor&&out.length<160&&++turns<64&&my===bookSeq);
-/* A LEFTOVER CURSOR MEANS THERE IS MORE BOOK THAN THIS. The loop stops at 160
-   rows or 64 turns, and stopping looked exactly like reaching the end - so a
-   board deeper than the cap presented its first slice as the whole thing, and
-   "no order on this pair" could mean "none in the first 160". */
 if(cursor)out.capped=true;
 return out;
 }));
@@ -4237,12 +3762,6 @@ rows.push({id:ids[i],board:FLOOR,floor:1,v2:0,dutch:0,maker:ad(0),pf:1,exp,
 nA:0,nB:0,cp:ZERO,tA:ad(6),aA:w(8),sA:null,dA:null,tB:ad(4),aB:rem,sB:null,dB:null});
 }
 }}catch{}
-/* ONE ROW PER ORDER. The sweeps overlap: `SEL_RECENT_FLOOR` filters on
-   `remaining`, not on expiry, so an expired bid of your own inside the recent
-   window is listed there AND again by the own-expired sweep below it - the
-   same id, twice, offering to cancel a thing that only exists once. Keep the
-   FIRST, which is the view's row: it carries symbols and decimals, where the
-   direct-getter fallback fills those with nulls. */
 const uniq=new Set(),deduped=[];
 deduped.capped=capped;
 for(const r of rows){
@@ -4466,11 +3985,6 @@ function bookFilters(hidden){
 const f=TOKENS[fromSel.value]?.sym||"?",t=TOKENS[toSel.value]?.sym||"?";
 const chip=(on,attr,val,label,title)=>`<button class="bkc${on?" on":""}" `
 +`data-${attr}="${val}"${title?` title="${title}"`:""}>${label}</button>`;
-/* SAY WHEN THE SCAN WAS CAPPED. Both paths stop early - the view pager at 160
-   rows, the direct-getter fallback at the newest 40 ids per board - and both
-   used to stop silently, which reads as "this is the whole book" when it is
-   only the top of it. The quote line already discloses its own cap; the list
-   people actually browse did not. */
 const note=[hidden?hidden+" hidden":"",bookTrunc?"scan capped":""].filter(Boolean).join(" \u00b7 ");
 return `<h6><span>Orderbook</span><span title="${bookTrunc?"More orders exist than this scan returned \u2014 the newest are shown first.":""}">${note}</span></h6>`
 +`<div class="bkf">`
@@ -4975,8 +4489,6 @@ if(Date.now()>=last.exp-5000&&autoQ++<AUTO_Q_MAX)update(1);
 },5e3);
 document.addEventListener("visibilitychange",()=>{
 if(document.hidden)return;
-/* Ahead of the account guard: the names countdown runs for a disconnected
-   visitor too, and it is the thing most visibly stale after a tab comes back. */
 if(wnMode){wnSync();wnRoll()}
 if(!account||busy)return;
 autoQ=0;
@@ -5011,10 +4523,7 @@ const show=!lqMode||!!lqList.querySelector(".lqnew");
 for(const el of [amtRow,outRow])if(el)el.classList.toggle("hide",!show);
 };
 function lqSet(on){
-/* Leaving the cause line up here would leave a live Burn - an irreversible
-   ragequit - clickable on a panel that no longer shows the cause it belongs to. */
 if(on)cbDisarm();
-
 lqMode=on;
 if(on&&lnMode)lnSet(false);
 if(on&&wnMode)wnSet(false);
@@ -5283,12 +4792,6 @@ return dec1(r,0)===1n?{lp:dec1(r,1),used0:dec1(r,2),used1:dec1(r,3),ref0:dec1(r,
 async function lqTo(){
 const v=rc.value.trim();
 if(!v)return account;
-// RE-RESOLVE, AND CHECK IT AGAINST WHAT WAS SHOWN. `lqShowTo` displayed an
-// answer `rcvOf` caches for 30 seconds; this runs at click time and used to
-// take whatever came back with no comparison, so a name whose record moved
-// between the preview and the click minted the LP position to an address the
-// user never saw - the whole position, not a slice of it. `doSend` has had
-// this guard for exactly this reason; the liquidity path did not.
 const shown=(rcvEl.textContent||"").trim();
 const to=await rcvOf(v,true).catch(()=>"");
 if(!to){rc.classList.add("bad");
@@ -5915,13 +5418,6 @@ for(const k of Object.keys(fcFloorPx))delete fcFloorPx[k];
 fcSync();
 }catch(e){err(e);b.disabled=false;b.textContent="Collect"}
 }
-/* CAUSE LOOT — burn back for a share of the treasury.
-   A cause raised through the DAICO launcher sells `loot`: a plain ERC20 that
-   is a claim on the DAO's ether rather than a position in a market. Nothing
-   pools it and nothing quotes it, so this line is the only price the page can
-   show for such a token - and it is the real one. Ragequit pays exactly this,
-   pro rata across shares and loot together, out of whatever ether the cause's
-   beneficiary has not drawn down yet. */
 const SEL_DAOOF="98fabd3a",SEL_LOOTOF="9b7b2ab0",SEL_SHARESOF="03314efa",
 SEL_TSUP="18160ddd",SEL_RAGEQUIT="29f64d1a";
 const SEL_SALES="c6b9f06a",SEL_REMAINING="b399b0bc",SEL_BUY="cce7ec13";
@@ -5930,25 +5426,9 @@ const SEL_RQABLE="14a6d7de";
 const cbSeen={};
 let cbDao="",cbAmt=0n,cbCost=0n,cbBuy=false,cbDrawn=0,cbSold=0n,cbReady=0n,cbSeq=0;
 let cbDue=0n,cbShares="",cbTok="";
-/* DISARM WHERE THE PAIR MOVES, not at each place that happens to move it. The
-   Burn button is bound to `cbDao`, and every transition that swaps the selects
-   out from under a painted panel leaves it clickable against a cause it no
-   longer shows. Guarding each caller meant the invariant held only as long as
-   nobody added a caller - and `adoptList` acquired one. Bumping `cbSeq` voids
-   any cbSync still in flight so a late answer cannot re-arm what this cleared. */
-/* EVERYTHING BOUND TO THE PAIR, not just the fields that existed when this was
-   written. `cbDue`, `cbShares` and `cbTok` were added to carry the burn quote
-   and were not added here, so disarming left three stale values behind. Today
-   `cbAct` gates on `cbDao` and `cbPaint` rewrites all three before a Burn
-   button can exist, so nothing is reachable through them - but that is the
-   guard holding, not this one, and the invariant this function states is that
-   nothing bound to the old pair survives it. */
 const cbDisarm=()=>{cbSeq++;cbDao="";cbAmt=0n;cbReady=0n;cbDue=0n;cbShares="";cbTok="";
 if(typeof cbEl!=="undefined"&&cbEl)cbEl.classList.add("hide")};
 const cbWord=h=>{const b=strip0x(h||"");return b.length>=64?"0x"+b.slice(24,64):""};
-/* A token counts as cause loot only when its DAO names it back. Reading DAO()
-   off the token alone would accept any contract that happens to have that
-   getter, and then quote a burn against a treasury it has no claim on. */
 async function cbLook(tok){
 const key=tok.toLowerCase();
 if(cbSeen[key])return cbSeen[key];
@@ -5957,24 +5437,12 @@ try{
 const dao=cbWord(await rpc(C,[{to:tok,data:"0x"+SEL_DAOOF},L]));
 if(/^0x[0-9a-f]{40}$/i.test(dao)&&!/^0x0{40}$/i.test(dao)){
 const [lt,sh]=await mc3Deep([{to:dao,data:"0x"+SEL_LOOTOF},{to:dao,data:"0x"+SEL_SHARESOF}]);
-/* AND NEITHER IS A FAILED MULTICALL. The `catch` below exists so a flaky read
-   is not cached as "not a cause" - but `mc3Deep` does not throw, it returns
-   nulls, so the guard never saw the case it was written for. A null `lt` fails
-   the key match, falls through, and caches the negative answer for the life of
-   the page: no price and no redemption path for this token until a reload,
-   over one bad RPC moment. */
 if(lt==null||sh==null)return out;
 if(cbWord(lt).toLowerCase()===key){out={dao,shares:cbWord(sh)};
-/* The list has to learn it too: a cause is not the same KIND of thing as the
-   rest of the tokens, and grouping it with them invites someone to look for a
-   price it does not have. */
 const ix=TOKENS.findIndex(t=>t.addr&&t.addr.toLowerCase()===key);
 if(ix>=0&&!TOKENS[ix].cause){TOKENS[ix].cause=1;rebuild()}}
 }
 }catch{
-/* A read that FAILED is not a token that is not a cause. Caching the failure
-   would remove the only price and the only redemption path this token has, for
-   the life of the page, over one flaky RPC. */
 return out;
 }
 return cbSeen[key]=out;
@@ -5984,22 +5452,7 @@ const my=++cbSeq;
 cbDao="";cbAmt=0n;cbBuy=false;
 const f=TOKENS[fromSel.value],t=TOKENS[toSel.value];
 if(lnMode||lqMode||wnMode||tab!=="swap"||!f||!t){cbEl.classList.add("hide");return}
-/* Backing is ether in and the cause's token out; burning is the same trade run
-   backwards. One line serves both because they are one relationship seen from
-   either end, and a cause has no third thing you can do with it. */
-/* THE RECEIVING SIDE DECIDES what this is. If a cause is what you are trying
-   to get, you are backing it - whatever you happen to be holding - and the
-   page owes you an answer about the ether, not silence about the token you
-   picked. Reading the paying side first meant a USDC holder got nothing at
-   all, which is the same screen as "this is not a cause". */
 const real=x=>x&&x.addr&&x.addr!==ZERO&&x.std!=="nft";
-/* ETHER IN, AND NOTHING ELSE, and that is a contract limit rather than a
-   choice. ShareOffering.buy credits `msg.sender`, so a router that swapped
-   your token to ether and then bought would itself be the buyer and the
-   backing would land at the router. There is no buyFor. What DOES work is an
-   EIP-5792 batch - swap, then buy, both sent from your own account, so
-   msg.sender stays you - and that is where this goes next. Until then the
-   page says what to switch instead of offering a button that cannot work. */
 const cbEth=f.addr===ZERO||(f.addr||"").toLowerCase()===WETH.toLowerCase();
 let hit=null,tok=null,buy=false;
 if(real(t)){const h=await cbLook(t.addr);if(my!==cbSeq)return;
@@ -6008,9 +5461,6 @@ if(!hit&&real(f)){const h=await cbLook(f.addr);if(my!==cbSeq)return;
 if(h.dao){hit=h,tok=f}}
 if(!hit||!hit.shares||!tok){cbEl.classList.add("hide");return}
 let eth=0n,sup=0n,price=0n,dl=0n,left=0n,cap=0n;
-/* Explicit false only. A null is an RPC that did not answer, not a promise
-   withdrawn, and telling a backer their claim is gone because a batch timed
-   out is the one wrong answer worth avoiding here. */
 let rqOff=false;
 const now2=BigInt(Math.floor(Date.now()/1000));
 cbReady=0n;
@@ -6024,24 +5474,10 @@ mc3Deep([{to:hit.shares,data:"0x"+SEL_TSUP},{to:tok.addr,data:"0x"+SEL_TSUP},
 {to:hit.dao,data:"0x"+SEL_DAOALLOW+encAddr(ZERO)+encAddr(CTAP)},
 {to:hit.dao,data:"0x"+SEL_RQABLE}])]);
 eth=BigInt(b||"0x0");
-/* A MISSING SUPPLY IS NOT A SUPPLY OF ZERO. `mc3Deep` never throws: a sub-call
-   that reverts, or a whole batch that exhausts its retries, comes back as
-   `null`, and `BigInt(null||"0x0")` is 0. That silently drops a term from the
-   denominator of an IRREVERSIBLE burn, and it drops it in the direction that
-   overstates the payout - lose the loot supply on a DAO that is mostly loot
-   and the page quotes the entire treasury, ten times what the contract will
-   pay. The burn still succeeds; the ether simply is not there.
-   `sup<=0n` below only caught the case where BOTH legs failed. */
 if(r[0]==null||r[1]==null){cbEl.classList.add("hide");return}
 const shr=BigInt(r[0]),lot=BigInt(r[1]);
 sup=shr+lot;
 const sale=strip0x(r[2]||"");
-/* THE SALE HAS TO BE THE ONE THIS LINE IS DESCRIBING. sales() returns the mint
-   sentinel first and the pay token second, and a DAO is free to run a sale that
-   mints SHARES, or one priced in an ERC20. Reading only the price and the
-   deadline would quote both of those as if they were this loot token for ether
-   - and then send ether to buy something else entirely. Anything but
-   loot-for-ether is left unpriced: the burn still works, the backing does not. */
 if(sale.length>=320
 &&("0x"+sale.slice(24,64)).toLowerCase()===CLOOT
 &&/^0+$/.test(sale.slice(64,128))){
@@ -6049,11 +5485,6 @@ dl=BigInt("0x"+sale.slice(128,192));price=BigInt("0x"+sale.slice(192,256));
 cap=BigInt("0x"+sale.slice(256,320))}
 cbSold=lot;
 left=BigInt(r[3]||"0x0");
-/* WHAT THE TAP WILL PAY IF SOMEONE ASKS IT TO. Vesting does not move on its
-   own - the ether sits in the treasury, counting as refundable, until a claim
-   transaction is sent. TapVest pays advance*rate where
-   advance = floor(min(owed, allowance, balance) / rate), so the whole-second
-   flooring has to be reproduced here or the line promises more than arrives. */
 const tp=strip0x(r[4]||"");
 if(tp.length>=256){
 const rate=BigInt("0x"+tp.slice(128,192)),lastC=BigInt("0x"+tp.slice(192,256));
@@ -6064,10 +5495,6 @@ if(av>allow)av=allow;
 if(av>eth)av=eth;
 cbReady=av/rate*rate;
 }}
-/* What the tap has already drawn, said as a share of what was actually
-   raised. The goal never reaches the chain, so the honest denominator is what
-   backers paid - sold units at the sale price - and the numerator is the part
-   of it that is no longer in the treasury. */
 rqOff=r[6]!=null&&BigInt(r[6])===0n;
 cbDrawn=lot>0n&&price>0n?(()=>{const raised=(lot*price+CONE-1n)/CONE;
 return raised>eth?Number((raised-eth)*100n/raised):0})():0;
@@ -6076,16 +5503,8 @@ if(my!==cbSeq)return;
 if(sup<=0n){cbEl.classList.add("hide");return}
 const now=BigInt(Math.floor(Date.now()/1000));
 const open=price>0n&&(dl===0n||dl>now);
-/* Days LEFT is how many days you can still act in, so it rounds up: flooring
-   made a raise set to thirty days read "29 days left" a second after it
-   launched, which looks like an off-by-one and understates the window. */
 const days=dl>now?Number((dl-now+86399n)/86400n):0;
 cbDao=hit.dao;cbBuy=buy;
-/* HOW FULL, and HOW MUCH IS STILL THERE. Two different questions, and a cause
-   needs both: the first says whether it is working, the second says what your
-   claim is worth. Progress is sold units over the ceiling, which needs no
-   price and cannot be flattered - and the goal is that ceiling priced out, so
-   the number on the launch form comes back without ever being stored. */
 const pct=cap>0n?Number(cbSold*1000n/cap)/10:0;
 const goal=cap>0n&&price>0n?cap*price/CONE:0n;
 const head=goal>0n
@@ -6095,26 +5514,11 @@ const head=goal>0n
 const bar=goal>0n
 ?`<div class="lqbar fill" style="--at:${Math.max(0,Math.min(100,pct)).toFixed(1)}%" aria-hidden="true"><b></b></div>`
 :"";
-/* THE TAP DOES NOT MOVE ON ITS OWN. Vesting only accrues; the ether stays in
-   the treasury - still refundable, still counted in every burn quote - until
-   somebody sends a claim. TapVest.claim takes no caller check and pays the
-   beneficiary either way, so this is offered to everyone, exactly as fee
-   collection is for a launched coin.
-   It is shown to backers too rather than hidden from them, because it is the
-   one number on this line that a backer would rather not press: releasing is
-   what makes their burn worth less. Concealing a permissionless button does
-   not stop it being pressed, it only stops them knowing it exists. */
 const rel=cbReady>0n
 ?`<span class="cbrow"><span>${trimAmt(cbReady,18)} ETH vested and unreleased</span>`
 +`<button type="button" id="cbRel" class="fclink">Release</button></span>`
 :"";
 const top=(head?`<span class="cbrow">${head}</span>${bar}`:"")+rel;
-/* Every branch below paints and returns through here, so a button can never be
-   rendered without its handler - which is what an early return past the
-   binding at the bottom used to do. */
-/* An action the contract will actually take gets a target, not a footnote.
-   `.lqbtn` is the bordered in-panel button the liquidity rows already use, so
-   Back and Burn now look like the other things on this page that spend. */
 const act=(text,label)=>`<span class="cbact"><span>${text}</span>`
 +`<button type="button" id="cbGo" class="lqbtn">${label}</button></span>`;
 const msg=t=>`<span class="cbmsg">${t}</span>`;
@@ -6130,9 +5534,6 @@ if(r)r.onclick=cbRelease;
 if(buy){
 if(!open||left<=0n)
 return paint(msg(`Backing for ${safeSym(tok.sym)} has closed — it can still be burned back`),CB_TIP);
-/* Refuse the buy, do not merely annotate it. Backing a cause whose burn-back
-   is off buys a claim that cannot be exercised, and that is not a trade-off
-   to surface in a tooltip under a working Back button. */
 if(rqOff)
 return paint(msg(`This cause has switched burn-back off \u2014 backing it cannot be redeemed`),
 "Backing pays ether for loot whose only value is the right to burn it back. This DAO has turned that right off, so there is no way out of the position.");
@@ -6145,20 +5546,10 @@ let units=pay*CONE/price;
 if(units>left)units=left;
 if(units<=0n){cbEl.classList.add("hide");return}
 cbAmt=units;
-/* Round the cost up exactly as ShareOffering does, or the buy reverts for a
-   wei on every amount that does not divide evenly. */
 cbCost=(units*price+CONE-1n)/CONE;
 return paint(act(`Back with ${trimAmt(cbCost,18)} ETH for `
 +`${trimAmt(units,tok.dec)} ${safeSym(tok.sym)}`,"Back"),CB_TIP);
 }
-/* THE BURN IS THE WHOLE PROMISE, AND IT IS A FLAG THAT CAN BE TURNED OFF.
-   `ragequit` reverts unless `ragequittable`, and `setRagequittable` is
-   onlyDAO - which on a cause means the creator, who holds the only share.
-   So the one thing that makes this token worth anything is revocable by the
-   person it is a claim against. The dry run at the click already fails
-   closed, but failing closed AFTER someone has decided to hold is not the
-   same as telling them, and a Burn button that cannot burn is a lie the page
-   was repeating on every render. */
 if(rqOff)
 return paint(msg(`Burn-back has been switched off by this cause \u2014 ${safeSym(tok.sym)} cannot be redeemed`),
 "This DAO has set ragequittable to false, so ragequit reverts and the treasury "
@@ -6166,17 +5557,8 @@ return paint(msg(`Burn-back has been switched off by this cause \u2014 ${safeSym
 let want=0n;try{want=parseUnits(amt.value.trim()||"0",tok.dec)}catch{}
 if(want<=0n)want=fromBalance;
 if(want<=0n){
-/* Holding none is the case where the redemption rate matters MOST: it is what
-   someone deciding whether to back reads, and what a disconnected visitor sees.
-   Hiding it left the page's only honest price visible only to people who had
-   already paid it. */
 return paint(msg(`1 ${safeSym(tok.sym)} redeems for ${trimAmt(eth*CONE/sup,18)} ETH`),CB_TIP);}
 cbAmt=want;
-/* A BURN THAT PAYS NOTHING STILL BURNS. Moloch destroys the loot before it
-   pays and skips a zero transfer without reverting (`if (due == 0) continue`),
-   so a drawn-down treasury - or a stake too small to earn a single wei - makes
-   the dry run succeed and the tokens vanish for nothing. A swap in that state
-   would revert on its floor; this has no floor, so the button is the floor. */
 const due=eth*want/sup;
 cbDue=due;cbShares=hit.shares;cbTok=tok.addr;
 if(due<=0n)
@@ -6192,10 +5574,6 @@ return paint(act(`Burn ${trimAmt(want,tok.dec)} ${safeSym(tok.sym)} `
 const CB_TIP="Backing a cause is not a trade and there is no market to leave through. "
 +"What you get is a claim: burn it back at any time for your share of the ether the cause "
 +"has not drawn down yet, which is the number this line shows once you hold some.";
-/* Anyone may release a cause's vested ether, and it goes to the beneficiary
-   however presses it - the same shape as collecting a launched coin's fees.
-   The tap accrues on a clock but moves only when asked, so without this the
-   ether simply sits there and a creator has to go elsewhere to draw it. */
 async function cbRelease(){
 if(!cbDao||cbReady<=0n)return;
 const b=document.getElementById("cbRel");if(!b||b.disabled)return;
@@ -6219,17 +5597,8 @@ b.disabled=true;b.textContent=cbBuy?"Backing…":"Burning…";
 const req=cbBuy
 ?{from:account,to:COFF,value:"0x"+cbCost.toString(16),
 data:"0x"+SEL_BUY+encAddr(cbDao)+encUint(cbAmt)}
-/* ragequit(address[] tokens, uint256 shares, uint256 loot). The array holds
-   the one token being claimed - the zero address, meaning ether. */
 :{from:account,to:cbDao,value:"0x0",
 data:"0x"+SEL_RAGEQUIT+encUint(96)+encUint(0)+encUint(cbAmt)+encUint(1)+encAddr(ZERO)};
-/* RE-PRICE IT AT THE CLICK. `ragequit` takes no minimum and reads the treasury
-   at execution, while the line above quoted a snapshot - and the Release button
-   sits directly on top of this one, permissionless, so ANYONE can draw the
-   vested tranche down in the gap between reading the number and pressing the
-   button. The burn would still succeed, for less, with no floor to catch it
-   and nothing to undo. The dry run below cannot see this either: paying out
-   less is not a revert. So ask again, and stop if the answer moved. */
 if(!cbBuy&&cbShares&&cbTok){
 let now2=null;
 try{
@@ -6275,8 +5644,6 @@ head=heads.slice(0,3).join("")+statics.slice(0,4).join("")
 +(art?heads[3]+statics[4]:"");
 return "0x"+(art?SEL_LAUNCHART:SEL_LAUNCH)+head+tail;
 };
-/* Who the launch belongs to - the coin's creator, or the cause's beneficiary.
-   One field, one resolver, because it is the same question either way. */
 async function lnOwner(){
 const rv=rc.value.trim();
 if(!rv)return account;
@@ -6288,74 +5655,27 @@ if(!/\.(g?wei|eth)$/i.test(rv))throw Error("That must be an address, or a .eth /
 rcvEl.textContent="resolving\u2026";
 let r="";try{r=await nameFwd(rv.toLowerCase())}catch{r=""}
 if(!r||/^0x0{40}$/i.test(r)){rcvEl.textContent="";throw Error("That name is not registered.")}
-// SHAPE-CHECK WHAT CAME BACK. `nameFwd` reaches a resolver this page does not
-// control, and its answer goes straight into `encAddr` and from there into the
-// word that receives the whole creator allocation and every creator fee for
-// the life of the token. Non-zero is not the same as well-formed.
 if(!isAddr(r))throw Error("That name resolved to something that is not an address.");
-// AND SHOW IT. This address is permanent and unrecoverable if wrong, and the
-// page used to clear the line and sign without ever displaying what the name
-// resolved to - the one number a person could have checked.
 rcvEl.textContent=r;
 return r;
 }
-
-/* CAUSE LAUNCH — the launcher's B-side.
-
-   A coin launch opens a market. A cause launch opens a fund, and nothing else:
-   ten million units of non-voting `loot` are offered at a fixed price in ether,
-   the ether reaches the beneficiary as a stream rather than a lump, and every
-   unit can be burned back for its share of whatever has not been streamed yet.
-   No pool is created and no market exists - the burn IS the price, which is
-   why the form has four fields and no notion of slippage, supply or valuation.
-
-   WHY THE CALLDATA IS A TEMPLATE AND NOT AN ENCODER. safeSummonDAICO takes
-   four structs, and all four are static tuples, so they sit inline in the head
-   - fifty-two words before the first byte of a string. Of those fifty-two,
-   every governance word is a constant of this format: the same quorum, the
-   same threshold, the same seven zeros where a share sale would go, the same
-   eight where an LP seed would. A general tuple encoder would spend a
-   kilobyte of page teaching the dapp to say numbers it can never vary. So the
-   head is written out as it is, and only the seven words that can differ - the
-   offsets, the salt, and the tap's budget, beneficiary and rate - are spliced.
-   What the form can change is exactly what appears as a variable below. */
 const CSUM="0x00000000004473e1f31C8266612e7FD5504e6f2a";
 const CMSUM="0x0000000000330B8df9E3bc5E553074DA58eE9138";
 const CIMPL="643a45b599d81be3f3a68f37eb3de55ff10673c1";
 const CRND="0x000000000011C799980827F52d3137b4abD6E654";
 const COFF="0x000000A4Ad929C9E108aD2B1D2fBeDe0C2Ae57e1";
 const CTAP="0x0000000060cdD33cbE020fAE696E70E7507bF56D";
-/* ShareOffering keys a sale to a mint sentinel. address(1007) mints loot;
-   the DAO's own address would mint shares, and shares carry the vote. */
 const CLOOT="0x00000000000000000000000000000000000003ef";
 const SEL_DAICO="4e1e3b11",SEL_SETALLOW="da46098c",SEL_CONFIGURE="fca53be5";
-/* Ten million units, of which the founder's single share is one - so 9,999,999
-   are for sale and the raise comes to the number on the form. Shares and loot
-   are counted apart, so the loot ceiling is the sellable amount outright. */
 const CUNITS=10000000n,CONE=10n**18n,CMAX=(1n<<256n)-1n;
-/* Inline metadata is stored in the DAO's own storage rather than as contract
-   code, which costs roughly three times what the coin launcher's art does per
-   byte. A cause's mark is worth a few kilobytes, not twenty-four. */
 const CAU_MAX_ART=4096;
 const CAU_MAX_DAYS=3650;
-
 const cPad=h=>h.padEnd(Math.ceil(h.length/64)*64,"0");
 const cTail=h=>{h=strip0x(h);return encUint(h.length/2)+cPad(h)};
-/* One (address,uint256,bytes) element. The tuple is dynamic because of the
-   bytes, so its own head carries an offset of 0x60 to the calldata. */
 const cCall=(to,data)=>encAddr(to)+encUint(0)+encUint(96)+cTail(data);
 const cCalls=cs=>{let off=cs.length*32,head="",tail="";
 for(const c of cs){head+=encUint(off);off+=c.length/2;tail+=c}
 return encUint(cs.length)+head+tail};
-
-/* The DAO's address, known before it exists: the summoner CREATE2s a minimal
-   proxy under a salt derived from the founding holders. It has to be known,
-   because the sale is configured against it inside the very transaction that
-   creates it. */
-/* The loot token's address, which is a CREATE2 child of the DAO itself: salt is
-   bytes32(bytes20(dao)) and the only thing separating loot from shares is the
-   implementation in the proxy. Derived rather than read, because the receipt has
-   to name the token in the same transaction that creates it. */
 const CLIMPL="6f1f2af76a3add953277e9f369242697c87bc6a5";
 const cProxy=impl=>strip0x(keccak(hexToBytes(
 "602d5f8160095f39f35f5f365f5f37365f73"+impl+"5af43d5f5f3e6029573d5ffd5b3d5ff3")));
@@ -6368,33 +5688,15 @@ const ss=strip0x(keccak(hexToBytes(inner)));
 const ih=cProxy(CIMPL);
 return "0x"+keccak(hexToBytes("ff"+strip0x(CMSUM)+ss+ih)).slice(26);
 };
-
 const encCause=(name,sym,uri,salt,owner,ben,dao,goal,rate,price,deadline,cap)=>{
 const T=new TextEncoder(),Z=encUint(0);
 const dyn=[lnTail(T.encode(name)),lnTail(T.encode(sym)),lnTail(T.encode(uri)),
 encUint(1)+encAddr(owner),encUint(1)+encUint(CONE),encUint(0),
 cCalls([
-/* Both calls run from the DAO's own context during init: setAllowance is
-   onlyDAO, and configure keys the sale to msg.sender, so the DAO has to be the
-   one making them. That costs no extra transaction and no extra signature. */
 cCall(dao,SEL_SETALLOW+encAddr(COFF)+encAddr(CLOOT)+encUint(CMAX)),
 cCall(COFF,SEL_CONFIGURE+encAddr(CLOOT)+encAddr(ZERO)+encUint(price)
 +encUint(deadline)+encUint(cap))])];
-/* proposalThreshold, proposalTTL, timelockDelay, quorumAbsolute, then seventeen
-   words of features this format does not use: no futarchy, no share sale, no
-   auto-burn, no rollback guardian, nothing locked. */
 const cfg=encUint(CONE)+encUint(604800)+encUint(172800)+encUint(CONE)+Z.repeat(17);
-/* The tap. Budget is the whole goal, and the rate is that goal divided by the
-   RELEASE window - a different clock from the raise window, which is why
-   `cauTerms` below refuses a release shorter than the raise.
-   THE RATE IS ABSOLUTE, NOT PROPORTIONAL, and that is the fact worth carrying
-   out of this file: TapVest pays min(rate*elapsed, budget, treasury), so a
-   cause that raises a tenth of its goal is emptied in a tenth of the window,
-   not over the whole of it. What has not been released is exactly what a
-   backer can burn back for, so an under-subscribed cause can leave its backers
-   with nothing long before the window ends. Nothing here can fix that - the
-   raise is unknown at launch, so the rate cannot be set from it - which is why
-   the page says it plainly instead. */
 const tap=encAddr(CTAP)+Z+encUint(goal)+encAddr(ben)+encUint(rate);
 let off=52*32,heads=[],tail="";
 for(const d of dyn){heads.push(encUint(off));off+=d.length/2;tail+=d}
@@ -6404,10 +5706,6 @@ return "0x"+SEL_DAICO
 +heads[3]+heads[4]+heads[5]
 +cfg+Z.repeat(7)+tap+Z.repeat(8)+heads[6]+tail;
 };
-
-/* Metadata as a data: URI, held in the DAO's storage. There is no pinning
-   service in this page and there will not be one: a cause that depends on a
-   gateway staying up is a cause with an off switch somebody else holds. */
 const cauURI=(name,sym)=>{
 let img="";
 if(lnArtBytes){let s="";for(const x of lnArtBytes)s+=String.fromCharCode(x);
@@ -6415,9 +5713,6 @@ img="data:"+MIME_NAME[lnArtMime]+";base64,"+btoa(s)}
 return "data:application/json,"+encodeURIComponent(
 JSON.stringify({name,symbol:sym,image:img,launchType:"cause"}));
 };
-
-/* What the form is worth, read once so the preview and the transaction cannot
-   disagree. Returns null when the numbers are not yet usable. */
 function cauTerms(){
 const g=String(lnGoal.value||"").replace(/[, ]/g,"").trim();
 const d=String(lnDays.value||"").replace(/[, ]/g,"").trim();
@@ -6425,34 +5720,15 @@ if(!/^\d+(\.\d+)?$/.test(g)||!/^\d+(\.\d+)?$/.test(d))return null;
 let goal;try{goal=parseUnits(g,18)}catch{return null}
 const secs=BigInt(Math.round(Number(d)*86400));
 if(goal<=0n||secs<3600n||Number(d)>CAU_MAX_DAYS)return null;
-/* Integer division floors, and a price of zero would mint the whole ceiling
-   to whoever called first, for nothing. */
 const price=goal/CUNITS;
 if(price<=0n)return null;
-/* TapVest pays min(rate * elapsed, budget, treasury), so a rate of zero would
-   strand the raise in the treasury forever. */
-/* THE RELEASE CLOCK IS NOT THE RAISE CLOCK, and conflating them was a real
-   bug. TapVest accrues from the moment of the summon on wall-clock time,
-   never from when the money turns up - so vesting over the raise window means
-   the whole budget is claimable exactly when backing closes, and a backer who
-   arrives late can be drained the instant they arrive. The release therefore
-   runs well past the raise, and the difference is what the burn is worth. */
 const vest=BigInt(lnVest.value);
-/* AND IT IS NOT ENOUGH TO SAY SO. The two clocks were bounded independently -
-   the raise up to ten years, the release only ever up to two - and never
-   compared, so the form would happily accept a raise that outlasts its own
-   vesting. That is not a slow drip past the close; it is the whole treasury
-   claimable years BEFORE backing shuts, and every backer who arrives after the
-   tap empties gets a burn worth nothing while the page still tells them they
-   "burn back for the rest". The launch is irreversible, so this is refused
-   rather than warned about. */
 if(vest<=secs)return{err:`Backing runs for ${trimNum(Number(secs)/86400)} days but the ether is `
 +`fully released in ${trimNum(Number(vest)/86400)} days — the treasury would empty before backing closes. `
 +`Shorten the raise, or release over longer.`};
 const rate=goal/vest||1n;
 return{goal,secs,price,rate,vest,cap:(CUNITS-1n)*CONE};
 }
-
 const lnKindQuote=()=>lnKind.value==="cause"?cauQuote():lnQuote();
 function cauQuote(){
 lnGo.textContent=account?"Launch":"Connect Wallet";
@@ -6460,12 +5736,6 @@ const t=cauTerms();
 if(!t){lnNote.textContent="";return}
 if(t.err){lnNote.textContent=t.err;lnNote.style.color="#c33";return}
 const per=(+formatUnits(t.price,18));
-// SAY WHAT A PARTIAL RAISE DOES, IN DAYS. The rate is `goal / window`, so the
-// window on the form is the time-to-empty only at FULL funding - and a small
-// campaign that raises a tenth of its goal is emptied in a tenth of it. That
-// is the one thing about this form nobody will infer, it is the common case
-// rather than the edge case, and what is drained is exactly what backers could
-// still have burned back for. A concrete number of days beats a paragraph.
 const tenthDays=t.rate>0n
 ?Number((t.goal/10n)/t.rate)/86400
 :0;
@@ -6477,21 +5747,13 @@ lnNote.textContent=`1 ETH backs ${trimNum(1/per)} units`
 +(lnArtBytes?` · logo ${(lnArtBytes.length/1024).toFixed(1)} KB`:"");
 lnNote.style.color="";
 }
-
-/* Coin fields and cause fields share one panel, because they are one decision
-   made two ways rather than two products. Name, symbol and logo are asked once
-   and mean the same thing either way. */
 function cauKind(){
 const on=lnKind.value==="cause";
 for(const el of [lnMktL,lnSupplyL,lnMcapL,lnAllocL])el.classList.toggle("hide",on);
 for(const el of [lnGoalL,lnDaysL,lnVestL])el.classList.toggle("hide",!on);
-/* The header names what is being made. Leaving it reading "Launch a coin"
-   over a goal and a deadline was the single most confusing thing on the panel:
-   every other word agreed it was a cause and the heading did not. */
 lnTitle.textContent=on?"Launch a cause":"Launch a coin";
 lnSub.textContent=on?"refundable until you spend it"
 :"you earn 0.4% of every trade, forever";
-/* Placeholders are examples, and an example of a cause is not a cat. */
 lnName.placeholder=on?"Feed Ducks":"Zero Cat";
 lnSym.placeholder=on?"DUCK":"ZCAT";
 rc.placeholder=on?"Beneficiary — defaults to you":"Creator — defaults to you";
@@ -6500,7 +5762,6 @@ rc.title=on?"Who the ether streams to. Leave blank and it is you. Worth setting 
 stat.textContent="";
 on?cauQuote():lnQuote();
 }
-
 async function cauGo(){
 const name=lnName.value.trim(),sym=lnSym.value.trim().toUpperCase();
 if(!name||!sym)throw Error("A name and a symbol, please.");
@@ -6513,11 +5774,6 @@ throw Error(`A cause's logo is stored in the DAO itself, so it is capped at 4 KB
 const t=cauTerms();
 if(!t)throw Error("A goal in ether, and how long it runs for — at least an hour, at most ten years.");
 if(t.err)throw Error(t.err);
-/* TWO DIFFERENT PEOPLE, and conflating them handed the whole electorate away.
-   `owner` is where the ether streams - a multisig, a treasury, someone else
-   entirely. The founding share is not that: it is bought with the launcher's
-   own ether at the price a backer pays, and it carries the only vote the DAO
-   has. It belongs to whoever signed this transaction. */
 const ben=await lnOwner();
 const owner=account;
 const salt=wnSecret();
@@ -6525,19 +5781,12 @@ const dao=cPredict(owner,salt);
 const deadline=BigInt(Math.floor(Date.now()/1000))+t.secs;
 stat.textContent="Launching…";
 const req={from:account,to:CSUM,
-/* The founder's one share is bought at the same price a backer pays, so their
-   claim on the treasury is the same shape as everyone else's. */
 value:"0x"+t.price.toString(16),
 data:encCause(name,sym,cauURI(name,sym),salt,owner,ben,dao,t.goal,t.rate,t.price,deadline,t.cap)};
 await rpc(C,[req,L]);
 await waitTx(await sendTx([req]));sGot();
 lnArtBytes=null;lnArtNote.textContent="none";lnArtNote.classList.remove("set");
 lnPrev.classList.remove("set");lnArt.value="";
-/* DERIVED, THEN CONFIRMED. `cLoot` reproduces a CREATE2 address off-chain, and
-   its sibling `cPredict` is checked implicitly because the calldata targets the
-   DAO it predicts - if that were wrong the launch would have reverted. This one
-   has no such backstop: it is computed after the fact and handed to the user as
-   the token to hold and the address to burn. The DAO exists by now, so ask it. */
 let loot=cLoot(dao);
 try{
 const said=cbWord(await rpc(C,[{to:dao,data:"0x"+SEL_LOOTOF},L]));
@@ -6551,10 +5800,7 @@ stat.innerHTML=`${safeSym(sym)} is raising at `
 }
 let lnMode=false,lnArtBytes=null,lnArtMime=0;
 function lnSet(on){
-/* Leaving the cause line up here would leave a live Burn - an irreversible
-   ragequit - clickable on a panel that no longer shows the cause it belongs to. */
 if(on)cbDisarm();
-
 lnMode=on;
 if(on&&lqMode)lqSet(false);
 if(on&&wnMode)wnSet(false);
@@ -6577,21 +5823,10 @@ const ns=v=>v.replace(/[, ]/g,"");
 const sup=ns(lnSupply.value),mc=+ns(lnMcap.value),al=+ns(lnAlloc.value);
 lnNote.textContent="";
 if(!(Number(sup)>0)||!(mc>0))return;
-/* PREVIEW WHAT WILL BE MINTED, not what was typed. The launch quantises the
-   allocation to whole basis points, so a typed 0.005% previewed 50,000 tokens
-   and minted 100,000. The preview now rounds first, exactly as the calldata
-   does, and says nothing about a keep the launch would refuse. */
 const alBps=al>0?Math.round(al*100):0;
 const pooled=Number(sup)*(1-alBps/10000);
 if(!(pooled>0))return;
 const sym=lnSym.value.trim().toUpperCase();
-// BOTH HALVES OF THIS SENTENCE DESCRIBE THE SAME ETHER, SO THEY HAVE TO AGREE.
-// `poolFrac` is the real AMM fill - what one ether actually takes out of the
-// curve. The second figure used to be `0.99/px`, the spot price less the fee,
-// which ignores the curve entirely: at a 3 ETH opening it read "1 ETH buys 25%
-// of all tokens - opens at 1 ETH ~ 330,000,000" on a supply of a billion,
-// where 25% is 250,000,000. Wrong by a third, in the direction that flatters a
-// thin launch, and shaped exactly like the executable quote the docs promise.
 const poolFrac=99/(mc+.99);
 const firstEth=poolFrac*pooled/Number(sup);
 const firstTokens=poolFrac*pooled/100;
@@ -6660,12 +5895,6 @@ lnArtNote.textContent="none";stat.textContent=e.message||String(e);
 }
 lnQuote();
 };
-/* GROUPING IS NOT PARSING. Stripping every non-digit turned a pasted `1e9`
-   into `19` - a nineteen-token supply that then passed every guard below and
-   minted, irreversibly, because the validator that would have rejected `1e9`
-   only ever saw the laundered digits. Anything that is not already a plain
-   grouped decimal is left exactly as typed, so the check at submit is the one
-   that decides. */
 const lnGroup=el=>{
 if(!/^[\d, ]*(\.[\d ]*)?$/.test(el.value))return;
 const dot=el.value.indexOf(".");
@@ -6682,9 +5911,6 @@ if(/\d/.test(out[i])&&++seen===digitsBefore){pos=i+1;break}
 try{el.setSelectionRange(pos,pos)}catch{}
 };
 lnSupply.oninput=()=>{lnGroup(lnSupply);lnQuote()};
-/* One dispatcher. Name, symbol and the logo are shared by both kinds, so wiring
-   them straight to lnQuote replaced the cause preview with coin economics
-   computed from the hidden Supply and Market-cap fields. */
 for(const el of [lnName,lnSym,lnMcap,lnAlloc])el.oninput=lnKindQuote;
 lnKind.onchange=cauKind;
 for(const el of [lnGoal,lnDays])el.oninput=cauQuote;
@@ -6725,9 +5951,6 @@ if(Math.floor(Date.now()/1000)-p.at>=WN_MAX){wnGo.disabled=false;wnGo.textConten
 return}
 wnGo.disabled=!wnQ;
 wnGo.textContent=wnQ?(wnQ.free?`Claim ${wnQ.label}.id.wei`:"Commit"):"Register"};
-/* Left as its own read so the price note is not held up behind it. The seq is
-   the one `wnQuote` took, so a later keystroke drops this answer on the floor
-   instead of labelling the button with a name the user has moved on from. */
 const wnTicketOffer=async(l,seq,round)=>{
 try{const[t]=await mc3([{to:WROLL,data:"0x"+SEL_RTICKET+encUint(round)+pad32(wnId(l))}]);
 if(seq!==wnSeq)return;
@@ -6749,12 +5972,6 @@ wnNote.textContent="checking…";
 wnSync();
 try{
 const free=wnFree();
-/* ASK THE CHAIN WHICH ROUND, DO NOT TRUST THE CACHE. This and `wnRoll` are
-   started together on mode-enter, so a quote that read ticketOf at the cached
-   `wnRound` asked about round zero until the roll line landed. From the second
-   round on that is the wrong question, it answers "not in", and the page offers
-   an entry that reverts. The state read rides in this batch; the ticket read
-   only happens for a name that is yours and weighs. */
 const rc=!free&&account?[{to:WNS,data:"0x"+SEL_WOWNER+pad32(wnId(l))},
 {to:WROLL,data:"0x"+SEL_RWEIGHT+pad32(wnId(l))},
 {to:WROLL,data:"0x"+SEL_RSTATE}]:[];
@@ -6799,9 +6016,6 @@ else{
 const id=wnId(nm);
 const [w,t]=await mc3([{to:WROLL,data:"0x"+SEL_RWEIGHT+pad32(id)},
 {to:WROLL,data:"0x"+SEL_RTICKET+encUint(round)+pad32(id)}]);
-/* The box was empty when this read went out. If something has been typed since,
-   `wnQuote` owns the button now, and the reverse name is no longer what the
-   user is asking about - say the round and leave the offer alone. */
 if(my!==wnRollSeq||wnName.value.trim()){wnRollEl.textContent=line;return}
 const weight=dec1(w,0);
 if(!weight){line+=` ${nm} does not weigh — only a paid .wei name does.`;
@@ -6819,22 +6033,13 @@ for(const el of [document.querySelector(".panel"),rcvPanel])if(el)el.classList.t
 for(const el of [wnPanel,wnGo,wnRollPanel])el.classList.toggle("hide",!on);
 for(const el of [rc,rcvEl])if(el)el.classList.toggle("hide",on)};
 function wnSet(on){
-/* Leaving the cause line up here would leave a live Burn - an irreversible
-   ragequit - clickable on a panel that no longer shows the cause it belongs to. */
 if(on)cbDisarm();
-
 wnMode=on;
 if(on&&lqMode)lqSet(false);
 if(on&&lnMode)lnSet(false);
 wnPaint();
 stat.textContent="";
 clearInterval(wnTimer);
-/* A backgrounded tab has nobody to show a countdown to. This tick fires every
-   second and, with a commit pending, sends a stamp read every five - the only
-   timer on the page that was not checking `document.hidden`, unlike the 30s and
-   5s polls above. Everything it renders is derived from stored timestamps, so
-   skipping ticks costs nothing: the visibilitychange handler resyncs on return
-   and the countdown is correct again on the first frame. */
 if(on){wnTimer=setInterval(()=>{
 if(document.hidden)return;
 wnSync();
@@ -7065,11 +6270,6 @@ const supRaw=lnSupply.value.replace(/[, ]/g,"");
 if(!/^\d+(\.\d+)?$/.test(supRaw)||!(Number(supRaw)>0))throw Error("Supply has to be a positive number.");
 const supply=parseUnits(supRaw,18);
 const typed=Number(lnAlloc.value||0);
-// CHECK THE TYPED VALUE AGAINST THE CAP, NOT THE ROUNDED ONE. `Math.round`
-// pulled anything in (20.000, 20.005] back down to exactly 2000 bps, so the
-// cap never fired and the launch went ahead keeping less than the form said -
-// silently, irreversibly, with nothing able to mint the shortfall afterwards.
-// A number above the maximum is a mistake to report, not one to round away.
 if(!(typed>=0)||typed*100>LN_MAX_ALLOC)throw Error("Allocation runs from 0 to 20%.");
 const alloc=Math.round(typed*100);
 if(!(alloc>=0)||alloc>LN_MAX_ALLOC)throw Error("Allocation runs from 0 to 20%.");
@@ -7086,20 +6286,6 @@ const req={from:account,to:PLAUNCH,value:"0x0",
 data:encLaunch(name,sym,"",supply,BigInt(alloc),mcap,owner,lnArtBytes,lnArtMime)};
 const sim=await rpc(C,[req,L]);
 const candidate=/^0x[0-9a-fA-F]{128}$/.test(sim||"")?"0x"+strip0x(sim).slice(24,64):null;
-// DISARM ON THE TRANSACTION, NOT ON THE LOOKUP. The form used to be cleared
-// inside `if(token)` - the branch that only runs when the page manages to
-// name the new coin. Every other path left the panel open with Name, Symbol,
-// Supply and Market cap still filled and the button live again, so one more
-// click sent byte-identical calldata and minted a SECOND coin with a second
-// supply and a second allocation. The paths that reach it are not exotic: a
-// receipt with no logs, a `creatorOf` that names someone else, or `waitTx`
-// giving up after ten minutes on a congested mempool with the transaction
-// still pending. And that last one is the case where re-clicking is the most
-// natural thing a person could do, because the receipt deliberately shows no
-// address to confirm against.
-//
-// Once the transaction is sent the launch has happened or it has not, and
-// either way this form is finished with.
 const receipt=await waitTx(await sendTx([req]));sGot();
 lnSet(false);
 lnName.value="";lnSym.value="";lnSupply.value="";lnAlloc.value="";
@@ -7351,11 +6537,6 @@ if(chInv&&isFinite(ch)&&ch>-100){
 const other=(1/(1+ch/100)-1)*100;
 const pr=chEff&&chEff();
 const base=pr&&pr[1]?pr[1].sym:"the token";
-/* ATTRIBUTE CONTEXT, SO IT NEEDS THE SAME FILTER THE TEXT DOES. The very next
-   line runs this same value through `safeSym`; this one interpolated it raw
-   into a double-quoted attribute. It is inert today only because every writer
-   of a symbol happens to strip a quote character - which makes it a trap for
-   the next roster source rather than a safe line. */
 note=` title="${safeSym(base)} is ${other>=0?"+":""}${other.toFixed(2)}% over this window. `
 +`This chart prices the pair the other way up, so its line moves the opposite way."`;
 flip=` <span class="chflip">${safeSym(base)} ${other>=0?"+":""}${other.toFixed(2)}%</span>`;
@@ -7558,15 +6739,6 @@ go.onclick=()=>{sBlip();invPlay()};
 scEl.appendChild(go);
 };
 let lSeq=0,listReady=false;
-/* WHAT THE LINK LAST WROTE, so the second pass can tell its own value from a
-   value the user typed over it. This function runs twice - once against the
-   baked-in tokens and again when the on-chain list lands, hundreds of
-   milliseconds of real RPC later - and the second pass used to re-apply the
-   recipient, the amount and the time-lock unconditionally. Anything edited in
-   that window was silently reverted to the link's version, and `doSend`'s
-   anti-tamper check could not see it: `update()` recomputes the expected
-   recipient from the same field that was just overwritten, so both sides of
-   the comparison moved together. A field the user has touched is theirs. */
 const lkWrote=Object.create(null);
 const lkKeep=(el,v)=>{
 if(el.value!==""&&lkWrote[el.id]!==undefined&&el.value!==lkWrote[el.id])return false;
@@ -7574,8 +6746,6 @@ el.value=v;lkWrote[el.id]=v;return true;
 };
 async function applyLink(){
 const q=new URLSearchParams(location.hash.slice(1));
-/* Bumped BEFORE the early return, or navigating to an empty hash leaves an
-   in-flight pass live and it lands afterwards as though it were current. */
 const my=++lSeq;
 if(![...q.keys()].length)return;
 const at=a=>a?TOKENS.findIndex(t=>t.addr.toLowerCase()===a):-1;
@@ -7588,17 +6758,6 @@ const both=async()=>[await tok(q.get("token")),await tok(q.get("out"))];
 let[fa,ta]=await both();
 if(my!==lSeq)return;
 if((fa&&at(fa)<0)||(ta&&at(ta)<0)){[fa,ta]=await both();if(my!==lSeq)return}
-// DON'T RENDER A PAIR THE LINK DIDN'T ASK FOR. This runs twice: once at load
-// against the tokens baked into the page, and again once the on-chain list
-// resolves. A link naming a token that only exists in that list - most of
-// them - cannot be resolved on the first pass, and going ahead anyway meant
-// showing the default pair, quoting it, and only then correcting to the token
-// the user actually followed the link for. Four visible states where one
-// would do, and the middle two were a real price for the wrong market.
-//
-// So the first pass steps aside when it cannot answer, and the second does
-// the work. Address links still resolve immediately - `tok()` adds those from
-// chain - so this only defers what genuinely has to wait.
 if(!listReady){
 const named=["token","out"].map(k=>(q.get(k)||"").trim()).filter(Boolean);
 if(named.some(v=>!/^0x[0-9a-f]{40}$/i.test(v)&&!symAddr(v.toLowerCase())))return;
@@ -7677,10 +6836,6 @@ listReady=true;
 adoptList(pairAddrs());
 return applyLink();
 }).catch(()=>{
-// The list failed to load. `listReady` still has to flip, or a link that was
-// deferred above waits for a second pass that is never coming - the deeplink
-// would simply never apply. Better to try it against the baked-in tokens and
-// report what could not be found than to sit there silently.
 listReady=true;
 applyLink().catch(()=>{});
 });
@@ -8012,10 +7167,6 @@ swap.disabled=true;++busy;
 try{
 const q=last;
 const {callData,fundedCallData,msgValue,amountIn,from,to}=q;
-/* On an exact-output route `amountIn` IS `msgValue`, so this compared the
-   value to itself and passed unconditionally for every ETH-in exact-out trade.
-   Check it against the BOUND instead - the same `amountLimit` the rate line
-   printed as `Max`, which is the number the user actually agreed to. */
 const wantsValue=q.wrap>0n?0n:(from.addr===ZERO?(q.isIn?amountIn:q.limit):0n);
 if(msgValue!==wantsValue)throw Error("bad value");
 if((q.shownPay!==undefined&&q.shownPay!==amt.value)||

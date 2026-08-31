@@ -131,7 +131,11 @@ test('launching a cause', async (t) => {
     const note = p.text('lnNote');
     // 10 ETH over 10,000,000 units = 1e-6 ETH each, so 1 ETH backs 1,000,000.
     assert.match(note, /1 ETH backs 1,000,000 units/);
-    assert.match(note, /ETH a day reaches you over 12 months/);
+    // "at full funding" rather than "reaches you": the tap pays that rate only
+    // if the goal is met, and the sentence after it prices the shortfall.
+    assert.match(note, /ETH a day at full funding, over 12 months/);
+    assert.match(note, /at a tenth of the goal it empties in/,
+      'the note must price an under-subscribed raise, not just the happy path');
     // The note must name BOTH clocks, because the gap between them is the
     // whole value of the token it is describing.
     assert.match(note, /burn back for the rest/);

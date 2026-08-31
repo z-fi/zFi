@@ -264,6 +264,10 @@ test("launching a coin", async (t) => {
       p.type("lnName", "Cat"); p.type("lnSym", "CAT");
       p.type("lnSupply", "1000000000"); p.type("lnMcap", "3");
       p.type("lnAlloc", typed);
+      // BEFORE the click: a successful launch calls lnSet(false), which clears
+      // lnNote and empties the form. Read after, and the note is always "" and
+      // this assertion can only ever fail.
+      const note = p.text("lnNote");
       p.click("lnGo");
       await p.waitFor(() => p.chain.sent.length > 0, {label: "the launch call"});
       const iface = new Interface([
@@ -272,7 +276,6 @@ test("launching a coin", async (t) => {
       const d = iface.parseTransaction({data: p.chain.sent[0].data});
       assert.equal(d.args[4], bps, `${typed}% signed ${d.args[4]} bps`);
       // And the note must have promised the same thing it signed.
-      const note = p.text("lnNote");
       if (bps > 0n) {
         const pct = Number(bps) / 100;
         assert.ok(note.includes(`(${pct}%)`), `note said "${note}" but signed ${pct}%`);
