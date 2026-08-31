@@ -37,7 +37,7 @@ const ALLOWED_ORIGINS = [
 // origin, and still cannot get an address subdomain on these gateways without
 // deploying a contract that serves their own page, at which point they are
 // paying for their own bytes.
-const ORIGIN_SUFFIXES = ['.w4eth.io', '.w3link.io', '.eth.limo', '.wei.limo', '.wei.is', '.wei.si', '.wei.domains'];
+const ORIGIN_SUFFIXES = ['.w4eth.io', '.w3link.io', '.eth.limo', '.wei.limo', '.wei.is', '.wei.domains'];
 const ADDR_HOST = /^0x[0-9a-fA-F]{40}(\.\d+)?\./;
 
 // THE NAMES PEOPLE ARE ACTUALLY SENT TO. The address-subdomain rule above
@@ -53,7 +53,7 @@ const NAMED_HOSTS = /^(?:[a-z0-9-]+\.)?(?:zfi|zerofi|zswap)\./i;
 // name on every gateway suffix would hand these keys to a name we do not
 // control. Address subdomains stay allowed on all of them, because there the
 // host IS the contract serving the bytes.
-const NAMED_SUFFIXES = ['.wei.limo', '.wei.is', '.wei.si', '.wei.domains'];
+const NAMED_SUFFIXES = ['.wei.limo', '.wei.is', '.wei.domains'];
 
 // A DOMAIN WE OWN OUTRIGHT, so the name itself is the authorisation - there is
 // no gateway in front of it and no other tenant on it. Apex and one subdomain
