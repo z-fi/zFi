@@ -4767,7 +4767,11 @@ const my=++lqSeq;
 if(!p){lqList.innerHTML=`<div class="lqempty">Pick two different tokens.</div>`;lqSub.textContent="";lqRows=[];return}lqSyncAmounts();
 const [t0,t1]=p;
 lqSub.textContent=`${t0.sym} / ${t1.sym}`;
-lqList.innerHTML=`<div class="lqempty">Loading…</div>`;
+/* SAME RULE AS THE TOKEN LIST: a background read that leaves the panel looking
+   settled gets the spinner, so "nothing here" and "still asking" are not the
+   same picture. User-initiated waits keep the bare ellipsis - the wallet is
+   already showing its own state for those, and a second spinner is noise. */
+lqList.innerHTML=`<div class="lqempty">Loading<span class="spin"></span></div>`;
 try{
 const who=account||ZERO;
 const [raw,c]=await mc3([
