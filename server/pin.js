@@ -40,6 +40,21 @@ const ALLOWED_ORIGINS = [
 const ORIGIN_SUFFIXES = ['.w4eth.io', '.w3link.io', '.eth.limo', '.wei.limo', '.wei.is'];
 const ADDR_HOST = /^0x[0-9a-fA-F]{40}(\.\d+)?\./;
 
+// THE NAMES PEOPLE ARE ACTUALLY SENT TO. The address-subdomain rule above
+// covers a contract-served page found by its own address, which is how a
+// version is pinned - but nobody publishes those. The published names are
+// these three, on whichever gateway suffix answers, optionally with a label in
+// front (`new.zswap.wei.limo`). Naming them is narrower than the suffix rule
+// it sits beside: a suffix match plus a first label from this set, not any
+// host that happens to live on the gateway.
+const NAMED_HOSTS = /^(?:[a-z0-9-]+\.)?(?:zfi|zerofi|zswap)\./i;
+// ...but only under the .wei namespace, which is ours. `zswap.eth.limo` is
+// whoever holds `zswap.eth`, and that is not necessarily us - allowing a bare
+// name on every gateway suffix would hand these keys to a name we do not
+// control. Address subdomains stay allowed on all of them, because there the
+// host IS the contract serving the bytes.
+const NAMED_SUFFIXES = ['.wei.limo', '.wei.is'];
+
 function originAllowed(origin) {
   if (ALLOWED_ORIGINS.includes(origin)) return true;
   let u;
@@ -48,8 +63,8 @@ function originAllowed(origin) {
   if (!ORIGIN_SUFFIXES.some((sfx) => u.hostname.endsWith(sfx))) return false;
   // Only an address-shaped subdomain, so a suffix match cannot hand the keys to
   // an unrelated host that merely lives on the same gateway.
-  return ADDR_HOST.test(u.hostname) || u.hostname === 'zswap.wei.limo'
-    || u.hostname === 'new.zswap.wei.limo';
+  if (ADDR_HOST.test(u.hostname)) return true;
+  return NAMED_HOSTS.test(u.hostname) && NAMED_SUFFIXES.some((sfx) => u.hostname.endsWith(sfx));
 }
 
 function cors(request) {
