@@ -109,6 +109,12 @@ white-space:nowrap;flex:0 0 auto;text-align:center;transition:background .15s,co
 #stat:not(:empty){margin-bottom:.5em}
 #stat a{color:var(--f);text-decoration:underline}
 .hdr{display:flex;justify-content:space-between;align-items:center;gap:.5em}
+/* These two panels follow the receive box directly and had no top margin at
+   all, so their headers sat flush against its border - "Liquidity  ETH/WSTETH"
+   reading as part of the box above rather than as the start of a new section.
+   `#book` and `#chBox` already space themselves; these were simply missed. */
+#lqPanel,#lnPanel{margin-top:.85em}
+#lqPanel>.hdr{margin-bottom:.5em}
 .tabs{display:flex;gap:1.35em;margin-bottom:.85em;border-bottom:1px solid var(--e)}
 .tabs button{flex:1;padding:.5em;font-size:.75em;font-weight:600;text-transform:uppercase;letter-spacing:.08em;border:0;background:transparent;color:var(--m);cursor:pointer;transition:background .15s,color .15s}
 .tabs button.on{color:var(--f);font-weight:700;box-shadow:inset 0 -2px 0 var(--f)}
