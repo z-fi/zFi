@@ -339,61 +339,6 @@ async function getOkxQuote(sellToken, buyToken, sellAmount, slippageBps) {
   } catch (_) { return null; } finally { clearTimeout(tid); }
 }
 
-// Bitget API helpers.
-//
-// NO SIGNING HAPPENS HERE. This lane used to build its own HMAC-SHA256 headers
-// in the browser from BITGET_API_KEY / BITGET_API_SECRET and post straight to
-// Bitget, bypassing the proxy every other lane goes through. The constants
-// were empty, so nothing ever leaked - but the SHAPE was key-in-page, and this
-// page is meant to be served from chain and immutable: a key committed to it
-// could never be rotated and would be permanently archived by anyone who ever
-// mirrored the bytes. It is also the exact thing zSolverList's curation
-// promises callers it never does.
-//
-// So the credential lives at the proxy now, like 0x's and 1inch's, and this
-// file sends none. If the proxy has no bitget route the requests simply fail
-// and the lane drops out of the race, which is what already happens today -
-// BITGETOL_ADDRESS is the zero address and short-circuits every helper below.
-async function _bitgetHeaders() {
-  return { 'Content-Type': 'application/json' };
-}
-function bitgetToken(addr) {
-  return addr === ZERO_ADDRESS ? "" : addr;
-}
-async function getBitgetPrice(sellToken, buyToken, sellAmount) {
-  if (BITGETOL_ADDRESS === ZERO_ADDRESS) return null;
-  const ac = new AbortController();
-  const tid = setTimeout(() => ac.abort(), 3000);
-  try {
-    const body = { fromChain: "eth", toChain: "eth", fromContract: bitgetToken(sellToken), toContract: bitgetToken(buyToken), fromAmount: sellAmount.toString() };
-    const headers = await _bitgetHeaders();
-    const resp = await fetch(`${BITGET_API}/bgw-pro/swapx/pro/quote`, { method: 'POST', headers, body: JSON.stringify(body), signal: ac.signal });
-    if (!resp.ok) return null;
-    const json = await resp.json();
-    if (json.status !== 0 || !json.data) return null;
-    return json.data;
-  } catch (_) { return null; } finally { clearTimeout(tid); }
-}
-async function getBitgetQuote(sellToken, buyToken, sellAmount, slippageBps) {
-  if (BITGETOL_ADDRESS === ZERO_ADDRESS) return null;
-  try {
-    const priceBody = { fromChain: "eth", toChain: "eth", fromContract: bitgetToken(sellToken), toContract: bitgetToken(buyToken), fromAmount: sellAmount.toString() };
-    const priceHeaders = await _bitgetHeaders();
-    const priceResp = await fetch(`${BITGET_API}/bgw-pro/swapx/pro/quote`, { method: 'POST', headers: priceHeaders, body: JSON.stringify(priceBody) });
-    if (!priceResp.ok) return null;
-    const priceJson = await priceResp.json();
-    if (priceJson.status !== 0 || !priceJson.data) return null;
-    const market = priceJson.data.market;
-    const body = { fromChain: "eth", toChain: "eth", fromContract: bitgetToken(sellToken), toContract: bitgetToken(buyToken), fromAmount: sellAmount.toString(), fromAddress: BITGETOL_ADDRESS, toAddress: BITGETOL_ADDRESS, market, slippage: (Number(slippageBps) / 10000).toString() };
-    const headers = await _bitgetHeaders();
-    const resp = await fetch(`${BITGET_API}/bgw-pro/swapx/pro/swap`, { method: 'POST', headers, body: JSON.stringify(body) });
-    if (!resp.ok) return null;
-    const json = await resp.json();
-    if (json.status !== 0 || !json.data) return null;
-    return { tx: { to: json.data.contract, data: json.data.calldata }, toAmount: priceJson.data.toAmount };
-  } catch (_) { return null; }
-}
-
 // Bebop API helpers
 function bebopToken(addr) {
   return addr === ZERO_ADDRESS ? WETH_ADDRESS : addr;

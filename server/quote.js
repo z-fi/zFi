@@ -25,7 +25,6 @@ const OKX_API = 'https://web3.okx.com';
 const KYBER_API = 'https://aggregator-api.kyberswap.com/ethereum/api/v1';
 const ODOS_API = 'https://api.odos.xyz';
 const PARASWAP_API = 'https://api.paraswap.io';
-const BITGET_API = 'https://bopenapi.bgwapi.io';
 const OPENOCEAN_API = 'https://open-api.openocean.finance';
 
 // Approval targets (must match wrapper contracts)
@@ -37,7 +36,6 @@ const APPROVAL_TARGETS = {
   'Odos': '0x0D05a7D3448512B78fa8A9e46c4872C88C4a0D05',        // V3 SOR Router
   'Paraswap': '0x6A000F20005980200259B80c5102003040001068',     // Augustus v6.2
   'Enso': '0xF75584eF6673aD213a685a1B58Cc0330B8eA22Cf',        // Enso Router
-  'Bitget': '0xd1ca1f4dbb645710f5d5a9917aa984a47524f49a',       // BKSwapRouter v2
   'OpenOcean': '0x6352a56caadC4F1E25CD6c75970Fa768A3304e64',     // Exchange V2
 };
 
@@ -682,86 +680,6 @@ async function fetchParaswapQuote(tokenIn, tokenOut, amount, taker) {
   }
 }
 
-// --- Bitget quote fetcher (two-step: quote → swap, HMAC-SHA256 auth) ---
-
-async function bitgetSign(apiPath, bodyStr, env) {
-  const timestamp = Date.now().toString();
-  const content = { apiPath, body: bodyStr, 'x-api-key': env.BITGET_API_KEY, 'x-api-timestamp': timestamp };
-  const sorted = Object.fromEntries(Object.keys(content).sort().map(k => [k, content[k]]));
-  const key = await crypto.subtle.importKey(
-    'raw', new TextEncoder().encode(env.BITGET_SECRET_KEY),
-    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
-  );
-  const sig = btoa(String.fromCharCode(...new Uint8Array(
-    await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(JSON.stringify(sorted))),
-  )));
-  return {
-    'x-api-key': env.BITGET_API_KEY,
-    'x-api-timestamp': timestamp,
-    'x-api-signature': sig,
-    'Content-Type': 'application/json',
-  };
-}
-
-async function fetchBitgetQuote(tokenIn, tokenOut, amount, taker, env) {
-  if (!env?.BITGET_API_KEY || !env?.BITGET_SECRET_KEY) return null;
-  // Bitget uses empty string for native ETH
-  const fromContract = tokenIn.toLowerCase() === ZERO.toLowerCase() ? '' : tokenIn;
-  const toContract = tokenOut.toLowerCase() === ZERO.toLowerCase() ? '' : tokenOut;
-  if (fromContract === toContract) return null;
-
-  const userAddr = taker || '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045';
-
-  try {
-    // Step 1: quote
-    const quotePath = '/bgw-pro/swapx/pro/quote';
-    const quoteBodyStr = JSON.stringify({
-      fromContract, toContract, fromAmount: amount.toString(),
-      fromChain: 'ETH', toChain: 'ETH',
-    });
-    const quoteHeaders = await bitgetSign(quotePath, quoteBodyStr, env);
-    const quoteRes = await fetch(`${BITGET_API}${quotePath}`, {
-      method: 'POST', headers: quoteHeaders,
-      body: quoteBodyStr,
-      signal: AbortSignal.timeout(3000),
-    });
-    if (!quoteRes.ok) return null;
-    const quoteData = await quoteRes.json();
-    const qd = quoteData?.data;
-    if (!qd?.toAmount) return null;
-    const outAmount = BigInt(qd.toAmount);
-    const market = qd.market;
-
-    // Step 2: build tx
-    const swapPath = '/bgw-pro/swapx/pro/swap';
-    const swapBodyStr = JSON.stringify({
-      fromContract, toContract, fromAmount: amount.toString(),
-      fromChain: 'ETH', toChain: 'ETH',
-      fromAddress: userAddr, toAddress: userAddr,
-      market, slippage: '0.5',
-    });
-    const swapHeaders = await bitgetSign(swapPath, swapBodyStr, env);
-    const swapRes = await fetch(`${BITGET_API}${swapPath}`, {
-      method: 'POST', headers: swapHeaders,
-      body: swapBodyStr,
-      signal: AbortSignal.timeout(3000),
-    });
-    if (!swapRes.ok) return null;
-    const swapData = await swapRes.json();
-    const sd = swapData?.data;
-    if (!sd?.calldata || !sd?.contract) return null;
-
-    const isEthIn = tokenIn.toLowerCase() === ZERO.toLowerCase();
-    return {
-      amountOut: outAmount,
-      tx: { to: sd.contract, data: sd.calldata, value: isEthIn ? amount.toString() : '0' },
-      approvalTarget: sd.contract,
-    };
-  } catch {
-    return null;
-  }
-}
-
 // --- OpenOcean quote fetcher (one-step GET, no auth) ---
 
 async function fetchOpenOceanQuote(tokenIn, tokenOut, amount, taker) {
@@ -846,10 +764,9 @@ async function getQuote(params, env) {
     skip || fetchKyberQuote(tokenIn, tokenOut, amount, to),
     skip || fetchOdosQuote(tokenIn, tokenOut, amount, to),
     skip || fetchParaswapQuote(tokenIn, tokenOut, amount, to),
-    skip || fetchBitgetQuote(tokenIn, tokenOut, amount, to, env),
     skip || fetchOpenOceanQuote(tokenIn, tokenOut, amount, to),
   ]);
-  const extNames = ['Bebop', 'Enso', '0x', '1inch', 'OKX', 'KyberSwap', 'Odos', 'Paraswap', 'Bitget', 'OpenOcean'];
+  const extNames = ['Bebop', 'Enso', '0x', '1inch', 'OKX', 'KyberSwap', 'Odos', 'Paraswap', 'OpenOcean'];
 
   // rest = [4 heavy results, ...external aggregator quotes]
   const heavyMc3 = rest.slice(0, heavyCalls.length);

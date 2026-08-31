@@ -11,7 +11,7 @@ import { webcrypto } from 'node:crypto';
 import pin from './pin.js';
 import quote from './quote.js';
 
-// OKX / Bitget request signing uses crypto.subtle (Web Crypto). Guarantee the
+// OKX request signing uses crypto.subtle (Web Crypto). Guarantee the
 // global exists across every supported Node version.
 if (!globalThis.crypto) globalThis.crypto = webcrypto;
 
