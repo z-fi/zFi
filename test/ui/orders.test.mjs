@@ -550,9 +550,14 @@ describe('the orderbook list', () => {
     const paid = JSON.stringify(tx).toLowerCase();
     assert.ok(paid.includes((250000000000000000n).toString(16)),
       'the transaction should carry the 0.25 WETH the user chose');
-    assert.ok(!paid.includes((1000000000000000000n).toString(16).padStart(16, '0') + '0'.repeat(0)) ||
-      paid.includes((250000000000000000n).toString(16)),
-      'and not silently take the whole order');
+    // `!X || Y` with Y already asserted true above can never fail; this is the
+    // check that sentence was meant to be. The full ask must not appear as an
+    // ABI word anywhere in the calldata - if it does, something is still
+    // spending the whole order.
+    const w32 = v => v.toString(16).padStart(64, '0');
+    assert.ok(paid.includes(w32(250000000000000000n)), 'the 0.25 WETH is not an ABI word in the call');
+    assert.ok(!paid.includes(w32(1000000000000000000n)),
+      'the full 1 WETH ask is still encoded in the transaction');
     p.close();
   });
 

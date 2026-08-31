@@ -497,6 +497,46 @@ describe('adding', () => {
  * which is why it is asserted twice: once as snwap's own out-minimum measured
  * in LP shares at the depositor, and once inside the executor payload.
  */
+
+describe('the bound a new band is seeded under', () => {
+  test('a loose swap slippage cannot loosen the seed bound', async () => {
+    // A seed's LP is a pure function of the band, the price and the amounts -
+    // no chain state enters it - so the preview is exact but for rounding.
+    // There is nothing to tolerate here the way a swap tolerates drift, and
+    // minLP is the only thing that notices if the pool was seeded out from
+    // under us during the factory's own token transfer. A 10% swap setting
+    // must not become a 10% seed bound.
+    const p = await setup();
+    p.$('slip').value = '10';
+    p.$('slip').dispatchEvent(new p.window.Event('input', { bubbles: true }));
+    await p.settle();
+
+    const tog = p.$('lqList').querySelector('#lqNewTog');
+    if (tog) { tog.dispatchEvent(new p.window.MouseEvent('click', { bubbles: true })); await p.settle(); }
+    const box = p.$('lqList').querySelector('.lqnew');
+    assert.ok(box, 'the create form should be reachable');
+
+    // Whatever the preview stored, the bound sent must be within 0.5% of it.
+    box.dataset.lp = String(10n ** 18n);
+    box.dataset.sl = '1'; box.dataset.sh = '2'; box.dataset.sp = '1';
+    const create = box.querySelector('#lqCreate');
+    create.disabled = false;
+    create.dispatchEvent(new p.window.MouseEvent('click', { bubbles: true }));
+    await p.settle();
+
+    const tx = p.chain.sent.find(t => (t.to || '').toLowerCase() === LENS.toLowerCase()
+      || /^0x7163352a/.test(t.data || ''));
+    if (tx) {
+      // minLP is the second-to-last word of createAndSeed's calldata.
+      const d = tx.data.replace(/^0x/, '');
+      const minLP = BigInt('0x' + d.slice(-128, -64));
+      assert.ok(minLP >= 10n ** 18n * 9950n / 10000n,
+        `a 10% setting leaked into the seed bound: minLP=${minLP}`);
+    }
+    p.close();
+  });
+});
+
 describe('zapping in from one side', () => {
   const openAdd = async p => {
     await p.waitFor(() => btn(p, 'a'), { label: 'add button' });
@@ -707,6 +747,28 @@ describe('zapping in from one side', () => {
     assert.equal(box.querySelector('[data-act="ac"]').textContent, 'Add liquidity');
     p.close();
   });
+
+  test('refuses to zap into a hooked pool, where the quote cannot be honest', async () => {
+    // A hook makes `previewZap` model a different sender and a different
+    // reserve transition than `zapIn` executes: the lens quotes with the
+    // eth_call caller and adds the GROSS swap portion to reserves, while the
+    // route is the sender the hook actually sees and the pool keeps only the
+    // net. The number on screen is then not the trade. `minLP` still protects
+    // the funds, but the honest move is not to quote it at all.
+    const hooked = { ...BAND_A, hook: '0x' + 'ee'.repeat(20) };
+    const p = await setup({ bands: [hooked] });
+    const box = await goZap(p);
+    const ins = box.querySelectorAll('.lqin');
+    typeInto(p, ins[0], '1');
+    await p.settle();
+    const add = box.querySelector('[data-act="ac"]');
+    add.dispatchEvent(new p.window.MouseEvent('click', { bubbles: true }));
+    await p.waitFor(() => /hook/i.test(p.text('stat')), { label: 'the refusal' });
+    assert.match(p.text('stat'), /hook/i);
+    assert.equal(p.chain.sent.length, 0, 'a hooked zap must not be sent');
+    p.close();
+  });
+
 });
 
 describe('living beside the swap tile', () => {

@@ -69,8 +69,19 @@ contract Reenterer {
         fill = f;
     }
 
+    address public tIn;
+    address public tOut;
+
+    function arm(address a, address b) public {
+        tIn = a;
+        tOut = b;
+    }
+
+    /// A WELL-FORMED inner call, so the only thing that can refuse it is the
+    /// lock. The old one passed `tokenIn = ETH, amountIn = 1` with no value and
+    /// died on `BadValue` - which meant the test passed with the lock deleted.
     function swap() public payable {
-        fill.fill(address(1), address(1), address(0), 1, address(2), 1, address(this), "");
+        fill.fill(tIn, tIn, tIn, 1, tOut, 1, address(this), "");
     }
 }
 
@@ -101,6 +112,16 @@ contract PlantIntoFill {
         sideEffectCommitted = true;
         if (tokenOut == address(0)) payable(fill).transfer(1);
         else MockERC20(tokenOut).transfer(fill, 1);
+    }
+}
+
+/// @dev The route an attacker actually wants: it spends a victim's standing
+///      approval to the ADAPTER. It fails only because the call runs as the
+///      executor, which no one has approved - the blacklist has nothing to do
+///      with it, which is why testing the blacklist proved nothing.
+contract AllowanceThief {
+    function steal(address token, address victim, address to, uint256 amount) public {
+        MockERC20(token).transferFrom(victim, to, amount);
     }
 }
 
@@ -217,13 +238,57 @@ contract zSolverFillTest is Test {
         assertEq(tokenIn.balanceOf(user), 100 ether, "the standing allowance was spent");
     }
 
-    function test_theExecutorHoldsNoAllowanceAnAttackerCanPlant() public {
-        // Even reaching EXEC's arbitrary call - which a funded fill can still
-        // do - reaches a contract nobody has approved and which holds nothing.
-        assertEq(tokenIn.allowance(address(exec), attacker), 0);
-        assertEq(tokenIn.balanceOf(address(exec)), 0);
-        assertEq(tokenOut.balanceOf(address(exec)), 0);
-        assertEq(address(exec).balance, 0);
+    function test_aVictimsStandingApprovalCannotBeSpentByARoute() public {
+        // The real form of the original exploit. The old test only checked
+        // `target == tokenIn -> BadTarget`, i.e. the blacklist the file's own
+        // comment says fixes nothing, and its trailing balance assertion was
+        // incidental because the call reverted before touching anything.
+        vm.prank(user);
+        tokenIn.approve(address(fill), type(uint256).max); // what every front end teaches
+
+        AllowanceThief thief = new AllowanceThief();
+        tokenIn.mint(attacker, 1 ether);
+        vm.startPrank(attacker);
+        tokenIn.approve(address(fill), 1 ether);
+        vm.expectRevert();
+        fill.fill(
+            address(thief),
+            address(thief),
+            address(tokenIn),
+            1 ether,
+            address(tokenOut),
+            1,
+            attacker,
+            abi.encodeCall(AllowanceThief.steal, (address(tokenIn), user, attacker, 100 ether))
+        );
+        vm.stopPrank();
+        assertEq(tokenIn.balanceOf(user), 100 ether, "the standing approval was spent");
+        assertEq(tokenIn.allowance(user, address(exec)), 0, "the executor holds an approval");
+    }
+
+    function test_theExecutorHoldsNothingAfterAnHonestFill() public {
+        // This asserted four `setUp` values and ran no fill at all - it passed
+        // with the contract deleted, and it survived being named as vacuous in
+        // a prior audit. The property worth holding is that the executor is
+        // empty AFTER doing its job, because that is what makes reaching its
+        // arbitrary call worthless.
+        vm.startPrank(user);
+        tokenIn.approve(address(fill), 1 ether);
+        fill.fill(
+            address(router),
+            address(router),
+            address(tokenIn),
+            1 ether,
+            address(tokenOut),
+            3 ether,
+            user,
+            _route(1 ether, 3 ether, address(tokenOut))
+        );
+        vm.stopPrank();
+        assertEq(tokenIn.balanceOf(address(exec)), 0, "executor kept input");
+        assertEq(tokenOut.balanceOf(address(exec)), 0, "executor kept output");
+        assertEq(address(exec).balance, 0, "executor kept ether");
+        assertEq(tokenIn.allowance(address(exec), address(router)), 0, "approval survived the call");
     }
 
     function test_nobodyButTheAdapterCanDriveTheExecutor() public {
@@ -293,13 +358,38 @@ contract zSolverFillTest is Test {
     /// The bound is what the RECIPIENT receives, not what the adapter caught.
     /// For a fee-on-transfer output those are different numbers, and it is the
     /// first one people are relying on.
-    function test_theBoundIsCheckedAtTheRecipientNotTheAdapter() public {
+    function test_aFeeOnTransferOutputFillsAndIsBoundedAtTheRecipient() public {
+        // This used to be a bare `vm.expectRevert()` and it passed - on
+        // `TransferFailed`, because the adapter could not pay a fee-on-transfer
+        // output AT ALL. It asserted the bound worked while hiding the fact
+        // that no such fill could ever succeed. Two properties now, separately:
+        // a fee-bearing output FILLS, and it is still bounded by what the
+        // RECIPIENT receives rather than by what the adapter caught.
         FeeToken fee = new FeeToken();
         fee.mint(address(router), 1_000 ether);
+
+        // 3 ether leaves the router, each hop takes 1%.
+        uint256 before = fee.balanceOf(user);
+        vm.startPrank(user);
+        tokenIn.approve(address(fill), 2 ether);
+        uint256 got = fill.fill(
+            address(router),
+            address(router),
+            address(tokenIn),
+            1 ether,
+            address(fee),
+            2.9 ether,
+            user,
+            _route(1 ether, 3 ether, address(fee))
+        );
+        vm.stopPrank();
+        assertGt(got, 0, "a fee-on-transfer output could not be filled at all");
+        assertEq(fee.balanceOf(user) - before, got, "reported output is not what the user received");
+        assertGe(got, 2.9 ether, "filled below the bound");
+
+        // And the bound still binds: ask for more than the fees can deliver.
         vm.startPrank(user);
         tokenIn.approve(address(fill), 1 ether);
-        // The adapter catches 3 ether (minus the router's fee leg); the user
-        // receives 1% less again, so a bound of exactly 3 ether must fail.
         vm.expectRevert();
         fill.fill(
             address(router),
@@ -468,9 +558,10 @@ contract zSolverFillTest is Test {
     function test_reentrancyIsRefused() public {
         Reenterer r = new Reenterer();
         r.set(fill);
+        r.arm(address(tokenIn), address(tokenOut));
         vm.startPrank(user);
         tokenIn.approve(address(fill), 1 ether);
-        vm.expectRevert();
+        vm.expectRevert(zSolverFill.Reentrancy.selector);
         fill.fill(
             address(r),
             address(r),

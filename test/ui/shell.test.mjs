@@ -386,14 +386,14 @@ describe('the footer', () => {
     // derives it, and it cannot be corrected after deploy. Left empty, a
     // successor ships looking like a root: the chain still records the parent,
     // but the page gives a reader no way back to it. The address here is the
-    // deployed root, so this test also fails if a future build forgets to
-    // re-point it at ITS predecessor.
-    const ROOT = '0x00000095643CFfA7D9fae407a84dfCB6406456c6';
+    // deployed tip this build succeeds, so this test also fails if a future
+    // build forgets to re-point it at ITS predecessor.
+    const PREVIOUS = '0xe686952842627A2cf81DF42CCaD54ef98046DB8D';
     const self = '0x00000000000000000000000000000000000000ab';
     const p = await loadPage({ chain: new MockChain(), url: `https://${self}.1.w3link.io/` });
     await p.settle();
     const hrefs = [...p.$('footAddr').querySelectorAll('a')].map(a => a.getAttribute('href'));
-    assert.ok(hrefs.some(h => new RegExp(ROOT, 'i').test(h)),
+    assert.ok(hrefs.some(h => new RegExp(PREVIOUS, 'i').test(h)),
       `no link back to the predecessor; footer had ${hrefs.join(', ') || 'no links'}`);
     p.close();
   });

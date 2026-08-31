@@ -54,9 +54,35 @@ describe('fixtures', () => {
 });
 
 describe('connection', () => {
+  test('the disconnected label is an invitation, and clicking it connects', async () => {
+    // It used to read "Not connected" and do nothing when clicked - a status
+    // nobody can act on, which also no longer fitted the row beside seven
+    // controls. Now it says what the click does, and the click does it.
+    const p = await setup({ connect: false });
+    assert.equal(p.text('addr'), 'Connect');
+    p.click('addr');
+    await p.settle();
+    assert.notEqual(p.text('addr'), 'Connect', 'clicking the label did not connect');
+    p.close();
+  });
+
+  test('the disconnected label is reachable by keyboard', async () => {
+    // The Enter/Space branch was unreachable: role and tabIndex were set only
+    // once a wallet existed, so the label was not focusable in the one state
+    // where it now has something to do.
+    const p = await setup({ connect: false });
+    const el = p.$('addr');
+    assert.equal(el.getAttribute('role'), 'button', 'not announced as a control');
+    assert.equal(el.tabIndex, 0, 'not focusable while disconnected');
+    el.dispatchEvent(new p.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await p.settle();
+    assert.notEqual(p.text('addr'), 'Connect', 'Enter on the label did not connect');
+    p.close();
+  });
+
   test('starts disconnected and offers to connect', async () => {
     const p = await setup({ connect: false });
-    assert.equal(p.text('addr'), 'Not connected');
+    assert.equal(p.text('addr'), 'Connect');
     assert.equal(p.text('swap'), 'Connect Wallet');
     assert.equal(p.disabled('swap'), false, 'connect must always be clickable');
     p.close();
@@ -101,7 +127,7 @@ describe('connection', () => {
     p.click('swap');
     await p.settle();
     assert.equal(p.text('stat'), '', 'a deliberate rejection is not an error state');
-    assert.equal(p.text('addr'), 'Not connected');
+    assert.equal(p.text('addr'), 'Connect');
     p.close();
   });
 
@@ -356,6 +382,36 @@ describe('WETH <-> ETH', () => {
     assert.equal(tx.value, '0x0');
     // No approval: withdraw burns the caller's own balance.
     assert.equal(p.chain.sent.filter(t => selectorOf(t.data || '0x') === SEL.APPROVE).length, 0);
+    p.close();
+  });
+
+  /**
+   * `swap.onclick` re-derives the value it expects to send and refuses to sign
+   * if the quote disagrees: `from.addr===ZERO ? (isIn ? amountIn : limit) : 0`.
+   * The 1:1 shortcuts build `last` by hand and carried neither field, so on the
+   * wrap leg `wantsValue` read `undefined` and every wrap threw `bad value`
+   * before anything reached the wallet. The unwrap leg only survived because
+   * WETH-in takes the `: 0` arm and never looks at `isIn` at all.
+   */
+  test('ETH to WETH wraps directly and passes the value guard', async () => {
+    const p = await setup();
+    p.pickToken('fromSel', 'ETH');
+    await p.settle();
+    p.pickToken('toSel', 'WETH');
+    await p.settle();
+    await p.typeAmount('amt', '2');
+
+    assert.equal(p.value('outAmt'), '2', 'wrapping is 1:1');
+    assert.match(p.text('rate'), /1 ETH = 1 WETH/);
+
+    p.click('swap');
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'wrap tx' });
+    await p.settle();
+    assert.ok(!/bad value/.test(p.text('stat')), `value guard rejected the wrap: ${p.text('stat')}`);
+    const tx = p.chain.lastSent;
+    assert.equal(tx.to.toLowerCase(), A.WETH.toLowerCase(), 'goes straight to WETH');
+    assert.equal(selectorOf(tx.data), SEL.WETH_DEPOSIT, 'calls deposit()');
+    assert.equal(BigInt(tx.value), 2n * ETH, 'the ETH rides along as value');
     p.close();
   });
 
@@ -1031,6 +1087,59 @@ describe('price impact gates', () => {
     const need = p.asked.prompt[0].match(/Type (\d+) to accept/)[1];
     assert.equal(need, String(Math.floor(Number(shown))),
       'the demanded token must come from the number in the message');
+    p.close();
+  });
+});
+
+/**
+ * What the page says when something goes wrong.
+ *
+ * `explain` used to build its message with `String(e.data || e.message || e)`,
+ * and wallets routinely hand back `data` as an OBJECT - `{code, message}`, or a
+ * nested `originalError`. Stringifying one of those yields "[object Object]",
+ * so the page reported "Error: [object Object]" for a whole class of real
+ * failures. It was survivable while these landed in the status line under a
+ * form; it stopped being survivable once the game surfaced them on its own HUD.
+ *
+ * This asks `explain` directly. Driving a failed swap and reading the status
+ * line does not work: the re-render that follows clears it, so every such
+ * assertion passes against an empty string and proves nothing.
+ */
+describe('what a failure is called', () => {
+  // Script-level `const`s are in the global lexical scope, which a direct eval
+  // can reach even though they are not properties of `window`.
+  const explain = (p, e) => p.window.eval(`explain(${JSON.stringify(e)})`);
+
+  test('an object in `data` is not reported as [object Object]', async () => {
+    const p = await setup();
+    const said = explain(p, { code: -32603, data: { code: 3, message: 'execution reverted: bad thing' } });
+    assert.doesNotMatch(said, /\[object/, `the page said: ${said}`);
+    assert.match(said, /bad thing/, 'the wallet\u2019s own words should survive');
+    p.close();
+  });
+
+  test('revert data nested in an object is still decoded', async () => {
+    const p = await setup();
+    // 0x7939f424 - TransferFromFailed, one of the selectors the page knows.
+    const said = explain(p, { code: -32603, data: { data: '0x7939f424' } });
+    assert.doesNotMatch(said, /\[object/, `the page said: ${said}`);
+    assert.doesNotMatch(said, /0x7939f424/, 'a known revert should read as English');
+    p.close();
+  });
+
+  test('a plain message still reads exactly as it did', async () => {
+    const p = await setup();
+    assert.match(explain(p, { message: 'nonce too low' }), /nonce too low/);
+    assert.match(explain(p, { data: '0x7939f424' }), /transfer/i, 'string data still decodes');
+    p.close();
+  });
+
+  test('an error carrying nothing at all still says something', async () => {
+    const p = await setup();
+    const said = explain(p, { code: -32000 });
+    assert.doesNotMatch(said, /\[object/, `the page said: ${said}`);
+    assert.ok(said.trim().length > 0, 'silence is the one unacceptable answer');
+    assert.match(said, /-32000/, 'the code is all there is, so show it');
     p.close();
   });
 });

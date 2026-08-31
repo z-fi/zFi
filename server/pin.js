@@ -22,10 +22,40 @@ const ALLOWED_ORIGINS = [
   ...(globalThis.process?.env?.ALLOWED_ORIGINS?.split(',').map((s) => s.trim()).filter(Boolean) || []),
 ];
 
+// A CONTRACT-SERVED PAGE HAS NO FIXED HOSTNAME. zSwap is served from its own
+// address, so its origin is `https://0x<address>.<gateway>` - a different host
+// for every version, decided by a CREATE2 address nobody knows until the deploy
+// happens. An exact allowlist cannot name it in advance, and pinning one after
+// the fact would mean editing this service every time a version ships.
+//
+// So the gateway SUFFIXES are allowed, and only for a host that is an address
+// subdomain of one. What that widens is small and worth being honest about:
+// `Origin` is enforced by browsers and set freely by anything else, so this
+// list never stopped a determined caller - `curl -H "Origin: https://zfi.wei.is"`
+// has always worked. It stops other people's SITES from spending these keys,
+// and that property is unchanged: an attacker's page still cannot forge an
+// origin, and still cannot get an address subdomain on these gateways without
+// deploying a contract that serves their own page, at which point they are
+// paying for their own bytes.
+const ORIGIN_SUFFIXES = ['.w4eth.io', '.w3link.io', '.eth.limo', '.wei.limo', '.wei.is'];
+const ADDR_HOST = /^0x[0-9a-fA-F]{40}(\.\d+)?\./;
+
+function originAllowed(origin) {
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  let u;
+  try { u = new URL(origin); } catch { return false; }
+  if (u.protocol !== 'https:') return false;
+  if (!ORIGIN_SUFFIXES.some((sfx) => u.hostname.endsWith(sfx))) return false;
+  // Only an address-shaped subdomain, so a suffix match cannot hand the keys to
+  // an unrelated host that merely lives on the same gateway.
+  return ADDR_HOST.test(u.hostname) || u.hostname === 'zswap.wei.limo'
+    || u.hostname === 'new.zswap.wei.limo';
+}
+
 function cors(request) {
   const origin = request.headers.get('Origin') || '';
   return {
-    'Access-Control-Allow-Origin': ALLOWED_ORIGINS.includes(origin) ? origin : '',
+    'Access-Control-Allow-Origin': originAllowed(origin) ? origin : '',
     'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Prefer',
   };
@@ -155,7 +185,7 @@ export default {
 
     // Reject requests from non-allowlisted origins (CORS is browser-only; this blocks curl/scripts too)
     const origin = request.headers.get('Origin') || '';
-    if (!ALLOWED_ORIGINS.includes(origin)) {
+    if (!originAllowed(origin)) {
       return new Response(JSON.stringify({ error: 'forbidden' }), {
         status: 403,
         headers: { 'Content-Type': 'application/json' },

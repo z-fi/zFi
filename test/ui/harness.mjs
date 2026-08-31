@@ -25,7 +25,7 @@ import { JSDOM, VirtualConsole } from 'jsdom';
 import { AbiCoder, keccak256, toUtf8Bytes } from 'ethers';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-export const HTML_PATH = path.join(ROOT, 'zSwap.html');
+export const HTML_PATH = path.join(ROOT, process.env.ZSWAP_HTML || 'zSwap.html');
 
 const coder = AbiCoder.defaultAbiCoder();
 

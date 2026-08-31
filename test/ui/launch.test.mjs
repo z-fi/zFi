@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {loadPage, MockChain, A} from "./harness.mjs";
+import {Interface} from "ethers";
 import {readFile} from "node:fs/promises";
 
 const PLAUNCH = "0x0000002fc8e77585a008aa45d78a71ad36293aee";
@@ -220,6 +221,101 @@ test("launching a coin", async (t) => {
     p.close();
   });
 
+  // The head-slicing test below checks offsets by hand. This one hands the
+  // whole thing to a real ABI decoder, which is the only way an over-padded
+  // tail or a mis-sized length word gets caught - `data.includes(hex)` is
+  // position-independent and passes on both.
+  await t.test("the launch calldata decodes as launch(), field for field", async () => {
+    const p = await open_();
+    p.type("lnName", "Precision Cat");
+    p.type("lnSym", "PCAT");
+    p.type("lnSupply", "1000000000");
+    p.type("lnMcap", "3");
+    p.type("lnAlloc", "5");
+    p.click("lnGo");
+    await p.waitFor(() => p.chain.sent.length > 0, {label: "the launch call"});
+
+    const iface = new Interface([
+      "function launch(string name,string symbol,string uri,uint256 supply,uint256 allocBps,uint256 startMcapWei,address owner)",
+    ]);
+    const d = iface.parseTransaction({data: p.chain.sent[0].data});
+    assert.equal(d.name, "launch");
+    assert.equal(d.args[0], "Precision Cat");
+    assert.equal(d.args[1], "PCAT");
+    assert.equal(d.args[3], 10n ** 27n, "supply is not 1e9 tokens at 18 decimals");
+    assert.equal(d.args[4], 500n, "5% must encode as 500 basis points");
+    assert.equal(d.args[5], 3n * 10n ** 18n, "opening valuation is not 3 ETH");
+    assert.equal(d.args[6].toLowerCase(), A.ACCOUNT.toLowerCase(), "creator is not the connected account");
+    p.close();
+  });
+
+  // The allocation is quantised to whole basis points on the way into the
+  // calldata. Whatever the preview says, it has to say the number that will
+  // actually be minted - and a value above the cap must be REFUSED, never
+  // rounded down into the cap, because nothing can mint the shortfall later.
+  for (const [typed, bps, why] of [
+    ["5", 500n, "a whole percent"],
+    ["2.657", 266n, "rounds to the nearest basis point"],
+    ["0.019", 2n, "rounds up from just under two bps"],
+    ["20", 2000n, "exactly the cap is allowed"],
+  ]) {
+    await t.test(`an allocation of ${typed}% signs ${bps} bps (${why})`, async () => {
+      const p = await open_();
+      p.type("lnName", "Cat"); p.type("lnSym", "CAT");
+      p.type("lnSupply", "1000000000"); p.type("lnMcap", "3");
+      p.type("lnAlloc", typed);
+      p.click("lnGo");
+      await p.waitFor(() => p.chain.sent.length > 0, {label: "the launch call"});
+      const iface = new Interface([
+        "function launch(string,string,string,uint256,uint256,uint256,address)",
+      ]);
+      const d = iface.parseTransaction({data: p.chain.sent[0].data});
+      assert.equal(d.args[4], bps, `${typed}% signed ${d.args[4]} bps`);
+      // And the note must have promised the same thing it signed.
+      const note = p.text("lnNote");
+      if (bps > 0n) {
+        const pct = Number(bps) / 100;
+        assert.ok(note.includes(`(${pct}%)`), `note said "${note}" but signed ${pct}%`);
+      }
+      p.close();
+    });
+  }
+
+  await t.test("an allocation over the cap is refused, not rounded into it", async () => {
+    // Math.round(20.004 * 100) === 2000, so the cap check used to pass and the
+    // launch quietly kept less than the form promised.
+    const p = await open_();
+    p.type("lnName", "Cat"); p.type("lnSym", "CAT");
+    p.type("lnSupply", "1000000000"); p.type("lnMcap", "3");
+    p.type("lnAlloc", "20.004");
+    p.click("lnGo");
+    await p.settle();
+    assert.equal(p.chain.sent.length, 0, "a launch above the cap was sent anyway");
+    assert.match(p.text("stat"), /0 to 20%/, `expected a cap error, got "${p.text("stat")}"`);
+    p.close();
+  });
+
+  await t.test("a launch cannot be sent twice, even when the coin is never named", async () => {
+    // The form used to be cleared only inside the branch that identifies the
+    // new token. Every other path - no logs, a creatorOf naming someone else,
+    // waitTx giving up - left it armed with the same values, so one more click
+    // minted a second coin.
+    const p = await open_({thinReceipts: true});
+    p.type("lnName", "Cat"); p.type("lnSym", "CAT");
+    p.type("lnSupply", "1000000000"); p.type("lnMcap", "3");
+    p.type("lnAlloc", "5");
+    p.click("lnGo");
+    await p.waitFor(() => p.chain.sent.length > 0, {label: "the launch call"});
+    await p.settle();
+
+    assert.equal(p.value("lnName"), "", "the name survived a completed launch");
+    assert.equal(p.value("lnSupply"), "", "the supply survived a completed launch");
+    p.click("lnGo");
+    await p.settle();
+    assert.equal(p.chain.sent.length, 1, "a second click sent a second launch");
+    p.close();
+  });
+
   await t.test("encodes launch with the real ABI layout, not encStr's", async () => {
     const p = await open_();
     p.type("lnName", "Precision Cat");
@@ -382,7 +478,7 @@ test("launching a coin", async (t) => {
     p.type("lnName", "A");
     p.type("lnSym", "X");
     p.click("lnGo");
-    await p.waitFor(() => p.text("addr") !== "Not connected",
+    await p.waitFor(() => p.text("addr") !== "Connect",
       {label: "the launch click to open the wallet"});
     assert.equal(p.chain.sent.length, 0,
       "connecting is not launching — nothing should be signed yet");
@@ -493,6 +589,64 @@ test("finding the launched coin", async (t) => {
     p.close();
   });
 
+  await t.test("states what the creator actually earns", async () => {
+    // The contracts pay a creator 40 bps of every trade for the life of the
+    // token - asserted in LaunchFeeEconomics.t.sol - and the panel used to say
+    // only "creator share of trading fees", which is the most persuasive fact
+    // about launching here left invisible.
+    const p = await open_();
+    assert.match(p.text("lnSub"), /0\.4%/,
+      `the launch panel should state the creator's cut, got "${p.text("lnSub")}"`);
+    p.close();
+  });
+
+  await t.test("the receipt says what was launched, and what it earns", async () => {
+    // The highest-attention moment a creator has. It used to be one sentence
+    // with an address in it.
+    const chain = withCoin(new MockChain());
+    chain.launchToken = COIN;
+    const p = await open_({chain});
+    await launch(p);
+    assert.match(p.text("stat"), /ZCAT is live at/, "the coin should be named");
+    assert.match(p.text("stat"), /0\.4% of every trade/, "and what it earns said");
+    assert.match(p.text("stat"), /collect/i, "and where the fees are swept from");
+    const a = p.$("stat").querySelector("a");
+    assert.ok(a && /etherscan\.io\/token\//.test(a.href), "the coin should be linked");
+    p.close();
+  });
+
+  await t.test("prices the opening buy net of the pool fee", async () => {
+    // The preview ignored the 1% swap fee, so it overstated what a buyer gets
+    // by up to a percent - always flatteringly. 99/(m+0.99) matches measured
+    // on-chain fills to four decimals; at a 100 ETH open the difference is
+    // visible after rounding (0.99% before, 0.98% after).
+    const p = await open_();
+    p.type("lnSupply", "1000000000");
+    p.type("lnMcap", "100");
+    p.type("lnAlloc", "0");
+    await p.settle();
+    assert.match(p.text("lnNote"), /0\.98% of all/,
+      `the preview must be net of the fee, got "${p.text("lnNote")}"`);
+    p.close();
+  });
+
+  await t.test("refuses a supply:valuation ratio the band cannot express", async () => {
+    // The contract also enforces sqrtPHigh <= 1e36 and sqrtPHigh/1e6 != 0.
+    // Without mirroring it the user gets an opaque Bad() after paying gas.
+    const p = await open_();
+    p.type("lnName", "A"); p.type("lnSym", "X");
+    p.type("lnAlloc", "0");
+
+    p.type("lnSupply", "0.000002");          // the minimum pooled supply
+    p.type("lnMcap", "100000000000000000000");  // 1e20 ETH
+    p.click("lnGo");
+    await p.settle();
+    assert.match(p.text("stat"), /valuation is too large/,
+      `expected a sentence, got "${p.text("stat")}"`);
+    assert.equal(p.chain.sent.length, 0, "and nothing should have been sent");
+    p.close();
+  });
+
   await t.test("refuses a predicted address that belongs to somebody else", async () => {
     // The nonce race with no log to correct it. `creatorOf` answering with
     // somebody else's creator is the only thing between the page and adopting
@@ -504,8 +658,14 @@ test("finding the launched coin", async (t) => {
     chain.creatorOfAnswer = "0x" + "ee".repeat(20);
     const p = await open_({chain});
     await launch(p);
-    assert.equal(p.text("stat"), "ZCAT is live",
+    // The claim is about the ADDRESS, not the wording: an address the page
+    // could not verify must not appear, whatever else the receipt says.
+    assert.match(p.text("stat"), /^ZCAT is live\b/,
+      `the coin should still be reported as live, got "${p.text("stat")}"`);
+    assert.doesNotMatch(p.text("stat"), /0x[0-9a-fA-F]/,
       "an unverifiable address must be dropped, not adopted");
+    assert.equal(p.$("stat").querySelectorAll("a").length, 0,
+      "and it must not be linked either");
     p.close();
   });
 });

@@ -29,6 +29,14 @@ pragma solidity ^0.8.36;
 /// @dev USE. Route a pool here when its `hooks` address is non-zero, and to
 ///      `zQuoterV4` otherwise. Nothing here knows about any particular pool or
 ///      token; a hooked pool is a hooked pool.
+///
+///      WHICH HOOKED POOLS. Quoting one is not endorsing one. The page routes
+///      through a hooked pool only when the curated token list carries that
+///      pool's spec - the list is the trust decision, made by the same DAO
+///      that curates the tokens themselves. Execution adds its own bound: the
+///      router re-checks the user's minimum at settlement, so a hook that
+///      turns hostile between quote and swap can waste a transaction but
+///      cannot push a fill past the bound it was quoted against.
 contract V4QuoteLens {
     /// @dev Uniswap's canonical V4Quoter on Ethereum mainnet. Confirmed rather
     ///      than assumed: its `poolManager()` returns 0x0000...4444c5dc75cB35

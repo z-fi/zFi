@@ -124,6 +124,37 @@ describe('swap links', () => {
   });
 });
 
+describe('a link to a token only the registry knows', () => {
+  /** The registry-row shape the lens serves. `e` carries the V4 pool specs,
+   *  including the hooks address, which is how a hooked token like FWA
+   *  declares the pool the page must quote. */
+  const regRow = (s, a, e = []) => ({
+    i: '1', c: 1, k: 'eip155', p: 'ERC-20', x: true, o: false, f: false,
+    a, n: `${s} Token`, s, d: 18, t: '#888', r: 1, u: '', au: '', l: '', desc: '', e, v: true,
+  });
+
+  // applyLink runs twice - once against the tokens baked into the page, again
+  // once the on-chain list resolves. A link naming a registry-only token
+  // cannot be answered on the first pass, and answering it anyway meant
+  // showing the default pair and QUOTING it before correcting: a real price
+  // for a market the user never asked about, followed by a second quote for
+  // the right one.
+  test('settles on the linked token without quoting a pair it never named', async () => {
+    const FWA = '0x' + 'fa'.repeat(20);
+    const chain = new MockChain();
+    chain.setNative(A.ACCOUNT, 10n * 10n ** 18n);
+    chain.quoteHandler = fixedRateQuoter({ rate: 3000n * 10n ** 18n });
+    chain.registry = [regRow('FWA', FWA)];
+
+    const p = await loadPage({ chain, hash: 'token=ETH&out=FWA&amount=1' });
+    await p.settle();
+
+    const sel = p.$('toSel');
+    const settled = sel.options[sel.selectedIndex]?.textContent || '';
+    assert.match(settled, /FWA/i, `the link named FWA, the page settled on ${settled}`);
+  });
+});
+
 describe('token identification', () => {
   test('accepts a symbol in either case', async () => {
     const p = await open('token=eth&out=usdc&amount=1');
@@ -368,6 +399,59 @@ describe('the share button', () => {
     p.close();
   });
 
+  test('shares a LAUNCHED coin by address, not by its ticker', async () => {
+    // The case that actually shipped: pick a coin off the launch list, copy a
+    // link, and it read `out=ZCAT`. Launched coins are found by scanning the
+    // most recent launches, so the reader's list holds a different set as new
+    // ones arrive - and nothing stops a second coin taking the ticker. Both
+    // make a symbol link rot; the address does not.
+    const POOL = '0x' + 'c1'.repeat(20);
+    const COIN = '0x' + 'c2'.repeat(20);
+    const chain = new MockChain({ autoConnected: true });
+    // The launch scan runs as part of loading the curated list, so the fixture
+    // needs a registry for launched coins to reach the picker at all.
+    const rows = [row('ETH', A.ZERO, 18, 'Native'), row('USDC', A.USDC, 6)];
+    chain.registry = rows;
+    chain.conviction = rows.map((_, i) => i + 1);
+    chain.setNative(A.ACCOUNT, 10n * ETH);
+    chain.setToken(COIN, { symbol: 'ZCAT', decimals: 18, name: 'Zero Cat' });
+    chain.setLaunched([{ pool: POOL, token: COIN, reserve0: 20n * ETH }]);
+    // Loaded from the LAUNCH LIST, not pasted as an address: pasting adds it as
+    // a custom token, which is a different flag and was already handled - that
+    // difference is what made the first version of this test vacuous.
+    const p = await loadPage({ chain, hash: null });
+    await p.settle();
+    const to = p.$('toSel');
+    const opt = [...to.options].find(o => /ZCAT/.test(o.textContent));
+    assert.ok(opt, `the launch list never offered the coin: ${[...to.options].map(o => o.textContent)}`);
+    to.value = opt.value;
+    to.dispatchEvent(new p.window.Event('change', { bubbles: true }));
+    await p.settle();
+    p.type('amt', '1');
+    await p.settle();
+
+    const q = new URLSearchParams(new URL(await share(p)).hash.slice(1));
+    assert.equal(q.get('out').toLowerCase(), COIN.toLowerCase(),
+      `a launched coin must be linked by address, got ${q.get('out')}`);
+    p.close();
+  });
+
+  test('shares a session-only token by address, even when its symbol is unique here', async () => {
+    // The near-miss: a coin opened from the launch list is added to THIS
+    // session, which makes its symbol unambiguous in THIS list - so the
+    // builder happily wrote `out=ZCAT`. Nobody else has that token, so
+    // `symAddr` finds nothing on their side and the link quietly selects
+    // neither leg. A link that only works for its author is worse than a long
+    // one; the address carries itself and adds the token on arrival.
+    const p = await open(`token=ETH&out=${MOON}&amount=1`,
+      c => c.setToken(MOON, { symbol: 'ZCAT', decimals: 18, name: 'Zero Cat' }));
+    const q = new URLSearchParams(new URL(await share(p)).hash.slice(1));
+    assert.match(q.get('out'), /^0x/,
+      `a token only this session knows must be linked by address, got ${q.get('out')}`);
+    assert.equal(q.get('out').toLowerCase(), MOON.toLowerCase(), 'and it must be the right one');
+    p.close();
+  });
+
   test('shares a custom token by address, since its symbol may be ambiguous', async () => {
     const p = await open(`token=ETH&out=${MOON}&amount=1`,
       c => c.setToken(MOON, { symbol: 'USDC', decimals: 18, name: 'Fake' }));
@@ -577,4 +661,37 @@ describe('share links round-trip', () => {
       assert.equal(p.value('rc'), A.OTHER);
       assert.equal(p.value('dly'), '259200');
     }));
+});
+
+/**
+ * Symbols resolve against the loaded list and nothing else, so a link naming a
+ * coin that has since dropped out of the shown cohort used to apply half a pair
+ * and say nothing - the form quietly kept whatever was already selected, and
+ * the person following the link had no way to tell the difference between "this
+ * is the trade" and "this leg was ignored". Addresses always resolve, which is
+ * why the share button emits them; the notice is for links typed by hand.
+ */
+describe('a symbol that resolves to nothing says so', () => {
+  test('an unknown symbol is reported rather than skipped', async () => {
+    const p = await open('token=ETH&out=NOSUCHCOIN&amount=1');
+    assert.match(p.text('stat'), /NOSUCHCOIN/,
+      'the ignored leg should be named');
+    assert.match(p.text('stat'), /address/i, 'and the way round it offered');
+    p.close();
+  });
+
+  test('a symbol that does resolve stays silent', async () => {
+    const p = await open('token=ETH&out=USDC&amount=1');
+    assert.doesNotMatch(p.text('stat'), /Couldn/, 'a working link must not warn');
+    assert.equal(symOf(p, 'toSel'), 'USDC');
+    p.close();
+  });
+
+  test('an address is never warned about, listed or not', async () => {
+    const p = await open(`token=ETH&out=${MOON}`, chain =>
+      chain.setToken(MOON, { symbol: 'MOON', decimals: 18, name: 'Moon' }));
+    assert.doesNotMatch(p.text('stat'), /Couldn/,
+      'an address is read from chain, so there is nothing to warn about');
+    p.close();
+  });
 });

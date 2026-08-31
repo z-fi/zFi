@@ -125,7 +125,35 @@ const MOCK = ((SB2, DUTCH, PFACTORY) => String.raw`
     V4LENS: "${pageConst('V4LENS')}",
     V4PORT: "${pageConst('V4PORT')}",
     FWA: "0xa0df17b5ac76ababa36e1450e2cbcd18a620c845",
-    ZLISTLENS: "0x000000cea3ab048d59473f3fb116a8d7f1abd247"
+    ZLISTLENS: "0x000000cea3ab048d59473f3fb116a8d7f1abd247",
+    // The cause launcher's summoner, read from the page like the rest.
+    CSUM: "${pageConst('CSUM')}",
+    // A cause that already exists, so the burn-back line has something real to
+    // price. Its DAO holds 4 ETH against 1 share and 9,999,999 loot - a raise
+    // that filled 40% and has not been drawn down.
+    CDAO: "0x00000000000000000000000000000000cafe0001",
+    CLOOTTK: "0x00000000000000000000000000000000cafe0002",
+    CSHARESTK: "0x00000000000000000000000000000000cafe0003",
+    COFFER: "${pageConst('COFF')}",
+    TAPVEST: "${pageConst('CTAP')}"
+  };
+  /* The fixture cause, kept coherent so every number on the line agrees with
+     every other: a 10 ETH goal at 1e12 wei a unit, 40% sold (4,000,000 units,
+     so 4 ETH raised), and 0.4 ETH of that already drawn by the tap - which is
+     the 10% released the line should report, and why a burn pays 0.9 ETH per
+     million rather than the 1.0 that was paid in. */
+  var CAUSE = {
+    price: 1000000000000n,
+    lootSupply: 4000000n * 10n ** 18n,
+    sharesSupply: 10n ** 18n,
+    treasury: 3600000000000000000n,
+    remaining: 5999999n * 10n ** 18n,
+    deadline: BigInt(Math.floor(Date.now() / 1000) + 22 * 86400),
+    // The tap: 10 ETH over a year, last released a week ago — so there is
+    // something vested and waiting for someone to press Release.
+    rate: (10n * 10n ** 18n) / 31556952n,
+    lastClaim: BigInt(Math.floor(Date.now() / 1000) - 7 * 86400),
+    tapBudget: 10n * 10n ** 18n
   };
   // Live zOrg conviction order, captured from ZorgTokenListLens on mainnet.
   // The registry's own listing order is the fixture's array order; these two
@@ -156,6 +184,7 @@ const MOCK = ((SB2, DUTCH, PFACTORY) => String.raw`
   // matter - and getting one wrong shows up as a quote off by 10^n.
   TOK["0x00000000008835cef3e0d2333695f288ee6b63a6"] = { sym: "zzz", dec: 0 };
   TOK["0x0000000000696760e15f265e828db644a0c242eb"] = { sym: "WEI", dec: 0 };
+  TOK[A.CLOOTTK] = { sym: "WATER", dec: 18 };
 
   // USD reference prices, used to price every route consistently.
   //
@@ -330,6 +359,41 @@ const MOCK = ((SB2, DUTCH, PFACTORY) => String.raw`
     var to = (tx.to || "").toLowerCase(), data = strip(tx.data || ""), sel = data.slice(0, 8);
     if (!data) return "0x";
     if (to === A.MC3 && sel === "82ad56cb") return aggregate3(data);
+    /* The cause paths. A loot token names its DAO and the DAO names the loot
+       and shares back, which is the two-way check the burn line insists on
+       before it prices anything. Supplies are what make the split honest: the
+       founder's single share counts toward the denominator. */
+    if (to === A.CLOOTTK) {
+      if (sel === "98fabd3a") return "0x" + u256(BigInt(A.CDAO));       // DAO()
+      if (sel === "18160ddd") return "0x" + u256(CAUSE.lootSupply);   // totalSupply()
+    }
+    if (to === A.CDAO) {
+      // allowance[token][spender] — what the DAO still lets the tap take.
+      if (sel === "dd62ed3e") return "0x" + u256(CAUSE.tapBudget);
+      if (sel === "9b7b2ab0") return "0x" + u256(BigInt(A.CLOOTTK));   // loot()
+      if (sel === "03314efa") return "0x" + u256(BigInt(A.CSHARESTK)); // shares()
+      if (sel === "29f64d1a") return "0x";                             // ragequit()
+    }
+    if (to === A.CSHARESTK && sel === "18160ddd") return "0x" + u256(CAUSE.sharesSupply);
+    if (to === A.COFFER) {
+      // sales(dao) -> (token, payToken, deadline, price, cap)
+      if (sel === "c6b9f06a") {
+        return "0x" + u256(BigInt("0x3ef")) + u256(0n) + u256(CAUSE.deadline)
+          + u256(CAUSE.price) + u256(9999999n * 10n ** 18n);
+      }
+      if (sel === "b399b0bc") return "0x" + u256(CAUSE.remaining);  // remaining(dao)
+      if (sel === "cce7ec13") return "0x";                          // buy(dao, amount)
+    }
+    if (to === A.TAPVEST) {
+      // taps(dao) -> (token, beneficiary, ratePerSec, lastClaim)
+      if (sel === "6144452a") {
+        return "0x" + u256(0n) + u256(BigInt(A.ACCOUNT)) + u256(CAUSE.rate) + u256(CAUSE.lastClaim);
+      }
+      if (sel === "1e83409a") return "0x";   // claim(dao)
+    }
+    // SafeSummoner.safeSummonDAICO, simulated. The page predicts the DAO
+    // address itself, so what comes back only has to be well-formed.
+    if (to === A.CSUM && sel === "4e1e3b11") return "0x" + u256(BigInt(A.CDAO));
     if (to === A.ZQUOTER) { var q = quote(sel, tx.data); if (!q) throw Error("no route"); return q; }
     if (to === A.LENS.toLowerCase() && sel === "29c21083") return markets(data);
     // PrecisionPoolLens.quoteBestFor - the ONLY way Precision bands can win a
@@ -696,7 +760,12 @@ const MOCK = ((SB2, DUTCH, PFACTORY) => String.raw`
               case "eth_requestAccounts": connected = true; return resolve([A.ACCOUNT]);
               case "eth_blockNumber": return resolve("0x14a1b2c");
               case "eth_gasPrice": return resolve("0x" + (8e9).toString(16));
-              case "eth_getBalance": return resolve("0x" + BigInt(Math.floor(BAL[ZERO])).toString(16));
+              case "eth_getBalance": {
+                // A cause's treasury is its own balance, not the account's.
+                var who = (p[0] || "").toLowerCase();
+                if (who === A.CDAO) return resolve("0x" + CAUSE.treasury.toString(16));
+                return resolve("0x" + BigInt(Math.floor(BAL[ZERO])).toString(16));
+              }
               case "eth_getCode":
                 // Everything the page probes for exists in this simulation.
                 return resolve("0x60006000");

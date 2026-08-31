@@ -40,7 +40,7 @@
   /* Same trap as #wiz: `display:block` beats the UA [hidden] rule, so the frame
      painted as an empty dark slab under the boot spinner until srcdoc landed. */
   #frame[hidden]{display:none}
-  #warn{margin:auto;max-width:520px;border:1px solid var(--border);border-radius:10px;padding:22px;
+  #warn{margin:auto;max-width:520px;border:1px solid var(--border);border-radius:0;padding:22px;
         background:var(--bg);color:var(--fg);font:14px/1.55 inherit}
   #warn::backdrop{background:rgba(0,0,0,.6)}
   #warn h3{margin:0 0 12px;font-size:16px;line-height:1.3}
@@ -48,7 +48,7 @@
   #warn b{color:var(--fg)}
   #warn code{font-size:12px}
   .wbtns{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
-  .wbtns button{padding:9px 12px;border:1px solid var(--border);border-radius:7px;
+  .wbtns button{padding:9px 12px;border:1px solid var(--border);border-radius:0;
                 background:transparent;color:var(--fg);font:12px inherit;cursor:pointer}
   .wbtns .wprimary{background:var(--fg);color:var(--bg);border-color:var(--fg)}
   .wfoot{margin:16px 0 0!important;font-size:11px}
@@ -61,7 +61,7 @@
      element stayed painted exactly where it was. Cancel, Escape, the close control
      and the backdrop all ran and all looked like they did nothing. */
   #wiz{margin:auto;max-width:560px;max-height:min(90vh,940px);border:1px solid var(--border);
-       border-radius:12px;padding:0;overflow:hidden;
+       border-radius:0;padding:0;overflow:hidden;
        background:var(--bg);color:var(--fg);font:14px/1.5 Helvetica,Arial,sans-serif}
   #wiz[open]{display:flex;flex-direction:column}
   #wiz::backdrop{background:rgba(0,0,0,.66)}
@@ -69,16 +69,16 @@
        display:flex;align-items:center;gap:12px}
   /* An explicit way out, in the corner people look for one. Cancel sat at the far
      end of a footer that a long plan block pushes below the fold. */
-  #wizx{flex:0 0 auto;width:30px;height:30px;padding:0;border:0;border-radius:7px;
+  #wizx{flex:0 0 auto;width:30px;height:30px;padding:0;border:0;border-radius:0;
        background:transparent;color:var(--fg-muted);font:20px/1 Helvetica,Arial,sans-serif;cursor:pointer}
   #wizx:hover,#wizx:focus-visible{background:var(--border);color:var(--fg)}
   .wbody{padding:18px 20px;display:grid;gap:15px;overflow:auto;flex:1 1 auto}
   .wrow{display:grid;gap:6px}
   .wrow label{font-size:12px;color:var(--fg-muted)}
   .wrow input,.wrow select{background:transparent;color:var(--fg);border:1px solid var(--border);
-       border-radius:7px;padding:10px;font:14px inherit;min-height:42px}
+       border-radius:0;padding:10px;font:14px inherit;min-height:42px}
   .whint{font-size:12px;color:var(--fg-muted);margin:0}
-  .wplan{border:1px solid var(--border);border-radius:8px;padding:12px 14px;font-size:12.5px;
+  .wplan{border:1px solid var(--border);border-radius:0;padding:12px 14px;font-size:12.5px;
        background:var(--bg-soft,transparent)}
   .wplan ol{margin:6px 0 0;padding-left:20px}
   .wplan li{margin:3px 0}
@@ -94,7 +94,7 @@
   @keyframes wshim{to{background-position:-200% 0}}
   @keyframes wpulse{50%{opacity:.42}}
   .wskel{background:linear-gradient(90deg,var(--border) 25%,var(--bg-soft,#8884) 50%,var(--border) 75%);
-       background-size:200% 100%;animation:wshim 1.4s linear infinite;border-radius:6px}
+       background-size:200% 100%;animation:wshim 1.4s linear infinite;border-radius:0}
   .wfind{animation:wpulse 1.6s ease-in-out infinite}
   @media(prefers-reduced-motion:reduce){.wskel,.wfind{animation:none}}
   .wlocks{margin:5px 0 0;padding-left:20px}
@@ -105,7 +105,7 @@
   .wfoot2{display:flex;gap:9px;justify-content:flex-end;padding:14px 20px;flex-wrap:wrap;
        flex:0 0 auto;border-top:1px solid var(--border);background:var(--bg)}
   #wstat{flex:0 0 auto}
-  .wfoot2 button{padding:10px 15px;border:1px solid var(--border);border-radius:8px;background:transparent;
+  .wfoot2 button{padding:10px 15px;border:1px solid var(--border);border-radius:0;background:transparent;
        color:var(--fg);font:13px inherit;cursor:pointer}
   .wfoot2 .prim{background:var(--fg);color:var(--bg);border-color:var(--fg);font-weight:500}
   .wfoot2 button:disabled{opacity:.45;cursor:not-allowed}
@@ -115,12 +115,12 @@
      as it would be under the settings currently chosen, so the drawers have
      something to move. Art left, the numbers they change right. */
   .wprev{display:grid;grid-template-columns:132px minmax(0,1fr);gap:16px;align-items:start;
-       border:1px solid var(--border);border-radius:10px;padding:14px}
+       border:1px solid var(--border);border-radius:0;padding:14px}
   .wpart{display:grid;gap:7px;justify-items:center}
   .wpart .wskel{aspect-ratio:1;width:100%}
-  .wpart img{width:100%;display:block;image-rendering:pixelated;border:1px solid var(--border);border-radius:6px}
+  .wpart img{width:100%;display:block;image-rendering:pixelated;border:1px solid var(--border);border-radius:0}
   .wpempty{aspect-ratio:1;width:100%;display:grid;place-items:center;border:1px dashed var(--border);
-       border-radius:6px;color:var(--fg-muted);font-size:26px}
+       border-radius:0;color:var(--fg-muted);font-size:26px}
   .wpcap{font:italic 13px/1 "Iowan Old Style",Palatino,Georgia,serif;color:var(--fg-muted)}
   .wgold{color:#d9b34a}
   /* The rate is the number the commitment drawer exists to move. */
@@ -135,25 +135,25 @@
   .wlab{display:flex;gap:10px;align-items:baseline;justify-content:space-between}
   .wval{font-size:13px;color:var(--fg);display:flex;align-items:center;gap:6px}
   .wval input{width:9ch;text-align:right;padding:5px 7px;min-height:0;font:13px inherit;
-       background:transparent;color:var(--fg);border:1px solid var(--border);border-radius:6px}
-  .wmax{padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:transparent;
+       background:transparent;color:var(--fg);border:1px solid var(--border);border-radius:0}
+  .wmax{padding:4px 8px;border:1px solid var(--border);border-radius:0;background:transparent;
        color:var(--fg-muted);font:11px inherit;cursor:pointer}
   .wmax:hover{color:var(--fg)}
   .wrow input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:22px;
        background:transparent;border:0;padding:0;min-height:0;cursor:pointer}
-  .wrow input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:var(--border)}
+  .wrow input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:0;background:var(--border)}
   .wrow input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:18px;height:18px;
        margin-top:-7px;border-radius:50%;background:var(--fg);border:0}
-  .wrow input[type=range]::-moz-range-track{height:4px;border-radius:2px;background:var(--border)}
+  .wrow input[type=range]::-moz-range-track{height:4px;border-radius:0;background:var(--border)}
   .wrow input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--fg);border:0}
-  .wrow input[type=range]:focus-visible{outline:2px solid var(--fg);outline-offset:4px;border-radius:4px}
+  .wrow input[type=range]:focus-visible{outline:2px solid var(--fg);outline-offset:4px;border-radius:0}
   /* Tick labels under the amount track. */
   .wticks{display:flex;justify-content:space-between;font-size:11px;color:var(--fg-muted);margin-top:-2px}
   /* THE COMMITMENT SEGMENTS. Each option carries what it costs you in time and
      what it buys in rate, so the trade is legible without touching the control. */
   .wseg{display:grid;grid-template-columns:repeat(auto-fit,minmax(78px,1fr));gap:6px}
   .wsegi{position:relative;display:grid;gap:2px;justify-items:center;padding:9px 6px;cursor:pointer;
-       border:1px solid var(--border);border-radius:8px;text-align:center;line-height:1.25}
+       border:1px solid var(--border);border-radius:0;text-align:center;line-height:1.25}
   .wsegi input{position:absolute;opacity:0;width:0;height:0;margin:0}
   .wsegt{font-size:12px;color:var(--fg-muted)}
   .wsegr{font-size:14px;font-weight:600;letter-spacing:-.01em}
@@ -184,8 +184,8 @@
   .wfoot2 button:active:not(:disabled),.acts button:active:not(:disabled),
   .wmax:active,#wizx:active,#wizsnd:active{transform:translateY(1px)}
   .wfoot2 .prim{transition:transform .08s,box-shadow .15s}
-  .wfoot2 .prim:hover:not(:disabled){box-shadow:0 0 0 3px color-mix(in srgb,var(--fg) 18%,transparent)}
-  #wizsnd{margin-left:auto;flex:0 0 auto;width:30px;height:30px;padding:0;border:0;border-radius:7px;background:transparent;
+  .wfoot2 .prim:hover:not(:disabled){box-shadow:none}
+  #wizsnd{margin-left:auto;flex:0 0 auto;width:30px;height:30px;padding:0;border:0;border-radius:0;background:transparent;
        color:var(--fg-muted);font:15px/1 Helvetica,Arial,sans-serif;cursor:pointer}
   #wizsnd:hover,#wizsnd:focus-visible{background:var(--border);color:var(--fg)}
   #wizsnd.woff{opacity:.5}
@@ -195,7 +195,7 @@
   }
   /* THE BOND LIST. One card per receipt, so every position is legible at once
      instead of one at a time through a dropdown. */
-  .ubond{border:1px solid var(--border);border-radius:9px;padding:11px 13px;margin-bottom:8px}
+  .ubond{border:1px solid var(--border);border-radius:0;padding:11px 13px;margin-bottom:8px}
   .ubhead{display:flex;align-items:baseline;gap:10px;justify-content:space-between}
   .ubstate{font-size:12px;color:var(--fg-muted)}
   .ubdl{margin:8px 0 0;display:grid;gap:4px;font-size:12.5px}
@@ -203,7 +203,7 @@
   .ubdl dt{color:var(--fg-muted)}
   .ubdl dd{margin:0;text-align:right}
   .ubwhy{margin:8px 0 0;font-size:12px;color:var(--fg-muted)}
-  .ubuse{margin-top:10px;padding:7px 13px;border:1px solid var(--border);border-radius:7px;
+  .ubuse{margin-top:10px;padding:7px 13px;border:1px solid var(--border);border-radius:0;
        background:transparent;color:var(--fg);font:12px inherit;cursor:pointer}
   .ubuse:hover{border-color:var(--fg)}
   .ubuse:active{transform:translateY(1px)}
@@ -218,7 +218,7 @@
   .wsteps[open] summary::before{transform:rotate(90deg)}
   .wsteps summary:hover{color:var(--fg)}
   .wsteps ol{margin:8px 0 0;padding:0 0 0 18px;display:grid;gap:5px;color:var(--fg-muted)}
-  .wsteps.wrun{border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-top:14px}
+  .wsteps.wrun{border:1px solid var(--border);border-radius:0;padding:12px 14px;margin-top:14px}
   .wsteps.wrun .wcommit{margin:0}
   .wsteps.wrun ol{list-style:none;padding:0;gap:8px}
   .wsteps.wrun li{display:flex;gap:9px;align-items:flex-start;line-height:1.4}
@@ -247,7 +247,7 @@
   .acts{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center}
   /* 34px floor: these were 28 and 30, under the threshold for a comfortable tap
      and the two most important controls on the page. */
-  .acts button{border-radius:7px;padding:8px 14px;min-height:34px;font:12px Helvetica,Arial,sans-serif;cursor:pointer}
+  .acts button{border-radius:0;padding:8px 14px;min-height:34px;font:12px Helvetica,Arial,sans-serif;cursor:pointer}
   /* Loading a receipt is a step you finish. Once it is done the control stays
      available - you may hold several - but it stops competing for attention. */
   .acts .adone{opacity:.6}

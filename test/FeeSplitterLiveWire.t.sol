@@ -3,13 +3,15 @@ pragma solidity ^0.8.36;
 
 import "forge-std/Test.sol";
 
-/// @notice The two transactions the multisig is about to sign, rehearsed
-///         against the deployed splitter holding real ether.
+/// @notice The two transactions the multisig was handed, rehearsed against the
+///         deployed splitter holding real ether.
 ///
 ///         `setSplit` is signed once and decides where every protocol fee this
 ///         system ever collects goes. It is worth knowing that the exact
 ///         calldata handed over does what it is supposed to, rather than
-///         finding out during a multisig ceremony.
+///         finding out during a multisig ceremony. The first transaction has
+///         since been executed on mainnet; the tests now rehearse both it and
+///         the permissionless release that remains.
 interface IFeeSplitter {
     function setSplit(address[] calldata payees, uint256[] calldata shares) external;
     function release() external;
@@ -40,14 +42,17 @@ contract FeeSplitterLiveWireTest is Test {
     }
 
     /// The state it is in right now, stated so a later run shows it moved.
-    function test_todayItHoldsEtherItCannotPayOut() public {
+    /// The first transaction HAS been signed and mined: as of 2026-08-28 the
+    /// splitter holds a split - exactly the one `SET_SPLIT_CALLDATA` describes -
+    /// and what waits is only the release, which nobody has triggered yet.
+    function test_todayTheSplitIsSetAndEtherWaits() public {
         assertEq(FS.owner(), MULTISIG, "the owner is not the multisig");
-        assertEq(FS.payeeCount(), 0, "a split is already set");
-        assertGt(address(FS).balance, 0, "nothing has arrived yet");
-
-        vm.prank(stranger);
-        vm.expectRevert();
-        FS.release();
+        assertEq(FS.payeeCount(), 1, "the split is not what was signed");
+        (address[] memory p, uint256[] memory w) = FS.split();
+        assertEq(p.length, 1, "more than one payee");
+        assertEq(p[0], MULTISIG, "the payee is not the multisig");
+        assertEq(w[0], 1, "the share is not one");
+        assertGt(address(FS).balance, 0, "nothing is waiting to be released");
     }
 
     /// The handoff calldata, executed verbatim by the multisig.

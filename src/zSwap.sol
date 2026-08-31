@@ -274,7 +274,7 @@ contract zSwap {
     ///      zSolverFill itself has no owner, no pause and no upgrade path, and
     ///      routes every untrusted call through a stateless executor that
     ///      holds no allowance from anyone. See src/utils/zSolverFill.sol.
-    address public constant SOLVER_FILL = 0xA9ff2ffF37576304eCb108E313e9364Bc92412a1;
+    address public constant SOLVER_FILL = 0x7A2f21e476cA2ADde027BC868c5a083338EEfE54;
 
     // ------------------------------------------------------------- LINEAGE
     //

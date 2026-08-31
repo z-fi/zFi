@@ -128,7 +128,7 @@ input {
 .coin-tpl-badge svg { display:block; }
 .coin-tpl-simple {
   font-size:9px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;
-  padding:1px 4px;border-radius:3px;
+  padding:1px 4px;border-radius:0;
   background:var(--surface);border:1px solid var(--border-muted);
   opacity:1;color:var(--fg-muted);
 }
@@ -143,11 +143,13 @@ input {
 }
 .coin-stack > .coin-card:first-of-type { flex:1; }
 .coin-stack > .coin-card:first-of-type {
+  /* A stack of cards: two hard offset rules, no blur — the one place
+     elevation is allowed, because it encodes "there are more behind this". */
   box-shadow:
     2px 2px 0 0 var(--bg),
-    2px 2px 0 1px var(--border),
+    2px 2px 0 1px var(--border-muted),
     4px 4px 0 0 var(--bg),
-    4px 4px 0 1px var(--border);
+    4px 4px 0 1px var(--border-muted);
 }
 .coin-stack > .coin-card.coin-stacked { display:none; }
 .coin-stack.expanded > .coin-card:first-of-type { box-shadow:none; }
@@ -182,12 +184,12 @@ input {
 .coin-buy-cta {
   align-self:center;flex:none;padding:8px 20px;font-size:13px;font-weight:700;
   letter-spacing:0.06em;text-transform:uppercase;cursor:pointer;
-  color:var(--green);background:none;border:1px solid var(--green);border-radius:6px;
+  color:var(--green);background:none;border:1px solid var(--green);border-radius:0;
   transition:background 0.15s, color 0.15s;
 }
 .coin-buy-cta:hover { background:var(--green);color:var(--bg); }
 /* The target of the jump gets a brief ring, so the page does not just silently move. */
-@keyframes buyFlash { 0%,100% { box-shadow:0 0 0 0 transparent } 30% { box-shadow:0 0 0 2px var(--green) } }
+@keyframes buyFlash { 0%,100% { box-shadow:none} 30% { box-shadow:none} }
 .swap-tile.flash { animation:buyFlash 1.1s ease; }
 @media (prefers-reduced-motion: reduce) { .swap-tile.flash { animation:none } }
 .coin-mcap-row { font-size:13px;color:var(--fg-muted);margin-bottom:12px;font-weight:500; }
@@ -223,10 +225,10 @@ input {
 }
 .cause-meter-head b { color:var(--fg);font-weight:600;font-variant-numeric:tabular-nums; }
 .cause-meter-track {
-  height:8px;background:var(--border-muted);border-radius:4px;overflow:hidden;
+  height:8px;background:var(--border-muted);border-radius:0;overflow:hidden;
 }
 .cause-meter-fill {
-  height:100%;background:var(--fg);border-radius:4px;
+  height:100%;background:var(--fg);border-radius:0;
   transition:width 400ms cubic-bezier(0.4,0,0.2,1);min-width:2px;
 }
 .cause-meter-fill.is-full { background:var(--green); }
@@ -279,7 +281,7 @@ input {
 }
 .swap-panel .max-btn {
   padding:2px 4px;border:none;background:none;color:var(--fg-dim);font-size:10px;font-weight:600;
-  letter-spacing:0.03em;text-transform:uppercase;cursor:pointer;margin:0;border-radius:3px;
+  letter-spacing:0.03em;text-transform:uppercase;cursor:pointer;margin:0;border-radius:0;
   transition:color 0.15s,background 0.15s;
 }
 .swap-panel .max-btn:hover { color:var(--fg);background:var(--surface-hover); }
@@ -300,13 +302,13 @@ input {
    page's primary button fill and shouted louder than the trade button. */
 .coin-tpl-btn {
   background:var(--surface);color:var(--fg-muted);border:1px solid var(--border-muted);
-  border-radius:6px;font-family:inherit;font-weight:600;cursor:pointer;
+  border-radius:0;font-family:inherit;font-weight:600;cursor:pointer;
   transition:background 0.15s,color 0.15s,border-color 0.15s;
 }
 .coin-tpl-btn:hover { color:var(--fg);border-color:var(--border); }
 .coin-tpl-btn.active { background:var(--fg);color:var(--bg);border-color:var(--fg); }
 .swap-btn {
-  padding:13px;border:none;border-radius:8px;font-size:14px;font-weight:700;
+  padding:13px;border:none;border-radius:0;font-size:14px;font-weight:700;
   letter-spacing:0.04em;font-family:inherit;cursor:pointer;
   background:var(--btn-bg);color:var(--btn-fg);
 }
@@ -318,10 +320,10 @@ input {
 .sale-pay-mark { display:inline-flex; width:16px; height:16px; }
 .sale-pay-mark svg, .sale-pay-mark img { width:16px; height:16px; border-radius:50%; }
 .sale-pay-menu { position:absolute; right:0; top:calc(100% + 6px); z-index:30; min-width:118px;
-  background:var(--bg, #0d0d0d); border:1px solid var(--border, #2a2a2a); border-radius:8px;
-  padding:4px; box-shadow:0 8px 24px rgba(0,0,0,.45); }
+  background:var(--bg, #0d0d0d); border:1px solid var(--border, #2a2a2a); border-radius:0;
+  padding:4px; box-shadow:none; }
 .sale-pay-option { display:flex; align-items:center; gap:8px; width:100%; padding:7px 9px;
-  background:none; border:0; color:inherit; font:inherit; cursor:pointer; border-radius:6px; text-align:left; }
+  background:none; border:0; color:inherit; font:inherit; cursor:pointer; border-radius:0; text-align:left; }
 .sale-pay-option:hover { background:var(--surface-hover, rgba(255,255,255,.06)); }
 .sale-pay-option[aria-selected="true"] { background:var(--surface-hover, rgba(255,255,255,.09)); }
 .swap-mode-tabs { display:flex;gap:6px;margin-bottom:14px; }
@@ -515,7 +517,7 @@ input {
 .holder-addr { flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
 .holder-addr a { color:var(--fg-muted);text-decoration:none; }
 .holder-addr a:hover { color:var(--fg); }
-.holder-tag { font-size:10px;font-weight:600;padding:1px 5px;border-radius:3px;white-space:nowrap; }
+.holder-tag { font-size:10px;font-weight:600;padding:1px 5px;border-radius:0;white-space:nowrap; }
 .holder-tag-pool { background:rgba(59,130,246,0.15);color:#60a5fa; }
 .holder-tag-dao { background:rgba(168,85,247,0.15);color:#c084fc; }
 .holder-shares { font-weight:600;white-space:nowrap; }
@@ -544,14 +546,14 @@ input {
   content:'';flex:1;height:1px;background:var(--border-muted);
 }
 .prop-sec-head span {
-  font-size:9px;padding:1px 6px;border-radius:8px;border:1px solid var(--border-muted);
+  font-size:9px;padding:1px 6px;border-radius:0;border:1px solid var(--border-muted);
   color:var(--fg-dim);font-variant-numeric:tabular-nums;letter-spacing:0.04em;
 }
 .prop-chat-list { margin-bottom:4px; }
 /* A message is a row, not a card: the thread should read top-to-bottom without
    fifteen boxes competing with the proposal cards below it. */
 .prop-chat-item {
-  display:flex;gap:10px;padding:8px 8px 8px 6px;margin:0 -8px 0 -6px;border-radius:6px;
+  display:flex;gap:10px;padding:8px 8px 8px 6px;margin:0 -8px 0 -6px;border-radius:0;
   font-size:12px;line-height:1.6;color:var(--fg-muted);
   border-bottom:1px solid var(--border-muted);
   transition:background 0.15s ease;
@@ -590,7 +592,7 @@ input {
 .prop-more:hover, .prop-more:focus-visible { opacity:1;color:var(--fg-muted); }
 .prop-showall {
   display:block;width:100%;margin-top:8px;padding:8px;background:none;
-  border:1px dashed var(--border-muted);border-radius:6px;font:inherit;font-size:10px;
+  border:1px dashed var(--border-muted);border-radius:0;font:inherit;font-size:10px;
   letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-dim);cursor:pointer;
   transition:color 0.15s, border-color 0.15s;
 }
@@ -598,7 +600,7 @@ input {
 
 .prop-item {
   position:relative;padding:12px 12px 12px 14px;border:1px solid var(--border-muted);
-  border-radius:8px;margin-bottom:8px;background:var(--surface);
+  border-radius:0;margin-bottom:8px;background:var(--surface);
   transition:border-color 0.15s ease;
 }
 .prop-item:hover { border-color:var(--fg-dim); }
@@ -616,7 +618,7 @@ input {
   -webkit-mask-image:linear-gradient(to bottom, #000 55%, transparent 100%);
   mask-image:linear-gradient(to bottom, #000 55%, transparent 100%);
 }
-.prop-state { font-size:10px;padding:2px 8px;border-radius:10px;border:1px solid;white-space:nowrap;font-weight:600; }
+.prop-state { font-size:10px;padding:2px 8px;border-radius:0;border:1px solid;white-space:nowrap;font-weight:600; }
 .prop-state.executed { border-color:var(--fg-dim);color:var(--fg-dim);background:var(--surface-hover); }
 .prop-state.active { border-color:var(--green);color:var(--green);background:var(--status-success); }
 .prop-state.succeeded,.prop-state.queued { border-color:var(--green);color:var(--green);background:var(--status-success); }
@@ -628,7 +630,7 @@ input {
 .prop-vote { display:flex;gap:6px;margin-top:8px; }
 .prop-vote-btn {
   flex:1;padding:5px 8px;font:inherit;font-size:11px;font-weight:600;cursor:pointer;
-  background:transparent;border:1px solid var(--border-muted);border-radius:5px;color:var(--fg-muted);
+  background:transparent;border:1px solid var(--border-muted);border-radius:0;color:var(--fg-muted);
   transition:color .15s,border-color .15s;
 }
 .prop-vote-btn:hover:not(:disabled) { color:var(--fg);border-color:var(--border); }
@@ -642,11 +644,11 @@ input {
 .prop-votes .against { color:var(--red); }
 /* A tally of zero is context, not a result — keep it readable but out of the way. */
 .prop-votes .zero { opacity:0.45; }
-.prop-bar { position:relative;height:5px;border-radius:3px;background:var(--border-muted);margin-top:8px;overflow:hidden;display:flex; }
+.prop-bar { position:relative;height:5px;border-radius:0;background:var(--border-muted);margin-top:8px;overflow:hidden;display:flex; }
 /* The quorum threshold is the number that decides the proposal, so it outranks the
    tally visually. At a 5% quorum it sits near the left edge and a 1px hairline was
    indistinguishable from the vote sliver beside it. */
-.prop-bar-quorum { position:absolute;top:-1px;bottom:-1px;width:2px;background:var(--fg);opacity:0.8;border-radius:1px; }
+.prop-bar-quorum { position:absolute;top:-1px;bottom:-1px;width:2px;background:var(--fg);opacity:0.8;border-radius:0; }
 .prop-turnout { margin-left:auto;color:var(--fg-dim);white-space:nowrap; }
 .prop-turnout.met { color:var(--green); }
 .prop-clock { color:var(--fg-muted);font-variant-numeric:tabular-nums; }
@@ -752,7 +754,7 @@ input {
 .keeper-btn {
   width:100%;padding:9px 10px;font-size:12px;font-weight:600;cursor:pointer;
   background:var(--surface);color:var(--fg-muted);
-  border:1px solid var(--border-muted);border-radius:6px;
+  border:1px solid var(--border-muted);border-radius:0;
   transition:border-color 0.15s, color 0.15s, background 0.15s;
 }
 /* Only an action that would actually succeed right now gets the accent — the rest
@@ -767,17 +769,17 @@ input {
 /* Vault collection gallery */
 .nft-tile {
   display:block;width:100%;padding:0;border:none;background:none;text-align:center;
-  cursor:zoom-in;border-radius:8px;outline-offset:3px;
+  cursor:zoom-in;border-radius:0;outline-offset:3px;
 }
 .nft-tile:hover { background:none; }
 .nft-tile img {
-  width:100%;aspect-ratio:1;object-fit:contain;display:block;border-radius:8px;
+  width:100%;aspect-ratio:1;object-fit:contain;display:block;border-radius:0;
   background:var(--surface);border:1px solid var(--border-muted);
   transition:transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 .nft-tile:hover img, .nft-tile:focus-visible img {
   transform:translateY(-2px) scale(1.03);border-color:var(--fg-muted);
-  box-shadow:0 6px 18px rgba(0,0,0,0.18);
+  box-shadow:none;
 }
 .nft-tile-label {
   font-size:10px;color:var(--fg-muted);margin-top:4px;letter-spacing:0.03em;
@@ -785,7 +787,7 @@ input {
 }
 .nft-tile:hover .nft-tile-label, .nft-tile:focus-visible .nft-tile-label { color:var(--fg); }
 .nft-skel {
-  aspect-ratio:1;border-radius:8px;background:var(--surface);
+  aspect-ratio:1;border-radius:0;background:var(--surface);
   animation:nftPulse 1.4s ease-in-out infinite;
 }
 @keyframes nftPulse { 0%,100% { opacity:0.4 } 50% { opacity:0.75 } }
@@ -798,7 +800,7 @@ input {
 @keyframes nftFade { from { opacity:0 } to { opacity:1 } }
 .nft-lb-inner { max-width:min(520px,92vw);width:100%;text-align:center; }
 .nft-lb img {
-  width:100%;max-height:70vh;object-fit:contain;border-radius:10px;background:var(--surface);
+  width:100%;max-height:70vh;object-fit:contain;border-radius:0;background:var(--surface);
   display:block;margin:0 auto;
 }
 .nft-lb-meta { margin-top:12px;font-size:12px;color:#fff;opacity:0.9; }
@@ -2974,7 +2976,7 @@ async function refreshSaleStats() {
           const nfts = Number(nftCount);
           const nextN = nfts + 1;
           mintProgress.innerHTML = `
-            <div style="margin-top:6px;padding:10px 12px;border-radius:10px;background:var(--surface-raised, var(--surface))">
+            <div style="margin-top:6px;padding:10px 12px;border-radius:0;background:var(--surface-raised, var(--surface))">
               <div class="stat-row"><span class="stat-label" style="font-size:12px">Progress to NFT #${nextN}</span><span class="stat-value" style="font-size:12px;color:var(--green)">${fmtETH(progressETH)} / ${ethers.formatEther(MINT_PRICE)} ${ethIco}</span></div>
               ${pctBar(Math.min(progressPct, 100), 'var(--green)')}
               <div style="font-size:10px;color:var(--fg-dim);margin-top:4px">${nfts > 0 ? `${nfts} NFT${nfts > 1 ? 's' : ''} minted` : 'Treasury ETH flows to minter to purchase FW S02 NFTs'}</div>
@@ -3768,22 +3770,22 @@ async function renderLaunchedCoinPage(tokenAddr, info, gen) {
     <div id="lcChart"></div>
 
     <div class="coin-stat-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;font-size:11px;margin-bottom:14px">
-      <div style="padding:6px 8px;background:var(--surface);border-radius:6px">
+      <div style="padding:6px 8px;background:var(--surface);border-radius:0">
         <div style="color:var(--fg-dim);font-size:9px;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:2px">FDV</div>
         <div style="font-weight:600">${fdvEth > 1e-6 ? fmtMcap(fdvEth) : '—'}</div>
         <div style="font-size:9px;color:var(--fg-dim)">${fdvEth > 1e-6 && _lcEthUsd > 0 ? fmtUsd(fdvEth * _lcEthUsd) : 'at market price'}</div>
       </div>
-      <div style="padding:6px 8px;background:var(--surface);border-radius:6px" title="Ether the locked position would release in full. This is what backs the floor.">
+      <div style="padding:6px 8px;background:var(--surface);border-radius:0" title="Ether the locked position would release in full. This is what backs the floor.">
         <div style="color:var(--fg-dim);font-size:9px;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:2px">Backing</div>
         <div style="font-weight:600">${backingEth >= 0.0001 ? backingEth.toFixed(4) : backingEth > 0 ? backingEth.toExponential(2) : '0'} ETH</div>
         <div style="font-size:9px;color:${floorEth > marketEth ? 'var(--green)' : 'var(--fg-dim)'}">${floorEth > 0 && marketEth > 0 ? (floorEth / marketEth * 100).toFixed(0) + '% of the price' : 'in the pool'}</div>
       </div>
-      <div style="padding:6px 8px;background:var(--surface);border-radius:6px" title="Burn back to the launcher for this much ether per token, at any time. It tracks the ether behind the locked position, so it moves as the coin trades — trading above it pulls it down, and it is not a number that only ever rises.">
+      <div style="padding:6px 8px;background:var(--surface);border-radius:0" title="Burn back to the launcher for this much ether per token, at any time. It tracks the ether behind the locked position, so it moves as the coin trades — trading above it pulls it down, and it is not a number that only ever rises.">
         <div style="color:var(--fg-dim);font-size:9px;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:2px">Floor</div>
         <div style="font-weight:600">${floorEth > 0 ? fmtPer1M(floorEth * 1e6).v : '—'}</div>
         <div style="font-size:9px;color:var(--fg-dim)">${floorEth > 0 ? fmtPer1M(floorEth * 1e6).unit + ' per 1M' : 'no buys yet'}</div>
       </div>
-      <div style="padding:6px 8px;background:var(--surface);border-radius:6px" title="Live supply. Redemptions and fee burns retire it — a launched coin's supply only ever falls.">
+      <div style="padding:6px 8px;background:var(--surface);border-radius:0" title="Live supply. Redemptions and fee burns retire it — a launched coin's supply only ever falls.">
         <div style="color:var(--fg-dim);font-size:9px;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:2px">Supply</div>
         <div style="font-weight:600">${fmtTokenAmount(info.totalSupply.toString())}</div>
         <div style="font-size:9px;color:var(--fg-dim)">${fmtTokenAmount(info.circulating.toString())} outside the pool</div>
@@ -4817,17 +4819,17 @@ async function renderCauseCoinPage(daoAddr, data, metadata, ethUsd, gen) {
   const soldFmt = Number(ethers.formatEther(soldEver)).toLocaleString(undefined, {maximumFractionDigits: 0});
   html += `
     <div id="causeStatsGrid" class="coin-stat-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:11px;margin-bottom:14px">
-      <div style="padding:6px 8px;background:var(--surface);border-radius:6px">
+      <div style="padding:6px 8px;background:var(--surface);border-radius:0">
         <div style="color:var(--fg-dim);font-size:9px;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:2px">Price</div>
         <div style="font-weight:600">${ethAmount(fmtPriceWei(price), 11)}</div>
         <div style="font-size:9px;color:var(--fg-dim)">per ${saleIsLoot ? 'loot' : 'share'} &middot; ${fmtSharesPerEth(price)}</div>
       </div>
-      <div style="padding:6px 8px;background:var(--surface);border-radius:6px">
+      <div style="padding:6px 8px;background:var(--surface);border-radius:0">
         <div style="color:var(--fg-dim);font-size:9px;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:2px">Sold</div>
         <div style="font-weight:600;display:inline-flex;align-items:center;gap:5px">${causeGlyph(data.meta, metadata, 11)}<span id="causeSoldVal">${soldFmt}</span></div>
         <div id="causeSoldCap" style="font-size:9px;color:var(--fg-dim)">${(isOpenCap || cap === 0n) ? UNIT : 'of ' + capFmt}</div>
       </div>
-      <div style="padding:6px 8px;background:var(--surface);border-radius:6px">
+      <div style="padding:6px 8px;background:var(--surface);border-radius:0">
         <div style="color:var(--fg-dim);font-size:9px;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:2px">Status</div>
         <div id="causeStatusVal" style="font-weight:600;color:${soldOut || !saleEnded ? 'var(--green)' : 'var(--fg-muted)'}">${soldOut ? 'Trading' : saleEnded ? 'Ended' : 'Active'}</div>
         <div id="causeDeadlineVal" style="font-size:9px;color:${saleDeadline > 0 && !saleEnded && saleDeadline - now < 172800 ? 'var(--red)' : 'var(--fg-dim)'}">${soldOut ? 'sale complete' : saleDeadline > 0 ? fmtDeadline(saleDeadline) : 'no deadline'}</div>
@@ -5434,7 +5436,7 @@ function causeUnitOne() { return causeUnit() === 'loot' ? 'loot' : 'share'; }
 function causeTokenRow(sharesAddr, sym) {
   return `<button onclick="causeCopyToken('${sharesAddr}', this)" title="${sharesAddr}"
       style="display:flex;align-items:center;gap:6px;width:100%;padding:6px 8px;margin-bottom:14px;
-             background:var(--surface);border:1px solid var(--border-muted);border-radius:6px;
+             background:var(--surface);border:1px solid var(--border-muted);border-radius:0;
              color:var(--fg-muted);font-family:inherit;font-size:10px;cursor:pointer;text-align:left">
     <span style="color:var(--fg-dim);flex-shrink:0">$${escText(sym)}</span>
     <span style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${sharesAddr}</span>
@@ -5587,7 +5589,7 @@ async function causeReopenPropose(daoAddr) {
       the timelock before the sale runs again, so holders need to vote.
       <div style="margin-top:6px;display:flex;gap:8px;align-items:center">
         <a href="${voteUrl}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">Open the vote</a>
-        <button onclick="causeCopyText('${voteUrl}', this)" style="background:none;border:1px solid var(--border-muted);border-radius:5px;color:var(--fg-muted);font:inherit;font-size:10px;padding:3px 8px;cursor:pointer">copy link</button>
+        <button onclick="causeCopyText('${voteUrl}', this)" style="background:none;border:1px solid var(--border-muted);border-radius:0;color:var(--fg-muted);font:inherit;font-size:10px;padding:3px 8px;cursor:pointer">copy link</button>
       </div>
       <div style="margin-top:4px;font-family:ui-monospace,monospace;font-size:10px;color:var(--fg-dim)">
         ${ids.map(i => '#' + i.toString().slice(0, 12) + '\u2026').join(' &middot; ')}</div>`, 'var(--green)');
@@ -6637,7 +6639,7 @@ async function loadCausePool(daoAddr, sharesAddr, gen, knownHasPool) {
       <span>Market</span>
       ${has && pool ? `<button id="causeModeDrop" onclick="causeSetMode(_causeMode === 'lq' ? 'swap' : 'lq')"
         aria-pressed="false" title="Add liquidity instead of swapping" aria-label="Add liquidity instead of swapping"
-        style="width:24px;height:24px;border-radius:6px;border:1px solid var(--border-muted);background:none;color:var(--fg-dim);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0">
+        style="width:24px;height:24px;border-radius:0;border:1px solid var(--border-muted);background:none;color:var(--fg-dim);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.7s6 6.1 6 10.3a6 6 0 0 1-12 0c0-4.2 6-10.3 6-10.3z"/></svg>
       </button>` : ''}
     </div>
@@ -6651,7 +6653,7 @@ async function loadCausePool(daoAddr, sharesAddr, gen, knownHasPool) {
     </dl>
     ${spark}
     ${has && pool ? `
-      <div style="border:1px solid var(--border-muted);border-radius:8px;padding:10px 12px;margin-top:14px">
+      <div style="border:1px solid var(--border-muted);border-radius:0;padding:10px 12px;margin-top:14px">
         <div style="display:flex;align-items:center;gap:8px">
           <input id="causeSwapAmt" type="text" inputmode="decimal" placeholder="0.0" aria-label="Amount to swap"
             style="flex:1;min-width:0;background:none;border:none;color:var(--fg);font:inherit;font-size:22px;outline:none;padding:0" oninput="causeSwapQuote()">
@@ -6662,12 +6664,12 @@ async function loadCausePool(daoAddr, sharesAddr, gen, knownHasPool) {
 
       <div style="display:flex;justify-content:center;margin:-9px 0;position:relative;z-index:1">
         <button onclick="causeSwapFlip()" aria-label="Swap direction" title="Swap direction"
-          style="width:26px;height:26px;border-radius:7px;border:1px solid var(--border-muted);background:var(--bg);color:var(--fg-muted);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;line-height:1">
+          style="width:26px;height:26px;border-radius:0;border:1px solid var(--border-muted);background:var(--bg);color:var(--fg-muted);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;line-height:1">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3"/></svg>
         </button>
       </div>
 
-      <div style="border:1px solid var(--border-muted);border-radius:8px;padding:10px 12px;background:var(--surface)">
+      <div style="border:1px solid var(--border-muted);border-radius:0;padding:10px 12px;background:var(--surface)">
         <div style="display:flex;align-items:center;gap:8px">
           <div id="causeSwapOut" style="flex:1;min-width:0;font-size:22px;color:var(--fg-dim);overflow:hidden;text-overflow:ellipsis">0.0</div>
           <span id="causeSwapOutSym" style="display:inline-flex;align-items:center;font-size:13px;color:var(--fg-muted);white-space:nowrap"></span>
@@ -6692,7 +6694,7 @@ async function loadCausePool(daoAddr, sharesAddr, gen, knownHasPool) {
           <button id="causeOrderOpen" onclick="causeOrderToggle()" style="background:none;border:none;color:var(--fg-muted);font:inherit;font-size:10px;text-decoration:underline;cursor:pointer;padding:0">+ post</button>
         </div>
 
-        <div id="causeOrderForm" style="display:none;border:1px solid var(--border-muted);border-radius:8px;padding:10px 12px;margin-bottom:10px">
+        <div id="causeOrderForm" style="display:none;border:1px solid var(--border-muted);border-radius:0;padding:10px 12px;margin-bottom:10px">
           <div style="display:flex;gap:14px;border-bottom:1px solid var(--border-muted);margin-bottom:10px">
             <button id="causeOrderTab_bid" onclick="causeOrderSide('bid')" style="background:none;border:none;border-bottom:2px solid var(--fg);color:var(--fg);font:inherit;font-size:11px;padding:0 0 6px;cursor:pointer">Bid</button>
             <button id="causeOrderTab_ask" onclick="causeOrderSide('ask')" style="background:none;border:none;border-bottom:2px solid transparent;color:var(--fg-dim);font:inherit;font-size:11px;padding:0 0 6px;cursor:pointer">Ask</button>

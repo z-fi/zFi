@@ -419,6 +419,12 @@ describe('reading the tape', () => {
     // Four bars, but the newest pair sits 40 buckets from the older pair.
     const p = await setup({ tapes: { [POOL_A]: [at(0), at(1), at(40), at(41)] } });
     await p.waitFor(() => svg(p), { label: 'chart' });
+    // Pin 5m: this is about how a GAP is drawn, not about which timeframe a
+    // sparse pool opens on - that choice is its own test, and rolling these
+    // four bars up would close the very gap under examination.
+    [...p.$('chTf').children].find(b => b.textContent === '5m').dispatchEvent(
+      new p.window.MouseEvent('click', { bubbles: true }));
+    await p.settle();
 
     const xs = [...svg(p).querySelectorAll('rect')]
       .map(r => Number(r.getAttribute('x'))).sort((a, b) => a - b);
@@ -435,6 +441,11 @@ describe('reading the tape', () => {
       low: 3000 * RAW_ETH_USDC, close: 3000 * RAW_ETH_USDC, volume: 5e18, count: 1 });
     const p = await setup({ tapes: { [POOL_A]: [at(0), at(1), at(40), at(41)] } });
     await p.waitFor(() => svg(p), { label: 'chart' });
+    // Pin 5m: the bucket arithmetic below is written in five-minute slots, and
+    // which timeframe a sparse pool opens on is a separate question.
+    [...p.$('chTf').children].find(b => b.textContent === '5m').dispatchEvent(
+      new p.window.MouseEvent('click', { bubbles: true }));
+    await p.settle();
     const el = p.$('chArt');
     el.getBoundingClientRect = () => ({ left: 0, width: 340, top: 0, height: 150 });
     el.dispatchEvent(new p.window.MouseEvent('pointermove',
@@ -788,6 +799,138 @@ describe('a native market selected as WETH', () => {
     await p.settle();
     await p.waitFor(() => p.visible('chTog'), { label: 'the WETH chart' });
     assert.match(p.text('chNote'), /WETH/, 'a real WETH band is its own market');
+    p.close();
+  });
+});
+
+/**
+ * Which timeframe a pool opens on.
+ *
+ * The chart draws only the newest CH_SLOTS worth of periods, but the automatic
+ * timeframe used to measure its span across the WHOLE tape. One stale bar - a
+ * single trade days before the rest - then dragged the opening timeframe wide
+ * even though the drawn window would have been perfectly legible close in.
+ *
+ * The second thing these pin is density. Six bars scattered over ninety-eight
+ * slots is not a chart a trader reads; it is six hairlines with white space
+ * between them. Bar COUNT alone cannot tell those apart from six adjacent
+ * bars, so the fit has to look at how much of the drawn window actually
+ * traded.
+ */
+describe('choosing the opening timeframe', () => {
+  // Bars at explicit slot offsets back from now, so a fixture can be sparse
+  // or clustered on purpose rather than only contiguous.
+  const at = (offsets, { start = 3000, pool = 1, coarse = false } = {}) => {
+    const width = coarse ? 14400 : 300;
+    const now = Math.floor(Date.now() / 1000 / width);
+    let p = start;
+    return offsets.map(off => {
+      const o = p; p = p * 1.004;
+      return {
+        bucket: now - off,
+        open: o * RAW_ETH_USDC, high: p * 1.002 * RAW_ETH_USDC,
+        low: o * 0.998 * RAW_ETH_USDC, close: p * RAW_ETH_USDC,
+        volume: 10 * pool * 1e18, count: 3,
+      };
+    });
+  };
+  const chosen = p => {
+    const on = [...p.$('chTf').querySelectorAll('button[data-secs]')]
+      .find(b => b.classList.contains('on'));
+    return on ? Number(on.dataset.secs) : null;
+  };
+
+  test('says when, not just how much', async () => {
+    // Price is labelled down the right edge and the gaps are drawn to scale,
+    // but without a time axis the reader has to guess what span is on screen -
+    // and a gap is exactly the thing you cannot size by eye.
+    const p = await setup({ tapes: { [POOL_A]: at([...Array(24).keys()]) } });
+    await p.waitFor(() => svg(p), { label: 'chart' });
+    const labels = [...svg(p).querySelectorAll('text')].map(t => t.textContent);
+    const clocks = labels.filter(t => /^\d{2}:\d{2}$/.test(t));
+    assert.ok(clocks.length >= 2,
+      `an intraday chart needs clock times on its axis, got ${JSON.stringify(labels)}`);
+
+    // And they must name real bars, in order, oldest on the left.
+    const now = Math.floor(Date.now() / 1000 / 300);
+    const clockOf = b => new Date(b * 300 * 1e3).toLocaleTimeString(
+      'en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+    assert.equal(clocks[0], clockOf(now - 23), 'the left edge should be the oldest bar drawn');
+    assert.equal(clocks[clocks.length - 1], clockOf(now), 'the right edge should be the newest');
+    p.close();
+  });
+
+  test('dates a multi-day window even when its bars are hours', async () => {
+    // Eight four-hour bars across two days were labelled 16:00 / 04:00 /
+    // 16:00 - the same clock twice, naming no day. What a label has to say
+    // follows the SPAN on screen, not how wide one bar happens to be.
+    const p = await setup({ tapes: { [POOL_A]: at([0, 40, 90, 150, 220, 300, 400, 560]) } });
+    await p.waitFor(() => svg(p), { label: 'chart' });
+    const labels = [...svg(p).querySelectorAll('text')].map(t => t.textContent);
+    const stamps = labels.filter(t => /^[A-Z][a-z]{2} \d+$|^\d{2}:\d{2}$/.test(t));
+    assert.ok(stamps.length >= 2, `no axis labels at all, got ${JSON.stringify(labels)}`);
+    assert.ok(stamps.every(t => /^[A-Z][a-z]{2} \d+$/.test(t)),
+      `a two-day window must be dated, not clocked, got ${JSON.stringify(stamps)}`);
+    assert.equal(new Set(stamps).size, stamps.length,
+      `a repeated label reads as a bug, got ${JSON.stringify(stamps)}`);
+    p.close();
+  });
+
+  test('dates a daily chart rather than clocking it', async () => {
+    // 08:00 on every candle tells a reader nothing when each one is a day.
+    const p = await setup({ tapes: { [POOL_A]: at([]) },
+      coarse: { [POOL_A]: at([...Array(40).keys()].map(i => i * 6), { coarse: true }) } });
+    await p.waitFor(() => svg(p), { label: 'chart' });
+    [...p.$('chTf').children].find(b => b.textContent === '1d').dispatchEvent(
+      new p.window.MouseEvent('click', { bubbles: true }));
+    await p.settle();
+    const labels = [...svg(p).querySelectorAll('text')].map(t => t.textContent);
+    assert.ok(labels.some(t => /^[A-Z][a-z]{2} \d+$/.test(t)),
+      `a daily chart should be dated, got ${JSON.stringify(labels)}`);
+    assert.ok(!labels.some(t => /^\d{2}:\d{2}$/.test(t)), 'and not clocked');
+    p.close();
+  });
+
+  test('a lone stale fine bar cannot outrank a real coarse history', async () => {
+    // zCat's actual shape on mainnet: the 5m ring has aged down to ONE bar
+    // three days old, while the 4h tape still holds ~37 bars over eleven days.
+    // Neither is dense AND long enough to qualify outright, so this lands in
+    // the fallback - where "highest fill" is a trap, because one bar alone is
+    // 100% full. What matters there is how much chart there is: bars AND
+    // density together.
+    const p = await setup({
+      tapes: { [POOL_A]: at([12]) },
+      // Five bars over twenty 4h slots: too few to qualify and too sparse to
+      // qualify, so the choice really does fall through to the fallback.
+      coarse: { [POOL_A]: at([0, 4, 9, 14, 19], { coarse: true }) },
+    });
+    await p.waitFor(() => svg(p), { label: 'chart' });
+    const on = [...p.$('chTf').querySelectorAll('button[data-secs]')]
+      .find(b => b.classList.contains('on'));
+    assert.ok(Number(on.dataset.secs) >= 14400,
+      `a single stale 5m bar must not win over a real 4h history, opened on ${on?.textContent}`);
+    p.close();
+  });
+
+  test('one stale bar does not drag a busy pool onto a wide timeframe', async () => {
+    // Twenty-four consecutive five-minute bars — two hours of real trading,
+    // which is a 5m chart — plus one lone trade three days earlier that the
+    // drawn window would never even include.
+    const recent = [...Array(24).keys()];
+    const p = await setup({ tapes: { [POOL_A]: at([...recent, 900]) } });
+    await p.waitFor(() => svg(p), { label: 'chart' });
+    assert.equal(chosen(p), 300,
+      `two hours of solid trading is a 5m chart, opened on ${chosen(p)}s`);
+    p.close();
+  });
+
+  test('a scattered pool opens wide enough to look continuous', async () => {
+    // Eight trades spread thinly across two days. At 5m that is eight
+    // hairlines in a sea of gap; rolled up it becomes a chart.
+    const p = await setup({ tapes: { [POOL_A]: at([0, 40, 90, 150, 220, 300, 400, 560]) } });
+    await p.waitFor(() => svg(p), { label: 'chart' });
+    assert.ok(chosen(p) > 300,
+      `a pool that trades every few hours should not open on 5m, opened on ${chosen(p)}s`);
     p.close();
   });
 });

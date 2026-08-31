@@ -1,0 +1,251 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>zSolverList admin</title>
+<style>
+:root{--bg:#0b0b0c;--fg:#e8e8ea;--m:#8a8a92;--ln:#26262b;--ok:#4ade80;--bad:#f87171;--acc:#60a5fa}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 ui-sans-serif,system-ui,-apple-system,sans-serif;padding:1.5em}
+main{max-width:56em;margin:0 auto}
+h1{font-size:1.1em;font-weight:600;margin:0 0 .2em}
+p.sub{color:var(--m);margin:0 0 1.5em}
+fieldset{border:1px solid var(--ln);border-radius:8px;padding:1em;margin:0 0 1em}
+legend{color:var(--m);padding:0 .5em;font-size:.85em}
+label{display:block;color:var(--m);font-size:.8em;margin:.6em 0 .2em}
+input{width:100%;background:#141417;border:1px solid var(--ln);color:var(--fg);border-radius:6px;
+padding:.5em .6em;font:inherit;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.85em}
+input:focus{outline:1px solid var(--acc);border-color:var(--acc)}
+input[type=checkbox]{width:auto}
+.row{border:1px solid var(--ln);border-radius:6px;padding:.75em;margin-bottom:.6em;background:#101013}
+.row h4{margin:0;font-size:.85em;color:var(--acc);display:flex;justify-content:space-between;align-items:center}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:0 .8em}
+@media(max-width:40em){.grid{grid-template-columns:1fr}}
+button{background:#1b1b20;border:1px solid var(--ln);color:var(--fg);border-radius:6px;
+padding:.55em 1em;font:inherit;cursor:pointer}
+button:hover:not(:disabled){border-color:var(--acc)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.primary{background:var(--acc);border-color:var(--acc);color:#06121f;font-weight:600}
+.bar{display:flex;gap:.5em;flex-wrap:wrap;align-items:center;margin-top:1em}
+pre{background:#101013;border:1px solid var(--ln);border-radius:6px;padding:.75em;
+overflow-x:auto;font-size:.75em;color:var(--m);white-space:pre-wrap;word-break:break-all;max-height:14em}
+.st{margin-top:1em;padding:.75em;border-radius:6px;border:1px solid var(--ln);font-size:.85em;white-space:pre-wrap}
+.st.ok{border-color:var(--ok);color:var(--ok)}
+.st.bad{border-color:var(--bad);color:var(--bad)}
+small.hint{color:var(--m);font-size:.78em;display:block;margin-top:.3em}
+code{font-family:ui-monospace,Menlo,monospace;color:var(--fg)}
+.del{background:transparent;border:0;color:var(--m);cursor:pointer;font-size:.85em;padding:0 .3em}
+.del:hover{color:var(--bad)}
+</style>
+<main>
+<h1>zSolverList &mdash; rewrite the lane roster</h1>
+<p class="sub">Calls <code>set(Solver[])</code>. It replaces the whole array, so every lane you want to keep must be present. Owner only.</p>
+
+<fieldset>
+<legend>Target</legend>
+<div class="grid">
+<div><label>zSolverList</label><input id="list" value="0x1Dfbb2f41B596F72187370469074C46de60dA2e3"></div>
+<div><label>Adapter to apply to every lane</label><input id="adapter" value="0x7A2f21e476cA2ADde027BC868c5a083338EEfE54"></div>
+</div>
+<small class="hint">The page pins the adapter in its own bytes. A lane naming any other address is dropped and that venue goes dark &mdash; so this must match the deployed <code>zSolverFill</code>.</small>
+<div class="bar">
+<button id="connect" class="primary">Connect wallet</button>
+<button id="load">Read live roster</button>
+<button id="applyAdapter">Apply adapter to all rows</button>
+</div>
+<div id="who" class="st" style="display:none"></div>
+</fieldset>
+
+<fieldset>
+<legend>Lanes &mdash; order is the ranking</legend>
+<div id="rows"></div>
+<div class="bar"><button id="add">+ Add lane</button></div>
+</fieldset>
+
+<fieldset>
+<legend>Calldata</legend>
+<pre id="data">—</pre>
+<div class="bar">
+<button id="copy">Copy calldata</button>
+<button id="sim">Simulate</button>
+<button id="send" class="primary">Write</button>
+</div>
+</fieldset>
+
+<div id="status" class="st" style="display:none"></div>
+</main>
+<script>
+const $=i=>document.getElementById(i);
+const ZERO="0x"+"0".repeat(40);
+
+/* ---- ABI encoding, by hand. Same reason as the main page: a dependency here
+   is a dependency that can lie about what you are signing. ---- */
+const strip=h=>String(h||"").replace(/^0x/,"");
+const pad=(h,left)=>{const x=strip(h);if(x.length>64)throw Error("word overflow");
+return left?x.padStart(64,"0"):x.padEnd(64,"0")};
+const encUint=v=>{const b=BigInt(v);if(b<0n)throw Error("negative");return pad(b.toString(16),true)};
+const encAddr=a=>{const x=strip(a).toLowerCase();
+if(!/^[0-9a-f]{40}$/.test(x))throw Error("not an address: "+a);return pad(x,true)};
+const encBool=b=>encUint(b?1n:0n);
+const utf8=s=>{const b=new TextEncoder().encode(s);
+return [...b].map(x=>x.toString(16).padStart(2,"0")).join("")};
+const encString=s=>{const h=utf8(s);
+let body="";for(let i=0;i<h.length;i+=64)body+=pad(h.slice(i,i+64),false);
+return encUint(BigInt(new TextEncoder().encode(s).length))+body};
+
+/* set((string,string,address,uint16,bool)[]) - the tuple is dynamic because it
+   holds two strings, so the array body is a table of offsets, and each tuple is
+   itself five head words followed by its own two string tails. */
+const SEL="0x9334962f";
+function encodeSet(lanes){
+  const tuples=lanes.map(l=>{
+    const nameOff=5*32, epOff=nameOff+(encString(l.name).length/2);
+    return encUint(nameOff)+encUint(epOff)+encAddr(l.adapter)
+      +encUint(BigInt(l.handicapBps))+encBool(l.enabled)
+      +encString(l.name)+encString(l.endpoint);
+  });
+  let off=tuples.length*32, heads="", tails="";
+  for(const t of tuples){heads+=encUint(off);off+=t.length/2;tails+=t}
+  return SEL+encUint(32)+encUint(tuples.length)+heads+tails;
+}
+
+const DEFAULTS=[
+ ["ParaSwap","https://api.paraswap.io"],
+ ["KyberSwap","https://aggregator-api.kyberswap.com"],
+ ["Enso","https://api.zfi.wei.is/enso/api/v1/shortcuts/route"],
+ ["0x","https://api.zfi.wei.is/0x"],
+ ["1inch","https://api.zfi.wei.is/1inch"],
+ ["Bebop","https://api.bebop.xyz/router/ethereum/v1"],
+ ["OKX","https://api.zfi.wei.is/okx"],
+].map(([name,endpoint])=>({name,endpoint,adapter:"",handicapBps:50,enabled:true}));
+
+let lanes=DEFAULTS.map(l=>({...l,adapter:$("adapter").value.trim()}));
+
+function paint(){
+  $("rows").innerHTML="";
+  lanes.forEach((l,i)=>{
+    const d=document.createElement("div");
+    d.className="row";
+    d.innerHTML=`<h4><span>${i+1}. ${l.name||"(unnamed)"}</span><button class="del" data-d="${i}" title="Remove">remove</button></h4>
+    <div class="grid">
+      <div><label>name</label><input data-f="name" data-i="${i}" value=""></div>
+      <div><label>adapter</label><input data-f="adapter" data-i="${i}" value=""></div>
+    </div>
+    <label>endpoint</label><input data-f="endpoint" data-i="${i}" value="">
+    <div class="grid">
+      <div><label>handicapBps</label><input data-f="handicapBps" data-i="${i}" value=""></div>
+      <div><label>enabled</label><input type="checkbox" data-f="enabled" data-i="${i}"></div>
+    </div>`;
+    $("rows").appendChild(d);
+    // Values are assigned, never interpolated into HTML - an endpoint is
+    // attacker-shaped text and this page is the one signing.
+    d.querySelector('[data-f="name"]').value=l.name;
+    d.querySelector('[data-f="adapter"]').value=l.adapter;
+    d.querySelector('[data-f="endpoint"]').value=l.endpoint;
+    d.querySelector('[data-f="handicapBps"]').value=l.handicapBps;
+    d.querySelector('[data-f="enabled"]').checked=!!l.enabled;
+  });
+  build();
+}
+$("rows").addEventListener("input",e=>{
+  const t=e.target,i=+t.dataset.i,f=t.dataset.f;
+  if(f===undefined)return;
+  lanes[i][f]=f==="enabled"?t.checked:(f==="handicapBps"?t.value:t.value);
+  build();
+});
+$("rows").addEventListener("click",e=>{
+  const i=e.target.dataset.d;
+  if(i===undefined)return;
+  lanes.splice(+i,1);paint();
+});
+$("add").onclick=()=>{lanes.push({name:"",endpoint:"",adapter:$("adapter").value.trim(),handicapBps:50,enabled:true});paint()};
+$("applyAdapter").onclick=()=>{const a=$("adapter").value.trim();lanes.forEach(l=>l.adapter=a);paint()};
+
+let calldata="";
+function build(){
+  try{
+    calldata=encodeSet(lanes.map(l=>({...l,handicapBps:BigInt(l.handicapBps||0)})));
+    $("data").textContent=calldata+"\n\n"+((calldata.length-10)/2)+" bytes, "+lanes.length+" lanes";
+  }catch(e){calldata="";$("data").textContent="cannot encode: "+e.message}
+}
+
+const say=(m,cls)=>{const s=$("status");s.style.display="";s.className="st "+(cls||"");s.textContent=m};
+const eth=()=>{if(!window.ethereum)throw Error("no wallet in this browser");return window.ethereum};
+let account="";
+
+$("connect").onclick=async()=>{
+  try{
+    const a=await eth().request({method:"eth_requestAccounts"});
+    account=a[0];
+    const owner=await readOwner();
+    const mine=owner.toLowerCase()===account.toLowerCase();
+    const w=$("who");w.style.display="";w.className="st "+(mine?"ok":"bad");
+    w.textContent=`connected ${account}\nowner     ${owner}\n`+
+      (mine?"you are the owner — this will go through":"NOT the owner — set() will revert");
+  }catch(e){say(e.message,"bad")}
+};
+
+async function call(to,data){
+  return await eth().request({method:"eth_call",params:[{to,data,...(account?{from:account}:{})},"latest"]});
+}
+async function readOwner(){
+  const r=await call($("list").value.trim(),"0x8da5cb5b"); // owner()
+  return "0x"+strip(r).slice(24,64);
+}
+
+$("load").onclick=async()=>{
+  try{
+    const raw=await call($("list").value.trim(),"0xe3b06401"); // solvers()
+    const b=strip(raw);
+    const at=i=>b.slice(i*64,(i+1)*64);
+    const num=i=>BigInt("0x"+at(i));
+    const base=Number(num(0))/32;               // offset to the array
+    const n=Number(num(base));
+    const out=[];
+    for(let k=0;k<n;k++){
+      const t=base+1+Number(num(base+1+k))/32;  // each tuple's own base
+      const rd=o=>{                              // a string at word offset o
+        const p=t+Number(num(t+o))/32;
+        const len=Number(num(p));
+        const hex=b.slice((p+1)*64,(p+1)*64+len*2);
+        return new TextDecoder().decode(new Uint8Array(
+          (hex.match(/../g)||[]).map(x=>parseInt(x,16))));
+      };
+      out.push({name:rd(0),endpoint:rd(1),
+        adapter:"0x"+at(t+2).slice(24),
+        handicapBps:Number(num(t+3)),
+        enabled:num(t+4)===1n});
+    }
+    lanes=out;paint();
+    say(`read ${out.length} lanes from chain`,"ok");
+  }catch(e){say("read failed: "+e.message,"bad")}
+};
+
+$("copy").onclick=async()=>{
+  try{await navigator.clipboard.writeText(calldata);say("calldata copied","ok")}
+  catch{say("could not copy — select it from the box above","bad")}
+};
+
+$("sim").onclick=async()=>{
+  if(!calldata)return say("nothing encoded","bad");
+  try{
+    await call($("list").value.trim(),calldata);
+    say("simulation passed — this call does not revert","ok");
+  }catch(e){say("simulation REVERTED: "+(e.data||e.message)+
+    "\n\nConnect as the owner, and check every adapter is a real address.","bad")}
+};
+
+$("send").onclick=async()=>{
+  if(!calldata)return say("nothing encoded","bad");
+  if(!account)return say("connect a wallet first","bad");
+  try{
+    await call($("list").value.trim(),calldata);   // never sign what would revert
+  }catch(e){return say("refusing to send — it reverts in simulation: "+(e.data||e.message),"bad")}
+  try{
+    const h=await eth().request({method:"eth_sendTransaction",
+      params:[{from:account,to:$("list").value.trim(),data:calldata,value:"0x0"}]});
+    say("sent: "+h+"\n\nhttps://etherscan.io/tx/"+h,"ok");
+  }catch(e){say(e.message,"bad")}
+};
+
+$("adapter").addEventListener("input",build);
+paint();
+</script>

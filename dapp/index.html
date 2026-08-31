@@ -43,7 +43,7 @@ try{var d=localStorage.getItem('dark');if(d==='1'||(d===null&&matchMedia('(prefe
   --slip-border:rgba(0,0,0,0.25);--slip-hover:rgba(0,0,0,0.45);--slip-focus:#000;
   --refresh-color:#888;--refresh-hover:#555;--countdown:#888;
   --info-border:#999;--info-hover:#000;
-  --info-tip-bg:#fff;--info-tip-border:#c8c8c8;--info-tip-fg:#333;--info-tip-shadow:0 2px 8px rgba(0,0,0,0.1);
+  --info-tip-bg:#fff;--info-tip-border:#c8c8c8;--info-tip-fg:#333;--info-tip-shadow:none;
   --toggle-bg:#e8e8e8;--toggle-fg:#000;
   --loading-border:#666;--loading-top:#fff;
   --token-bal:#767676;--group-border:#e8e8e8;
@@ -64,7 +64,7 @@ try{var d=localStorage.getItem('dark');if(d==='1'||(d===null&&matchMedia('(prefe
   --slip-border:rgba(255,255,255,0.15);--slip-hover:rgba(255,255,255,0.3);--slip-focus:#e8e8e0;
   --refresh-color:#767676;--refresh-hover:#999;--countdown:#767676;
   --info-border:#555;--info-hover:#e8e8e0;
-  --info-tip-bg:#141414;--info-tip-border:#3d3d3d;--info-tip-fg:#bbb;--info-tip-shadow:0 2px 8px rgba(0,0,0,0.3);
+  --info-tip-bg:#141414;--info-tip-border:#3d3d3d;--info-tip-fg:#bbb;--info-tip-shadow:none;
   --toggle-bg:#e8e8e0;--toggle-fg:#000;
   --loading-border:#555;--loading-top:#0a0a0a;
   --token-bal:#767676;--group-border:#2a2a2a;
@@ -184,11 +184,11 @@ button.secondary:hover { background: var(--surface-hover); }
   font-size: 10px;
   letter-spacing: 0.03em;
   padding: 2px 5px;
-  border-radius: 3px;
+  border-radius:0;
   background: var(--info-tip-bg);
   border: 1px solid var(--info-tip-border);
   color: var(--info-tip-fg);
-  box-shadow: var(--info-tip-shadow);
+  box-shadow:none;
   white-space: nowrap;
   opacity: 0;
   pointer-events: none;
@@ -229,7 +229,7 @@ button.secondary:hover { background: var(--surface-hover); }
   cursor: pointer;
   transition: color 0.15s, background 0.15s;
   margin: 0;
-  border-radius: 3px;
+  border-radius:0;
 }
 .max-btn:hover { color: var(--fg); background: var(--surface-hover); }
 .max-btn:disabled { opacity: 0.4; cursor: not-allowed; background: none; }
@@ -471,7 +471,7 @@ input[type="number"].slip-num:focus { border-bottom-color: var(--slip-focus); bo
   color: var(--badge-fg);
   font-size: 9px;
   padding: 1px 5px;
-  border-radius: 3px;
+  border-radius:0;
   letter-spacing: 0.04em;
   font-weight: 600;
   flex-shrink: 0;
@@ -484,7 +484,7 @@ input[type="number"].slip-num:focus { border-bottom-color: var(--slip-focus); bo
 }
 .routes-list-item .route-bar {
   height: 3px;
-  border-radius: 2px;
+  border-radius:0;
   background: var(--badge-bg);
   opacity: 0.15;
   transition: width 0.3s ease;
@@ -589,7 +589,7 @@ body.modal-open { overflow: hidden; }
   color: var(--fg-dim);
   border: 1px solid var(--border);
   padding: 2px 6px;
-  border-radius: 999px;
+  border-radius:0;
 }
 .token-balance { margin-left: auto; font-size: 11px; color: var(--token-bal); font-variant-numeric: tabular-nums; opacity: 0.7; }
 
@@ -662,7 +662,7 @@ body.modal-open { overflow: hidden; }
 .wei-list-remove:hover { color: #e74c3c; }
 #tokenList { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
 #tokenList::-webkit-scrollbar { width: 4px; }
-#tokenList::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+#tokenList::-webkit-scrollbar-thumb { background: var(--border); border-radius:0; }
 #tokenList::-webkit-scrollbar-track { background: transparent; }
 
 /* Status */
@@ -776,7 +776,7 @@ body.modal-open { overflow: hidden; }
   text-transform: none;
   color: var(--info-tip-fg);
   z-index: 200;
-  box-shadow: var(--info-tip-shadow);
+  box-shadow:none;
 }
 .info-tip.open .info-tooltip { display: block; }
 
@@ -842,7 +842,7 @@ body.modal-open { overflow: hidden; }
   flex-shrink:0;min-width:78px;
   font-family:inherit;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;
   color:var(--fg-muted);background:transparent;border:1px solid var(--border-muted);
-  border-radius:6px;padding:4px 6px;cursor:pointer;
+  border-radius:0;padding:4px 6px;cursor:pointer;
 }
 
 .coin-name-row { display:flex;gap:12px;margin-bottom:14px; }
@@ -873,7 +873,7 @@ body.modal-open { overflow: hidden; }
 .coin-upload-btn:has(img) .coin-upload-clear { display:flex; }
 .coin-upload-clear:hover { color:var(--fg); }
 .coin-upload-logo { width:56px;height:56px;border-radius:50%;flex-shrink:0; }
-.coin-upload-banner { flex:1;height:56px;border-radius:6px; }
+.coin-upload-banner { flex:1;height:56px;border-radius:0; }
 
 .coin-summary { display:grid;grid-template-columns:auto 1fr;gap:4px 16px;font-size:12px;line-height:1.6; }
 .coin-summary dt { color:var(--fg-muted);grid-column:1; }
@@ -903,9 +903,9 @@ body.modal-open { overflow: hidden; }
   position:absolute;top:100%;left:0;right:0;margin-top:4px;z-index:20;
   background:var(--bg);border:1px solid var(--border);
   max-height:240px;overflow-y:auto;
-  box-shadow:0 4px 14px rgba(0,0,0,0.08);
+  box-shadow:none;
 }
-.dark #nftCollectionDropdown { box-shadow:0 4px 14px rgba(0,0,0,0.4); }
+.dark #nftCollectionDropdown { box-shadow:none; }
 .nft-dd-row {
   display:flex;justify-content:space-between;align-items:center;gap:10px;
   padding:8px 12px;cursor:pointer;
@@ -920,7 +920,7 @@ body.modal-open { overflow: hidden; }
   display:flex;align-items:center;gap:12px;margin-bottom:10px;
 }
 .coin-slider-row label { flex:0 0 120px;font-size:12px;letter-spacing:0.05em;text-transform:uppercase;margin:0; }
-.coin-slider-row input[type="range"] { flex:1;-webkit-appearance:none;appearance:none;height:4px;background:var(--border);outline:none;border-radius:2px; }
+.coin-slider-row input[type="range"] { flex:1;-webkit-appearance:none;appearance:none;height:4px;background:var(--border);outline:none;border-radius:0; }
 .coin-slider-row input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance:none;appearance:none;width:16px;height:16px;border-radius:50%;
   background:var(--fg);cursor:pointer;border:none;
@@ -976,11 +976,11 @@ body.modal-open { overflow: hidden; }
 }
 /* Launch progress bar */
 .coin-launch-progress {
-  height:2px;background:var(--border-muted);margin-top:10px;overflow:hidden;border-radius:1px;display:none;
+  height:2px;background:var(--border-muted);margin-top:10px;overflow:hidden;border-radius:0;display:none;
 }
 .coin-launch-progress.active { display:block; }
 .coin-launch-progress-fill {
-  height:100%;width:0;background:var(--fg);border-radius:1px;
+  height:100%;width:0;background:var(--fg);border-radius:0;
   animation:coin-launch-fill 12s cubic-bezier(0.1,0.4,0.2,1) forwards;
 }
 @keyframes coin-launch-fill {
@@ -1010,8 +1010,8 @@ body.modal-open { overflow: hidden; }
 .live-sale-name { font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
 .live-sale-meta { font-size:11px;color:var(--fg-muted);margin-top:1px; }
 .live-sale-pct { font-size:12px;font-weight:600;color:var(--green, #22c55e);white-space:nowrap; }
-.live-sale-bar { width:48px;height:4px;background:var(--surface);border-radius:2px;overflow:hidden;flex-shrink:0; }
-.live-sale-bar-fill { height:100%;background:var(--green, #22c55e);border-radius:2px; }
+.live-sale-bar { width:48px;height:4px;background:var(--surface);border-radius:0;overflow:hidden;flex-shrink:0; }
+.live-sale-bar-fill { height:100%;background:var(--green, #22c55e);border-radius:0; }
 
 /* OTC order ticker */
 .otc-order {
@@ -1027,7 +1027,7 @@ body.modal-open { overflow: hidden; }
 .otc-icons .otc-ic1 { margin-left:-5px; }
 .otc-info { flex:1;min-width:0; }
 .otc-pair { font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
-.otc-src { font-size:7px;font-weight:700;letter-spacing:.4px;padding:1px 3px;border-radius:3px;text-transform:uppercase;flex-shrink:0; }
+.otc-src { font-size:7px;font-weight:700;letter-spacing:.4px;padding:1px 3px;border-radius:0;text-transform:uppercase;flex-shrink:0; }
 .otc-src.otc { background:rgba(99,145,255,0.15);color:#6391ff; }
 .otc-src.otc { background:rgba(99,145,255,0.12);color:#6391ff; }
 .dark .otc-src.otc { color:#8ab4ff; }
@@ -1184,7 +1184,7 @@ body.modal-open { overflow: hidden; }
 .xfer-claim button.secondary:hover { background:var(--card-border); }
 .xfer-claim button.danger { background:transparent; color:#ef4444; border-color:#ef4444; }
 .xfer-claim button.danger:hover { background:#ef4444; color:var(--bg); }
-.xfer-item.slow-focus { animation:slowFocusPulse 2.4s ease-out 1; box-shadow:0 0 0 2px var(--fg) inset; }
+.xfer-item.slow-focus { animation:slowFocusPulse 2.4s ease-out 1; box-shadow:none; }
 @keyframes slowFocusPulse { 0% { background:var(--fg); color:var(--bg); } 35% { background:var(--fg); color:var(--bg); } 100% { background:var(--bg); color:var(--fg); } }
 /* Delayed transfer (SLOW) options */
 .delay-chip {

@@ -92,6 +92,10 @@ contract zSwapResolver {
     ///      Three days, not thirty: a delay long enough to be noticed but short
     ///      enough that shipping a fix stays realistic. It is a constant, so
     ///      changing it means a new resolver and a visible re-point.
+    ///
+    ///      THE BYPASS, SAID PLAINLY: `manage` can move the name record itself,
+    ///      so the DAO can always serve what it likes - MATURITY governs only
+    ///      this resolver's automatic answer, a rule the DAO imposes on itself.
     uint256 public constant MATURITY = 3 days;
 
     /// @notice The newest zSwap this name will serve: the tip of the chain, or

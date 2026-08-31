@@ -279,7 +279,7 @@ describe('a pair of one asset', () => {
     chain.setNative(A.ACCOUNT, 10n * ETH);
     chain.quoteHandler = fixedRateQuoter({ rate: 3000n * ETH });
     const page = await loadPage({ chain, hash: null });
-    await page.waitFor(() => page.text('addr') !== 'Not connected', { label: 'auto-connect' });
+    await page.waitFor(() => page.text('addr') !== 'Connect', { label: 'auto-connect' });
     await page.settle();
     return page;
   }

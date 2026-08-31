@@ -316,7 +316,7 @@ const HELPERS = [
   'decodeString', 'idTok', 'idDelay',
   'decViewPage', 'planBookExactIn', 'planBookExactOut', 'decBar', 'rollUp', 'mergeTapes',
   'encFillPlan', 'encFillPlanAndSwap', 'encSnwap', 'encSweep',
-  'encPermit2Hybrid', 'impactBps', 'safeSym', 'safeUrl', 'genIcon',
+  'encPermit2Hybrid', 'impactBps', 'safeSym', 'safeUrl', 'safeDataUrl', 'genIcon',
   'wcToWallet', 'wcNode', 'wcHost',
 ];
 // Exported for the same reason as HELPERS, but they are namespaces rather than
@@ -403,7 +403,7 @@ if (exported) {
     decodeString, idTok, idDelay, decViewPage, planBookExactIn, planBookExactOut,
     decBar, rollUp, mergeTapes,
     encFillPlan, encFillPlanAndSwap, encSnwap, encSweep,
-    encPermit2Hybrid, impactBps, safeSym, safeUrl, genIcon,
+    encPermit2Hybrid, impactBps, safeSym, safeUrl, safeDataUrl, genIcon,
   } = exported;
 
   const { WCU, QR8 } = exported;
@@ -566,8 +566,22 @@ if (exported) {
   });
 
   check('every fetch lives in the shared read layer, and signing never reaches it', () => {
+    // Three, and each one is named. `httpRead` is the RPC read layer; `laneGet`
+    // and `lanePost` are the solver lanes, which talk to aggregator HTTP APIs
+    // and not to nodes. Counting to one was the invariant before lanes existed
+    // and has been failing ever since - which is worse than no check, because a
+    // permanently red check is one nobody reads. What actually matters is that
+    // no FOURTH caller appears and that the lanes never carry a signature.
     const hits = [...html.matchAll(/\bfetch\s*\(/g)].length;
-    if (hits !== 1) throw Error(`expected exactly one fetch(, found ${hits}`);
+    if (hits !== 3) throw Error(`expected exactly three fetch( - httpRead, laneGet, lanePost - found ${hits}`);
+    for (const owner of ['const lanePost=async(name,url,body,ms)=>{', 'const laneGet=async(name,url,ms)=>{']) {
+      const at = html.indexOf(owner);
+      if (at < 0) throw Error(`the solver lane transport ${owner.slice(6, 13)} has moved or been renamed`);
+      const body = html.slice(at, at + 700);
+      if (!/\bfetch\s*\(/.test(body)) throw Error(`${owner.slice(6, 13)} no longer holds its own fetch`);
+      if (/eth_send|personal_sign|eth_sign|wallet_/.test(body))
+        throw Error(`${owner.slice(6, 13)} carries a signing method`);
+    }
     const fn = html.match(/const httpRead=async\(u,method,params\)=>\{[\s\S]*?\nconst j=/);
     if (!fn || !/\bfetch\s*\(/.test(fn[0])) throw Error('the only fetch is not the one inside httpRead');
     if (/XMLHttpRequest|EventSource|navigator\.sendBeacon/.test(html))
@@ -709,7 +723,25 @@ if (exported) {
     if (body[1] !== 'I') throw Error(`genIcon emitted raw metadata: ${JSON.stringify(body[1])}`);
     const ingress = html.match(/const sym=safeSym\(t\.s\)[\s\S]{0,400}?next\.push\([^\n]*\n/);
     if (!ingress) throw Error('loadTokenList ingress no longer sanitizes via safeSym/safeUrl');
-    if (!/const logo=safeUrl\(t\.l\);/.test(ingress[0])) throw Error('registry logo not passed through safeUrl');
+    // The registry ingress is held to the STRICTER of the two normalizers.
+    // `safeUrl` also admits https://, which is right for an arbitrary NFT's own
+    // tokenURI but not for this list: a registry row must not be able to put a
+    // remote host in the render path. Accept only `safeDataUrl` here, and prove
+    // it actually refuses a remote logo rather than trusting the name.
+    if (!/const logo=safeDataUrl\(t\.l\);/.test(ingress[0]))
+      throw Error('registry logo not passed through safeDataUrl');
+    if (safeDataUrl('https://x.io/a.png') !== '')
+      throw Error('registry normalizer admits a remote host');
+    if (safeDataUrl('data:image/png;base64,QUJD') !== 'data:image/png;base64,QUJD')
+      throw Error('registry normalizer rejects a legitimate inline logo');
+    // `data:` is not by itself safe - the scheme is only half the check. A
+    // `data:text/html` in an <img src> is inert in today's browsers, but this
+    // value is one edit away from reaching a context where it is not, and the
+    // page is frozen at deploy. The normalizer must be image-only.
+    if (safeDataUrl('data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==') !== '')
+      throw Error('registry normalizer admits a non-image data: URI');
+    if (safeDataUrl('data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=') === '')
+      throw Error('registry normalizer rejects an inline SVG logo, which the live list uses');
     if (/\$\{t\.[sl]\}/.test(ingress[0])) throw Error('raw registry field interpolated into markup');
   });
 
@@ -769,6 +801,16 @@ if (exported) {
     if (!ask) throw Error('preflightAsk no longer recognizable — retarget this check');
     if (!/catch\{throw Error\("order could not be read/.test(ask[0])) {
       throw Error('preflightAsk no longer fails closed on an unreadable order');
+    }
+    // A PARTIALLY TAKEN ORDER SHRINKS, and only the growth direction was
+    // checked, so the fill passed pre-flight and reverted on-chain instead -
+    // the user paying gas to be told nothing. `preflightFills` compares the
+    // remaining amount against what is about to be paid; this one must too.
+    if (!/at\(iB\+1\)<pay/.test(ask[0])) {
+      throw Error('preflightAsk no longer checks that the order still covers the payment');
+    }
+    if (!/preflightAsk\(row,pay\)/.test(html)) {
+      throw Error('preflightLeg no longer passes the payment down to preflightAsk');
     }
   });
 

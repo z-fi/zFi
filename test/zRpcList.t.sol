@@ -75,7 +75,7 @@ contract zRpcListTest is Test {
         // adapter is not this, or the roster gets to choose what code runs.
         assertEq(
             z.SOLVER_FILL(),
-            0xA9ff2ffF37576304eCb108E313e9364Bc92412a1,
+            0x7A2f21e476cA2ADde027BC868c5a083338EEfE54,
             "the version pins a different adapter than the deployed one"
         );
     }

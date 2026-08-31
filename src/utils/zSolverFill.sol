@@ -350,6 +350,18 @@ contract zSolverFill {
         // fee-on-transfer or rebasing output is not the same sentence as "the
         // user received minOut" - and it is the second one people are relying
         // on.
+        // PAY WHAT ARRIVED, NOT WHAT WAS MEASURED. `held` is the executor's
+        // delta, and the hop from the executor to here is itself a transfer -
+        // so for a fee-on-transfer output this contract receives LESS than
+        // `held` and paying the full figure reverts `TransferFailed` on every
+        // such fill, whatever the bound was. The comment below used to name
+        // fee-on-transfer as a case this handled; it was a case this could not
+        // execute at all. Paying the lesser of the two makes the sentence true
+        // and costs an honest token nothing, because for an honest token the
+        // two are equal. The bound is unaffected either way: it is enforced
+        // against what `to` actually receives, a few lines down.
+        uint256 have = _balance(tokenOut);
+        if (held > have) held = have;
         uint256 had = _balance(tokenOut, to);
         _pay(tokenOut, to, held);
         // CHECKED, DELIBERATELY. `unchecked` here saved about twenty gas and

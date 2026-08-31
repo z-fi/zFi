@@ -227,4 +227,56 @@ contract CauseLaunchCalldataTest is Test {
         uint256 nowWorth = dao.balance * held / total;
         assertLt(nowWorth, 1 ether, "releasing did not reduce what a burn pays");
     }
+
+    /// THE RATE IS ABSOLUTE, AND THIS TEST EXISTS TO SAY SO IN NUMBERS.
+    ///
+    /// `assertLt(nowWorth, 1 ether)` above passes at ten times the rate, or a
+    /// thousand - an eighty-two percent loss reads the same as a one percent
+    /// one. That is the assertion that let the real behaviour go unnoticed:
+    /// the tap pays `goal / window` per second REGARDLESS of what was raised,
+    /// so a cause that fills a tenth of its goal is emptied in a tenth of the
+    /// window, and its backers can be left with nothing long before the window
+    /// they were shown has run.
+    ///
+    /// So this pins the actual arithmetic. It is not a bug to be fixed on
+    /// chain - the raise is unknown when the tap is configured, so the rate
+    /// cannot be derived from it - which is exactly why the page has to SAY it.
+    /// If this test ever starts failing, the tap's semantics changed and the
+    /// page's copy about under-subscribed causes needs to change with it.
+    function test_theTapDrainsInProportionToTheSHORTFALL_notTheWindow() public {
+        // A tenth of the goal, on the form's own defaults: 10 ETH over 30 days,
+        // released over twelve months.
+        vm.prank(backer);
+        IShareOffering(SHARE_OFFERING).buy{value: 1 ether}(dao, 1_000_000 ether);
+        uint256 raised = dao.balance;
+        assertApproxEqAbs(raised, 1 ether, 1e12, "the fixture no longer raises one ether");
+
+        // ONE TWELFTH OF THE WINDOW. Proportional vesting would pay about a
+        // twelfth of the treasury here. The rate is `goal / window`, so it pays
+        // a twelfth of the GOAL - which on a tenth-funded raise is most of the
+        // money: 10 ETH / 31556952s * 31 days = 0.849 ETH against 1.0 raised.
+        vm.warp(block.timestamp + 31 days);
+        vm.prank(backer);
+        ITapVest(TAP_VEST).claim(dao);
+
+        assertLt(dao.balance, raised / 5, "over 20% survived one twelfth of the window - has the tap become proportional?");
+        assertGt(dao.balance, 0, "the fixture drained completely at 31 days; the arithmetic below needs revisiting");
+
+        uint256 total = IToken(shares).totalSupply() + IToken(loot).totalSupply();
+        uint256 held = IToken(loot).balanceOf(backer);
+        uint256 nowWorth = dao.balance * held / total;
+        // A backer one month into a twelve-month release keeps under a fifth of
+        // what they put in. The old assertion - `< 1 ether` - called this a
+        // pass, and would have called a 99% loss a pass too.
+        assertLt(nowWorth, 0.2 ether, "a backer kept more than a fifth - the drain is not what the page describes");
+
+        // And it is gone entirely well before the window the backer was shown.
+        vm.warp(block.timestamp + 9 days);
+        vm.prank(backer);
+        ITapVest(TAP_VEST).claim(dao);
+        // Dust only - the tap floors to whole seconds, so a few hundred
+        // gwei survive. That residue IS what a backer's burn pays out at this
+        // point: about 0.000000113 ETH against the 1 ETH they put in.
+        assertLt(dao.balance, 1e12, "the treasury outlasted day 40 of a twelve-month release");
+    }
 }

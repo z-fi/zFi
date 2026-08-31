@@ -147,6 +147,10 @@ async function main() {
   // is refused by the constructor (NoAdapter), which is correct behaviour and
   // would otherwise read as a failed estimate.
   let fillAddr = ADAPTER || (DRY ? '0x' + '11'.repeat(20) : '0x' + '00'.repeat(20));
+  // The executor is created by the adapter's constructor and is pinned in the
+  // page separately from the adapter, so it belongs in the record too - it was
+  // the one live address this file never wrote down.
+  let execAddr = '';
   if (!ADAPTER) {
     const factory = new ContractFactory(fillArt.abi, fillArt.bytecode, wallet);
     const tx = await factory.getDeployTransaction();
@@ -157,8 +161,9 @@ async function main() {
       const c = await factory.deploy();
       await c.waitForDeployment();
       fillAddr = await c.getAddress();
+      execAddr = await c.EXEC();
       console.log(`  deployed -> ${fillAddr}`);
-      console.log(`  executor -> ${await c.EXEC()}`);
+      console.log(`  executor -> ${execAddr}`);
     }
   }
 
@@ -172,6 +177,7 @@ async function main() {
   ];
 
   const deployed = { zSolverFill: fillAddr };
+  if (execAddr) deployed.zSolverExec = execAddr;
   for (const job of jobs) {
     const factory = new ContractFactory(job.abi, job.bytecode, wallet);
     const tx = await factory.getDeployTransaction(...job.args);
@@ -208,7 +214,15 @@ async function main() {
   if (!DRY) {
     const rec = path.join(ROOT, 'deploy', 'rosters.json');
     fs.mkdirSync(path.dirname(rec), { recursive: true });
-    fs.writeFileSync(rec, JSON.stringify({ chainId: Number(net.chainId), owner: OWNER, ...deployed }, null, 2) + '\n');
+    /* MERGE, DO NOT REPLACE. Under `--only-fill` there are no jobs, so the
+       record was rewritten holding the adapter alone - silently dropping the
+       zRpcList and zSolverList addresses of contracts that are still live and
+       still pinned in the page. A partial deploy must leave a partial record
+       ON TOP of the whole one, never in place of it. */
+    let prior = {};
+    try { prior = JSON.parse(fs.readFileSync(rec, 'utf8')); } catch {}
+    if (prior.chainId !== undefined && Number(prior.chainId) !== Number(net.chainId)) prior = {};
+    fs.writeFileSync(rec, JSON.stringify({ ...prior, chainId: Number(net.chainId), owner: OWNER, ...deployed }, null, 2) + '\n');
     console.log(`\nwrote: deploy/rosters.json`);
     console.log('\nNEXT: a zSwap version must name these addresses in its constructor.');
   }

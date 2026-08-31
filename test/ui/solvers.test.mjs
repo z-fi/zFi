@@ -1,7 +1,8 @@
 import { test, describe, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { AbiCoder, Interface } from 'ethers';
-import { A, MockChain, loadPage, fixedRateQuoter, closeAllPages } from './harness.mjs';
+import { readFileSync } from 'node:fs';
+import { A, MockChain, loadPage, fixedRateQuoter, cpammQuoter, closeAllPages } from './harness.mjs';
 
 after(closeAllPages);
 
@@ -23,8 +24,22 @@ const chainWithQuote = () => {
 describe('the solver lanes', () => {
   const SELF = '0x' + 'ab'.repeat(20);
   const LIST = '0x' + 'cd'.repeat(20);
-  const FILL = '0x' + 'ef'.repeat(20);
-  const EXEC = '0x' + '99'.repeat(20);
+  // THE ADAPTER IS PINNED IN THE PAGE'S OWN BYTES, so a test that invents an
+  // address tests nothing: the page correctly refuses it and abandons the
+  // solver path, which is how a whole suite went red without anything being
+  // broken. Read the pin out of the page instead - then a redeploy that moves
+  // the address moves these with it, and can never leave the suite asserting
+  // against an adapter the page would never call.
+  const PAGE = readFileSync(new URL('../../zSwap.html', import.meta.url), 'utf8');
+  const pin = (name) => {
+    const m = PAGE.match(new RegExp(`const ${name}="(0x[0-9a-fA-F]{40})"`));
+    if (!m) throw new Error(`${name} is not pinned in zSwap.html - has the constant been renamed?`);
+    // Lowercased: the page pins a checksummed literal, and `wire` compares
+    // against a lowercased `tx.to`. Mixed case here silently matches nothing.
+    return m[1].toLowerCase();
+  };
+  const FILL = pin('SOLVER_FILL_PIN');
+  const EXEC = pin('SOLVER_EXEC_PIN');
   const ROUTER = '0x' + '77'.repeat(20);
 
   // (name, endpoint, adapter, handicapBps, enabled)
@@ -203,6 +218,37 @@ describe('the solver lanes', () => {
     p.close();
   });
 
+  /**
+   * The caret is a CHILD of `rate`; every disclosure suffix below it assigns
+   * `rate.textContent`, which discards children. The caret was appended ahead
+   * of eight of them, so it survived only the quotes that had nothing to
+   * disclose - and vanished on exactly the degraded ones whose ranking most
+   * deserves inspection, taking with it the only way to pin a lane.
+   */
+  test('the caret survives a quote that carries a disclosure suffix', async () => {
+    // A pool shallow enough that 10 ETH moves it ~1%, so the quote carries an
+    // "Impact" suffix - the last of the eight that assign `rate.textContent`.
+    const chain = chainWithQuote();
+    chain.setNative(A.ACCOUNT, 100_000n * ETH);
+    chain.quoteHandler = cpammQuoter({ reserveIn: 1000n * ETH, reserveOut: 3_000_000n * USDC, source: 0 });
+    wire(chain, [lane('0x', 'https://a.example', FILL), lane('ParaSwap', 'https://b.example', FILL)]);
+    chain.lanes = {
+      'a.example': { buyAmount: (3600n * USDC).toString(), transaction: { to: ROUTER, data: '0x1234' } },
+      'b.example/prices': { priceRoute: { destAmount: (3200n * USDC).toString(), srcDecimals: 18, destDecimals: 6, tokenTransferProxy: ROUTER } },
+      'b.example/transactions/1': { to: ROUTER, data: '0x1234' },
+    };
+    const p = await open(chain);
+    await p.typeAmount('amt', '10');
+
+    assert.match(p.text('rate'), /Impact \d/, 'this quote was meant to carry a suffix below the caret');
+    assert.ok(p.$('rankBox').firstChild, 'the venue list is empty, so the caret is absent for another reason');
+    const caret = p.$('rate').querySelector('.rk');
+    assert.ok(caret, 'a disclosure suffix wiped the caret off a degraded quote');
+    caret.onclick();
+    assert.ok(!p.$('rankBox').classList.contains('hide'), 'the list did not open');
+    p.close();
+  });
+
   // The page hand-rolls its calldata - no ABI library ships in it - so the one
   // thing worth proving is that what it builds actually decodes as the call it
   // means to make. A silent layout slip here would send a well-formed
@@ -314,8 +360,14 @@ describe('the solver lanes', () => {
     const d = iface.parseTransaction({ data: q.callData });
     // amountIn is the CEILING the user could spend; minOut is the exact output.
     assert.equal(d.args[5], 3000n * USDC, 'minOut is not the exact output asked for');
-    // The ceiling is 0x's OWN maxSellAmount, not one we derived from slippage.
-    assert.equal(d.args[3], 95n * 10n ** 16n, 'amountIn is not the lane published ceiling');
+    // The ceiling is the LESSER of the lane's published cap and what the user's
+    // slippage authorises. 0x caps at 0.95; 0.9 quoted at 0.5% authorises
+    // 0.9045; the spend must be bounded by the user's number, not the lane's,
+    // or a lane could spend more than was agreed to just by publishing a
+    // roomier cap.
+    const authorised = (9n * 10n ** 17n * 10050n) / 10000n;
+    assert.equal(d.args[3], authorised, 'amountIn is not clamped to the authorised slippage');
+    assert.ok(d.args[3] < 95n * 10n ** 16n, 'the lane cap governed instead of the user slippage');
     assert.ok(d.args[3] < 10n ** 18n, 'the ceiling is not cheaper than the chain');
     assert.equal(d.args[1].toLowerCase(), ROUTER.toLowerCase(), 'spender is not the allowanceTarget');
     p.close();
@@ -330,6 +382,35 @@ describe('the solver lanes', () => {
     await p.typeAmount('outAmt', '3000');
     assert.ok(!(chain.httpLog || []).some(h => String(h.url).includes('s.example')),
       'a sell-side-only lane was asked for an exact-output quote');
+    p.close();
+  });
+
+  // The bold row must be the venue the quote is BUILT FROM. When a pin is
+  // active that is not the best floor, and bolding the best one tells the
+  // reader they are getting something they are not.
+  test('the marked row follows the venue actually used, not the best floor', async () => {
+    const chain = chainWithQuote();
+    wire(chain, [lane('0x', 'https://a.example', FILL), lane('ParaSwap', 'https://b.example', FILL)]);
+    chain.lanes = {
+      'a.example': { buyAmount: (3600n * USDC).toString(), transaction: { to: ROUTER, data: '0x1234' } },
+      'b.example/prices': { priceRoute: { destAmount: (3400n * USDC).toString(), srcDecimals: 18, destDecimals: 6, tokenTransferProxy: ROUTER } },
+      'b.example/transactions/1': { to: ROUTER, data: '0x1234' },
+    };
+    const p = await open(chain);
+    await p.typeAmount('amt', '1');
+
+    // No pin: the best floor is also what is used, so it is marked.
+    let marked = p.$('rankBox').querySelector('i.w');
+    assert.match(marked.textContent, /0x/, `unpinned, the used venue was not marked: ${marked.textContent}`);
+
+    // Pin the weaker one. The mark must move to it.
+    const para = [...p.$('rankBox').querySelectorAll('i')].find(r => r.textContent.includes('ParaSwap'));
+    para.onclick();
+    await p.settle();
+
+    marked = p.$('rankBox').querySelector('i.w');
+    assert.match(marked.textContent, /ParaSwap/,
+      `pinned ParaSwap but the list marks ${marked.textContent} as the one in use`);
     p.close();
   });
 
