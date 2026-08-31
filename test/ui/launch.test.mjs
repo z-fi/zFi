@@ -611,7 +611,7 @@ test("finding the launched coin", async (t) => {
     const p = await open_({chain});
     await launch(p);
     assert.match(p.text("stat"), /ZCAT is live at/, "the coin should be named");
-    assert.match(p.text("stat"), /0\.4% of every trade/, "and what it earns said");
+    assert.match(p.text("stat"), /0\.4% of each trade goes to you/, "and what it earns said");
     assert.match(p.text("stat"), /collect/i, "and where the fees are swept from");
     const a = p.$("stat").querySelector("a");
     assert.ok(a && /etherscan\.io\/token\//.test(a.href), "the coin should be linked");

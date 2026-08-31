@@ -32,10 +32,17 @@ interface INameNFT {
 ///      it is the owner, and hands it on. One signature, any wallet.
 ///
 ///      WHAT IT IS AND IS NOT. Because `registerSubdomain` is parent-owner
-///      only, a contract holding the parent is the SOLE issuer of everything
-///      beneath it. Nobody can mint a lookalike from a block explorer. That is
-///      a real property, and it is the reason to deploy this rather than mint
-///      under an open parent like `id.wei`.
+///      only, the registry admits no issuer beneath this parent except this
+///      contract - so every `*.arcade.wei` was minted through `claim`, and the
+///      shape of the namespace is ours to define. That is the reason to deploy
+///      this rather than mint under an open parent like `id.wei`.
+///
+///      IT IS NOT EXCLUSIVITY. `claim` is permissionless and takes the label
+///      from its caller, so this contract hands that parent-owner privilege to
+///      anyone who asks. A lookalike IS mintable straight from a block
+///      explorer - any free label, any score, to any address, for gas. An
+///      earlier draft of this comment claimed the opposite; it was wrong, and
+///      it is the sort of wrong an implementer builds on.
 ///
 ///      It is NOT proof that a score was earned. `claim` believes what it is
 ///      told. A player can pass any number. This contract makes the namespace

@@ -2990,7 +2990,7 @@ if(plannerBounded)rate.textContent+=" · Planner heuristic/capped";
 if(bookUnavailable)rate.textContent+=" · AMM only (books offline)";
 if(pq&&pq.capped)rate.textContent+=` · Precision scan capped (${LQ_SCAN})`;
 if(isIn&&f.launched&&(t.addr===ZERO||t.addr.toLowerCase()===WETH.toLowerCase())){
-const floorOut=await quoteFloor(f.addr,swapAmt);
+const floorOut=await quoteFloor(f.addr,swapAmt,quoteBlock);
 if(my!==seq)return;
 if(floorOut>0n){
 if(floorOut>finalOut){
@@ -3290,7 +3290,13 @@ if(/^0x0{40}$/i.test(ad(0))||at(1))stale();
 if(ad(4).toLowerCase()!==inA||ad(6).toLowerCase()!==outA)stale();
 if(at(10)<f.pay)stale();
 }else if(f.board.toLowerCase()===DUTCH.toLowerCase()){
-if(s.length<640||at(0)===0n)stale();
+/* NOT JUST "IT EXISTS". The listing's own `remaining` (9) and `expiry` (10)
+   are already in the return this just decoded, and neither was looked at - so
+   a lot someone else has partly taken, or one that lapsed while the quote sat
+   on screen, passed here and reverted on chain with the whole hybrid route. */
+if(s.length<11*64||at(0)===0n)stale();
+if(at(9)<f.get)stale();
+if(at(10)&&BigInt(Math.floor(Date.now()/1e3))>at(10))stale();
 }else{
 const wds=WORDS(f.board.toLowerCase()===SB2.toLowerCase()?1:0);
 if(s.length<(2+wds)*64)stale();
@@ -3299,6 +3305,16 @@ if(w(1)!==1n)stale();
 const v2=wds===11,iA=v2?7:2,iB=v2?9:4;
 if(ad(iA).toLowerCase()!==outA||ad(iB).toLowerCase()!==inA)stale();
 if(w(iB+1)<f.pay)stale();
+/* AND THAT IT STILL PAYS OUT WHAT WAS PLANNED. Only the payment side was
+   checked. A maker can `replaceOrder` the same id to a smaller `amountA` at
+   the same price - the payment still fits, so this passed - and then the fill
+   reverts on its own `minAmountA`, taking the AMM leg and the gas with it.
+   `preflightAsk` checks both sides for the single-order button; the multi-leg
+   route is where it matters more, because one stale leg voids the whole route.
+   Expiry too: the book filters lapsed orders when it PAINTS, so a book left
+   open offers a Fill on an order that has since expired. */
+if(v2&&w(iA+1)<f.get)stale();
+if(v2&&w(3)&&BigInt(Math.floor(Date.now()/1e3))>w(3))stale();
 }
 }
 }
@@ -5329,14 +5345,29 @@ footBurn.innerHTML=` \u00b7 <a href="https://etherscan.io/token/${BETH}?a=${TITH
 +`This is the running total, held as the BETH receipt minted to the DAO - the ether it stands for no longer exists.">`
 +`${(+formatUnits(v,18)).toFixed(4)} ETH burned</a>`;
 }
-async function quoteFloor(tok,amount){
+/* KEYED TO THE BLOCK, NOT THE CLOCK. `floorPrice` is a function of the pool's
+   reserves, so it moves on every trade - and this was cached for five minutes
+   while the route it gets compared against is quoted fresh. A stale-versus-live
+   comparison is how the page ends up printing "Floor pays more: 0.111 ETH"
+   when the launcher will now pay 0.078: the user approves, redeems by hand,
+   sets their own minEthOut because this page does not give them one, and eats
+   the difference. The route quotes already carry a block; the floor now shares
+   it, so the two numbers always describe the same chain state.
+   AND A FAILED READ IS NOT AN ANSWER. Caching the `catch` as zero stored "no
+   floor" indistinguishably from a real zero, and `floorOut>0n` below then
+   suppressed BOTH branches - so one dropped eth_call silently removed every
+   mention of redemption for five minutes, and the user sells into a worse
+   price never knowing the option was there. Leave the key unset and let the
+   next quote ask again. */
+async function quoteFloor(tok,amount,block){
 if(!tok||tok===ZERO||amount<=0n)return 0n;
 const key=tok.toLowerCase();
-if(!fcFloorPx[key]||Date.now()-fcFloorPx[key].t>300000){
+const at=block||L;
+if(!fcFloorPx[key]||fcFloorPx[key].blk!==at){
 try{
-const r=await rpc(C,[{to:PLAUNCH,data:"0x"+SEL_FLOORPRICE+encAddr(tok)},L]);
-fcFloorPx[key]={v:BigInt(r||"0x0"),t:Date.now()};
-}catch{fcFloorPx[key]={v:0n,t:Date.now()}}
+const r=await rpc(C,[{to:PLAUNCH,data:"0x"+SEL_FLOORPRICE+encAddr(tok)},at]);
+fcFloorPx[key]={v:BigInt(r||"0x0"),blk:at};
+}catch{delete fcFloorPx[key];return 0n}
 }
 const px=fcFloorPx[key].v;
 return px>0n?px*amount/(10n**18n):0n;
@@ -5593,9 +5624,15 @@ return paint(msg(eth<=0n
 :`Burning ${trimAmt(want,tok.dec)} ${safeSym(tok.sym)} would pay less than a wei`),CB_TIP);
 return paint(act(`Burn ${trimAmt(want,tok.dec)} ${safeSym(tok.sym)} `
 +`for ${trimAmt(due,18)} ETH`,"Burn"),
+/* ETHER ONLY, AND SAY SO. `ragequit` burns the loot before it pays, and pays
+   out only the tokens named in its array - this page names ether alone. Any
+   ERC-20 the DAO happens to hold is not claimed by the burn, and the claim on
+   it dies with the loot. A cause raises in ether so that is the ordinary case,
+   but "your share of the treasury" would be a promise the call does not keep. */
 "This token is a claim on a cause's treasury, not a position in a market. "
-+"Burning it pays your share of the ether the cause has not drawn down yet, counted "
-+"pro rata across every share and unit of loot. It cannot be undone.");
++"Burning it pays your share of the ETHER the cause has not drawn down yet, counted "
++"pro rata across every share and unit of loot. Any other token the cause holds is "
++"not paid out by this burn. It cannot be undone.");
 }
 const CB_TIP="Backing a cause is not a trade and there is no market to leave through. "
 +"What you get is a claim: burn it back at any time for your share of the ether the cause "
@@ -5865,7 +5902,13 @@ const firstTokens=poolFrac*pooled/100;
 lnNote.textContent=`1 ETH buys ${firstEth>=10?Math.round(firstEth):firstEth.toFixed(firstEth<1?2:1)}% of all ${sym||"tokens"}`
 +` \u00b7 opens at 1 ETH \u2248 ${trimNum(firstTokens)} ${sym||"tokens"}`
 +(al>0&&alBps===0?` \u00b7 that keep is below one basis point \u2014 the smallest is 0.01%`:"")
-+(alBps>0?` \u00b7 creator keeps ${trimNum(Number(sup)*alBps/10000)} (${alBps/100}%)`:"")
+/* THE FIGURE TYPED ABOVE PRICES THE POOL, NOT THE COIN. `startMcapWei` values
+   the POOLED supply, so a keep makes the whole supply worth more than the
+   number in the box - at a 20% keep a "30 ETH" launch opens at 37.5 ETH fully
+   diluted, and the 7.5 ETH difference is exactly what the creator is holding.
+   Neither the label nor its tooltip said so, so say it where the number is. */
++(alBps>0?` \u00b7 creator keeps ${trimNum(Number(sup)*alBps/10000)} (${alBps/100}%)`
++` \u00b7 fully diluted ${trimNum(mc*Number(sup)/pooled)} ETH`:"")
 +(alBps>=1000?` \u00b7 that much can sell for most of the ether early buyers put in`:"")
 +(lnArtBytes?` \u00b7 logo ${(lnArtBytes.length/1024).toFixed(1)} KB`:"");
 lnNote.style.color=poolFrac>=10?"#c33":"";
@@ -6177,7 +6220,7 @@ document.removeEventListener("keydown",kd,true);document.removeEventListener("ke
 invOff=null}
 const again=()=>{runId++;ov=0;sc=0;lv=3;wv=1;minted="";mintMsg="";shareMsg="";born();hud2()};
 const shareScore=async()=>{
-const what=(minted?`I scored ${sc} in zSwap invaders and minted it as ${minted}`
+const what=(minted?`I scored ${sc} in zSwap invaders and claimed ${minted}`
 :`I scored ${sc} in zSwap invaders`)+" \u{1F47E}";
 const u="https://"+SHARE_HOST+(minted?"/#score="+minted:"");
 const href="https://x.com/intent/post?text="+encodeURIComponent(what)+"&url="+encodeURIComponent(u);
@@ -6275,8 +6318,20 @@ const req={from:account,to:WNS,value:"0x0",
 data:"0x"+SEL_WCOMMIT+pad32(wnHash(wnQ.label,account,sec))};
 await rpc(C,[req,L]);
 wnSave({label:wnQ.label,secret:sec,at:0,since:Math.floor(Date.now()/1000)});
+/* A REJECTED PROMISE IS NOT PROOF THE COMMIT DID NOT LAND. A WalletConnect
+   session that drops between the user approving and the response arriving -
+   the ordinary mobile failure - rejects here while the transaction is already
+   in the mempool. Wiping the secret then costs the user the name: the
+   commitment is on chain, this page no longer holds what it takes to reveal,
+   and nobody can register that label until the commitment lapses a day later.
+   Only a refusal proves nothing was broadcast, so only a refusal discards the
+   secret. Anything else keeps it - a stale record costs nothing, and `wnQuote`
+   simply offers the reveal once the commitment shows up. */
 let h;
-try{h=await sendTx([req])}catch(e){wnSave(null);throw e}
+try{h=await sendTx([req])}
+catch(e){
+if(e&&(e.code===4001||/user (rejected|denied)|rejected the request|denied transaction/i.test(e.message||"")))wnSave(null);
+throw e}
 wnSave({label:wnQ.label,secret:sec,at:0,since:Math.floor(Date.now()/1000),tx:h});
 try{await settle(h)}catch(e){if(/tx reverted/.test(e&&e.message||""))wnSave(null);throw e}
 await wnStamp();
@@ -6346,10 +6401,15 @@ refreshBalance();
 update();
 }catch{}
 }
-stat.innerHTML=token?`${sym} is live at `
+/* ESCAPED, like the cause path five hundred lines up already does. `sym` is
+   whatever the user typed, and this is innerHTML - so a symbol carrying < or &
+   renders as broken markup on the one line confirming an irreversible
+   transaction, and a tag-shaped one executes in this page's own origin.
+   Uppercasing does not help: HTML tag matching is case-insensitive. */
+stat.innerHTML=token?`${safeSym(sym)} is live at `
 +`<a href="https://etherscan.io/token/${token}" target="_blank" rel="noreferrer">${short(token)}</a>`
-+` \u00b7 you earn 0.4% of every trade \u2014 collect it from the coin panel`
-:`${sym} is live \u00b7 you earn 0.4% of every trade`;
++` \u00b7 0.4% of each trade goes to you \u2014 collect it from the coin panel`
+:`${safeSym(sym)} is live \u00b7 0.4% of each trade goes to you`;
 lnArtBytes=null;lnArtNote.textContent="none";lnArtNote.classList.remove("set");
 lnPrev.classList.remove("set");lnArt.value="";
 }catch(e){err(e)}
@@ -6765,6 +6825,13 @@ const line=t=>{const d=document.createElement("div");d.textContent=t;scEl.append
 if(m)line(`Minted score ${(+m[1]).toLocaleString("en-US")}`+(m[2]?` \u00b7 reached wave ${m[2]}`:""));
 else line("Not a score name \u2014 the label carries no run.");
 line("Held by "+short(owner));
+/* THE LABEL IS PERMANENT; IT IS NOT EVIDENCE. `claim` is permissionless and
+   takes the number from whoever calls it, so this card faithfully reports a
+   figure its minter chose. Immutable is not the same as earned, and a card
+   that prints a score under a name without saying so invites the mistake -
+   the one mistake that must never be built on, because anything of value
+   gated on these names is free to anyone with a terminal. */
+if(m)line("Anyone can mint a name with any number \u2014 this says it was claimed, not earned.").className="scw";
 if(m&&rec&&rec!==m[1])line(`The score record now reads ${rec}, not ${m[1]} \u2014 the holder changed it.`).className="scw";
 const go=document.createElement("button");go.type="button";go.textContent="Play invaders";
 go.onclick=()=>{sBlip();invPlay()};
