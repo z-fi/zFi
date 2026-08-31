@@ -6726,7 +6726,15 @@ const newest=pts[pts.length-1].b,cap=Math.floor(pw/3);
 const kept=pts.filter(b=>newest-b.b<cap);
 const clipped=kept.length<pts.length;
 pts=kept;
-if(chInv)pts=pts.map(b=>({...b,o:1/b.o,h:1/b.l,l:1/b.h,c:1/b.c}));
+/* INVERTING DIVIDES, AND THE TAPE CAN HOLD A ZERO. PriceTape says so itself:
+   a trade whose price underflows the 1e18 scale packs to zero, `low` can never
+   be lifted again, and `fold` carries that zero into the coarse candle. Right
+   way up the wick clamp below absorbs it. Upside down it becomes Infinity -
+   and if the zero reached `o` or `c` then the clamp's own bounds are infinite
+   too, so the scale goes NaN and nothing draws at all. Drop what does not
+   invert to a real number rather than take the whole chart down with it. */
+if(chInv)pts=pts.map(b=>({...b,o:1/b.o,h:1/b.l,l:1/b.h,c:1/b.c}))
+.filter(b=>isFinite(b.o)&&isFinite(b.h)&&isFinite(b.l)&&isFinite(b.c));
 if(!pts.length){chArt.innerHTML='<div class="msg">No trades in this window.</div>';chDraw=null;return}
 let hi=-Infinity,lo=Infinity,vm=0;
 for(const b of pts){if(b.v>vm)vm=b.v}
