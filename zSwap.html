@@ -7003,10 +7003,32 @@ const lkKeep=(el,v)=>{
 if(el.value!==""&&lkWrote[el.id]!==undefined&&el.value!==lkWrote[el.id])return false;
 el.value=v;lkWrote[el.id]=v;return true;
 };
-async function applyLink(){
+/* `e` is passed only by the hashchange listener, never by the three direct
+   calls, which is what separates "the page just loaded" from "the user
+   navigated". Both arrive here with an empty hash and they mean opposite
+   things: at load the form is the user's own and must not be touched, while
+   pressing Back off a payment-request link is a request to undo it. Without
+   that distinction the early return served the first case and stranded the
+   second - amount, recipient and score card stayed filled in with nothing in
+   the URL to explain them.
+   ONLY WHAT THE LINK PUT THERE. The tab and the token pair are where the user
+   now IS, and they may have moved since; resetting those would be the page
+   yanking the view around. The values a link supplies are the ones that go. */
+async function applyLink(e){
 const q=new URLSearchParams(location.hash.slice(1));
 const my=++lSeq;
-if(![...q.keys()].length)return;
+if(![...q.keys()].length){
+if(e){
+if(typeof amt!=="undefined"&&amt){amt.value="";fitFont(amt)}
+if(typeof outAmt!=="undefined"&&outAmt){outAmt.value="";fitFont(outAmt)}
+if(typeof rc!=="undefined"&&rc){rc.value="";rc.classList.remove("bad")}
+if(typeof rcvEl!=="undefined"&&rcvEl)rcvEl.textContent="";
+if(typeof scEl!=="undefined"&&scEl)scEl.classList.add("hide");
+setMode("in");
+last=null;
+try{update()}catch{}
+}
+return;}
 const at=a=>a?TOKENS.findIndex(t=>t.addr.toLowerCase()===a):-1;
 const tok=async v=>{if(!v)return "";const x=v.trim().toLowerCase();
 if(!/^0x[0-9a-f]{40}$/.test(x))return symAddr(x);

@@ -312,6 +312,42 @@ describe('navigating between links', () => {
     p.close();
   });
 
+  /**
+   * Back off a link lands on a bare `#`, which used to hit `applyLink`'s empty
+   * early return and change nothing - so the amount and recipient a link had
+   * filled in stayed on screen with nothing in the URL accounting for them.
+   * The same empty hash also arrives at load, where the form is the user's own
+   * and must not be touched, so the two cases are told apart by whether a
+   * hashchange event was passed.
+   */
+  test('going back to a bare hash undoes what the link filled in', async () => {
+    const p = await open('to=alice.wei&amount=3&token=ETH', c => { c.names.set('alice.wei', A.OTHER); });
+    await p.waitFor(() => p.value('amt') === '3', { label: 'link applied' });
+    const tabBefore = tabOf(p);
+    const fromBefore = p.$('fromSel').value;
+
+    p.window.location.hash = '';
+    p.window.dispatchEvent(new p.window.HashChangeEvent('hashchange'));
+    await p.waitFor(() => p.value('amt') === '', { label: 'amount cleared' });
+
+    assert.equal(p.value('rc'), '', 'the recipient the link supplied is still there');
+    // Where the user IS stays put - yanking the tab or the pair around would be
+    // a worse surprise than the state it is undoing.
+    assert.equal(tabOf(p), tabBefore, 'going back should not move the user off their tab');
+    assert.equal(p.$('fromSel').value, fromBefore, 'going back should not change the token pair');
+    p.close();
+  });
+
+  test('a load with no hash leaves a typed form alone', async () => {
+    const p = await open('');
+    await p.typeAmount('amt', '2.5');
+    assert.equal(p.value('amt'), '2.5');
+    // applyLink() runs at init with an empty hash; if that cleared, every user
+    // who typed before the page settled would watch their amount vanish.
+    assert.equal(p.value('amt'), '2.5', 'init must not clear the form');
+    p.close();
+  });
+
   test('following a payment link from a swap link switches tabs', async () => {
     const p = await open('token=ETH&out=USDC&amount=1');
     assert.equal(tabOf(p), 'Swap');
