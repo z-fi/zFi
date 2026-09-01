@@ -9,10 +9,10 @@
 :focus-visible{outline:2px solid var(--f);outline-offset:2px}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}.flip:hover{transform:none}}
 body{background:var(--b);color:var(--f);font-family:Helvetica,Arial,sans-serif;min-height:100dvh;margin:0;padding:1em .85em;display:flex;flex-direction:column;box-sizing:border-box}
-.card{position:relative;border:1px solid var(--hd);padding:1em .95em;background:var(--c);max-width:22em;width:100%;margin:auto;box-sizing:border-box}.inv{position:absolute;inset:0;background:var(--c);overflow:hidden;outline:0;touch-action:none;z-index:5;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}#wn{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}.invx{position:absolute;width:20px;height:20px;transition:opacity .12s}.invx.pop{opacity:0}.invs{position:absolute;width:22px;height:20px;display:flex;align-items:flex-start;justify-content:center}
+.card{position:relative;border:1px solid var(--hd);padding:1em .95em;background:var(--c);max-width:22em;width:100%;margin:auto;box-sizing:border-box}.inv{position:absolute;inset:0;background:var(--c);overflow:hidden;outline:0;touch-action:none;z-index:5;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}#wn{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}.invx{position:absolute;width:20px;height:20px;transition:opacity .12s;pointer-events:none}.invx.pop{opacity:0}.invs{position:absolute;width:22px;height:20px;display:flex;align-items:flex-start;justify-content:center;pointer-events:none}
 .invs svg{width:20px;height:20px}
 .invs::after{content:"";position:absolute;left:-4px;right:-4px;bottom:-4px;height:2px;background:var(--f)}
-.invs.pop::after{background:var(--w)}.invs.pop{opacity:.35}.invb{position:absolute;width:2px;height:7px;background:#16a34a}.invd{position:absolute;width:2px;height:6px;background:#c33}.invh{position:absolute;top:4px;left:8px;right:8px;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--m);pointer-events:none;font-variant-numeric:tabular-nums;display:flex;justify-content:space-between;align-items:center;gap:.6em}.invq{pointer-events:auto;cursor:pointer;padding:1px 5px;border:1px solid var(--e);color:var(--f);opacity:.7}.invm{pointer-events:auto;cursor:pointer;color:var(--f);text-decoration:underline;text-underline-offset:2px}.invmsg{color:var(--m)}.invsh{pointer-events:auto;cursor:pointer;color:var(--m);text-decoration:underline;text-underline-offset:2px}.invq:hover{opacity:1}
+.invs.pop::after{background:var(--w)}.invs.pop{opacity:.35}.invb{position:absolute;width:2px;height:7px;background:#16a34a;pointer-events:none}.invd{position:absolute;width:2px;height:6px;background:#c33;pointer-events:none}.invh{position:absolute;top:4px;left:8px;right:8px;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--m);pointer-events:none;font-variant-numeric:tabular-nums;display:flex;justify-content:space-between;align-items:center;gap:.6em}.invq{pointer-events:auto;cursor:pointer;padding:1px 5px;border:1px solid var(--e);color:var(--f);opacity:.7}.invm{pointer-events:auto;cursor:pointer;color:var(--f);text-decoration:underline;text-underline-offset:2px}.invmsg{color:var(--m)}.invsh{pointer-events:auto;cursor:pointer;color:var(--m);text-decoration:underline;text-underline-offset:2px}.invq:hover{opacity:1}
 #addr{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
 #addr.on:hover{color:var(--f);text-decoration:line-through}
 #sd{position:fixed;top:.85em;right:.85em;width:1.75em;height:1.75em;display:inline-flex;align-items:center;justify-content:center;border:0;background:transparent;cursor:pointer;color:var(--m);opacity:.4;z-index:2;padding:0;transition:opacity .15s}#sd:hover,#sd:focus-visible{opacity:.9}
@@ -786,7 +786,10 @@ const KEEP="zswap:deep";
 const stickyPools=()=>{try{
 return JSON.parse(LS[KEEP]||"[]").filter(x=>/^0x[0-9a-f]{40}$/i.test(x)).slice(0,LAUNCH_SHOW);
 }catch{return[]}};
-async function loadTokenList(){
+let listJob=null;
+const loadTokenList=()=>listJob||(listJob=loadTokenListRun()
+.finally(()=>{if(!listLive)listJob=null}));
+async function loadTokenListRun(){
 if(TOKENLIST===ZERO)return setListSource("registry address not set");
 setListNote("Built-in token list \u2014 checking zList\u2026");
 try{
@@ -1157,9 +1160,11 @@ const j=await laneGet("1inch",`${ep}/swap/v6.0/1/swap?${q}`,ms);
 if(!j||!j.tx||!j.dstAmount)return null;
 return{out:BigInt(j.dstAmount),target:j.tx.to,spender:j.tx.to,data:j.tx.data}},
 };
+const RPC_TRIES=4;
 const nodeRead=async(method,params)=>{
 let last;
-for(let i=0;i<rpcPool.length;i++){
+const tries=Math.min(rpcPool.length,RPC_TRIES);
+for(let i=0;i<tries;i++){
 const u=rpcPool[(rpcPi+i)%rpcPool.length];
 try{const r=await httpRead(u,method,params);rpcPi=(rpcPi+i)%rpcPool.length;
 if(!curated)loadCurated().catch(()=>{});
@@ -1467,10 +1472,15 @@ if(age>BN_TTL/2)bnFetch().catch(()=>{});
 return Promise.resolve(bnVal);
 };
 const codeSeen={};
+const CODE_MISS_TTL=60000;
 const hasCode=async(a,block)=>{
-if(codeSeen[a])return true;
+if(codeSeen[a]===true)return true;
+const miss=codeSeen[a];
+if(miss&&Date.now()-miss<CODE_MISS_TTL)return false;
 const h=await rpc("eth_getCode",[a,block||L]);
-return codeSeen[a]=(h||"").length>4;
+const ok=(h||"").length>4;
+codeSeen[a]=ok||Date.now();
+return ok;
 };
 const REF_N=100n;
 const CH_WICK_CAP=3;
@@ -2625,7 +2635,7 @@ stat.innerHTML=txLink(tx,"Sent");
 try{await waitTx(tx)}catch(e){sFail();throw e}
 stat.innerHTML=txLink(tx,"Done");if(!quiet)sGot()};
 const txLink=(h,label)=>`${label} <a href="https://etherscan.io/tx/${h}" target="_blank" rel="noreferrer">${h.slice(0,10)}…${h.slice(-6)}</a>`;
-let autoQ=0;
+let autoQ=0,rankOpen=false;
 async function update(auto){
 if(!auto)autoQ=0;
 syncIcons();
@@ -3059,7 +3069,7 @@ row.append(n,v);
 rankBox.appendChild(row);
 }
 }
-rankBox.classList.add("hide");
+rankBox.classList.toggle("hide",!(rankOpen&&rankBox.firstChild));
 const paysSym=r.poolOut===ZERO?"ETH":"WETH";
 rcvHdr.textContent=r.outDiffers?`You receive \u2014 as ${paysSym}`:"You receive";
 if(r.outDiffers&&rate.textContent)rate.textContent+=` \u00b7 pays ${paysSym}`;
@@ -3125,8 +3135,9 @@ car.title="Compare venues";
 car.setAttribute("role","button");
 car.tabIndex=0;
 car.setAttribute("aria-expanded",rankBox.classList.contains("hide")?"false":"true");
-const carToggle=()=>{const open=rankBox.classList.toggle("hide");
-car.setAttribute("aria-expanded",open?"false":"true")};
+const carToggle=()=>{const shut=rankBox.classList.toggle("hide");
+rankOpen=!shut;
+car.setAttribute("aria-expanded",shut?"false":"true")};
 car.onclick=carToggle;
 car.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();carToggle()}};
 rate.appendChild(document.createTextNode(" "));
@@ -3487,6 +3498,10 @@ txt=new TextDecoder().decode(Uint8Array.from(bin,c=>c.charCodeAt(0)));
 let j;try{j=JSON.parse(txt)}catch{return ""}
 return okDataImg(j&&j.image)?j.image:"";
 };
+const capObj=(o,max)=>{const ks=Object.keys(o);
+for(let i=0;i<ks.length-max;i++)delete o[ks[i]]};
+const capMap=(m,max)=>{while(m.size>max)m.delete(m.keys().next().value)};
+const LOGO_MAX=192,CARD_MAX=64,META_MAX=256;
 const logoCache={};
 async function loadLogos(addrs){
 const want=[...new Set(addrs.map(a=>a.toLowerCase()))]
@@ -3495,6 +3510,7 @@ if(!want.length)return;
 let raw=[];
 if(TOKENLIST!==ZERO)raw=await mc3Deep(want.map(a=>({to:TOKENLIST,data:"0x"+SEL_LOGOOF+encAddr(a)}))).catch(()=>[]);
 want.forEach((a,i)=>{let u="";try{if(raw[i])u=safeDataUrl(decodeString(raw[i]))}catch{}logoCache[a]=u});
+capObj(logoCache,LOGO_MAX);
 const self=want.filter(a=>!logoCache[a]);
 if(!self.length)return;
 const cu=await mc3Deep(self.map(a=>({to:a,data:"0x"+SEL_CONTRACTURI}))).catch(()=>[]);
@@ -3918,7 +3934,7 @@ let total=0;
 try{total=Number(BigInt(await rpc(C,[{to:b.a,data:"0x"+SEL_NEXTID},L])))}catch{continue}
 if(!total)continue;
 const hi=total,lo=Math.max(0,hi-40);
-if(lo>0)rows.capped=true;
+if(lo>0)bookTrunc=true;
 const ids=[];for(let i=hi-1;i>=lo;--i)ids.push(i);
 let raw="";
 try{raw=await rpc(C,[{to:b.a,data:"0x"+SEL_GETORDERS+encUint(32)+encUint(ids.length)+ids.map(i=>encUint(i)).join("")},L])}catch{continue}
@@ -3954,7 +3970,6 @@ return o.cp===ZERO
 ||o.cp.toLowerCase()===me()
 ||o.maker.toLowerCase()===me();
 });
-if(rows.capped)bookTrunc=true;
 const dutchRows=rows.filter(r=>r.dutch);
 const bidRows=rows.filter(r=>r.floor);
 const fillRows=rows.filter(r=>!r.dutch&&!r.floor&&r.v2&&r.pf&&!r.nA&&!r.nB);
@@ -3983,7 +3998,12 @@ if(init>r.aB)r.filled=(init-r.aB)*10000n/init;
 }
 }
 if(!rows.length){bookRows=[];bookLegs=[];book.innerHTML="";syncBook(0);return}
-await loadLogos(rows.flatMap(r=>[r.tA,r.tB]));
+const needMeta=[];
+for(const r of rows){
+if(!r.nA&&(r.sA==null||r.dA==null))needMeta.push(r.tA);
+if(!r.nB&&(r.sB==null||r.dB==null))needMeta.push(r.tB);
+}
+await Promise.all([loadLogos(rows.flatMap(r=>[r.tA,r.tB])),warmMeta(needMeta)]);
 if(my!==bookSeq)return;
 const legs=await Promise.all(rows.map(r=>Promise.all([
 leg(r.tA,r.aA,r.nA,r.sA!=null&&r.dA!=null?{sym:r.sA,dec:r.dA}:null),
@@ -4008,9 +4028,25 @@ const rowIsType=r=>bookType==="all"
 ||(bookType==="bid"&&r.floor)
 ||(bookType==="nft"&&(r.nA||r.nB||r.isNFT))
 ||(bookType==="limit"&&!r.dutch&&!r.floor);
+const bookOpenCards=()=>{const s=[];
+for(const el of book.querySelectorAll('.o.ins[aria-expanded="true"]'))
+if(el.dataset.k)s.push(el.dataset.k);
+return s};
+const bookReopen=ks=>{
+for(const k of ks){
+const el=book.querySelector('.o.ins[data-k="'+k+'"]');
+if(!el)continue;
+const at=k.lastIndexOf(":");
+const c=cardCache[k.slice(0,at).toLowerCase()+":"+k.slice(at+1)];
+const box=el.parentNode.querySelector(".ic");
+if(!c||!box)continue;
+el.setAttribute("aria-expanded","true");
+box.innerHTML=cardHtml(c)||"No card for this order.";
+}};
 function paintBook(){
 const rows=bookRows,legs=bookLegs;
 if(!rows.length){book.innerHTML="";syncBook(0);return}
+const wasOpen=bookOpenCards(),wasAt=book.scrollTop;
 let own="",rest="",nOwn=0,nRest=0,hidden=0;
 const now=BigInt(Math.floor(Date.now()/1e3));
 rows.forEach((r,i)=>{
@@ -4066,7 +4102,9 @@ html+=bookFilters(hidden);
 if(nRest)html+=rest;
 else html+=`<div class="lqempty">${emptyBook()}${hidden?` ${hidden} hidden by the filters.`:""}</div>`;
 book.innerHTML=html;
+bookReopen(wasOpen);
 syncBook(nOwn+nRest,rows.length);
+book.scrollTop=wasAt;
 }
 const cardCache={};
 async function loadCard(board,id){
@@ -4079,7 +4117,7 @@ if(i<0)throw Error("card is not inline");
 const j=JSON.parse(atob(uri.slice(i+7)));
 const out={attrs:Array.isArray(j.attributes)?j.attributes:[],img:safeUrl(j.image),
 name:safeSym(j.name).slice(0,40)};
-cardCache[k]=out;return out;
+cardCache[k]=out;capObj(cardCache,CARD_MAX);return out;
 }
 function cardHtml(c){
 const rows=c.attrs.slice(0,10).map(a=>{
@@ -4360,8 +4398,23 @@ try{const[sr,dr]=await Promise.all([rpc(C,[{to:a,data:"0x95d89b41"},L]),rpc(C,[{
 const d=Number(BigInt(dr));
 if(Number.isInteger(d)&&d>=0&&d<=36){m={sym:decodeString(sr).trim().replace(/[<>&"'`]/g,"").slice(0,10)||m.sym,dec:d};ok=1}
 }catch{}
-if(ok)metaCache.set(a,m);
+if(ok){metaCache.set(a,m);capMap(metaCache,META_MAX)}
 return m;
+}
+async function warmMeta(addrs){
+const want=[...new Set(addrs.map(a=>(a||"").toLowerCase()))]
+.filter(a=>/^0x[0-9a-f]{40}$/.test(a)&&a!==ZERO&&!known(a)&&!metaCache.has(a));
+if(!want.length)return;
+const res=await mc3Deep(want.flatMap(a=>[{to:a,data:"0x95d89b41"},{to:a,data:"0x313ce567"}])).catch(()=>[]);
+want.forEach((a,i)=>{
+const sr=res[i*2],dr=res[i*2+1];
+if(!sr||!dr)return;
+let d;try{d=Number(BigInt(dr))}catch{return}
+if(!Number.isInteger(d)||d<0||d>36)return;
+let sym="";try{sym=decodeString(sr).trim().replace(/[<>&"'`]/g,"").slice(0,10)}catch{}
+metaCache.set(a,{sym:sym||a.slice(0,6)+"…",dec:d});
+});
+capMap(metaCache,META_MAX);
 }
 const rel=s=>{const a=Math.abs(s),u=[[86400,"d"],[3600,"h"],[60,"m"]];
 for(const[n,l]of u)if(a>=n)return Math.floor(a/n)+l;return a+"s"};
@@ -6322,13 +6375,16 @@ const px=(W-COLS*IW)/2;
 for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){const t=face(r,c,r*COLS+c),n=mk("invx",t.h);
 n.title=t.s;w.appendChild(n);al.push({node:n,s:t.s,x:px+c*IW,y:18+r*IH,c})}
 dir=1};
+let hudWas="";
 const hud2=()=>{const t=left();
-hud.innerHTML=(ov?`<span>game over \u00b7 ${sc}</span><span class="${minted||minting?"invmsg":"invm"}">`
+const html=(ov?`<span>game over \u00b7 ${sc}</span><span class="${minted||minting?"invmsg":"invm"}">`
 +(minted?`${minted}`:minting?"minting\u2026":mintMsg?`${mintMsg}`:sc>0?"mint this score":"tap to play again")+`</span>`+(sc>0&&!minting?`<span class="invsh">${shareMsg||"share"}</span>`:"")
 :`<span>${"\u25b2".repeat(Math.max(0,lv))}</span>`
 +`<span${t<=10?' style="color:var(--w)"':""}>${t}s</span>`
 +`<span>wave ${wv} \u00b7 ${sc}</span>`)
-+`<span class="invq" title="Back to swapping (esc)">\u2715</span>`};
++`<span class="invq" title="Back to swapping (esc)">\u2715</span>`;
+if(html===hudWas)return;
+hudWas=html;hud.innerHTML=html};
 const fire=()=>{const t=performance.now();
 if(ov||bu.length||t-fa<120)return;fa=t;sPew();const n=mk("invb");w.appendChild(n);
 bu.push({node:n,x:sx+SW/2-1,y:H-SH-12})};
@@ -6578,6 +6634,10 @@ const srcFor=tf=>tf>=COARSE?COARSE:FINE;
 let chFloor=0,chSupply=0,chFloorKey="",chCoin1=0;
 let chKind=LS.ck==="line"?"line":"candle",chInv=false,chInvKey="",chPeriod=300,chBars=null,chSeq=0,chPools=null,chOpen=LS.ch==="1",chCache={};
 let chDraw=null;
+const chKeep=(key,val)=>{
+chCache[key]=val;
+for(const k in chCache)if(k!==key&&Date.now()-chCache[k].at>60000)delete chCache[k];
+};
 const unf=p=>(p&0xffffff)*2**(p>>>24);
 const decBar=w=>{if(!w)return null;const f=s=>Number((w>>BigInt(s))&0xffffffffn);
 return{b:Number(w&0xffffffffn),o:unf(f(32)),h:unf(f(64)),l:unf(f(96)),c:unf(f(128)),v:unf(f(160)),n:Number((w>>192n)&0xffffn)}};
@@ -6643,7 +6703,7 @@ if(altPools.length){eff=alt;pools=altPools}
 }
 }
 const [t0,t1]=eff;
-if(!pools.length){chCache[key]={at:Date.now(),bars:null,pools:null,pair:null};return syncChartUI()}
+if(!pools.length){chKeep(key,{at:Date.now(),bars:null,pools:null,pair:null});return syncChartUI()}
 const reqs=[];
 for(const a of pools)reqs.push({to:a,data:"0x"+SEL_TAPE+encUint(FINE)+encUint(256)},
 {to:a,data:"0x"+SEL_TAPE+encUint(COARSE)+encUint(256)});
@@ -6666,7 +6726,7 @@ if(lead.length)c=lead.concat(c)}
 chBars=f||c?{[FINE]:f,[COARSE]:c}:null;
 const live=set=>set.filter(d=>d&&d.some(Boolean)).length;
 chPools=chBars?{[FINE]:live(fine),[COARSE]:live(coarse)}:null;
-chCache[key]={at:Date.now(),bars:chBars,pools:chPools,pair:eff===p?null:eff};
+chKeep(key,{at:Date.now(),bars:chBars,pools:chPools,pair:eff===p?null:eff});
 }catch{chBars=null;chPools=null}
 finally{if(chLoading===k0)chLoading=""}
 if(my===chSeq)syncChartUI();

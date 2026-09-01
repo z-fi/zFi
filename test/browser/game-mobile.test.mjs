@@ -86,6 +86,36 @@ describe('the game on a phone', () => {
     await pg.close(); await ctx.close();
   });
 
+  test('a tap that lands on a sprite still aims at the finger', async () => {
+    // The ship is placed from `e.offsetX`, which is measured against whatever
+    // the pointer actually hit. Aliens, bullets and the ship sit above the
+    // field with default pointer-events, so a thumb landing on one reported an
+    // offset inside that 20px sprite and the ship jumped to the left edge —
+    // i.e. aiming failed exactly when the screen was busiest.
+    const { pg, ctx } = await playOn('iPhone 13');
+    const at = await pg.evaluate(() => {
+      const g = document.querySelector('.inv').getBoundingClientRect();
+      const a = document.querySelector('.invx').getBoundingClientRect();
+      const x = a.left + a.width / 2, y = a.top + a.height / 2;
+      const el = document.elementFromPoint(x, y);
+      return { x: Math.round(x), y: Math.round(y), left: g.left,
+               hit: (el && el.className) || '' };
+    });
+    assert.ok(!/inv[xsbd]\b/.test(at.hit),
+      `a sprite is swallowing the tap: hit "${at.hit}"`);
+    await pg.touchscreen.tap(at.x, at.y);
+    await pg.waitForTimeout(100);
+    const centre = await pg.evaluate(() => {
+      const g = document.querySelector('.inv').getBoundingClientRect();
+      const s = document.querySelector('.invs').getBoundingClientRect();
+      return s.left + s.width / 2 - g.left;
+    });
+    const want = at.x - at.left;
+    assert.ok(Math.abs(centre - want) <= 3,
+      `tapped ${Math.round(want)}px into the field but the ship went to ${Math.round(centre)}px`);
+    await pg.close(); await ctx.close();
+  });
+
   test('the field takes the gesture rather than scrolling the page', async () => {
     const { pg, ctx } = await playOn('iPhone 13');
     assert.equal(await pg.$eval('.inv', el => getComputedStyle(el).touchAction), 'none',
