@@ -3,7 +3,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>zFi</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400' width='400' height='400'%3E%3Crect width='400' height='400' fill='%23000'/%3E%3CclipPath id='frame'%3E%3Crect width='400' height='400'/%3E%3C/clipPath%3E%3Cg clip-path='url(%23frame)'%3E%3Cpath d='M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z' fill='white'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml">
-<meta name="theme-color" id="tc" content="#fafafa">
+<meta name="theme-color" id="tc" content="#fff">
 <style>:root{color-scheme:light;--b:#fff;--c:#fff;--p:#fff;--f:#000;--m:#666;--n:#666;--e:#ddd;--k:#000;--kf:#fff;--kh:#333;--fh:#f5f5f5;--e2:#ddd;--w:#c33;--hd:#000;--dm:#999}
 .d{color-scheme:dark;--b:#0a0a0a;--c:#0a0a0a;--p:#0a0a0a;--f:#e8e8e0;--m:#888;--n:#888;--e:#2a2a2a;--k:#e8e8e0;--kf:#0a0a0a;--kh:#ccc;--fh:#161616;--e2:#2a2a2a;--w:#e57373;--hd:#333;--dm:#5f5f5f}
 :focus-visible{outline:2px solid var(--f);outline-offset:2px}
@@ -14,7 +14,6 @@ body{background:var(--b);color:var(--f);font-family:Helvetica,Arial,sans-serif;m
 .invs::after{content:"";position:absolute;left:-4px;right:-4px;bottom:-4px;height:2px;background:var(--f)}
 .invs.pop::after{background:var(--w)}.invs.pop{opacity:.35}.invb{position:absolute;width:2px;height:7px;background:#16a34a}.invd{position:absolute;width:2px;height:6px;background:#c33}.invh{position:absolute;top:4px;left:8px;right:8px;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--m);pointer-events:none;font-variant-numeric:tabular-nums;display:flex;justify-content:space-between;align-items:center;gap:.6em}.invq{pointer-events:auto;cursor:pointer;padding:1px 5px;border:1px solid var(--e);color:var(--f);opacity:.7}.invm{pointer-events:auto;cursor:pointer;color:var(--f);text-decoration:underline;text-underline-offset:2px}.invmsg{color:var(--m)}.invsh{pointer-events:auto;cursor:pointer;color:var(--m);text-decoration:underline;text-underline-offset:2px}.invq:hover{opacity:1}
 #addr{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
-#addr.on{cursor:pointer}
 #addr.on:hover{color:var(--f);text-decoration:line-through}
 #sd{position:fixed;top:.85em;right:.85em;width:1.75em;height:1.75em;display:inline-flex;align-items:center;justify-content:center;border:0;background:transparent;cursor:pointer;color:var(--m);opacity:.4;z-index:2;padding:0;transition:opacity .15s}#sd:hover,#sd:focus-visible{opacity:.9}
 /* The mark is a link to the DAO that governs this page, so the anchor carries
@@ -87,7 +86,7 @@ left:var(--at,50%);transform:translateX(-1.5px)}
 .lqbar>b{position:absolute;top:-1px;bottom:-1px;background:var(--m);opacity:.3;
 left:0;right:0}
 .lqnew .primary{margin-top:.5em;min-height:2.6em;font-size:.85em}
-#listNote{max-width:22em;margin:.5em auto 0;font-size:10px;color:var(--dm);letter-spacing:.06em;text-align:center}
+#listNote{max-width:22em;margin:.5em auto 0;font-size:10px;color:var(--m);letter-spacing:.06em;text-align:center}
 /* The list arrives over an RPC, so on a cold load the built-in names sit there
    for a beat and then are replaced. Saying nothing reads as finished; a spinner
    says the page is still asking, and the rows fade rather than snap when the
@@ -139,9 +138,9 @@ white-space:nowrap;flex:0 0 auto;text-align:center;transition:background .15s,co
 .o a{color:var(--m)}
 .o button{border:1px solid var(--e);padding:.4em .7em;font-size:.85em;font-weight:400;letter-spacing:.08em;text-transform:uppercase;background:transparent;color:var(--f);cursor:pointer;flex:0 0 auto;transition:background .15s,color .15s,border-color .15s}
 .o button:hover:not(:disabled),.o button:focus-visible:not(:disabled){border-color:var(--f)}
-#foot{display:flex;justify-content:center;align-items:baseline;gap:.6em;flex-wrap:wrap;margin-top:1.3em;padding-top:.9em;border-top:1px solid var(--e);font-size:.6em;color:var(--dm);letter-spacing:.1em;text-transform:uppercase}
+#foot{display:flex;justify-content:center;align-items:baseline;gap:.6em;flex-wrap:wrap;margin-top:1.3em;padding-top:.9em;border-top:1px solid var(--e);font-size:.6em;color:var(--m);letter-spacing:.1em;text-transform:uppercase}
 #foot span:empty{display:none}
-#foot a{color:var(--dm);text-decoration:none}
+#foot a{color:var(--m);text-decoration:none}
 #foot a:hover{color:var(--f)}
 .o button:disabled{background:transparent;border-color:transparent;color:var(--m);cursor:default;font-weight:400}
 .bkf{display:flex;flex-wrap:wrap;gap:.3em;margin:.35em 0 .45em}
@@ -151,7 +150,6 @@ white-space:nowrap;transition:background .15s,color .15s}
 .bkc:hover:not(.on),.bkc:focus-visible:not(.on){color:var(--f);border-color:var(--f)}
 .bkc.on{background:var(--k);color:var(--kf);border-color:var(--k)}
 .bkc.on:hover{background:var(--kh)}
-.ow{margin-bottom:.3em}
 .ow .o{margin-bottom:0}
 .o.ins{cursor:pointer}
 .o.ins:hover{background:var(--fh)}
@@ -171,7 +169,7 @@ vertical-align:.1em;line-height:1;text-decoration:none;margin-left:.5em}
 .dly select{font-size:1em}
 #lnArtNote{color:var(--n);font-variant-numeric:tabular-nums}
 #lnArtNote.set{color:var(--f)}
-.lnbtn{font:inherit;font-size:1em;color:var(--f);background:transparent;border:1px solid var(--e);padding:.2em .6em;cursor:pointer}.wnbtn{display:block;width:100%;box-sizing:border-box;font:inherit;font-size:.75em;color:var(--f);background:var(--p);border:1px solid transparent;padding:.65em .8em;margin-top:.5em;cursor:pointer;text-align:center;transition:border-color .15s,color .15s}.wnbtn{border-color:var(--e)}.wnbtn:hover{border-color:var(--f)}.wnbtn.mut{color:var(--m);cursor:default;border-color:transparent}.wnbtn.mut:hover{border-color:transparent}
+.lnbtn{font:inherit;font-size:1em;color:var(--f);background:transparent;border:1px solid var(--e);padding:.2em .6em;cursor:pointer}.wnbtn{display:block;width:100%;box-sizing:border-box;font:inherit;font-size:.75em;color:var(--f);background:var(--p);border:1px solid var(--e);padding:.65em .8em;margin-top:.5em;cursor:pointer;text-align:center;transition:border-color .15s,color .15s}.wnbtn:hover{border-color:var(--f)}.wnbtn.mut{color:var(--m);cursor:default;border-color:transparent}.wnbtn.mut:hover{border-color:transparent}
 #fcEl{display:block;text-align:center;color:var(--m);font-size:.72em;letter-spacing:.03em;margin-top:.9em}
 .fclink{font:inherit;color:var(--m);background:none;border:0;border-bottom:1px solid var(--e);padding:0 0 .1em;margin-left:.35em;cursor:pointer;letter-spacing:inherit}
 .fclink:hover{color:var(--f);border-color:var(--f)}
@@ -185,8 +183,7 @@ vertical-align:.1em;line-height:1;text-decoration:none;margin-left:.5em}
 .docs{margin-top:.5em}
 .docs details{border-top:1px solid var(--e)}
 .docs details:last-child{border-bottom:1px solid var(--e)}
-.docs summary{cursor:pointer;list-style:none;padding:.75em .2em;font-size:.7em;font-weight:700;text-transform:uppercase;letter-spacing:.12em;
-letter-spacing:.02em;color:var(--f);display:flex;justify-content:space-between;align-items:center}
+.docs summary{cursor:pointer;list-style:none;padding:.75em .2em;font-size:.7em;font-weight:700;text-transform:uppercase;letter-spacing:.02em;color:var(--f);display:flex;justify-content:space-between;align-items:center}
 .docs summary::-webkit-details-marker{display:none}
 .docs summary::after{content:"+";color:var(--m);font-weight:400}
 .docs details[open] summary::after{content:"\2013"}
@@ -239,11 +236,9 @@ margin-top:.55em;padding-top:.55em;border-top:1px solid var(--e);color:var(--f)}
 .chtog span{display:inline-block;transition:transform .2s}
 .chtog[aria-expanded=true] span{transform:rotate(180deg)}
 .rank{display:block;margin-top:.45em;color:var(--m);font-size:.92em;line-height:1.5}
-.rank i{font-style:normal;display:flex;justify-content:space-between;gap:1em}
+.rank i{font-style:normal;display:flex;justify-content:space-between;gap:1em;cursor:pointer}
 .rank i.w{color:var(--f);font-weight:600}
-.rank i{cursor:pointer}
-.rank i:hover{opacity:1}
-.rank i.p{opacity:1;text-decoration:underline}
+.rank i.pin{text-decoration:underline}
 .rank u{text-decoration:none;color:var(--m)}
 #rate .rk{cursor:pointer;padding:0 .25em;opacity:.6}
 #rate .rk:hover{opacity:1}
@@ -393,8 +388,8 @@ background:var(--e);margin:.5em auto .1em}
 <button id="swap" class="primary">Connect Wallet</button>
 <div id="listNote" class="hide" role="status" aria-live="polite"></div>
 <div id="scEl" class="sc hide" role="status" aria-live="polite"></div>
-<div id="wkWrap" class="hide"><div id="wkPanel" role="dialog" aria-modal="true" aria-label="Choose a wallet"><div id="wkHdr">Choose a wallet</div><div id="wkList" role="listbox"></div></div></div>
-<div id="tkPanel" class="tkp hide"><input id="tkFind" type="text" placeholder="Search name, symbol or address" autocomplete="off" spellcheck="false" aria-label="Filter tokens"><div id="tkList" role="listbox"></div></div>
+<div id="wkWrap" class="hide"><div id="wkPanel" role="dialog" aria-modal="true" aria-labelledby="wkHdr"><div id="wkHdr">Choose a wallet</div><div id="wkList"></div></div></div>
+<div id="tkPanel" class="tkp hide"><input id="tkFind" type="text" placeholder="Search name, symbol or address" autocomplete="off" spellcheck="false" aria-label="Filter tokens" role="combobox" aria-expanded="true" aria-controls="tkList" aria-autocomplete="list"><div id="tkList" role="listbox"></div></div>
 <div id="stat" role="status" aria-live="polite"></div>
 <button id="chTog" class="chtog hide" aria-expanded="false">Chart <span>▾</span></button>
 <div id="chBox" class="hide"><div class="chtf" id="chTf"></div><div id="chArt"></div><small id="chNote"></small></div>
@@ -449,7 +444,7 @@ background:var(--e);margin:.5em auto .1em}
 <script>const IC0='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">',
 ICMOON=IC0+'<path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z"/></svg>',
 ICSUN=IC0+'<circle cx="12" cy="12" r="4.2"/><path d="M12 2v2m0 16v2M4.2 4.2l1.5 1.5m12.6 12.6 1.5 1.5M2 12h2m16 0h2M4.2 19.8l1.5-1.5M18.3 5.7l1.5-1.5"/></svg>';
-const ic=()=>{const d=H.className=='d';th.innerHTML=d?ICSUN:ICMOON;tc.content=d?'#101010':'#fafafa'};ic();
+const ic=()=>{const d=H.className=='d';th.innerHTML=d?ICSUN:ICMOON;tc.content=d?'#0a0a0a':'#fff'};ic();
 const ZSWAP_VERSION="0.3";
 const ZSWAP_SELF="";
 const ZSWAP_PREVIOUS="0xe686952842627A2cf81DF42CCaD54ef98046DB8D";
@@ -1709,9 +1704,12 @@ else pill.removeAttribute("title");
 }
 }
 };
+const tkAct=id=>{if(id)tkFind.setAttribute("aria-activedescendant",id);
+else tkFind.removeAttribute("aria-activedescendant")};
 const tkRows=()=>{
 const q=tkFind.value.trim().toLowerCase();
 tkList.textContent="";
+tkCur=-1;tkAct("");
 const frag=document.createDocumentFragment();
 let n=0,group="";
 for(const opt of tkSel.options){
@@ -1725,6 +1723,7 @@ const g=opt.parentElement?.label||(opt.value==="__custom"?"":
 if(g&&g!==group){const h=document.createElement("div");h.className="tkg";h.textContent=g;frag.appendChild(h);group=g}
 const r=document.createElement("button");
 r.type="button";r.className="tkr";r.setAttribute("role","option");
+r.id="tkr"+n;
 r.dataset.value=opt.value;
 r.setAttribute("aria-selected",String(opt.value===tkSel.value));
 if(opt.disabled)r.setAttribute("aria-disabled","true");
@@ -1800,7 +1799,7 @@ tkFind.focus({preventScroll:true});
 const tkClose=()=>{
 if(!tkSel)return;
 pickBtn(tkSel)?.setAttribute("aria-expanded","false");
-tkPanel.classList.add("hide");tkSel=null;
+tkPanel.classList.add("hide");tkSel=null;tkCur=-1;tkAct("");
 };
 const tkChoose=v=>{
 const sel=tkSel;if(!sel)return;
@@ -1828,11 +1827,12 @@ if(!rows.length)return;
 tkCur=e.key==="ArrowDown"?(tkCur+1)%rows.length:(tkCur<=0?rows.length:tkCur)-1;
 rows.forEach((r,i)=>r.classList.toggle("cur",i===tkCur));
 rows[tkCur].scrollIntoView({block:"nearest"});
+tkAct(rows[tkCur].id);
 return;
 }
 if(e.key==="Enter"){
 const r=tkCur>=0?rows[tkCur]:rows.length===1?rows[0]:null;
-if(r){e.preventDefault();tkChoose(r.dataset.value)}
+if(r){e.preventDefault();r.dataset.value?tkChoose(r.dataset.value):r.click()}
 }
 });
 tkPanel.addEventListener("click",e=>e.stopPropagation());
@@ -2106,6 +2106,12 @@ setTimeout(()=>{if(waiters[id]){delete waiters[id];rej(Error("relay timeout"))}}
 function handle(raw){
 let m;try{m=JSON.parse(raw)}catch{return}
 if(m.method==="irn_subscription"){
+// A relay push can land in the window between `drop` and the reload it
+// triggers. `sendRaw` throws once the session is closed, and this runs
+// straight off `sock.onmessage`, so the ack has to be skipped rather than
+// thrown out of the socket callback. A closed session has no subscribers
+// left either, so there is nothing to dispatch.
+if(!alive)return;
 sendRaw({id:m.id,jsonrpc:"2.0",result:true});
 const d=m.params&&m.params.data;
 if(d&&subs[d.topic])Promise.resolve(subs[d.topic](d.message)).catch(()=>{});
@@ -2142,8 +2148,21 @@ const pTopic=await U.topicOf(symKey);
 const kp=await U.kex();
 const proposeId=rpcId();
 let settle=null;
-const done=new Promise((res,rej)=>{settle={res,rej}});
+// The pairing promise is parked in `waiters` under a non-numeric key, the way
+// session requests use "s". `handle` looks entries up by the numeric id it
+// reads off the wire, so "p" can never be hit there; the point is `drop`,
+// which rejects everything in `waiters`. Without this the relay could close
+// mid-pairing and leave the QR modal waiting on a promise nobody can settle.
+const pKey="p"+proposeId;
+const done=new Promise((res,rej)=>{settle={
+res:v=>{delete waiters[pKey];res(v)},
+rej:e=>{delete waiters[pKey];rej(e)}}});
+waiters[pKey]={res:v=>settle.res(v),rej:e=>settle.rej(e)};
 await subscribe(pTopic,async msg=>{
+// The subscription dispatcher swallows what this handler throws, so a
+// failure in the key exchange or the inner subscribe has to be handed to
+// the pairing promise here or it goes nowhere.
+try{
 const m=U.decode(symKey,msg);
 if(!m||m.id!==proposeId)return;
 if(m.error)return settle.rej(Error(m.error.message||"rejected"));
@@ -2168,6 +2187,7 @@ if(s.id&&waiters["s"+s.id]){
 const w=waiters["s"+s.id];delete waiters["s"+s.id];
 if(s.error)w.rej(Object.assign(Error(s.error.message||"rejected"),{code:s.error.code}));
 else w.res(s.result)}});
+}catch(e){settle.rej(e instanceof Error?e:Error(String(e)))}
 });
 const proposal={id:proposeId,jsonrpc:"2.0",method:"wc_sessionPropose",params:{
 relays:[{protocol:"irn"}],
@@ -2375,12 +2395,17 @@ nd.appendChild(ch);
 wkList.appendChild(box);wkList.appendChild(note);wkList.appendChild(nd);
 wkHdr.textContent="WalletConnect";
 wkWrap.classList.remove("hide");
+const back=document.activeElement;
+cp.focus({preventScroll:true});
 return new Promise((res,rej)=>{
 const esc=e=>{if(e.key==="Escape")stop()};
-const stop=()=>{removeEventListener("keydown",esc);wkWrap.onclick=null;rej(Object.assign(Error(""),{code:4001}))};
+const off=()=>{removeEventListener("keydown",esc);removeEventListener("keydown",wkTrap,true);
+wkWrap.onclick=null;if(back&&back.focus)try{back.focus()}catch{}};
+const stop=()=>{off();rej(Object.assign(Error(""),{code:4001}))};
 wkWrap.onclick=e=>{if(e.target===wkWrap)stop()};
 addEventListener("keydown",esc);
-wcShow.settle=()=>{removeEventListener("keydown",esc);wkWrap.onclick=null;res()}})};
+addEventListener("keydown",wkTrap,true);
+wcShow.settle=()=>{off();res()}})};
 async function wcConnect(){
 const meta={name:"zSwap",description:"zSwap",url:location.origin,icons:[]};
 const{uri,done}=await wcRelay.pair(WC_PID,meta);
@@ -2435,15 +2460,27 @@ if(a&&a[0])PROV=d.provider}catch{}
 return}
 await new Promise(r=>setTimeout(r,50));
 }};
+const wkTrap=e=>{
+if(e.key!=="Tab")return;
+const f=[...wkPanel.querySelectorAll('button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])')]
+.filter(x=>!x.disabled&&x.offsetParent!==null);
+if(!f.length)return;
+const a=f[0],z=f[f.length-1],cur=document.activeElement;
+if(e.shiftKey?cur===a||!wkPanel.contains(cur):cur===z){e.preventDefault();(e.shiftKey?z:a).focus()}
+};
 const wkPick=cs=>new Promise(res=>{
 wkList.textContent="";
 let done=false;
+const back=document.activeElement;
 const end=v=>{if(done)return;done=true;
-wkWrap.classList.add("hide");removeEventListener("keydown",esc);res(v)};
+wkWrap.classList.add("hide");removeEventListener("keydown",esc);
+removeEventListener("keydown",wkTrap,true);
+if(back&&back.focus)try{back.focus()}catch{}
+res(v)};
 const esc=e=>{if(e.key==="Escape")end(null)};
 cs.forEach(c=>{
 const b=document.createElement("button");
-b.type="button";b.className="tkr";b.setAttribute("role","option");
+b.type="button";b.className="tkr";
 if(c.icon){const im=document.createElement("img");im.src=c.icon;im.alt="";b.appendChild(im)}
 else if(c.svg){const sp=document.createElement("span");sp.className="wki";sp.innerHTML=c.svg;b.appendChild(sp)}
 b.appendChild(document.createTextNode(c.name));
@@ -2451,6 +2488,7 @@ b.onclick=()=>end(c);
 wkList.appendChild(b)});
 wkWrap.onclick=e=>{if(e.target===wkWrap)end(null)};
 addEventListener("keydown",esc);
+addEventListener("keydown",wkTrap,true);
 wkWrap.classList.remove("hide");
 wkList.firstChild?.focus()});
 async function wkResolve(){
@@ -2593,11 +2631,15 @@ if(!auto)autoQ=0;
 syncIcons();
 fcSync();
 cbSync();
+// Claimed before the early returns, not after them. Every in-flight quote is
+// retired by `my!==seq`, and the panel a quote paints into belongs to swap
+// mode alone; leaving on any of these four paths without bumping would let a
+// quote that is already obsolete finish and write over the LP or book fields.
+const my=++seq;
 if(wnMode)return;
 if(lqMode)return loadLq();
 if(tab==="book")return render();
 if(tab==="send")return updateSend();
-const my=++seq;
 quoting=false;
 last=null; rate.textContent=""; if(!lqMode&&!lnMode)rcvHdr.textContent="You receive"; render();
 const f=TOKENS[fromSel.value], t=TOKENS[toSel.value];
@@ -3000,7 +3042,7 @@ for(const x of rank){
 const row=document.createElement("i");
 if(x.n===used)row.className="w";
 const pinNow=lanePin();
-if(x.n===pinNow)row.className+=" p";
+if(x.n===pinNow)row.className+=" pin";
 row.title=x.n===pinNow?"Pinned \u2014 click again for the best floor"
 :x.f===top&&x.n!==used?"Best floor \u2014 click to use it":"Use this venue";
 const pick=()=>{const on=lanePin()===x.n;laneOverride=on?null:x.n;laneOverrideFor=on?"":laneScope();update()};
@@ -4008,7 +4050,7 @@ const act=mine?`<button data-x="c" ${dset}>${expired?"Reclaim":"Cancel"}</button
 :takeable?`<button data-x="f" ${dset}>${r.floor?"Sell into":"Fill"}</button>`
 :`<button disabled>${r.isNFT?"NFT bid":"Not routable"}</button>`;
 const card=r.board.toLowerCase()!==SB1.toLowerCase();
-const row=`<div class="ow"><div class="o${card?" ins":""}"${card?` data-k="${r.board}:${r.id}"`:""}>`
+const row=`<div class="ow"><div class="o${card?" ins":""}"${card?` data-k="${r.board}:${r.id}" role="button" tabindex="0" aria-expanded="false" title="Show the on-chain receipt"`:""}>`
 +`<span class="l">${a.ic}${bg.ic}<span><b>${a.txt} → ${bg.txt}</b>`
 +`<i>${a.link}${tags}${when}</i></span></span>${act}</div><div class="ic"></div></div>`;
 if(mine){own+=row;++nOwn;return}
@@ -4048,7 +4090,8 @@ return(rows?`<dl>${rows}</dl>`:"")+(c.img?`<img src="${c.img}" alt="" loading="l
 async function inspect(el,k){
 const box=el.parentNode.querySelector(".ic");
 if(!box)return;
-if(box.innerHTML){box.innerHTML="";return}
+if(box.innerHTML){box.innerHTML="";el.setAttribute("aria-expanded","false");return}
+el.setAttribute("aria-expanded","true");
 const at=k.lastIndexOf(":"),board=k.slice(0,at),id=BigInt(k.slice(at+1));
 box.textContent="Reading the receipt\u2026";
 try{box.innerHTML=cardHtml(await loadCard(board,id))||"No card for this order."}
@@ -4087,6 +4130,12 @@ bkTog.setAttribute("aria-expanded",on&&bkOpen?"true":"false");
 book.classList.toggle("hide",!on||!bkOpen);
 }
 bkTog.onclick=()=>{bkOpen=!bkOpen;LS.bk=bkOpen?"1":"0";syncBook(bookShown,bookRows.length)};
+book.addEventListener("keydown",e=>{
+if(e.key!=="Enter"&&e.key!==" ")return;
+const row=e.target.closest(".o.ins");
+if(!row||e.target!==row)return;
+e.preventDefault();inspect(row,row.dataset.k);
+});
 book.addEventListener("click",async e=>{
 const fc=e.target.closest("[data-bf]"),tc=e.target.closest("[data-bt]");
 if(fc){bookPairOnly=fc.dataset.bf==="1";LS.bkp=bookPairOnly?"1":"0";paintBook();return}
@@ -4623,6 +4672,7 @@ lqPanel.classList.toggle("hide",!on);
 refreshBalance1();
 if(on)loadLq();else{lqRows=[];lqList.innerHTML=""}
 lqSyncAmounts();
+fcSync();
 }
 const fullBand=(lo,hi)=>lo>0&&isFinite(hi)&&hi/lo>=9.9e5;
 function lqRow(o,t0,t1){
@@ -5482,8 +5532,16 @@ const my=++fcSeq;
 const t=TOKENS[toSel.value],f=TOKENS[fromSel.value];
 const cand=[t,f].find(x=>x&&x.addr&&x.addr!==ZERO&&x.std!=="nft");
 fcTok="";fcOwed=0n;
-if(fcMineToks.length)return;
-if(!cand||lnMode||lqMode||tab!=="swap"){fcEl.classList.add("hide");return}
+// Split three ways, because the two lines this element can carry answer to
+// different things. Whether the swap card is on screen at all comes first and
+// binds both — the sweep line used to sit above it and so became unhideable
+// once shown, and wnMode was missing, which left the fee line under the .wei
+// panel. Then the sweep line, which is about the account's own coins and does
+// not care what pair is selected; its markup survives the hide, so returning
+// only has to show it again. The pair candidate gates the per-pair line alone.
+if(lnMode||lqMode||wnMode||tab!=="swap"){fcEl.classList.add("hide");return}
+if(fcMineToks.length){fcEl.classList.remove("hide");return}
+if(!cand){fcEl.classList.add("hide");return}
 try{
 const key=cand.addr.toLowerCase();
 let pool=fcPool[key];
@@ -5970,6 +6028,7 @@ rc.placeholder=on?"Creator — defaults to you"
 :"Recipient (optional) — 0x or .eth/.(g)wei";
 stat.textContent="";lnNote.textContent="";
 if(on)cauKind();
+fcSync();
 }
 function lnQuote(){
 lnGo.textContent=account?"Launch":"Connect Wallet";
@@ -6044,7 +6103,6 @@ try{
 const r=await lnPrepare(f);
 lnArtBytes=r.bytes;lnArtMime=r.mime;
 lnArtNote.textContent=`${(r.bytes.length/1024).toFixed(1)} KB`;
-lnKindQuote();
 lnArtNote.classList.add("set");
 let b64="";for(const x of r.bytes)b64+=String.fromCharCode(x);
 lnPrev.src="data:"+MIME_NAME[r.mime]+";base64,"+btoa(b64);
@@ -6053,7 +6111,12 @@ lnPrev.classList.add("set");
 lnArtBytes=null;lnArtNote.classList.remove("set");lnPrev.classList.remove("set");
 lnArtNote.textContent="none";stat.textContent=e.message||String(e);
 }
-lnQuote();
+// Through the kind dispatcher, not straight to `lnQuote`. In cause mode the
+// note this just computed is the logo-size line from `cauQuote`, and the coin
+// quote does not bail on its way past it — `lnSupply` and `lnMcap` keep their
+// defaults while hidden — so calling `lnQuote` here erased the 4 KB warning
+// the moment it was written.
+lnKindQuote();
 };
 const lnGroup=el=>{
 if(!/^[\d, ]*(\.[\d ]*)?$/.test(el.value))return;
@@ -6211,7 +6274,8 @@ wnStamp().then(()=>{const r=wnPend();if(r&&r.at)wnQuote()})}
 wnStampTry=0;
 const pp=wnPend();if(pp&&!pp.at)wnStamp().then(wnQuote);
 wnQuote();wnRoll()}
-else{wnNote.textContent="";wnRollEl.textContent=""}}
+else{wnNote.textContent="";wnRollEl.textContent=""}
+fcSync();}
 const syncSnd=()=>{sdw.style.display=snd?"":"none";sdx.style.display=snd?"none":"";
 sd.style.opacity=snd?"":".5";sd.setAttribute("aria-pressed",snd?"true":"false");
 sd.title=snd?"Sound on — click to mute":"Sound off — click to unmute"};
@@ -6968,7 +7032,13 @@ const alt=String(TOKENS.findIndex((x,i)=>String(i)!==fromSel.value&&(t==="book"|
 if(alt!=="-1"){if(oi>=0)fromSel.value=alt;else toSel.value=alt}
 }
 const wantLq=q.get("lq")==="1";
-if(!wantLq&&lqMode&&(fi>=0||oi>=0||to||n||!isNaN(lk)||q.get("token")||q.get("out")))lqSet(false);
+// A link that names a pair, an amount or a recipient is asking for the swap
+// card, and it has to be visible for that to mean anything. LP was already
+// stood down here; the launch and .wei panels cover the same card and no link
+// param opens either, so they stand down on the same condition.
+const linkWantsCard=fi>=0||oi>=0||to||n||!isNaN(lk)||q.get("token")||q.get("out");
+if(!wantLq&&lqMode&&linkWantsCard)lqSet(false);
+if(linkWantsCard){if(lnMode)lnSet(false);if(wnMode)wnSet(false)}
 setTab(t);
 if(wantLq&&t==="swap"&&!lqMode)lqSet(true);
 if(to)lkKeep(rc,to);
@@ -6997,10 +7067,19 @@ const f=TOKENS[fromSel.value],t=TOKENS[toSel.value],p=new URLSearchParams();
 p.set("token",tname(f));
 const rcv=rc.value.trim();if(rcv)p.set("to",rcv);
 if(tab==="send"){
+/* Named outright, the way the book branch names itself. A transfer has no
+   output token, and `to` and `lock` are both optional - so a send of a bare
+   amount produced `#token=ETH&amount=5`, which the reader cannot tell from a
+   swap link and reopens on the swap tab with the amount already filled in. */
+p.set("tab","send");
 if(amt.value.trim())p.set("amount",amt.value.trim());
 if(+dly.value)p.set("lock",dly.value);
 }else{
 p.set("out",tname(t));
+/* The reader already honors `lq=1` and opens the LP panel on it; without this
+   the share button was the one thing that could not produce the link it reads,
+   so sharing from LP mode silently handed over a plain swap of the same pair. */
+if(lqMode)p.set("lq","1");
 if(tab==="book"){p.set("tab","book");if(+dly.value)p.set("lock",dly.value)}
 if(mode==="out"&&outAmt.value.trim()){p.set("amount",outAmt.value.trim());p.set("exactOut","1")}
 else if(amt.value.trim())p.set("amount",amt.value.trim());
