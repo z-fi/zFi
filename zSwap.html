@@ -3907,8 +3907,11 @@ book.innerHTML='<h6><span>Orderbook</span></h6><div class="o"><span class="l"><i
 syncBook(0);book.classList.remove("hide");return}
 let rows=null;
 try{rows=await lensBookRows(my)}catch{rows=null}
-bookTrunc=!!(rows&&rows.capped);
+/* BELOW THE GUARD, like every other write in here. A superseded scan that
+   returns on the next line would still have left its own `capped` behind, so a
+   stale run could stamp "scan capped" on a fresher one's book. */
 if(my!==bookSeq)return;
+bookTrunc=!!(rows&&rows.capped);
 if(!rows)rows=[];
 for(const b of rows.length?[]:live){
 let total=0;
