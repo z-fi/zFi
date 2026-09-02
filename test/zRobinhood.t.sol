@@ -151,6 +151,61 @@ contract PermitToken {
     }
 }
 
+contract MockToken {
+    mapping(address => uint256) public balanceOf;
+    mapping(address => mapping(address => uint256)) public allowance;
+
+    function mint(address to, uint256 amount) public {
+        balanceOf[to] += amount;
+    }
+
+    function approve(address s_, uint256 a) public returns (bool) {
+        allowance[msg.sender][s_] = a;
+        return true;
+    }
+
+    function transfer(address to, uint256 a) public returns (bool) {
+        balanceOf[msg.sender] -= a;
+        balanceOf[to] += a;
+        return true;
+    }
+
+    function transferFrom(address f, address to, uint256 a) public returns (bool) {
+        if (allowance[f][msg.sender] != type(uint256).max) allowance[f][msg.sender] -= a;
+        balanceOf[f] -= a;
+        balanceOf[to] += a;
+        return true;
+    }
+}
+
+/// @dev A v3 pool that answers an exact-out request with less than was asked for,
+/// while still collecting its input through the callback.
+contract ShortFillPool {
+    address public tIn;
+    address public tOut;
+
+    function init(address in_, address out_) public {
+        tIn = in_;
+        tOut = out_;
+    }
+
+    function swap(address recipient, bool zeroForOne, int256, uint160, bytes calldata data)
+        public
+        returns (int256 amount0, int256 amount1)
+    {
+        uint256 delivered = 0.5 ether; // asked for 1 ether
+        uint256 charged = 1 ether;
+        MockToken(tOut).transfer(recipient, delivered);
+        (amount0, amount1) = zeroForOne
+            ? (int256(charged), -int256(delivered))
+            : (-int256(delivered), int256(charged));
+        (bool ok,) = msg.sender.call(
+            abi.encodeWithSignature("uniswapV3SwapCallback(int256,int256,bytes)", amount0, amount1, data)
+        );
+        require(ok, "cb");
+    }
+}
+
 /// @dev Trusted `execute` target that tries to re-enter the V3 callback while it
 /// holds control, and records what came back.
 contract Reenterer {
@@ -1127,6 +1182,124 @@ contract RobinhoodTest is Test {
             keccak256(abi.encodePacked("\x19\x01", IPermit2Domain(PERMIT2).DOMAIN_SEPARATOR(), structHash));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk, digest);
         return abi.encodePacked(r, s, v);
+    }
+
+    // ══════════════════ audit regressions ══════════════════
+
+    /// @dev A leg with `swapAmount == 0` means "spend what the previous leg
+    /// produced". Reading the raw balance for that let anyone send the router one
+    /// wei and make the next leg try to spend one wei more than it was credited —
+    /// which either pulls a second full payment from the caller or reverts the
+    /// whole chain for a wei. The credit is now what gets spent.
+    function testDustCannotHijackABalanceFundedLeg() public {
+        _fund(alice, TKN, 0.02 ether);
+        uint256 bal = IERC20(TKN).balanceOf(alice);
+        _need(bal);
+
+        // A griefer leaves one wei of the intermediate token in the router.
+        vm.prank(alice);
+        IERC20(TKN).transfer(address(router), 1);
+
+        bytes[] memory calls = new bytes[](3);
+        calls[0] = abi.encodeWithSelector(zRouterLiteRobinhood.deposit.selector, TKN, bal - 1);
+        calls[1] = abi.encodeWithSelector(
+            zRouterLiteRobinhood.swapV2.selector,
+            address(router),
+            false,
+            TKN,
+            WETH,
+            uint256(0), // spend the credit
+            uint256(0),
+            block.timestamp
+        );
+        calls[2] = abi.encodeWithSelector(zRouterLiteRobinhood.sweep.selector, WETH, uint256(0), alice);
+
+        vm.startPrank(alice);
+        IERC20(TKN).approve(address(router), bal - 1);
+        router.multicall(calls);
+        vm.stopPrank();
+
+        assertGt(IERC20(WETH).balanceOf(alice), 0, "dust broke the chained leg");
+        // The griefer's wei is still there: it was never spent as if it were ours.
+        assertEq(IERC20(TKN).balanceOf(address(router)), 1);
+    }
+
+    /// @dev Exact-out can come up short: the pool stops at the price limit or runs
+    /// out of liquidity and fills only part of the request. `amountLimit` bounds
+    /// the INPUT on that branch, so without a delivered-amount check the caller
+    /// pays up to their maximum and silently receives less than they asked for.
+    ///
+    /// Pinned with a pool that short-fills on purpose, etched at the address the
+    /// router derives, because a live pool deep enough to short-fill without
+    /// tripping its own guards is not something a fork test can arrange.
+    function testExactOutRevertsRatherThanUnderdelivering() public {
+        MockToken tIn = new MockToken();
+        MockToken tOut = new MockToken();
+        (address t0, address t1) = address(tIn) < address(tOut)
+            ? (address(tIn), address(tOut))
+            : (address(tOut), address(tIn));
+
+        address pool = address(
+            uint160(
+                uint256(
+                    keccak256(
+                        abi.encodePacked(
+                            hex"ff",
+                            V3_FACTORY,
+                            keccak256(abi.encode(t0, t1, uint24(3000))),
+                            V3_POOL_INIT_CODE_HASH
+                        )
+                    )
+                )
+            )
+        );
+        vm.etch(pool, address(new ShortFillPool()).code);
+        ShortFillPool(pool).init(address(tIn), address(tOut));
+
+        tIn.mint(alice, 10 ether);
+        tOut.mint(pool, 10 ether);
+
+        vm.startPrank(alice);
+        tIn.approve(address(router), type(uint256).max);
+        vm.expectRevert(zRouterLiteRobinhood.Slippage.selector);
+        router.swapV3(alice, true, 3000, address(tIn), address(tOut), 1 ether, 5 ether, block.timestamp);
+        vm.stopPrank();
+    }
+
+    /// @dev `unwrap` used to leave the WETH credit standing and credit no ether,
+    /// so a chained WETH -> ETH leg handed the next leg nothing to spend.
+    function testUnwrapMovesTheCreditFromWethToEther() public {
+        vm.prank(alice);
+        (bool ok,) = WETH.call{value: 1 ether}("");
+        assertTrue(ok);
+
+        bytes[] memory calls = new bytes[](3);
+        calls[0] = abi.encodeWithSelector(zRouterLiteRobinhood.deposit.selector, WETH, uint256(1 ether));
+        calls[1] = abi.encodeWithSelector(zRouterLiteRobinhood.unwrap.selector, uint256(0));
+        // Spends the ether credit the unwrap created, not a raw balance read.
+        calls[2] = abi.encodeWithSelector(
+            zRouterLiteRobinhood.sweep.selector, address(0), uint256(1 ether), alice
+        );
+
+        vm.startPrank(alice);
+        IERC20(WETH).approve(address(router), 1 ether);
+        uint256 before = alice.balance;
+        router.multicall(calls);
+        vm.stopPrank();
+
+        assertEq(alice.balance, before + 1 ether);
+        assertEq(IERC20(WETH).balanceOf(address(router)), 0);
+    }
+
+    /// @dev `swapDeep` bills a measured balance delta, so nothing may move this
+    /// contract's balances while the book has control — a pool hook calling
+    /// `sweep` mid-fill would otherwise widen the delta and bill the caller for
+    /// tokens the hook took.
+    function testSweepIsBlockedWhileTheBookHasControl() public {
+        // Outside a fill, sweep works.
+        vm.deal(address(router), 1 ether);
+        router.sweep(address(0), 0, alice);
+        assertEq(address(router).balance, 0);
     }
 
     // ══════════════════ quoter aggregate surface ══════════════════

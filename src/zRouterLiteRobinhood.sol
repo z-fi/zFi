@@ -72,7 +72,7 @@ contract zRouterLiteRobinhood {
                 require(amountLimit == 0 || amountIn <= amountLimit, Slippage());
             } else {
                 if (swapAmount == 0) {
-                    amountIn = ethIn ? msg.value : balanceOf(tokenIn);
+                    amountIn = ethIn ? msg.value : _selfAmount(tokenIn);
                     if (amountIn == 0) revert BadSwap();
                 } else {
                     amountIn = swapAmount;
@@ -133,7 +133,7 @@ contract zRouterLiteRobinhood {
 
         unchecked {
             if (!exactOut && swapAmount == 0) {
-                swapAmount = ethIn ? msg.value : balanceOf(tokenIn);
+                swapAmount = ethIn ? msg.value : _selfAmount(tokenIn);
                 if (swapAmount == 0) revert BadSwap();
             }
             (int256 a0, int256 a1) = IV3Pool(pool)
@@ -148,6 +148,15 @@ contract zRouterLiteRobinhood {
             if (amountLimit != 0) {
                 if (exactOut) require(uint256(zeroForOne ? a0 : a1) <= amountLimit, Slippage());
                 else require(uint256(-(zeroForOne ? a1 : a0)) >= amountLimit, Slippage());
+            }
+
+            // An exact-out swap can come up short: the pool stops at the price
+            // limit or runs out of liquidity and fills only part of the request.
+            // `amountLimit` bounds the INPUT on this branch, so without this the
+            // caller pays up to their maximum and silently receives less than the
+            // amount they asked for.
+            if (exactOut) {
+                require(uint256(-(zeroForOne ? a1 : a0)) >= swapAmount, Slippage());
             }
 
             (int256 dIn, int256 dOut) = zeroForOne ? (a0, a1) : (a1, a0);
@@ -227,7 +236,7 @@ contract zRouterLiteRobinhood {
         uint256 deadline
     ) public payable checkDeadline(deadline) returns (uint256 amountIn, uint256 amountOut) {
         if (!exactOut && swapAmount == 0) {
-            swapAmount = tokenIn == address(0) ? msg.value : balanceOf(tokenIn);
+            swapAmount = tokenIn == address(0) ? msg.value : _selfAmount(tokenIn);
             if (swapAmount == 0) revert BadSwap();
         }
         (amountIn, amountOut) = abi.decode(
@@ -368,10 +377,22 @@ contract zRouterLiteRobinhood {
         uint256 inBefore = ethIn ? address(this).balance : balanceOf(tokenIn);
         uint256 outBefore = tokenOut == address(0) ? address(this).balance : balanceOf(tokenOut);
 
+        // The caller is charged a measured balance delta, so nothing may move
+        // this contract's balances while the book has control. A Deepstate pool
+        // hook could otherwise call `sweep` mid-fill and widen the delta, billing
+        // the caller for tokens it took rather than tokens the book took.
+        assembly ("memory-safe") {
+            tstore(0x01, 1)
+        }
+
         IDeepstate(DEEPSTATE)
             .fill{value: ethIn ? amountInMax : 0}(
                 IDeepstate.FillParams(token0, token1, epoch, order, isBid, true, false)
             );
+
+        assembly ("memory-safe") {
+            tstore(0x01, 0)
+        }
 
         unchecked {
             amountIn = inBefore - (ethIn ? address(this).balance : balanceOf(tokenIn));
@@ -447,6 +468,25 @@ contract zRouterLiteRobinhood {
         }
     }
 
+    /// @dev What a previous leg actually credited, falling back to the raw balance
+    /// when there is no credit. `swapAmount == 0` means "spend what the last leg
+    /// produced"; reading the balance for that is wrong, because anyone can send
+    /// the router a single wei and the leg then tries to spend one wei more than
+    /// it was credited — which either pulls a second full payment from the caller
+    /// or reverts the whole chain.
+    function _selfAmount(address token) internal view returns (uint256 amount) {
+        amount = _creditOf(address(this), token);
+        if (amount == 0) amount = balanceOf(token);
+    }
+
+    function _creditOf(address user, address token) internal view returns (uint256 bal) {
+        assembly ("memory-safe") {
+            mstore(0x00, user)
+            mstore(0x20, token)
+            bal := tload(keccak256(0x00, 0x40))
+        }
+    }
+
     function _safeTransferETH(address to, uint256 amount) internal {
         if (to == address(this)) {
             depositFor(address(0), amount, to);
@@ -465,6 +505,9 @@ contract zRouterLiteRobinhood {
     receive() external payable {}
 
     function sweep(address token, uint256 amount, address to) public payable {
+        assembly ("memory-safe") {
+            if gt(tload(0x01), 0) { revert(0, 0) }
+        }
         if (token == address(0)) {
             _safeTransferETH(to, amount == 0 ? address(this).balance : amount);
         } else {
@@ -480,8 +523,14 @@ contract zRouterLiteRobinhood {
         depositFor(WETH, amount, address(this));
     }
 
+    /// @dev Consumes the WETH credit and re-credits the ether, so a chained
+    /// WETH -> ETH leg hands the next leg something to spend. Without this the
+    /// WETH credit outlives the WETH and the ether arrives uncredited.
     function unwrap(uint256 amount) public payable {
-        unwrapETH(amount == 0 ? balanceOf(WETH) : amount);
+        if (amount == 0) amount = _selfAmount(WETH);
+        _useTransientBalance(address(this), WETH, amount);
+        unwrapETH(amount);
+        depositFor(address(0), amount, address(this));
     }
 
     // ** PERMIT HELPERS

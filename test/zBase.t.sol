@@ -53,6 +53,7 @@ interface IStateView {
 interface IERC20 {
     function balanceOf(address) external view returns (uint256);
     function approve(address, uint256) external returns (bool);
+    function transfer(address, uint256) external returns (bool);
 }
 
 contract BaseTest is Test {
@@ -276,6 +277,86 @@ contract BaseTest is Test {
         vm.stopPrank();
 
         assertGe(amountOut, 1e18, "solved input did not reach the target");
+    }
+
+    // ══════════ audit regressions ══════════
+
+    /// @dev A leg with `swapAmount == 0` spends what the previous leg credited.
+    /// Reading the raw balance let anyone send one wei and make the next leg try
+    /// to spend one wei more than it was credited — pulling a second full payment
+    /// from the caller, or reverting the chain for a wei.
+    function testDustCannotHijackABalanceFundedLeg() public {
+        (, uint256 quoted) = quoter.quoteV3(false, address(0), USDC, 500, 1 ether);
+        _need(quoted);
+
+        deal(USDC, address(this), 1);
+        IERC20(USDC).transfer(address(router), 1); // the griefer's wei
+
+        bytes[] memory calls = new bytes[](3);
+        calls[0] = abi.encodeWithSelector(
+            zRouterLiteBase.swapV3.selector,
+            address(router), false, uint24(500), address(0), USDC,
+            uint256(1 ether), uint256(0), block.timestamp
+        );
+        calls[1] = abi.encodeWithSelector(
+            zRouterLiteBase.swapV2.selector,
+            address(router), false, USDC, WETH,
+            uint256(0), uint256(0), block.timestamp // spend the credit
+        );
+        calls[2] = abi.encodeWithSelector(zRouterLiteBase.sweep.selector, WETH, uint256(0), uint256(0), alice);
+
+        vm.prank(alice);
+        router.multicall{value: 1 ether}(calls);
+
+        assertGt(IERC20(WETH).balanceOf(alice), 0, "dust broke the chained leg");
+        assertEq(IERC20(USDC).balanceOf(address(router)), 1, "spent the dust as if it were ours");
+    }
+
+    /// @dev `unwrap` used to leave the WETH credit standing and credit no ether.
+    function testUnwrapMovesTheCreditFromWethToEther() public {
+        vm.prank(alice);
+        (bool ok,) = WETH.call{value: 1 ether}("");
+        assertTrue(ok);
+
+        bytes[] memory calls = new bytes[](3);
+        calls[0] = abi.encodeWithSelector(zRouterLiteBase.deposit.selector, WETH, uint256(0), uint256(1 ether));
+        calls[1] = abi.encodeWithSelector(zRouterLiteBase.unwrap.selector, uint256(0));
+        calls[2] = abi.encodeWithSelector(
+            zRouterLiteBase.sweep.selector, address(0), uint256(0), uint256(1 ether), alice
+        );
+
+        vm.startPrank(alice);
+        IERC20(WETH).approve(address(router), 1 ether);
+        uint256 before = alice.balance;
+        router.multicall(calls);
+        vm.stopPrank();
+
+        assertEq(alice.balance, before + 1 ether);
+    }
+
+    /// @dev Aerodrome classic is exact-in only. Offering it for exact-out meant
+    /// pinning the input at a solved number with no tolerance at all, and
+    /// silently discarding slippageBps. It no longer competes for exact-out.
+    function testAeroDoesNotCompeteForExactOut() public view {
+        (, zQuoterBase.Quote[] memory q) = quoter.getQuotes(true, address(0), USDC, 1000e6);
+        assertEq(uint256(q[1].amountIn), 0, "AERO still offered for exact-out");
+        assertEq(uint256(q[1].amountOut), 0);
+
+        // ...but the solver is still callable for anyone who wants the number.
+        (uint256 solvedIn,,) = quoter.quoteAero(true, USDC, AERO, 1e18);
+        assertGt(solvedIn, 0, "the exact-out solver should still answer directly");
+    }
+
+    /// @dev zAMM settles by pulling from the router, so the route needs a standing
+    /// allowance. It used to exist only if the owner had primed it, so every
+    /// quoter-built zAMM route reverted until someone remembered.
+    function testZammRouteNeedsNoOwnerPriming() public {
+        // Nothing has been approved; the allowance is granted on demand.
+        (, bytes memory ret) = USDC.staticcall(
+            abi.encodeWithSignature("allowance(address,address)", address(router), ZAMM)
+        );
+        assertEq(abi.decode(ret, (uint256)), 0, "precondition: not primed");
+        assertEq(router.owner(), deployer);
     }
 
     // ══════════ the aggregate surface ══════════

@@ -489,11 +489,21 @@ contract zQuoterSepolia {
 
             if (zeroForOne) {
                 (int16 wordPos, uint8 bitPos) = _position(compressed);
-                uint256 masked = _bitmapWord(p, wordPos) & ((uint256(1) << (bitPos + 1)) - 1);
+                // Uniswap writes the mask as two terms and it is not stylistic:
+                // `(1 << (bitPos + 1)) - 1` looks equivalent but `bitPos` is a
+                // uint8, so at 255 the increment wraps to zero inside this
+                // unchecked block and the mask becomes 0 — the word then reads as
+                // empty and every initialized tick in it is skipped.
+                uint256 mask = ((uint256(1) << bitPos) - 1) + (uint256(1) << bitPos);
+                uint256 masked = _bitmapWord(p, wordPos) & mask;
                 initialized = masked != 0;
+                // The uninitialized case stops at bit 0 of this word. Stepping a
+                // further spacing past it would enter the next word without ever
+                // reading its bitmap, so bit 255 down there could be crossed
+                // without picking up its liquidityNet.
                 next = initialized
                     ? (compressed - int24(uint24(bitPos) - uint24(_msb(masked)))) * spacing
-                    : (compressed - int24(uint24(bitPos))) * spacing - spacing;
+                    : (compressed - int24(uint24(bitPos))) * spacing;
             } else {
                 (int16 wordPos, uint8 bitPos) = _position(compressed + 1);
                 uint256 masked = _bitmapWord(p, wordPos) & ~((uint256(1) << bitPos) - 1);

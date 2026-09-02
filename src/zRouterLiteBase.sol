@@ -70,7 +70,7 @@ contract zRouterLiteBase {
                 require(amountLimit == 0 || amountIn <= amountLimit, Slippage());
             } else {
                 if (swapAmount == 0) {
-                    amountIn = ethIn ? msg.value : balanceOf(tokenIn);
+                    amountIn = ethIn ? msg.value : _selfAmount(tokenIn);
                     if (amountIn == 0) revert BadSwap();
                 } else {
                     amountIn = swapAmount;
@@ -131,7 +131,7 @@ contract zRouterLiteBase {
 
         unchecked {
             if (!exactOut && swapAmount == 0) {
-                swapAmount = ethIn ? msg.value : balanceOf(tokenIn);
+                swapAmount = ethIn ? msg.value : _selfAmount(tokenIn);
                 if (swapAmount == 0) revert BadSwap();
             }
             (int256 a0, int256 a1) = IV3Pool(pool)
@@ -146,6 +146,15 @@ contract zRouterLiteBase {
             if (amountLimit != 0) {
                 if (exactOut) require(uint256(zeroForOne ? a0 : a1) <= amountLimit, Slippage());
                 else require(uint256(-(zeroForOne ? a1 : a0)) >= amountLimit, Slippage());
+            }
+
+            // An exact-out swap can come up short: the pool stops at the price
+            // limit or runs out of liquidity and fills only part of the request.
+            // `amountLimit` bounds the INPUT on this branch, so without this the
+            // caller pays up to their maximum and silently receives less than the
+            // amount they asked for.
+            if (exactOut) {
+                require(uint256(-(zeroForOne ? a1 : a0)) >= swapAmount, Slippage());
             }
 
             (int256 dIn, int256 dOut) = zeroForOne ? (a0, a1) : (a1, a0);
@@ -229,7 +238,7 @@ contract zRouterLiteBase {
         uint256 deadline
     ) public payable checkDeadline(deadline) returns (uint256 amountIn, uint256 amountOut) {
         if (!exactOut && swapAmount == 0) {
-            swapAmount = tokenIn == address(0) ? msg.value : balanceOf(tokenIn);
+            swapAmount = tokenIn == address(0) ? msg.value : _selfAmount(tokenIn);
             if (swapAmount == 0) revert BadSwap();
         }
         (amountIn, amountOut) = abi.decode(
@@ -345,7 +354,7 @@ contract zRouterLiteBase {
 
         amountIn = swapAmount;
         if (amountIn == 0) {
-            amountIn = ethIn ? msg.value : balanceOf(tokenIn);
+            amountIn = ethIn ? msg.value : _selfAmount(tokenIn);
             if (amountIn == 0) revert BadSwap();
         }
         amountOut = IAeroPool(pool).getAmountOut(amountIn, tokenIn);
@@ -400,7 +409,7 @@ contract zRouterLiteBase {
 
         unchecked {
             if (!exactOut && swapAmount == 0) {
-                swapAmount = ethIn ? msg.value : balanceOf(tokenIn);
+                swapAmount = ethIn ? msg.value : _selfAmount(tokenIn);
                 if (swapAmount == 0) revert BadSwap();
             }
             (int256 a0, int256 a1) = IV3Pool(pool)
@@ -417,6 +426,15 @@ contract zRouterLiteBase {
             if (amountLimit != 0) {
                 if (exactOut) require(uint256(zeroForOne ? a0 : a1) <= amountLimit, Slippage());
                 else require(uint256(-(zeroForOne ? a1 : a0)) >= amountLimit, Slippage());
+            }
+
+            // An exact-out swap can come up short: the pool stops at the price
+            // limit or runs out of liquidity and fills only part of the request.
+            // `amountLimit` bounds the INPUT on this branch, so without this the
+            // caller pays up to their maximum and silently receives less than the
+            // amount they asked for.
+            if (exactOut) {
+                require(uint256(-(zeroForOne ? a1 : a0)) >= swapAmount, Slippage());
             }
 
             (int256 dIn, int256 dOut) = zeroForOne ? (a0, a1) : (a1, a0);
@@ -461,6 +479,20 @@ contract zRouterLiteBase {
             else IERC6909(tokenIn).transferFrom(msg.sender, address(this), idIn, pull);
         }
 
+        // zAMM settles by pulling from this contract, so it needs standing
+        // authority. Granted on demand rather than primed by the owner: otherwise
+        // every zAMM route the quoter picks reverts until someone remembers to
+        // call `ensureAllowance` for that token.
+        if (!ethIn) {
+            if (idIn == 0) {
+                if (allowance(tokenIn, address(this), ZAMM) < pull) {
+                    safeApprove(tokenIn, ZAMM, type(uint256).max);
+                }
+            } else {
+                IERC6909(tokenIn).setOperator(ZAMM, true);
+            }
+        }
+
         uint256 result = exactOut
             ? IZAMM(ZAMM).swapExactOut{value: ethIn ? amountLimit : 0}(
                 key, swapAmount, amountLimit, zeroForOne, to, deadline
@@ -471,14 +503,22 @@ contract zRouterLiteBase {
 
         (amountIn, amountOut) = exactOut ? (result, swapAmount) : (swapAmount, result);
 
-        // Exact-out overpays by construction; hand the remainder back. The
-        // deployed router returns here without ever marking the output, so a
-        // chained exact-out leg loses its credit.
+        // Exact-out overpays by construction; hand the remainder back. The third
+        // arm is not optional: with `idIn` set, the overpayment is an ERC6909
+        // balance, and reading `balanceOf(address)` on a pure-6909 issuer returns
+        // nothing — the helper reports zero and the refund is silently skipped,
+        // stranding the remainder for the next passer-by to sweep.
         if (exactOut && to != address(this)) {
-            uint256 refund = ethIn ? address(this).balance : balanceOf(tokenIn);
-            if (refund != 0) {
-                if (ethIn) _safeTransferETH(msg.sender, refund);
-                else safeTransfer(tokenIn, msg.sender, refund);
+            uint256 refund;
+            if (ethIn) {
+                refund = address(this).balance;
+                if (refund != 0) _safeTransferETH(msg.sender, refund);
+            } else if (idIn == 0) {
+                refund = balanceOf(tokenIn);
+                if (refund != 0) safeTransfer(tokenIn, msg.sender, refund);
+            } else {
+                refund = IERC6909(tokenIn).balanceOf(address(this), idIn);
+                if (refund != 0) IERC6909(tokenIn).transfer(msg.sender, idIn, refund);
             }
         }
         depositFor(tokenOut, idOut, amountOut, to);
@@ -553,6 +593,28 @@ contract zRouterLiteBase {
         }
     }
 
+    /// @dev What a previous leg actually credited, falling back to the raw balance
+    /// when there is no credit. `swapAmount == 0` means "spend what the last leg
+    /// produced"; reading the balance for that is wrong, because anyone can send
+    /// the router a single wei and the leg then tries to spend one wei more than
+    /// it was credited — which either pulls a second full payment from the caller
+    /// or reverts the whole chain.
+    function _selfAmount(address token) internal view returns (uint256 amount) {
+        amount = _creditOf(address(this), token);
+        if (amount == 0) amount = balanceOf(token);
+    }
+
+    function _creditOf(address user, address token) internal view returns (uint256 bal) {
+        assembly ("memory-safe") {
+            let m := mload(0x40)
+            mstore(0x00, user)
+            mstore(0x20, token)
+            mstore(0x40, 0)
+            bal := tload(keccak256(0x00, 0x60))
+            mstore(0x40, m)
+        }
+    }
+
     function _safeTransferETH(address to, uint256 amount) internal {
         if (to == address(this)) {
             depositFor(address(0), 0, amount, to);
@@ -588,8 +650,14 @@ contract zRouterLiteBase {
         depositFor(WETH, 0, amount, address(this));
     }
 
+    /// @dev Consumes the WETH credit and re-credits the ether, so a chained
+    /// WETH -> ETH leg hands the next leg something to spend. Without this the
+    /// WETH credit outlives the WETH and the ether arrives uncredited.
     function unwrap(uint256 amount) public payable {
-        unwrapETH(amount == 0 ? balanceOf(WETH) : amount);
+        if (amount == 0) amount = _selfAmount(WETH);
+        _useTransientBalance(address(this), WETH, 0, amount);
+        unwrapETH(amount);
+        depositFor(address(0), 0, amount, address(this));
     }
 
     // ** PERMIT HELPERS
