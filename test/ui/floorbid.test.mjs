@@ -251,10 +251,13 @@ describe('placing a bid', () => {
     p.select('kind', 'floor');
     await p.settle();
 
-    p.select('fromSel', 5);   // pay USDC
     // WETH, not ETH: the board escrows and delivers tokens, so `Terms.token`
     // must be a contract. Bidding for native ETH is not a thing it can express.
-    p.select('toSel', 1);
+    // BY SYMBOL, NOT BY INDEX - the list has reordered under this test once.
+    // Receive side first: USDC starts selected there, and the picker disables
+    // a token that is already chosen on the other side.
+    p.pickToken('toSel', 'WETH');
+    p.pickToken('fromSel', 'USDC');
     await p.settle();
     p.type('amt', '4200');    // the ceiling, and the escrow
     p.type('outAmt', '1');    // one WETH wanted

@@ -1,9 +1,15 @@
 import { test, describe, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { AbiCoder } from 'ethers';
+import { readFileSync } from 'node:fs';
 import {
   A, MockChain, loadPage, fixedRateQuoter, closeAllPages,
 } from './harness.mjs';
+
+// Read out of the page rather than copied, so moving the pin cannot leave this
+// suite green against an address nothing asks for.
+const RPCS_PIN = /const RPCS_PIN="(0x[0-9a-fA-F]{40})"/
+  .exec(readFileSync(new URL('../../zSwap.html', import.meta.url), 'utf8'))[1];
 
 after(closeAllPages);
 
@@ -63,14 +69,16 @@ describe('the page before any wallet exists', () => {
 
   test('the DAO-curated list is adopted ahead of the seeds', async () => {
     const SELF = '0x' + 'ab'.repeat(20);
-    const LIST = '0x' + 'cd'.repeat(20);
+    // The roster address is pinned in the page's own bytes - it is no longer
+    // read off the contract serving the page, because on a .wei or IPFS name
+    // there is no address in the host to read it from. Answer where the page
+    // actually asks, or this tests a lookup that no longer exists.
+    const LIST = RPCS_PIN;
     const URL = 'https://curated.example';
     const chain = chainWithQuote();
     const ethCall = chain.ethCall.bind(chain);
     chain.ethCall = (tx, block) => {
-      if ((tx.to || '').toLowerCase() === SELF && tx.data.startsWith('0x0b6feb61'))
-        return coder.encode(['address'], [LIST]); // RPCS()
-      if ((tx.to || '').toLowerCase() === LIST && tx.data.startsWith('0xd77e4c79'))
+      if ((tx.to || '').toLowerCase() === LIST.toLowerCase() && tx.data.startsWith('0xd77e4c79'))
         return coder.encode(['string[]'], [[URL]]); // rpcs()
       return ethCall(tx, block);
     };

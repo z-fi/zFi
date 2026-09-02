@@ -78,12 +78,29 @@ describe('a quote does not re-ask what it already knows', () => {
     const first = count(chain, 'eth_getCode', A.SWAPBOL);
     assert.ok(first >= 1);
 
+    // A MISS IS CACHED, BUT ONLY BRIEFLY. Re-asking on every quote is how a
+    // dead address costs a round trip per keystroke; never re-asking is how a
+    // contract deployed later stays invisible for the life of the session. The
+    // page holds a miss for CODE_MISS_TTL, so the clock is what this asserts
+    // against - a second quote inside the window must NOT re-ask, and one past
+    // it must.
     p.pickToken('toSel', 'USDT');
     await p.typeAmount('amt', '2');
     await p.settle();
+    assert.equal(count(chain, 'eth_getCode', A.SWAPBOL), first,
+      'a miss re-asked inside its TTL - that is a round trip per keystroke');
 
-    assert.ok(count(chain, 'eth_getCode', A.SWAPBOL) > first,
-      'an absent contract must be re-checked, or a later deploy is invisible');
+    const real = p.window.Date.now;
+    p.window.Date.now = () => real.call(Date) + 61_000;
+    try {
+      p.pickToken('toSel', 'USDC');
+      await p.typeAmount('amt', '3');
+      await p.settle();
+      assert.ok(count(chain, 'eth_getCode', A.SWAPBOL) > first,
+        'an absent contract must be re-checked, or a later deploy is invisible');
+    } finally {
+      p.window.Date.now = real;
+    }
     p.close();
   });
 });
