@@ -564,6 +564,20 @@ contract RobinhoodTest is Test {
         vm.stopPrank();
     }
 
+    /// @dev Ether must be attached to be credited as ether. The mainnet router
+    /// credits this call with ether it never received.
+    function testDepositRejectsPhantomEther() public {
+        vm.prank(alice);
+        vm.expectRevert(zRouterLite.InvalidMsgVal.selector);
+        router.deposit(address(0), 1 ether);
+    }
+
+    function testDepositCreditsAttachedEther() public {
+        vm.prank(alice);
+        router.deposit{value: 1 ether}(address(0), 1 ether);
+        assertEq(address(router).balance, 1 ether);
+    }
+
     /// @dev Depositing WETH with ether attached wraps on the way in.
     function testDepositWithEtherWrapsToWeth() public {
         vm.prank(alice);

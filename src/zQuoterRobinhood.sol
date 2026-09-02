@@ -3,37 +3,21 @@ pragma solidity ^0.8.36;
 
 import {TickMath, SwapMath, LiquidityMath, IStateViewV4, _sortTokens, _v4PoolId} from "./zQuoterV4.sol";
 
-// zQuoterRobinhood
-// A minimal, self-contained quoter for zRouterLite on Robinhood Chain (id 4663).
+// zQuoterRobinhood — quotes Uniswap V2/V3/V4 for zRouterLite on Robinhood Chain.
 //
-// WHY THIS IS NOT src/zQuoter.sol
-// The mainnet quoter cannot run here, and each reason argues for a smaller
-// contract rather than a ported one:
+// Not a port of src/zQuoter.sol: that one is a shell over a base quoter with no
+// code on 4663, and a staticcall to a codeless address returns empty rather than
+// reverting, so a port would quote zeros instead of failing. This does its own
+// math and calls nothing it does not name.
 //
-//  1. It is a THIN SHELL over a base quoter at 0x658bF1A6608210FDE7310760f391AD4eC8006A5F.
-//     That address has no code on 4663, and a staticcall to a codeless address
-//     succeeds with empty returndata — so a port would not revert, it would quote
-//     zeros. This contract does its own math and calls nothing it does not name.
-//  2. It quotes Curve, Lido, Sushi and zAMM. None of that is deployed on
-//     Robinhood Chain, and the router it pairs with here (src/zRouterLite.sol)
-//     carries no `swapVZ` or `swapCurve` to execute them with. Quoting a venue
-//     the router cannot reach produces a "best" route that reverts, which is
-//     worse than no route.
-//  3. It sits 138 bytes under EIP-170 and only builds under `FOUNDRY_PROFILE=zquoter`
-//     with `yul = false`. That build fragility is a tax paid for mainnet venue
-//     coverage; there is no reason to inherit it on a chain with three venues.
+// The init-code hashes below are the canonical Uniswap ones, which is the fact
+// the whole design rests on: quoter and router derive pool addresses the same
+// way, so a quote and the calldata built from it cannot name different pools.
 //
-// WHAT IT COVERS: exactly what zRouterLite can execute — Uniswap V2, V3 and V4.
-// Both init-code hashes below are the canonical Uniswap ones, which is the
-// load-bearing fact: the quoter and the router derive pool addresses the same
-// way, so a quote and the calldata built from it cannot point at different pools.
-//
-// ABI COMPATIBILITY: `AMM`, `Quote`, `getQuotes` and `buildBestSwap` keep the
-// mainnet zQuoter's exact shapes, including the unused enum ordinals. Front-end
-// code written against this moves to mainnet without an edit; the venues it
-// never sees here simply start appearing. The calldata it BUILDS is for
-// src/zRouterLite.sol, whose `deposit` and `sweep` drop the ERC6909 token id —
-// there is no such token on 4663 — so the two contracts ship as a pair.
+// `AMM`, `Quote`, `getQuotes` and `buildBestSwap` keep mainnet zQuoter's shapes,
+// so front-end code moves between chains unedited. The calldata it BUILDS
+// targets zRouterLite, whose `deposit` and `sweep` drop mainnet's ERC6909 id —
+// the two contracts ship as a pair.
 address constant WETH = 0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73;
 
 address constant V2_FACTORY = 0x8bcEaA40B9AcdfAedF85AdF4FF01F5Ad6517937f;
@@ -42,8 +26,7 @@ bytes32 constant V2_POOL_INIT_CODE_HASH = 0x96e8ac4277198ff8b6f785478aa9a39f403c
 address constant V3_FACTORY = 0x1f7d7550B1b028f7571E69A784071F0205FD2EfA;
 bytes32 constant V3_POOL_INIT_CODE_HASH = 0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54;
 
-// @dev The v4 lens. `StateView.poolManager()` returns 0x8366a39CC670B4001A1121B8F6A443A643e40951,
-// which is the same PoolManager src/zRouterLite.sol holds — checked, not assumed.
+// The v4 lens. Its `poolManager()` is the singleton zRouterLite holds — checked.
 address constant V4_STATE_VIEW = 0xF3334192D15450CdD385c8B70e03f9A6bD9E673b;
 
 uint160 constant MIN_SQRT_RATIO_PLUS_ONE = 4295128740;
@@ -56,10 +39,9 @@ contract zQuoterRobinhood {
     error IdenticalTokens();
     error SlippageBpsTooHigh();
 
-    /// @dev Ordinals are load-bearing: they match src/zQuoter.sol so a `source`
-    /// value crossing the wire means the same thing on both chains. SUSHI, ZAMM,
-    /// CURVE and LIDO are never produced here — they are placeholders that keep
-    /// UNI_V3 at 3 and UNI_V4 at 4.
+    /// @dev Ordinals match src/zQuoter.sol so a `source` means the same thing on
+    /// both chains. The four venues that do not exist here are never produced;
+    /// they hold UNI_V3 at 3 and UNI_V4 at 4.
     enum AMM {
         UNI_V2,
         SUSHI,
@@ -78,10 +60,8 @@ contract zQuoterRobinhood {
         uint256 amountOut;
     }
 
-    /// @dev The V3/V4 tiers to sweep, in hundredths of a bip. The tick spacings are
-    /// Uniswap's canonical pairing and are the ones the router will re-derive from
-    /// `feeBps` when it executes, so quoting any other spacing would quote a pool
-    /// the built calldata cannot reach.
+    /// @dev Tiers to sweep, in hundredths of a bip. Spacings are Uniswap's
+    /// canonical pairing, which is what the router re-derives when it executes.
     function _tiers() internal pure returns (uint24[4] memory) {
         return [uint24(100), 500, 3000, 10_000];
     }
@@ -96,11 +76,10 @@ contract zQuoterRobinhood {
         }
     }
 
-    /// @dev The router address is a constructor argument rather than a constant:
-    /// nothing of ours is deployed to 4663 yet, and `buildBestSwap` compares `to`
-    /// against it to decide whether output may be left in the router for a
-    /// following call. A hardcoded wrong address would silently produce the
-    /// non-chaining branch instead of failing.
+    /// @dev A constructor argument, not a constant: nothing is deployed to 4663
+    /// yet, and `buildBestSwap` compares `to` against it to decide whether output
+    /// may stay in the router. A wrong constant would take the other branch
+    /// silently rather than fail.
     address public immutable ZROUTER;
 
     constructor(address zRouter) payable {
@@ -112,9 +91,8 @@ contract zQuoterRobinhood {
     /// @notice Quote every venue zRouterLite can execute, and pick the best.
     /// @param exactOut false = `swapAmount` is the input; true = it is the desired output.
     /// @return best The winning quote, zeroed if nothing quoted.
-    /// @return quotes All nine candidates, in a stable order: V2, then V3 by tier,
-    ///         then V4 by tier. Entries that did not quote are left at zero rather
-    ///         than dropped, so a caller can index by venue.
+    /// @return quotes All nine candidates: V2, then V3 by tier, then V4 by tier.
+    ///         Entries that did not quote stay at zero so callers can index by venue.
     function getQuotes(bool exactOut, address tokenIn, address tokenOut, uint256 swapAmount)
         public
         view
@@ -147,13 +125,13 @@ contract zQuoterRobinhood {
         }
     }
 
-    /// @notice Quote, then hand back calldata that can be sent to zRouter as-is.
-    /// @param to Recipient of the output. Pass ZROUTER to leave funds in the router
-    ///        for a following call.
+    /// @notice Quote, then hand back calldata sendable to the router as-is.
+    /// @param to Recipient. Pass ZROUTER to leave funds in the router for a
+    ///        following call.
     /// @return best The venue that won.
-    /// @return callData Send this to ZROUTER with `msgValue` attached.
-    /// @return amountLimit The slippage bound already embedded in `callData` —
-    ///         minimum out for exactIn, maximum in for exactOut.
+    /// @return callData Send to ZROUTER with `msgValue` attached.
+    /// @return amountLimit The bound already embedded in `callData` — minimum out
+    ///         for exactIn, maximum in for exactOut.
     /// @return msgValue Ether to attach. Non-zero only when paying in ether.
     function buildBestSwap(
         address to,
@@ -166,8 +144,7 @@ contract zQuoterRobinhood {
     ) public view returns (Quote memory best, bytes memory callData, uint256 amountLimit, uint256 msgValue) {
         require(slippageBps < BPS, SlippageBpsTooHigh());
 
-        // ETH <-> WETH is 1:1 and is not a swap. The router wraps and unwraps
-        // directly, so quoting a venue for it would only invent a spread.
+        // ETH <-> WETH is 1:1, not a swap: quoting a venue would invent a spread.
         if ((tokenIn == address(0) && tokenOut == WETH) || (tokenIn == WETH && tokenOut == address(0))) {
             best = Quote(AMM.WETH_WRAP, 0, swapAmount, swapAmount);
             amountLimit = swapAmount;
@@ -246,9 +223,8 @@ contract zQuoterRobinhood {
 
     // ====================== UNISWAP V2 ======================
 
-    /// @dev Constant product at the canonical 0.30% fee. Reverts are impossible
-    /// here — a missing pair has no code, `getReserves` returns nothing, and the
-    /// staticcall guard below reports (0, 0) rather than propagating.
+    /// @dev Constant product at 0.30%. Cannot revert: a missing pair has no code
+    /// and the staticcall guard reports (0, 0) rather than propagating.
     function quoteV2(bool exactOut, address tokenIn, address tokenOut, uint256 swapAmount)
         public
         view
@@ -283,8 +259,8 @@ contract zQuoterRobinhood {
             if (resIn == 0 || resOut == 0) return (0, 0);
 
             if (exactOut) {
-                // An exact-out larger than the reserve is not expensive, it is
-                // impossible: the denominator would underflow into a nonsense price.
+                // Larger than the reserve is impossible, not expensive: the
+                // denominator would underflow into a nonsense price.
                 if (swapAmount >= resOut) return (0, 0);
                 amountOut = swapAmount;
                 amountIn = (resIn * amountOut * 1000 + (resOut - amountOut) * 997 - 1) / ((resOut - amountOut) * 997);
@@ -297,9 +273,8 @@ contract zQuoterRobinhood {
 
     // ====================== UNISWAP V3 / V4 ======================
 
-    /// @dev Where the concentrated-liquidity state lives. V3 keeps it on the pool
-    /// contract; V4 keeps it in the singleton and is read through StateView. The
-    /// step math downstream is identical, so this struct is the only fork.
+    /// @dev Where the state lives: V3 on the pool, V4 in the singleton behind
+    /// StateView. The step math is identical, so this struct is the only fork.
     struct Pool {
         bool isV4;
         address pool; // v3 only
@@ -338,25 +313,23 @@ contract zQuoterRobinhood {
         );
     }
 
-    /// @dev Hookless pools only. A hook can rewrite the swap arbitrarily, so a
-    /// quote computed from pool state alone would be a guess — and the router's
-    /// `swapV4` has no hook argument to execute against in any case.
+    /// @dev Hookless pools only: a hook can rewrite the swap, so a quote from
+    /// pool state alone would be a guess, and `swapV4` takes no hook anyway.
     function quoteV4(bool exactOut, address tokenIn, address tokenOut, uint24 fee, uint256 swapAmount)
         public
         view
         returns (uint256 amountIn, uint256 amountOut)
     {
-        // Native ether is a first-class currency in v4 (address(0)), so unlike V2/V3
-        // it is NOT normalized to WETH here — that would quote a different pool.
+        // Ether is a first-class currency in v4, so unlike V2/V3 it is NOT
+        // normalized to WETH — that would quote a different pool.
         if (tokenIn == tokenOut) return (0, 0);
         int24 spacing = _spacingFromBps(uint16(fee / 100));
         (bytes32 id, bool zeroForOne) = _v4PoolId(tokenIn, tokenOut, fee, spacing, address(0));
         return _quoteCL(Pool(true, address(0), id, spacing, fee), exactOut, zeroForOne, swapAmount);
     }
 
-    /// @dev The shared concentrated-liquidity engine. This is Uniswap's own step
-    /// loop; the sign convention is v4's (exact-in negative, exact-out positive),
-    /// which v3 shares.
+    /// @dev Uniswap's own step loop, shared by V3 and V4. Sign convention is v4's:
+    /// exact-in negative, exact-out positive.
     function _quoteCL(Pool memory p, bool exactOut, bool zeroForOne, uint256 swapAmount)
         internal
         view
@@ -380,9 +353,8 @@ contract zQuoterRobinhood {
 
                 uint160 sqrtPriceNextX96 = TickMath.getSqrtPriceAtTick(tickNext);
 
-                // `stepIn` here is input INCLUSIVE of the fee. Folding the two
-                // together at the call site is not cosmetic: keeping `feeAmt` as a
-                // fifth live local puts this loop one slot over via-ir's stack.
+                // `stepIn` includes the fee. Folding them in `_step` is not
+                // cosmetic: a fifth live local puts this loop over via-ir's stack.
                 (uint160 sqrtPriceNext, uint256 stepIn, uint256 stepOut) = _step(
                     sqrtPriceX96,
                     (zeroForOne ? (sqrtPriceNextX96 < limitX96) : (sqrtPriceNextX96 > limitX96))
@@ -415,8 +387,7 @@ contract zQuoterRobinhood {
                 sqrtPriceX96 = sqrtPriceNext;
             }
 
-            // A partial fill is not a price. Uniswap's own quoter reverts with
-            // NotEnoughLiquidity here; reporting the dribble instead would let a
+            // A partial fill is not a price — reporting the dribble would let a
             // near-empty pool win `best` with a number nobody can trade at.
             if (amountRemaining != 0) return (0, 0);
 
@@ -454,12 +425,10 @@ contract zQuoterRobinhood {
                 (sqrtPriceX96, tick, protocolFee, lpFee) = abi.decode(ret, (uint160, int24, uint24, uint24));
                 liquidity = IStateViewV4(V4_STATE_VIEW).getLiquidity(p.id);
 
-                // protocolFee is a PACKED uint24 — low 12 bits zeroForOne, high 12
-                // oneForZero — not a rate. Composing it the way v4-core does keeps
-                // this correct whether or not 4663's PoolManager ever has a
-                // protocolFeeController set.
-                // See src/zQuoterV4.sol for what the naive `protocolFee + lpFee`
-                // did to mainnet quotes once Uniswap switched protocol fees on.
+                // protocolFee is a PACKED uint24 — low 12 bits zeroForOne, high
+                // 12 oneForZero — not a rate. Composing it the way v4-core does
+                // stays correct if 4663 ever sets a protocolFeeController; see
+                // src/zQuoterV4.sol for what the naive sum did to mainnet quotes.
                 uint24 pf = zeroForOne ? (protocolFee & 0xfff) : (protocolFee >> 12);
                 swapFee = pf == 0 ? lpFee : uint24(pf + lpFee - (uint256(pf) * uint256(lpFee)) / 1_000_000);
             } else {
@@ -467,8 +436,8 @@ contract zQuoterRobinhood {
                 if (!ok || ret.length < 224) return (0, 0, 0, 0);
                 (sqrtPriceX96, tick) = abi.decode(ret, (uint160, int24));
                 liquidity = IV3Pool(p.pool).liquidity();
-                // v3's protocol fee is taken out of the LP's share, not the swapper's,
-                // so the tier fee is the whole story for a quote.
+                // v3 takes its protocol fee from the LP's share, not the
+                // swapper's, so the tier fee is the whole story.
                 swapFee = p.fee;
             }
         }
@@ -486,8 +455,8 @@ contract zQuoterRobinhood {
         return p.isV4 ? IStateViewV4(V4_STATE_VIEW).getTickBitmap(p.id, wordPos) : IV3Pool(p.pool).tickBitmap(wordPos);
     }
 
-    /// @dev v3's `nextInitializedTickWithinOneWord`, with the one word it needs
-    /// fetched from whichever of the two state layouts this pool uses.
+    /// @dev v3's `nextInitializedTickWithinOneWord`, reading its one word from
+    /// whichever state layout this pool uses.
     function _nextTick(Pool memory p, int24 tick, bool zeroForOne)
         internal
         view

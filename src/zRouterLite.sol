@@ -1,45 +1,21 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.36;
 
-// zRouterLite (Robinhood Chain, id 4663)
+// zRouterLite — Uniswap V2/V3/V4 on Robinhood Chain (4663).
 //
-// The mainnet zRouter is a multi-venue router: Uniswap V2/V3/V4, zAMM, Sushi,
-// Curve, a Lido staker, a generic solver executor and an owner-gated `execute`.
-// Robinhood Chain has exactly one liquidity family on it — Uniswap V2, V3 and
-// V4, all at canonical init-code hashes — so everything else in that contract
-// would be dead weight that still has to be deployed, audited and reasoned about.
+// The mainnet zRouter also carries zAMM, Sushi, Curve and a Lido staker. None of
+// that is deployed here, so none of it is in this contract; what remains is the
+// three Uniswap venues plus the venue-independent extensions — multicall,
+// transient deposit and sweep, wrap and unwrap, permit, the ownable/trust/execute
+// module, and snwap over SafeExecutor.
 //
-// WHAT WAS DROPPED, AND WHY EACH IS SAFE TO DROP HERE
-//  - swapVZ / addLiquidity / ERC6909: zAMM is not deployed on 4663.
-//  - swapCurve and the Curve interface zoo: no Curve pools on 4663.
-//  - exactETHToSTETH and friends: no Lido, no stETH, no wstETH.
-//  - The Sushi branch of `_v2PoolFor`: no Sushi factory. This also frees the
-//    `deadline == type(uint256).max` sentinel, which on mainnet means "Sushi";
-//    here a max deadline simply means no deadline, which is what it reads like.
-//  - permitDAI: there is no DAI on 4663, and the signature is DAI's alone.
-//  - permit2BatchTransferFrom: it pulls several tokens at once for a multi-leg
-//    route. Every route here is single-hop, and the zSwap front end never emits
-//    it, so the single-token form is the whole requirement.
-//  - ERC6909 entirely: nothing on 4663 issues one. `deposit` and `sweep` drop the
-//    token-id argument rather than carrying a parameter that may only ever be
-//    zero, and the transient-balance slot is keyed on (owner, token) alone.
-//
-// WHAT WAS KEPT DESPITE HAVING NO USER ON 4663 YET: the ownable/`trust`/`execute`
-// module, `snwap`/`snwapMulti` and `SafeExecutor`. These are venue-independent —
-// they are how a solver fill or a future integration reaches this router at all,
-// and retrofitting them would mean a new address. `execute` brings the
-// `tload(0x00)` callback lock with it, which is not optional: while an arbitrary
-// trusted target has control, the V3 and V4 callbacks must be unreachable.
-//
-// WHAT WAS KEPT VERBATIM: the transient-balance credit system. It is what lets
-// `multicall` chain a wrap into a swap into a sweep, and the quoter's
-// `buildBestSwap` emits exactly those sequences for the ETH<->WETH path.
-//
-// ABI: the three `swap*` entry points, `multicall`, `wrap` and `unwrap` keep the
-// mainnet zRouter's exact selectors and argument order. `deposit`, `sweep` and
-// `ensureAllowance` deliberately do not: each of those carried an ERC6909
-// parameter that has no meaning on this chain, and the paired zQuoterRobinhood
-// builds calldata for these signatures, so the two move together.
+// Two consequences worth knowing:
+//  - `deadline == type(uint256).max` means "no deadline". On mainnet it selects
+//    Sushi; there is no Sushi here.
+//  - `deposit`, `sweep` and `ensureAllowance` drop mainnet's ERC6909 argument —
+//    no such token exists on 4663. Every other selector is unchanged, and
+//    zQuoterRobinhood builds calldata for these signatures, so the two ship as a
+//    pair.
 contract zRouterLite {
     error BadSwap();
     error Expired();
@@ -58,9 +34,8 @@ contract zRouterLite {
         _;
     }
 
-    /// @dev `tx.origin` rather than `msg.sender` because this is meant to be
-    /// deployed through the CREATE2 factory at 0x4e59b448... for a vanity
-    /// address: `msg.sender` there is the factory, not whoever is deploying.
+    /// @dev `tx.origin`, not `msg.sender`: deployed through the CREATE2 factory,
+    /// `msg.sender` is the factory.
     constructor() payable {
         safeExecutor = new SafeExecutor();
         emit OwnershipTransferred(address(0), _owner = tx.origin);
@@ -130,7 +105,7 @@ contract zRouterLite {
             unwrapETH(amountOut);
             _safeTransferETH(to, amountOut);
         } else {
-            depositFor(tokenOut, amountOut, to); // marks output target
+            depositFor(tokenOut, amountOut, to);
         }
     }
 
@@ -174,28 +149,24 @@ contract zRouterLite {
                 else require(uint256(-(zeroForOne ? a1 : a0)) >= amountLimit, Slippage());
             }
 
-            // ── translate pool deltas to user-facing amounts ─
             (int256 dIn, int256 dOut) = zeroForOne ? (a0, a1) : (a1, a0);
             amountIn = dIn >= 0 ? uint256(dIn) : uint256(-dIn);
             amountOut = dOut <= 0 ? uint256(-dOut) : uint256(dOut);
 
-            // Handle ETH input refund (separate from output tracking)
             if (ethIn) {
                 if ((swapAmount = address(this).balance) != 0 && to != address(this)) {
                     _safeTransferETH(msg.sender, swapAmount);
                 }
             }
-            // Handle output tracking for chaining (must always run when !ethOut)
             if (!ethOut) {
                 depositFor(tokenOut, amountOut, to);
             }
         }
     }
 
-    /// @dev `uniswapV3SwapCallback`. Two layers: the `tload` lock refuses the
-    /// callback outright while `execute` has an arbitrary call outstanding, and
-    /// outside that the pool is re-derived from the tokens and fee carried in the
-    /// callback data, so only the pool a `swapV3` could have called satisfies it.
+    /// @dev `uniswapV3SwapCallback`. The lock refuses it outright while `execute`
+    /// has an arbitrary call outstanding; otherwise the caller must be the pool
+    /// re-derived from the callback data.
     fallback() external payable {
         assembly ("memory-safe") {
             if gt(tload(0x00), 0) { revert(0, 0) }
@@ -265,10 +236,10 @@ contract zRouterLite {
                 ),
             (uint256, uint256)
         );
-        depositFor(tokenOut, amountOut, to); // marks output target
+        depositFor(tokenOut, amountOut, to);
     }
 
-    /// @dev Handle V4 PoolManager swap callback - hookless default.
+    /// @dev V4 swap callback. Hookless pools only.
     function unlockCallback(bytes calldata callbackData) public payable returns (bytes memory result) {
         require(msg.sender == V4_POOL_MANAGER, Unauthorized());
 
@@ -305,10 +276,10 @@ contract zRouterLite {
 
             if (_useTransientBalance(address(this), tokenIn, amountIn)) {
                 if (tokenIn != address(0)) {
-                    safeTransfer(tokenIn, msg.sender, amountIn); // V4_POOL_MANAGER
+                    safeTransfer(tokenIn, msg.sender, amountIn);
                 }
             } else if (!ethIn) {
-                safeTransferFrom(tokenIn, payer, msg.sender, amountIn); // V4_POOL_MANAGER
+                safeTransferFrom(tokenIn, payer, msg.sender, amountIn);
             }
 
             uint256 amountOut = !exactOut ? takeAmount : swapAmount;
@@ -365,28 +336,24 @@ contract zRouterLite {
 
     // ** TRANSIENT STORAGE
 
+    /// @dev Three total cases, one per funding source. Ether must actually be
+    /// attached to be credited — the mainnet router would credit a bare
+    /// `deposit(address(0), n)` with ether it never received.
     function deposit(address token, uint256 amount) public payable {
-        if (msg.value != 0) {
-            if (token == WETH) {
-                require(msg.value == amount, InvalidMsgVal());
-                _safeTransferETH(WETH, amount); // wrap to WETH
-            } else {
-                require(msg.value == (token == address(0) ? amount : 0), InvalidMsgVal());
-            }
-        }
-        if (token != address(0) && msg.value == 0) {
+        if (token == address(0)) {
+            require(msg.value == amount, InvalidMsgVal());
+        } else if (token == WETH && msg.value != 0) {
+            require(msg.value == amount, InvalidMsgVal());
+            _safeTransferETH(WETH, amount); // wrap
+        } else {
+            require(msg.value == 0, InvalidMsgVal());
             safeTransferFrom(token, msg.sender, address(this), amount);
         }
-        depositFor(token, amount, address(this)); // transient storage tracker
+        depositFor(token, amount, address(this));
     }
 
-    /// @dev Keyed on (owner, token): two words, so unlike the mainnet router this
-    /// touches only scratch space and never has to save and restore the free
-    /// memory pointer.
-    function _useTransientBalance(address user, address token, uint256 amount)
-        internal
-        returns (bool credited)
-    {
+    /// @dev Keyed on (owner, token) — two words, so this stays in scratch space.
+    function _useTransientBalance(address user, address token, uint256 amount) internal returns (bool credited) {
         assembly ("memory-safe") {
             mstore(0x00, user)
             mstore(0x20, token)
@@ -438,19 +405,15 @@ contract zRouterLite {
 
     // ** PERMIT HELPERS
     //
-    // Both of these exist to be a leg of a `multicall`: sign, then permit and
-    // swap in one transaction instead of approve-then-swap in two. `multicall`
-    // delegatecalls into this contract, so `msg.sender` inside a permit leg is
-    // still the signer, not the router.
+    // Both are meant to be a `multicall` leg: sign, then permit and swap in one
+    // transaction. `multicall` delegatecalls, so `msg.sender` here is the signer.
 
     function permit(address token, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s) public payable {
         IERC2612(token).permit(msg.sender, address(this), value, deadline, v, r, s);
     }
 
-    /// @dev Permit2 SignatureTransfer, not AllowanceTransfer: the signature both
-    /// authorises and moves the tokens, so nothing is left approved afterwards.
-    /// The pulled amount is credited transiently, which is what lets the next
-    /// `multicall` leg spend it without a second transfer.
+    /// @dev SignatureTransfer, not AllowanceTransfer: nothing is left approved.
+    /// The pull is credited transiently for the next leg to spend.
     function permit2TransferFrom(
         address token,
         uint256 amount,
@@ -511,6 +474,9 @@ contract zRouterLite {
         v3pool = _computeV3pool(token0, token1, fee);
     }
 
+    /// @dev The `mstore(0x35, ...)` pair overlaps the free memory pointer at 0x40
+    /// and looks like it corrupts it. It does not: the pointer is under 2**88, so
+    /// it lives entirely in bytes 0x55-0x5f, which neither store touches.
     function _computeV3pool(address token0, address token1, uint24 fee) internal pure returns (address v3pool) {
         bytes32 salt = _hash(token0, token1, fee);
         assembly ("memory-safe") {
@@ -568,10 +534,9 @@ contract zRouterLite {
         emit OwnershipTransferred(msg.sender, _owner = newOwner);
     }
 
-    /// @dev Calls out AS the router, which is why it is both trust-gated and
-    /// wrapped in the callback lock: while an arbitrary target has control, the
-    /// V3 and V4 callbacks must not be reachable, or the target could drive a
-    /// swap that names someone else as `payer`.
+    /// @dev Calls out AS the router, so it is both trust-gated and wrapped in the
+    /// callback lock — otherwise the target could drive a swap naming someone
+    /// else as `payer`.
     function execute(address target, uint256 value, bytes calldata data) public payable returns (bytes memory result) {
         require(_isTrustedForCall[target], Unauthorized());
         assembly ("memory-safe") {
@@ -592,12 +557,10 @@ contract zRouterLite {
 
     // ** SNWAP - GENERIC EXECUTOR
 
-    /// @dev Permissionless, unlike `execute`, because the outbound call is made
-    /// by `safeExecutor` rather than by this contract: that helper holds no
-    /// approvals and no balances, so an arbitrary `executor` gets no authority it
-    /// did not already have. The accounting is a before/after balance delta on
-    /// `recipient`, so whatever the executor does internally is irrelevant —
-    /// only what lands is paid for.
+    /// @dev Permissionless, unlike `execute`: the call is made by `safeExecutor`,
+    /// which holds no approvals and no balances, so an arbitrary `executor` gains
+    /// nothing. Payment is a before/after balance delta on `recipient` — only
+    /// what lands is paid for.
     function snwap(
         address tokenIn,
         uint256 amountIn,
@@ -671,12 +634,12 @@ contract zRouterLite {
     }
 }
 
-// ** ROBINHOOD CHAIN (4663) CONSTANTS
+// ** ROBINHOOD CHAIN (4663)
 //
-// Every address below was read off the chain rather than copied from a docs page:
-// WETH agrees between SwapRouter02.WETH9() and UniswapV2Router02.WETH(); both
-// init-code hashes were confirmed by CREATE2-reconstructing a live pool from its
-// factory; the PoolManager is the one StateView.poolManager() points at.
+// Read off the chain, not copied from a docs page: WETH agrees between
+// SwapRouter02.WETH9() and UniswapV2Router02.WETH(), both init-code hashes were
+// confirmed by rebuilding a live pool address from its factory, and the
+// PoolManager is the one StateView.poolManager() returns.
 
 address constant WETH = 0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73;
 
@@ -746,7 +709,7 @@ library BalanceDeltaLibrary {
     }
 }
 
-// Solady safe transfer helpers:
+// Solady:
 
 error TransferFailed();
 
@@ -821,7 +784,7 @@ function balanceOfAccount(address token, address account) view returns (uint256 
     }
 }
 
-// Low-level WETH helpers - we know WETH so we can make assumptions:
+// WETH is known, so these skip the return-value checks:
 
 function wrapETH(address pool, uint256 amount) {
     assembly ("memory-safe") {
@@ -887,9 +850,8 @@ function depositFor(address token, uint256 amount, address _for) {
     }
 }
 
-// modified from 0xAC4c6e212A361c968F1725b4d055b47E63F80b75 - sushi yum
-
-/// @dev SafeExecutor - has no token approvals, safe for arbitrary external calls
+/// @dev Holds no approvals and no balances, so arbitrary calls made through it
+/// carry no authority. Modified from 0xAC4c6e212A361c968F1725b4d055b47E63F80b75.
 contract SafeExecutor {
     function execute(address target, bytes calldata data) public payable {
         assembly ("memory-safe") {
