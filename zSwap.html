@@ -16,9 +16,6 @@ body{background:var(--b);color:var(--f);font-family:Helvetica,Arial,sans-serif;m
 #addr{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
 #addr.on:hover{color:var(--f);text-decoration:line-through}
 #sd{position:fixed;top:.85em;right:.85em;width:1.75em;height:1.75em;display:inline-flex;align-items:center;justify-content:center;border:0;background:transparent;cursor:pointer;color:var(--m);opacity:.4;z-index:2;padding:0;transition:opacity .15s}#sd:hover,#sd:focus-visible{opacity:.9}
-/* The mark is a link to the DAO that governs this page, so the anchor carries
-   the placing and the svg simply fills it. The svg keeps pointer-events off so
-   the whole square is one target rather than the glyph's strokes. */
 #logoLink{position:fixed;top:.85em;left:.85em;width:1.75em;height:1.75em;z-index:1;
 display:block;opacity:.85;transition:opacity .15s}
 #logoLink:hover,#logoLink:focus-visible{opacity:1}
@@ -87,10 +84,6 @@ left:var(--at,50%);transform:translateX(-1.5px)}
 left:0;right:0}
 .lqnew .primary{margin-top:.5em;min-height:2.6em;font-size:.85em}
 #listNote{max-width:22em;margin:.5em auto 0;font-size:10px;color:var(--m);letter-spacing:.06em;text-align:center}
-/* The list arrives over an RPC, so on a cold load the built-in names sit there
-   for a beat and then are replaced. Saying nothing reads as finished; a spinner
-   says the page is still asking, and the rows fade rather than snap when the
-   answer lands. Both stop under prefers-reduced-motion. */
 .spin{display:inline-block;width:.75em;height:.75em;margin-left:.45em;vertical-align:-.1em;
 border:1px solid var(--e2);border-top-color:var(--m);border-radius:50%;animation:sp .7s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
@@ -113,10 +106,6 @@ white-space:nowrap;flex:0 0 auto;text-align:center;transition:background .15s,co
 #stat:not(:empty){margin-bottom:.5em}
 #stat a{color:var(--f);text-decoration:underline}
 .hdr{display:flex;justify-content:space-between;align-items:center;gap:.5em}
-/* These two panels follow the receive box directly and had no top margin at
-   all, so their headers sat flush against its border - "Liquidity  ETH/WSTETH"
-   reading as part of the box above rather than as the start of a new section.
-   `#book` and `#chBox` already space themselves; these were simply missed. */
 #lqPanel,#lnPanel{margin-top:.85em}
 #lqPanel>.hdr{margin-bottom:.5em}
 .tabs{display:flex;gap:1.35em;margin-bottom:.85em;border-bottom:1px solid var(--e)}
@@ -342,9 +331,9 @@ background:var(--e);margin:.5em auto .1em}
 <div class="card">
 <div class="meta"><span id="addr" role="button" tabindex="0" title="Connect a wallet">Connect</span><label id="slipL" title="Slippage"><span>Slippage </span><input id="slip" type="number" value="0.5" min="0.01" max="10" step="0.1">%</label><button id="lq" title="Liquidity for this pair" aria-label="Toggle liquidity mode" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.2c3.6 4 6 7.2 6 10.1a6 6 0 0 1-12 0c0-2.9 2.4-6.1 6-10.1z"/></svg></button><button id="ln" title="Launch a coin" aria-label="Toggle launch mode" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/></svg></button><button id="wn" title="Claim a .wei name" aria-label="Toggle names mode" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" fill-rule="evenodd" shape-rendering="crispEdges" aria-hidden="true"><path d="M3 1h1v1H3zM5 2h1v1H5zM10 2h1v1h-1zM12 1h1v1h-1zM4 4h8v1H4zM3 5h10v1H3zM2 6h12v3H2zM3 9h10v1H3zM4 10h8v1H4zM5 11h2v1H5zM9 11h2v1H9zM2 12h3v1H2zM7 12h2v1H7zM11 12h3v1h-3zM1 13h2v1H1zM13 13h2v1h-2zM3 6h3v2H3zM10 6h3v2h-3z"/></svg></button><button id="lk" title="Copy shareable link" aria-label="Copy shareable link"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5.5 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v.5"/></svg></button><button id="th" title="Toggle theme" aria-label="Toggle theme"></button></div>
 <div class="tabs" role="tablist"><button id="tabSwap" class="on" role="tab" aria-selected="true">Swap</button><button id="tabSend" role="tab" aria-selected="false">Send</button><button id="tabBook" role="tab" aria-selected="false">Orders</button></div>
-<div class="panel"><div class="hdr"><small id="payL">You pay</small><span class="pill"><span id="fromIcon"></span><select id="fromSel"></select><button type="button" class="tkb" id="fromPick" aria-haspopup="listbox" aria-expanded="false"><span class="tkbs"></span><span class="tkbc">▾</span></button></span></div><div class="row" id="amtRow"><input id="amt" type="text" inputmode="decimal" placeholder="0.0" aria-label="Amount to pay" autocomplete="off" spellcheck="false"></div><small id="bal"></small></div>
+<div class="panel"><div class="hdr"><small id="payL">You pay</small><span class="pill"><span id="fromIcon"></span><select id="fromSel" aria-labelledby="payL"></select><button type="button" class="tkb" id="fromPick" aria-haspopup="listbox" aria-expanded="false"><span class="tkbs"></span><span class="tkbc">▾</span></button></span></div><div class="row" id="amtRow"><input id="amt" type="text" inputmode="decimal" placeholder="0.0" aria-label="Amount to pay" autocomplete="off" spellcheck="false"></div><small id="bal"></small></div>
 <button id="flip" class="flip" title="Flip tokens" aria-label="Flip tokens"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14m-5-5 5 5 5-5"/></svg></button>
-<div class="panel" id="rcvPanel"><div class="hdr"><small id="rcvHdr">You receive</small><span class="pill"><span id="toIcon"></span><select id="toSel"></select><button type="button" class="tkb" id="toPick" aria-haspopup="listbox" aria-expanded="false"><span class="tkbs"></span><span class="tkbc">▾</span></button></span></div><div class="row" id="outRow"><input id="outAmt" type="text" inputmode="decimal" placeholder="0.0" aria-label="Amount to receive" autocomplete="off" spellcheck="false"></div><small id="bal1" class="hide"></small><small id="rate" role="status" aria-live="polite"></small><small id="rankBox" class="rank hide"></small></div>
+<div class="panel" id="rcvPanel"><div class="hdr"><small id="rcvHdr">You receive</small><span class="pill"><span id="toIcon"></span><select id="toSel" aria-labelledby="rcvHdr"></select><button type="button" class="tkb" id="toPick" aria-haspopup="listbox" aria-expanded="false"><span class="tkbs"></span><span class="tkbc">▾</span></button></span></div><div class="row" id="outRow"><input id="outAmt" type="text" inputmode="decimal" placeholder="0.0" aria-label="Amount to receive" autocomplete="off" spellcheck="false"></div><small id="bal1" class="hide"></small><small id="rate" role="status" aria-live="polite"></small><small id="rankBox" class="rank hide"></small></div>
 <div id="lqPanel" class="hide"><div class="hdr"><small>Liquidity</small><small id="lqSub"></small></div><div id="lqList"></div></div>
 <div id="lnPanel" class="hide">
 <div class="hdr lnhdr"><small id="lnTitle">Launch a coin</small><small id="lnSub">0.4% of each trade goes to the creator</small></div>
@@ -524,11 +513,6 @@ const RETH_ICON=`<svg width="20" height="20" viewBox="0 0 32 32"><circle cx="16"
 const BOLD_ICON=`<svg width="20" height="20" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="#63D77D"/><path fill-rule="evenodd" clip-rule="evenodd" d="M12.1719 4.56641H8.58203V26.1016H15.7617V25.2422C16.8398 25.793 18.0586 26.1055 19.3555 26.1055C23.7148 26.1055 27.25 22.5703 27.25 18.207C27.25 13.8438 23.7148 10.3086 19.3555 10.3086C18.0586 10.3086 16.8398 10.6211 15.7617 11.1719V4.56641H12.1719ZM15.7617 11.1719C13.207 12.4805 11.457 15.1406 11.457 18.207C11.457 21.2734 13.207 23.9336 15.7617 25.2422V11.1719Z" fill="#1C1D4F"/></svg>`;
 const TOKENS=[
 {sym:"ETH",   addr:ZERO, dec:18, icon:ETH_ICON},
-/* SECOND, TO MATCH THE RANKING. The built-in list is what the page shows for
-   the moment before zList answers, and every index-based fallback here reads
-   the same slot in both - so a slot holding one token now and another in a
-   second is a visible jump for no reason. wstETH is rank 1 on chain; it is
-   rank 1 here too, and WETH moves down a place to make room. */
 {sym:"wstETH",addr:"0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0",dec:18,icon:WSTETH_ICON},
 {sym:"WETH",  addr:WETH, dec:18, icon:ETH_ICON},
 {sym:"rETH",  addr:"0xae78736cd615f374d3085123a210448e74fc6393",dec:18,icon:RETH_ICON},
@@ -764,8 +748,6 @@ const setListNote=t=>{
 const el=document.getElementById("listNote");
 if(!el)return;
 el.textContent=t||"";
-// A trailing ellipsis is this page's mark for "still waiting", so the spinner
-// follows it rather than needing a second flag to keep in step.
 if(t&&/\u2026$/.test(t)){const s=document.createElement("span");s.className="spin";el.appendChild(s)}
 el.classList.toggle("hide",!t)};
 const setListSource=w=>setListNote(w?"Built-in token list — "+w:"");
@@ -900,8 +882,10 @@ return BigInt((ip||"0")+fp.padEnd(dec,"0"));
 };
 const formatUnits=(v,dec)=>{
 if(!dec)return BigInt(v).toString();
-const s=BigInt(v).toString().padStart(dec+1,"0");
-const ip=s.slice(0,-dec);
+v=BigInt(v);
+const sign=v<0n?"-":"";
+const s=(v<0n?-v:v).toString().padStart(dec+1,"0");
+const ip=sign+s.slice(0,-dec);
 const fp=s.slice(-dec).replace(/0+$/,"");
 return fp?`${ip}.${fp}`:ip;
 };
@@ -936,7 +920,11 @@ const NO_WALLET="No wallet detected.";
 let PROV=null;
 const prov=()=>PROV||window.ethereum;
 const RPC_SEED=["https://ethereum-rpc.publicnode.com","https://eth-mainnet.public.blastapi.io"];
+const RPC_STORE="zswap:rpc";
+const rpcPin=()=>{try{const v=localStorage.getItem(RPC_STORE);
+if(v&&/^https:\/\/\S+$/i.test(v))return v}catch{}return""};
 let rpcPool=RPC_SEED.slice(),rpcPi=0,curated=0,curating=0,curatedTry=0;
+const GAS_FLOOR=3000000000n;
 const SEL_LIST="d77e4c79";
 const decStrArr=h=>{const b=strip0x(h||"");if(b.length<128)return[];
 const W=i=>parseInt(b.slice(i*64,i*64+64),16);
@@ -977,23 +965,13 @@ if(!a1||!a2||strip0x(a1)!==strip0x(a2))return;
 const urls=decStrArr(a1).map(s=>s.trim()).filter(s=>/^https:\/\/\S+$/.test(s));
 if(!urls.length)return;
 rpcPool=[...new Set(urls.concat(rpcPool,RPC_SEED))];
+curated=1;
 }catch{}
-finally{curated=1;curating=0}};
+finally{curating=0}};
 const OX_ETH="0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 const OKX_APPROVE="0x40aA958dd87FC8305b97f2BA922CDdCa374bcD7f";
 const bmin=(a,b)=>a<b?a:b,bmax=(a,b)=>a>b?a:b;
 const SEL_SLIST="e3b06401",SEL_EXEC="495c73b0",SEL_FILL="0a1b4c9f";
-/* PINNED, NOT DISCOVERED. These were read off the contract serving the page,
-   which meant first working out WHICH contract that was - and the only way the
-   page can tell is if its own address is the first label of the hostname. On
-   zswap.wei, zerofi.wei, zerofi.sh or an IPFS gateway there is no address in
-   the host, so the lookup returned nothing and every lane below it was skipped
-   in silence: no roster, no endpoints, not one request. The page ran degraded
-   on precisely the names people are sent to.
-   Reading them was ceremony in any case - a value that did not equal the pin
-   was refused, so the pin was always the real answer. Naming them here is the
-   same trust model stated honestly: the page's own immutable bytes decide what
-   it talks to, and the host it was fetched from decides nothing. */
 const SOLVERS_PIN="0x1Dfbb2f41B596F72187370469074C46de60dA2e3";
 const RPCS_PIN="0x8C7348D039f58C4e9cfA936EF410eec759213b12";
 const SOLVER_FILL_PIN="0x7A2f21e476cA2ADde027BC868c5a083338EEfE54";
@@ -1163,10 +1141,12 @@ return{out:BigInt(j.dstAmount),target:j.tx.to,spender:j.tx.to,data:j.tx.data}},
 const RPC_TRIES=4;
 const nodeRead=async(method,params)=>{
 let last;
+const pin=rpcPin();
 const tries=Math.min(rpcPool.length,RPC_TRIES);
-for(let i=0;i<tries;i++){
-const u=rpcPool[(rpcPi+i)%rpcPool.length];
-try{const r=await httpRead(u,method,params);rpcPi=(rpcPi+i)%rpcPool.length;
+for(let i=pin?-1:0;i<tries;i++){
+const j=(rpcPi+i)%rpcPool.length;
+const u=i<0?pin:rpcPool[j];
+try{const r=await httpRead(u,method,params);if(i>=0)rpcPi=j;
 if(!curated)loadCurated().catch(()=>{});
 return r}
 catch(e){last=e;if(!e.retry)throw e}}
@@ -1396,7 +1376,7 @@ for(let i=0;i<600;i++){
 try{const st=await rpc("wallet_getCallsStatus",[id]);
 const rs=(st&&st.receipts)||[];
 if(rs.some(r=>r&&r.status==="0x0"))throw Error("batch reverted");
-const last=rs[rs.length-1],x=last&&(last.transactionHash||last.hash);
+const last=rs.length>=calls.length?rs[rs.length-1]:null,x=last&&(last.transactionHash||last.hash);
 if(x)return x;
 const q=String(st&&st.status);
 if(q==="400"||q==="500"||/fail|revert|reject/i.test(q))throw Error("batch failed");
@@ -1496,9 +1476,6 @@ const safeDataUrl=u=>{u=String(u??"").trim();
 return u.length<=32768&&/^data:image\/[a-z.+-]+;base64,[A-Za-z0-9+/=]+$/i.test(u)?u:""};
 const genIcon=sym=>`<svg width="20" height="20" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#999"/><text x="16" y="21" text-anchor="middle" fill="#fff" font-size="13" font-weight="600" font-family="system-ui">${(safeSym(sym)[0]||"?").toUpperCase()}</text></svg>`;
 const STORE="zswap:custom";
-/* One entry, rewritten in place. A deep-linked token is already in TOKENS by the
-   time anyone acts on it, so `addCustomToken` returns early and never reaches its
-   own persist - this is what the back path calls to keep what was paid for. */
 function keepToken(t){
 if(!t||!t.addr)return;
 const a=t.addr.toLowerCase();
@@ -1544,9 +1521,6 @@ const dec=+t?.dec;
 if(/^0x[0-9a-f]{40}$/.test(addr)&&Number.isInteger(dec)&&dec>=0&&dec<=36&&!TOKENS.some(x=>x.addr.toLowerCase()===addr)){
 const sym=String(t.sym||"?").replace(/[<>&"'`]/g,"").replace(/[\u0000-\u001f\u007f]/g,"").slice(0,16)||"?";
 TOKENS.push({sym,addr,dec,std:t.std==="nft"?"nft":"ft",cust:1,icon:genIcon(sym),
-/* Carried so the Causes group is populated on load rather than only after the
-   token is selected and re-probed. `cbLook` still verifies before anything is
-   priced, so a stale flag misgroups a row and nothing more. */
 ...(t.cause?{cause:1}:{})});
 }
 }}catch{}
@@ -1558,7 +1532,7 @@ const readBal=async t=>BigInt(t.addr===ZERO
 ?await rpc("eth_getBalance",[account,L])
 :await rpc(C,[{to:t.addr,data:"0x"+SEL_BALANCEOF+encAddr(account)},L]));
 const showBal=(el,v,dec)=>{const n=+formatUnits(v,dec);
-const pretty=n>=1?n.toLocaleString("en-US",{maximumFractionDigits:4}):n.toPrecision(4);
+const pretty=n>=1?n.toLocaleString("en-US",{maximumFractionDigits:4}):sigAmt(v,dec,4);
 el.innerHTML=`Balance: ${pretty} <a href="#" title="Use maximum (leaves gas for ETH)">Max</a>`};
 async function refreshBalance(){
 const f=TOKENS[fromSel.value];
@@ -2116,11 +2090,6 @@ setTimeout(()=>{if(waiters[id]){delete waiters[id];rej(Error("relay timeout"))}}
 function handle(raw){
 let m;try{m=JSON.parse(raw)}catch{return}
 if(m.method==="irn_subscription"){
-// A relay push can land in the window between `drop` and the reload it
-// triggers. `sendRaw` throws once the session is closed, and this runs
-// straight off `sock.onmessage`, so the ack has to be skipped rather than
-// thrown out of the socket callback. A closed session has no subscribers
-// left either, so there is nothing to dispatch.
 if(!alive)return;
 sendRaw({id:m.id,jsonrpc:"2.0",result:true});
 const d=m.params&&m.params.data;
@@ -2158,20 +2127,12 @@ const pTopic=await U.topicOf(symKey);
 const kp=await U.kex();
 const proposeId=rpcId();
 let settle=null;
-// The pairing promise is parked in `waiters` under a non-numeric key, the way
-// session requests use "s". `handle` looks entries up by the numeric id it
-// reads off the wire, so "p" can never be hit there; the point is `drop`,
-// which rejects everything in `waiters`. Without this the relay could close
-// mid-pairing and leave the QR modal waiting on a promise nobody can settle.
 const pKey="p"+proposeId;
 const done=new Promise((res,rej)=>{settle={
 res:v=>{delete waiters[pKey];res(v)},
 rej:e=>{delete waiters[pKey];rej(e)}}});
 waiters[pKey]={res:v=>settle.res(v),rej:e=>settle.rej(e)};
 await subscribe(pTopic,async msg=>{
-// The subscription dispatcher swallows what this handler throws, so a
-// failure in the key exchange or the inner subscribe has to be handed to
-// the pairing promise here or it goes nowhere.
 try{
 const m=U.decode(symKey,msg);
 if(!m||m.id!==proposeId)return;
@@ -2358,19 +2319,15 @@ if(p<bestP){bestP=p;best=m;bestK=k}}
 return{size:SZ,modules:best,mask:bestK}}
 return{build,_encode:encode};
 })();
-const RPC_STORE="zswap:rpc";
-const wcNode=()=>{try{const v=localStorage.getItem(RPC_STORE);
-if(v&&/^https:\/\/\S+$/i.test(v))return v}catch{}return rpcPool[rpcPi]};
+const wcNode=()=>rpcPin()||rpcPool[rpcPi];
 const wcHost=()=>{try{return new URL(wcNode()).host}catch{return wcNode()}};
 const WC_SIGN=["eth_sendTransaction","eth_signTransaction","personal_sign","eth_sign",
 "eth_signTypedData","eth_signTypedData_v3","eth_signTypedData_v4"];
 const wcToWallet=m=>m.indexOf("wallet_")===0||WC_SIGN.indexOf(m)>=0;
 async function wcRpc(method,params){
-let r;
-try{r=await httpRead(wcNode(),method,params)}
+try{return await nodeRead(method,params)}
 catch(e){if(e&&e.code!=null)throw e;
-throw Error("Could not reach "+wcHost()+" for reads. Pick another node from the WalletConnect panel.")}
-return r}
+throw Error("Could not reach "+wcHost()+" for reads. Pick another node from the WalletConnect panel.")}}
 const wcRelay=WCCLI(WCU,u=>new WebSocket(u));
 const qrSvg=m=>{let d="";
 for(let r=0;r<m.size;r++)for(let c=0;c<m.size;c++)if(m.modules[r][c])d+="M"+c+" "+r+"h1v1h-1z";
@@ -2574,7 +2531,9 @@ const t=TOKENS[toSel.value];
 if(!t)return;
 let reserve=0n;
 if(t.addr===ZERO){
-try{reserve=BigInt(await rpc("eth_gasPrice",[]))*lqReserveGas()}catch{}
+const g=lqReserveGas();
+try{reserve=BigInt(await rpc("eth_gasPrice",[]))*g}catch{}
+if(reserve<=0n)reserve=GAS_FLOOR*g;
 }
 const max=toBalance>reserve?toBalance-reserve:0n;
 if(lqFillMax(t,max))return;
@@ -2589,9 +2548,10 @@ const f=TOKENS[fromSel.value];
 if(!f)return;
 let reserve=0n;
 if(f.addr===ZERO){
-try{reserve=BigInt(await rpc("eth_gasPrice",[]))
-*(lqMode?lqReserveGas():tab==="swap"?900000n:tab==="book"?350000n
-:+dly.value?(tipCk.checked?200000n+TIP_GAS:200000n):30000n)}catch{}
+const g=lqMode?lqReserveGas():tab==="swap"?900000n:tab==="book"?350000n
+:+dly.value?(tipCk.checked?200000n+TIP_GAS:200000n):30000n;
+try{reserve=BigInt(await rpc("eth_gasPrice",[]))*g}catch{}
+if(reserve<=0n)reserve=GAS_FLOOR*g;
 }
 const max=fromBalance>reserve?fromBalance-reserve:0n;
 if(lqMode&&lqFillMax(f,max))return;
@@ -2641,16 +2601,12 @@ if(!auto)autoQ=0;
 syncIcons();
 fcSync();
 cbSync();
-// Claimed before the early returns, not after them. Every in-flight quote is
-// retired by `my!==seq`, and the panel a quote paints into belongs to swap
-// mode alone; leaving on any of these four paths without bumping would let a
-// quote that is already obsolete finish and write over the LP or book fields.
 const my=++seq;
+quoting=false;
 if(wnMode)return;
 if(lqMode)return loadLq();
 if(tab==="book")return render();
 if(tab==="send")return updateSend();
-quoting=false;
 last=null; rate.textContent=""; if(!lqMode&&!lnMode)rcvHdr.textContent="You receive"; render();
 const f=TOKENS[fromSel.value], t=TOKENS[toSel.value];
 if(!f||!t)return;
@@ -2754,6 +2710,7 @@ const mcRaw=(await Promise.all(mc3Split(_rq,QPAIR)
 if(my!==seq)return;
 const dec=_rq.map((q,i)=>{try{return mcRaw[i]?decQ(mcRaw[i],q.sb||slipBps,!isIn,q.u,q.v,q.S,q.mv):null}catch{return null}});
 for(const g of jobs)pick(g.length>1?merge(dec[g[0]],dec[g[1]]):dec[g[0]]);
+const zr=r;
 if(isIn&&!(dec[jobs[1][0]]||dec[jobs[1][1]]||dec[jobs[2][0]]||dec[jobs[2][1]])){
 const hq=await hubRoute(f,t,swapAmt,slipBps,deadline,rcv||acct||ZERO,acct||ZERO,quoteBlock).catch(()=>null);
 if(my!==seq)return;
@@ -2863,13 +2820,14 @@ if(!isIn&&tokSide)return wei*inA/outA;
 return null;
 };
 const tailDelta=swapAmt-tailAmt;
-const seedOut=isIn&&tail&&r.best.amountOut>tail.best.amountOut
+const tailFits=!!tail&&r===zr;
+const seedOut=isIn&&tailFits&&r.best.amountOut>tail.best.amountOut
 ?r.best.amountOut-tail.best.amountOut:r.best.amountOut;
-const seedIn=!isIn&&tail&&r.best.amountIn>tail.best.amountIn
+const seedIn=!isIn&&tailFits&&r.best.amountIn>tail.best.amountIn
 ?r.best.amountIn-tail.best.amountIn:r.best.amountIn;
 let p=isIn
-?planBookExactIn(candidates,swapAmt,seedOut,tail&&seedOut!==r.best.amountOut?tailDelta:r.best.amountIn)
-:planBookExactOut(candidates,swapAmt,seedIn,tail&&seedIn!==r.best.amountIn?tailDelta:r.best.amountOut);
+?planBookExactIn(candidates,swapAmt,seedOut,tailFits&&seedOut!==r.best.amountOut?tailDelta:r.best.amountIn)
+:planBookExactOut(candidates,swapAmt,seedIn,tailFits&&seedIn!==r.best.amountIn?tailDelta:r.best.amountOut);
 plannerBounded=!!(p&&p.bounded);
 let amm=null,ammFor=null;
 for(let round=0;p&&(isIn?p.ammIn:p.ammOut)&&round<2;round++){
@@ -2924,7 +2882,7 @@ amm?amm.callData:"0x",p.fills,f.addr,t.addr,recipient,acct,deadline,p.bookIn,p.b
 );
 }
 r={...r,best:{...r.best,amountIn:expectedIn,amountOut:expectedOut},callData,
-fills:p.fills,
+fills:p.fills,pools:undefined,
 fundedCallData,amountLimit:isIn?minOut:totalBudget,msgValue:f.addr===ZERO?totalBudget:0n,
 slipBps:amm&&amm.slipBps,
 to:null,spender:f.addr===ZERO?null:ZROUTER,
@@ -3127,11 +3085,6 @@ const car=document.createElement("span");
 car.className="rk";
 car.textContent="\u25be";
 car.title="Compare venues";
-/* REACHABLE WITHOUT A MOUSE. This caret is the only control that opens the
-   venue table, and the docs tell people to open it - so an onclick on a bare
-   span made that instruction impossible to follow on a keyboard. Kept as a
-   span to leave the type scale alone; given the role, the tab stop and the
-   two keys a button would have answered to. */
 car.setAttribute("role","button");
 car.tabIndex=0;
 car.setAttribute("aria-expanded",rankBox.classList.contains("hide")?"false":"true");
@@ -3252,7 +3205,8 @@ stat.textContent=msg;
 }
 });
 }
-flip.onclick=()=>{pairChosen=true;const a=fromSel.value,b=toSel.value,v=outAmt.value.replace(/,/g,"");fromSel.value=b;toSel.value=a;if(v&&!isNaN(+v))amt.value=v;setMode("in");fitFont(amt);syncDisabled();syncNftUI();refreshBalance();loadChart();update()};
+flip.onclick=()=>{pairChosen=true;const a=fromSel.value,b=toSel.value,v=outAmt.value.replace(/,/g,"");fromSel.value=b;toSel.value=a;
+amt.value=(v&&!isNaN(+v))?v:"";setMode("in");fitFont(amt);syncDisabled();syncNftUI();refreshBalance();loadChart();update()};
 const sameAcct=(a,b)=>!!a&&!!b&&a.toLowerCase()===b.toLowerCase();
 const wkBind=eth=>{
 if(!eth||eth.__zb)return;
@@ -3389,10 +3343,6 @@ if(/^0x0{40}$/i.test(ad(0))||at(1))stale();
 if(ad(4).toLowerCase()!==inA||ad(6).toLowerCase()!==outA)stale();
 if(at(10)<f.pay)stale();
 }else if(f.board.toLowerCase()===DUTCH.toLowerCase()){
-/* NOT JUST "IT EXISTS". The listing's own `remaining` (9) and `expiry` (10)
-   are already in the return this just decoded, and neither was looked at - so
-   a lot someone else has partly taken, or one that lapsed while the quote sat
-   on screen, passed here and reverted on chain with the whole hybrid route. */
 if(s.length<11*64||at(0)===0n)stale();
 if(at(9)<f.get)stale();
 if(at(10)&&BigInt(Math.floor(Date.now()/1e3))>at(10))stale();
@@ -3404,14 +3354,6 @@ if(w(1)!==1n)stale();
 const v2=wds===11,iA=v2?7:2,iB=v2?9:4;
 if(ad(iA).toLowerCase()!==outA||ad(iB).toLowerCase()!==inA)stale();
 if(w(iB+1)<f.pay)stale();
-/* AND THAT IT STILL PAYS OUT WHAT WAS PLANNED. Only the payment side was
-   checked. A maker can `replaceOrder` the same id to a smaller `amountA` at
-   the same price - the payment still fits, so this passed - and then the fill
-   reverts on its own `minAmountA`, taking the AMM leg and the gas with it.
-   `preflightAsk` checks both sides for the single-order button; the multi-leg
-   route is where it matters more, because one stale leg voids the whole route.
-   Expiry too: the book filters lapsed orders when it PAINTS, so a book left
-   open offers a Fill on an order that has since expired. */
 if(v2&&w(iA+1)<f.get)stale();
 if(v2&&w(3)&&BigInt(Math.floor(Date.now()/1e3))>w(3))stale();
 }
@@ -3912,8 +3854,8 @@ return deduped;
 }
 const loadBook=()=>loadBookRun().catch(()=>{});
 async function loadBookRun(){
-if(tab!=="book"){book.innerHTML="";bookRows=[];syncBook(0);return}
 const my=++bookSeq;
+if(tab!=="book"){book.innerHTML="";bookRows=[];syncBook(0);return}
 const live=(await Promise.all(BOARDS.map(b=>
 rpc("eth_getCode",[b.a,L]).then(c=>(c||"").length>4?b:null,()=>null)))).filter(Boolean);
 if(my!==bookSeq)return;
@@ -3923,9 +3865,6 @@ book.innerHTML='<h6><span>Orderbook</span></h6><div class="o"><span class="l"><i
 syncBook(0);book.classList.remove("hide");return}
 let rows=null;
 try{rows=await lensBookRows(my)}catch{rows=null}
-/* BELOW THE GUARD, like every other write in here. A superseded scan that
-   returns on the next line would still have left its own `capped` behind, so a
-   stale run could stamp "scan capped" on a fresher one's book. */
 if(my!==bookSeq)return;
 bookTrunc=!!(rows&&rows.capped);
 if(!rows)rows=[];
@@ -4128,15 +4067,20 @@ else if(a&&a.display_type==="number")v=String(v);
 return`<dt>${t}</dt><dd>${safeSym(v).slice(0,28)}</dd>`}).join("");
 return(rows?`<dl>${rows}</dl>`:"")+(c.img?`<img src="${c.img}" alt="" loading="lazy">`:"");
 }
+let inspectSeq=0;
 async function inspect(el,k){
 const box=el.parentNode.querySelector(".ic");
 if(!box)return;
-if(box.innerHTML){box.innerHTML="";el.setAttribute("aria-expanded","false");return}
+if(box.innerHTML){box.innerHTML="";delete box.dataset.job;el.setAttribute("aria-expanded","false");return}
 el.setAttribute("aria-expanded","true");
 const at=k.lastIndexOf(":"),board=k.slice(0,at),id=BigInt(k.slice(at+1));
+const job=String(++inspectSeq);box.dataset.job=job;
 box.textContent="Reading the receipt\u2026";
-try{box.innerHTML=cardHtml(await loadCard(board,id))||"No card for this order."}
-catch{box.textContent="This receipt could not be read."}
+let html;
+try{html=cardHtml(await loadCard(board,id))||"No card for this order."}
+catch{html=""}
+if(box.dataset.job!==job)return;
+if(html)box.innerHTML=html;else box.textContent="This receipt could not be read.";
 }
 const BOOK_TYPES=[["all","All"],["limit","Limit"],["dutch","Dutch"],["bid","Bids"],["nft","NFT"]];
 const emptyBook=()=>{
@@ -4492,7 +4436,7 @@ pos.innerHTML=html;
 }
 pos.addEventListener("click",async e=>{
 const m=e.target.closest('button[data-a="m"]');
-if(m){posShown+=POSPAGE;m.disabled=true;loadPos();return}
+if(m){posShown+=POSPAGE;m.disabled=true;Promise.resolve(loadPos()).finally(()=>{if(m.isConnected)m.disabled=false});return}
 const b=e.target.closest("button[data-t]");
 if(!b)return;
 b.disabled=true;
@@ -4710,6 +4654,7 @@ for(const el of [amtRow,outRow])if(el)el.classList.toggle("hide",!show);
 };
 function lqSet(on){
 if(on)cbDisarm();
+++seq;quoting=false;
 lqMode=on;
 if(on&&lnMode)lnSet(false);
 if(on&&wnMode)wnSet(false);
@@ -4893,13 +4838,10 @@ return {idx,sym:TOKENS[idx].sym,asked:cur.sym};
 async function loadLq(){
 const p=chPair();
 const my=++lqSeq;
-if(!p){lqList.innerHTML=`<div class="lqempty">Pick two different tokens.</div>`;lqSub.textContent="";lqRows=[];return}lqSyncAmounts();
+if(!p){lqList.innerHTML=`<div class="lqempty">Pick two different tokens.</div>`;lqSub.textContent="";lqRows=[];lqSyncAmounts();return}
+lqSyncAmounts();
 const [t0,t1]=p;
 lqSub.textContent=`${t0.sym} / ${t1.sym}`;
-/* SAME RULE AS THE TOKEN LIST: a background read that leaves the panel looking
-   settled gets the spinner, so "nothing here" and "still asking" are not the
-   same picture. User-initiated waits keep the bare ellipsis - the wallet is
-   already showing its own state for those, and a second spinner is noise. */
 lqList.innerHTML=`<div class="lqempty">Loading<span class="spin"></span></div>`;
 try{
 const who=account||ZERO;
@@ -5354,13 +5296,6 @@ const to=await lqTo();
 if(!to)return;
 ++busy;go.disabled=true;
 try{
-/* DELIBERATELY TIGHTER THAN THE SWAP SETTING, and not a copy of it. A seed's
-   LP is a pure function of the band, the price and the amounts - no chain
-   state enters it - so there is nothing here to tolerate the way a swap
-   tolerates drift, and `minLP` is the only thing that would notice the pool
-   being seeded out from under us during the factory's own transfer. A 10%
-   swap setting must not become a 10% seed bound; test/ui/liquidity.test.mjs
-   holds this to 0.5%. */
 const bps=BigInt(Math.round(Math.min(.5,Math.max(.01,+slip.value||.5))*100));
 const lp=BigInt(box.dataset.lp||0);
 if(lp<=0n){out.textContent="Preview the band first.";return}
@@ -5501,20 +5436,6 @@ footBurn.innerHTML=` \u00b7 <a href="https://etherscan.io/token/${BETH}?a=${TITH
 +`This is the running total, held as the BETH receipt minted to the DAO - the ether it stands for no longer exists.">`
 +`${(+formatUnits(v,18)).toFixed(4)} ETH burned</a>`;
 }
-/* KEYED TO THE BLOCK, NOT THE CLOCK. `floorPrice` is a function of the pool's
-   reserves, so it moves on every trade - and this was cached for five minutes
-   while the route it gets compared against is quoted fresh. A stale-versus-live
-   comparison is how the page ends up printing "Floor pays more: 0.111 ETH"
-   when the launcher will now pay 0.078: the user approves, redeems by hand,
-   sets their own minEthOut because this page does not give them one, and eats
-   the difference. The route quotes already carry a block; the floor now shares
-   it, so the two numbers always describe the same chain state.
-   AND A FAILED READ IS NOT AN ANSWER. Caching the `catch` as zero stored "no
-   floor" indistinguishably from a real zero, and `floorOut>0n` below then
-   suppressed BOTH branches - so one dropped eth_call silently removed every
-   mention of redemption for five minutes, and the user sells into a worse
-   price never knowing the option was there. Leave the key unset and let the
-   next quote ask again. */
 async function quoteFloor(tok,amount,block){
 if(!tok||tok===ZERO||amount<=0n)return 0n;
 const key=tok.toLowerCase();
@@ -5530,9 +5451,9 @@ return px>0n?px*amount/(10n**18n):0n;
 }
 const SEL_POOLOF="988b1fa7",SEL_OWED0="56ea33ee",SEL_OWED1="3ad57b72",SEL_COLLECT="a480ca79";
 const SEL_COLLECTMANY="c296057e";
-let fcMineToks=[],fcMineSeq=0;
+let fcMineToks=[],fcSeq=0;
 async function fcMine(){
-const my=++fcMineSeq;
+const my=++fcSeq;
 fcMineToks=[];
 if(!account||!LAUNCHED.length)return fcSync();
 try{
@@ -5541,7 +5462,7 @@ for(const x of LAUNCHED)reqs.push(
 {to:PLAUNCH,data:"0x"+SEL_CREATOROF+encAddr(x.addr)},
 {to:x.pool,data:"0x"+SEL_OWED0});
 const res=await mc3Deep(reqs);
-if(my!==fcMineSeq)return;
+if(my!==fcSeq)return;
 const acct=account.toLowerCase();
 let total=0n;const mine=[];
 for(let i=0;i<LAUNCHED.length;i++){
@@ -5562,7 +5483,7 @@ fcEl.title="Trading fees your launched coins have earned and nobody has swept ye
 +"The ether comes to you; the token side is burned, which raises the floor for your holders.";
 fcEl.classList.remove("hide");
 fcGo.onclick=fcCollectMine;
-}catch{if(my===fcMineSeq)fcSync()}
+}catch{if(my===fcSeq)fcSync()}
 }
 async function fcCollectMine(){
 if(!fcMineToks.length)return;
@@ -5581,20 +5502,13 @@ fcMine();
 }catch(e){err(e);b.disabled=false;b.textContent=label}
 }
 const FC_DUST=10000000000000n;
-let fcTok="",fcOwed=0n,fcSeq=0,fcOwner="";
+let fcTok="",fcOwed=0n,fcOwner="";
 const fcPool={},fcFloorPx={};
 async function fcSync(){
 const my=++fcSeq;
 const t=TOKENS[toSel.value],f=TOKENS[fromSel.value];
 const cand=[t,f].find(x=>x&&x.addr&&x.addr!==ZERO&&x.std!=="nft");
 fcTok="";fcOwed=0n;
-// Split three ways, because the two lines this element can carry answer to
-// different things. Whether the swap card is on screen at all comes first and
-// binds both — the sweep line used to sit above it and so became unhideable
-// once shown, and wnMode was missing, which left the fee line under the .wei
-// panel. Then the sweep line, which is about the account's own coins and does
-// not care what pair is selected; its markup survives the hide, so returning
-// only has to show it again. The pair candidate gates the per-pair line alone.
 if(lnMode||lqMode||wnMode||tab!=="swap"){fcEl.classList.add("hide");return}
 if(fcMineToks.length){fcEl.classList.remove("hide");return}
 if(!cand){fcEl.classList.add("hide");return}
@@ -5753,11 +5667,6 @@ if(g)g.onclick=cbAct;
 if(r)r.onclick=cbRelease;
 };
 if(buy){
-/* CHECK THE FLAG BEFORE PROMISING THE BURN. This branch returned first, so a
-   cause whose creator has switched `ragequittable` off and whose sale has
-   since closed was told "it can still be burned back" - and CB_TIP adds "at
-   any time". Both are false: `ragequit` reverts. The honest sentence already
-   existed four lines down and was simply unreachable in this state. */
 if(!open||left<=0n)
 return rqOff
 ?paint(msg(`Backing for ${safeSym(tok.sym)} has closed, and burn-back is switched off \u2014 it cannot be redeemed`),
@@ -5775,8 +5684,6 @@ let units=pay*CONE/price;
 if(units>left)units=left;
 if(units<=0n){cbEl.classList.add("hide");return}
 cbAmt=units;
-/* Named on the buy side too, so a successful back knows what to keep. The burn
-   re-quote guard that also reads this is gated on `!cbBuy` and is unaffected. */
 cbTok=tok.addr;
 cbCost=(units*price+CONE-1n)/CONE;
 return paint(act(`Back with ${trimAmt(cbCost,18)} ETH for `
@@ -5788,7 +5695,6 @@ return paint(msg(`Burn-back has been switched off by this cause \u2014 ${safeSym
 +"cannot be claimed against. Only the DAO can switch it back on.");
 let want=0n;try{want=parseUnits(amt.value.trim()||"0",tok.dec)}catch{}
 if(want<=0n)want=fromBalance;
-
 if(want<=0n){
 return paint(msg(`1 ${safeSym(tok.sym)} redeems for ${trimAmt(eth*CONE/sup,18)} ETH`),CB_TIP);}
 cbAmt=want;
@@ -5800,11 +5706,6 @@ return paint(msg(eth<=0n
 :`Burning ${trimAmt(want,tok.dec)} ${safeSym(tok.sym)} would pay less than a wei`),CB_TIP);
 return paint(act(`Burn ${trimAmt(want,tok.dec)} ${safeSym(tok.sym)} `
 +`for ${trimAmt(due,18)} ETH`,"Burn"),
-/* ETHER ONLY, AND SAY SO. `ragequit` burns the loot before it pays, and pays
-   out only the tokens named in its array - this page names ether alone. Any
-   ERC-20 the DAO happens to hold is not claimed by the burn, and the claim on
-   it dies with the loot. A cause raises in ether so that is the ordinary case,
-   but "your share of the treasury" would be a promise the call does not keep. */
 "This token is a claim on a cause's treasury, not a position in a market. "
 +"Burning it pays your share of the ETHER the cause has not drawn down yet, counted "
 +"pro rata across every share and unit of loot. Any other token the cause holds is "
@@ -5856,9 +5757,6 @@ if(lost*100n>cbDue)throw Error(`This burn now pays ${trimAmt(now2,18)} ETH, not 
 }
 await rpc(C,[req,L]);
 await waitTx(await sendTx([req]));sGot();
-/* A cause arrives by link and the link does not persist it, so somebody who has
-   just paid for one would lose the only way back to it on reload. Kept here and
-   not at the link, because backing is the point where they chose it. */
 if(cbBuy&&cbTok){
 const kt=TOKENS.find(x=>x.addr&&x.addr.toLowerCase()===cbTok.toLowerCase());
 if(kt){kt.cause=1;if(kt.cust)keepToken(kt)}
@@ -5942,15 +5840,6 @@ cCalls([
 cCall(dao,SEL_SETALLOW+encAddr(COFF)+encAddr(CLOOT)+encUint(CMAX)),
 cCall(COFF,SEL_CONFIGURE+encAddr(CLOOT)+encAddr(ZERO)+encUint(price)
 +encUint(deadline)+encUint(cap))])];
-/* THE TIMELOCK IS THE ONLY REAL DELAY, so it is worth more than the default.
-   Moloch has no voting period and no voting delay - `state` is decided on the
-   tallies alone - and on a cause the creator holds the only share against a
-   quorum of exactly one share. So a proposal reaches Succeeded the moment they
-   vote for it, in the same block if they like. Nothing between proposing and
-   executing is a waiting period EXCEPT this: the first `execute` only queues,
-   and the delay must elapse before a second one performs it. Three days rather
-   than two, because that queue is the entire notice a backer gets to burn out
-   before the exit closes, and it has to survive a weekend. */
 const cfg=encUint(CONE)+encUint(604800)+encUint(259200)+encUint(CONE)+Z.repeat(17);
 const tap=encAddr(CTAP)+Z+encUint(goal)+encAddr(ben)+encUint(rate);
 let off=52*32,heads=[],tail="";
@@ -5999,12 +5888,6 @@ lnNote.textContent=`1 ETH backs ${trimNum(1/per)} units`
 +lnVest.options[lnVest.selectedIndex].textContent
 +(tenthDays>0?` · at a tenth of the goal it empties in ${trimNum(tenthDays)} days`:"")
 +` · backers burn back for the rest`
-/* SAY IT AT THE PICKER, NOT AT THE LAUNCH BUTTON. `lnPrepare` enforces only
-   the coin's 24 KB ceiling, so in cause mode a 20 KB logo is accepted,
-   previewed and shown in green - then refused at the click, after the whole
-   form is filled in. A cause's logo is base64 inside the DAO's own URI rather
-   than an SSTORE2 pointer, so the cap is real and much smaller; state it as
-   soon as it is knowable. */
 +(lnArtBytes?` · logo ${(lnArtBytes.length/1024).toFixed(1)} KB`
 +(lnArtBytes.length>CAU_MAX_ART?` — over the 4 KB a cause allows, pick something simpler`:""):"");
 lnNote.style.color=lnArtBytes&&lnArtBytes.length>CAU_MAX_ART?"#c33":"";
@@ -6014,12 +5897,6 @@ const on=lnKind.value==="cause";
 for(const el of [lnMktL,lnSupplyL,lnMcapL,lnAllocL])el.classList.toggle("hide",on);
 for(const el of [lnGoalL,lnDaysL,lnVestL])el.classList.toggle("hide",!on);
 lnTitle.textContent=on?"Launch a cause":"Launch a coin";
-/* NOT "refundable". Burn-back returns a pro-rata share of what the cause has
-   NOT yet drawn, and the DAO can switch the right off entirely - this page
-   says so itself a few hundred lines down. A word that promises the whole
-   amount back, sitting where a backer reads it as their own protection, is the
-   one piece of copy here that could cost somebody the difference. Say what the
-   contract actually does, in the same words used everywhere else. */
 lnSub.textContent=on?"backers burn back for whatever you have not drawn"
 :"0.4% of each trade goes to the creator";
 lnName.placeholder=on?"Feed Ducks":"Zero Cat";
@@ -6069,6 +5946,7 @@ stat.innerHTML=`${safeSym(sym)} is raising at `
 let lnMode=false,lnArtBytes=null,lnArtMime=0;
 function lnSet(on){
 if(on)cbDisarm();
+++seq;quoting=false;
 lnMode=on;
 if(on&&lqMode)lqSet(false);
 if(on&&wnMode)wnSet(false);
@@ -6102,11 +5980,6 @@ const firstTokens=poolFrac*pooled/100;
 lnNote.textContent=`1 ETH buys ${firstEth>=10?Math.round(firstEth):firstEth.toFixed(firstEth<1?2:1)}% of all ${sym||"tokens"}`
 +` \u00b7 opens at 1 ETH \u2248 ${trimNum(firstTokens)} ${sym||"tokens"}`
 +(al>0&&alBps===0?` \u00b7 that keep is below one basis point \u2014 the smallest is 0.01%`:"")
-/* THE FIGURE TYPED ABOVE PRICES THE POOL, NOT THE COIN. `startMcapWei` values
-   the POOLED supply, so a keep makes the whole supply worth more than the
-   number in the box - at a 20% keep a "30 ETH" launch opens at 37.5 ETH fully
-   diluted, and the 7.5 ETH difference is exactly what the creator is holding.
-   Neither the label nor its tooltip said so, so say it where the number is. */
 +(alBps>0?` \u00b7 creator keeps ${trimNum(Number(sup)*alBps/10000)} (${alBps/100}%)`
 +` \u00b7 fully diluted ${trimNum(mc*Number(sup)/pooled)} ETH`:"")
 +(alBps>=1000?` \u00b7 that much can sell for most of the ether early buyers put in`:"")
@@ -6167,11 +6040,6 @@ lnPrev.classList.add("set");
 lnArtBytes=null;lnArtNote.classList.remove("set");lnPrev.classList.remove("set");
 lnArtNote.textContent="none";stat.textContent=e.message||String(e);
 }
-// Through the kind dispatcher, not straight to `lnQuote`. In cause mode the
-// note this just computed is the logo-size line from `cauQuote`, and the coin
-// quote does not bail on its way past it — `lnSupply` and `lnMcap` keep their
-// defaults while hidden — so calling `lnQuote` here erased the 4 KB warning
-// the moment it was written.
 lnKindQuote();
 };
 const lnGroup=el=>{
@@ -6313,6 +6181,7 @@ for(const el of [wnPanel,wnGo,wnRollPanel])el.classList.toggle("hide",!on);
 for(const el of [rc,rcvEl])if(el)el.classList.toggle("hide",on)};
 function wnSet(on){
 if(on)cbDisarm();
+++seq;quoting=false;
 wnMode=on;
 if(on&&lqMode)lqSet(false);
 if(on&&lnMode)lnSet(false);
@@ -6526,15 +6395,6 @@ const req={from:account,to:WNS,value:"0x0",
 data:"0x"+SEL_WCOMMIT+pad32(wnHash(wnQ.label,account,sec))};
 await rpc(C,[req,L]);
 wnSave({label:wnQ.label,secret:sec,at:0,since:Math.floor(Date.now()/1000)});
-/* A REJECTED PROMISE IS NOT PROOF THE COMMIT DID NOT LAND. A WalletConnect
-   session that drops between the user approving and the response arriving -
-   the ordinary mobile failure - rejects here while the transaction is already
-   in the mempool. Wiping the secret then costs the user the name: the
-   commitment is on chain, this page no longer holds what it takes to reveal,
-   and nobody can register that label until the commitment lapses a day later.
-   Only a refusal proves nothing was broadcast, so only a refusal discards the
-   secret. Anything else keeps it - a stale record costs nothing, and `wnQuote`
-   simply offers the reveal once the commitment shows up. */
 let h;
 try{h=await sendTx([req])}
 catch(e){
@@ -6609,11 +6469,6 @@ refreshBalance();
 update();
 }catch{}
 }
-/* ESCAPED, like the cause path five hundred lines up already does. `sym` is
-   whatever the user typed, and this is innerHTML - so a symbol carrying < or &
-   renders as broken markup on the one line confirming an irreversible
-   transaction, and a tag-shaped one executes in this page's own origin.
-   Uppercasing does not help: HTML tag matching is case-insensitive. */
 stat.innerHTML=token?`${safeSym(sym)} is live at `
 +`<a href="https://etherscan.io/token/${token}" target="_blank" rel="noreferrer">${short(token)}</a>`
 +` \u00b7 0.4% of each trade goes to you \u2014 collect it from the coin panel`
@@ -6896,13 +6751,6 @@ const newest=pts[pts.length-1].b,cap=Math.floor(pw/3);
 const kept=pts.filter(b=>newest-b.b<cap);
 const clipped=kept.length<pts.length;
 pts=kept;
-/* INVERTING DIVIDES, AND THE TAPE CAN HOLD A ZERO. PriceTape says so itself:
-   a trade whose price underflows the 1e18 scale packs to zero, `low` can never
-   be lifted again, and `fold` carries that zero into the coarse candle. Right
-   way up the wick clamp below absorbs it. Upside down it becomes Infinity -
-   and if the zero reached `o` or `c` then the clamp's own bounds are infinite
-   too, so the scale goes NaN and nothing draws at all. Drop what does not
-   invert to a real number rather than take the whole chart down with it. */
 if(chInv)pts=pts.map(b=>({...b,o:1/b.o,h:1/b.l,l:1/b.h,c:1/b.c}))
 .filter(b=>isFinite(b.o)&&isFinite(b.h)&&isFinite(b.l)&&isFinite(b.c));
 if(!pts.length){chArt.innerHTML='<div class="msg">No trades in this window.</div>';chDraw=null;return}
@@ -7045,12 +6893,6 @@ const line=t=>{const d=document.createElement("div");d.textContent=t;scEl.append
 if(m)line(`Minted score ${(+m[1]).toLocaleString("en-US")}`+(m[2]?` \u00b7 reached wave ${m[2]}`:""));
 else line("Not a score name \u2014 the label carries no run.");
 line("Held by "+short(owner));
-/* THE LABEL IS PERMANENT; IT IS NOT EVIDENCE. `claim` is permissionless and
-   takes the number from whoever calls it, so this card faithfully reports a
-   figure its minter chose. Immutable is not the same as earned, and a card
-   that prints a score under a name without saying so invites the mistake -
-   the one mistake that must never be built on, because anything of value
-   gated on these names is free to anyone with a terminal. */
 if(m)line("Anyone can mint a name with any number \u2014 this says it was claimed, not earned.").className="scw";
 if(m&&rec&&rec!==m[1])line(`The score record now reads ${rec}, not ${m[1]} \u2014 the holder changed it.`).className="scw";
 const go=document.createElement("button");go.type="button";go.textContent="Play invaders";
@@ -7063,17 +6905,6 @@ const lkKeep=(el,v)=>{
 if(el.value!==""&&lkWrote[el.id]!==undefined&&el.value!==lkWrote[el.id])return false;
 el.value=v;lkWrote[el.id]=v;return true;
 };
-/* `e` is passed only by the hashchange listener, never by the three direct
-   calls, which is what separates "the page just loaded" from "the user
-   navigated". Both arrive here with an empty hash and they mean opposite
-   things: at load the form is the user's own and must not be touched, while
-   pressing Back off a payment-request link is a request to undo it. Without
-   that distinction the early return served the first case and stranded the
-   second - amount, recipient and score card stayed filled in with nothing in
-   the URL to explain them.
-   ONLY WHAT THE LINK PUT THERE. The tab and the token pair are where the user
-   now IS, and they may have moved since; resetting those would be the page
-   yanking the view around. The values a link supplies are the ones that go. */
 async function applyLink(e){
 const q=new URLSearchParams(location.hash.slice(1));
 const my=++lSeq;
@@ -7117,10 +6948,6 @@ const alt=String(TOKENS.findIndex((x,i)=>String(i)!==fromSel.value&&(t==="book"|
 if(alt!=="-1"){if(oi>=0)fromSel.value=alt;else toSel.value=alt}
 }
 const wantLq=q.get("lq")==="1";
-// A link that names a pair, an amount or a recipient is asking for the swap
-// card, and it has to be visible for that to mean anything. LP was already
-// stood down here; the launch and .wei panels cover the same card and no link
-// param opens either, so they stand down on the same condition.
 const linkWantsCard=fi>=0||oi>=0||to||n||!isNaN(lk)||q.get("token")||q.get("out");
 if(!wantLq&&lqMode&&linkWantsCard)lqSet(false);
 if(linkWantsCard){if(lnMode)lnSet(false);if(wnMode)wnSet(false)}
@@ -7152,18 +6979,11 @@ const f=TOKENS[fromSel.value],t=TOKENS[toSel.value],p=new URLSearchParams();
 p.set("token",tname(f));
 const rcv=rc.value.trim();if(rcv)p.set("to",rcv);
 if(tab==="send"){
-/* Named outright, the way the book branch names itself. A transfer has no
-   output token, and `to` and `lock` are both optional - so a send of a bare
-   amount produced `#token=ETH&amount=5`, which the reader cannot tell from a
-   swap link and reopens on the swap tab with the amount already filled in. */
 p.set("tab","send");
 if(amt.value.trim())p.set("amount",amt.value.trim());
 if(+dly.value)p.set("lock",dly.value);
 }else{
 p.set("out",tname(t));
-/* The reader already honors `lq=1` and opens the LP panel on it; without this
-   the share button was the one thing that could not produce the link it reads,
-   so sharing from LP mode silently handed over a plain swap of the same pair. */
 if(lqMode)p.set("lq","1");
 if(tab==="book"){p.set("tab","book");if(+dly.value)p.set("lock",dly.value)}
 if(mode==="out"&&outAmt.value.trim()){p.set("amount",outAmt.value.trim());p.set("exactOut","1")}
