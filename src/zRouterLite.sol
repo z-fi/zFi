@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.36;
 
-// zRouterLite — Uniswap V2/V3/V4 on Robinhood Chain (4663).
+// zRouterLite — Uniswap V2/V3/V4 and the Deepstate CLOB on Robinhood Chain (4663).
 //
 // The mainnet zRouter also carries zAMM, Sushi, Curve and a Lido staker. None of
 // that is deployed here, so none of it is in this contract; what remains is the
-// three Uniswap venues plus the venue-independent extensions — multicall,
+// three Uniswap venues, a taker leg into the Deepstate order book, plus the
+// venue-independent extensions — multicall,
 // transient deposit and sweep, wrap and unwrap, permit, the ownable/trust/execute
 // module, and snwap over SafeExecutor.
 //
@@ -316,6 +317,86 @@ contract zRouterLite {
                     ),
                     ""
                 );
+        }
+    }
+
+    // ** DEEPSTATE (onchain CLOB)
+
+    /// @notice Take against the Deepstate order book as a router-owned taker.
+    /// @dev Deepstate is a limit book, not a curve, so this does not pretend to be
+    /// a `swap*`: the caller names the book, the packed `price || quantity` order
+    /// and a maximum input, and gets back what actually filled. Nothing rests —
+    /// a resting order would be owned by this contract and nobody could cancel it.
+    ///
+    /// Both bounds are enforced here, on measured balance deltas, rather than
+    /// trusted from Deepstate's return value: `fill` returns only a resting-order
+    /// handle, and the book's own rounding is not something to re-derive.
+    ///
+    /// `token0`/`token1` must be sorted; Deepstate rejects them otherwise. A bid
+    /// buys token0 with token1, an ask sells token0 for token1.
+    ///
+    /// No callback lock is taken. A Deepstate pool hook could call back in, but
+    /// the V3 and V4 callbacks authenticate by `msg.sender` against the pool and
+    /// the singleton, which a hook cannot impersonate — and taking the lock here
+    /// would clear it early if `execute` were ever the outer frame.
+    function swapDeep(
+        address to,
+        address token0,
+        address token1,
+        uint256 epoch,
+        bytes32 order,
+        bool isBid,
+        uint256 amountInMax,
+        uint256 amountOutMin,
+        uint256 deadline
+    ) public payable checkDeadline(deadline) returns (uint256 amountIn, uint256 amountOut) {
+        (address tokenIn, address tokenOut) = isBid ? (token1, token0) : (token0, token1);
+        bool ethIn = tokenIn == address(0);
+
+        if (!ethIn) {
+            if (!_useTransientBalance(address(this), tokenIn, amountInMax)) {
+                safeTransferFrom(tokenIn, msg.sender, address(this), amountInMax);
+            }
+            // Deepstate settles by pulling from the taker, so it needs an
+            // allowance. Lazy rather than owner-primed, so a book for a token
+            // nobody has approved yet still works.
+            if (allowance(tokenIn, address(this), DEEPSTATE) < amountInMax) {
+                safeApprove(tokenIn, DEEPSTATE, type(uint256).max);
+            }
+        }
+
+        uint256 inBefore = ethIn ? address(this).balance : balanceOf(tokenIn);
+        uint256 outBefore = tokenOut == address(0) ? address(this).balance : balanceOf(tokenOut);
+
+        IDeepstate(DEEPSTATE)
+            .fill{value: ethIn ? amountInMax : 0}(
+                IDeepstate.FillParams(token0, token1, epoch, order, isBid, true, false)
+            );
+
+        unchecked {
+            amountIn = inBefore - (ethIn ? address(this).balance : balanceOf(tokenIn));
+            amountOut = (tokenOut == address(0) ? address(this).balance : balanceOf(tokenOut)) - outBefore;
+        }
+
+        require(amountIn <= amountInMax, Slippage());
+        require(amountOut >= amountOutMin, Slippage());
+
+        // Hand back whatever the book did not take. A chained leg keeps it as a
+        // credit rather than a transfer, so the next leg can spend it.
+        unchecked {
+            uint256 refund = amountInMax - amountIn;
+            if (refund != 0) {
+                if (to == address(this)) depositFor(tokenIn, refund, address(this));
+                else if (ethIn) _safeTransferETH(msg.sender, refund);
+                else safeTransfer(tokenIn, msg.sender, refund);
+            }
+        }
+
+        if (tokenOut == address(0)) {
+            _safeTransferETH(to, amountOut);
+        } else {
+            if (to != address(this)) safeTransfer(tokenOut, to, amountOut);
+            depositFor(tokenOut, amountOut, to);
         }
     }
 
@@ -651,6 +732,31 @@ bytes32 constant V3_POOL_INIT_CODE_HASH = 0xe34f199b19b2b4f47f68442619d555527d24
 
 address constant V4_POOL_MANAGER = 0x8366a39CC670B4001A1121B8F6A443A643e40951;
 
+/// @dev Deepstate: a fully onchain CLOB, radix-tree book, price-time matching.
+/// Takers pay a protocol fee out of matched output, so `amountOutMin` is measured
+/// after it.
+address constant DEEPSTATE = 0x6cf19308C22FC82ea620Fa0B3E94948d20f27B96;
+
+interface IDeepstate {
+    struct FillParams {
+        address token0;
+        address token1;
+        uint256 epoch;
+        bytes32 order;
+        bool isBid;
+        bool noRest;
+        bool fillOrKill;
+    }
+
+    function fill(FillParams calldata params) external payable returns (bytes32 restingOrder);
+    function roots(address token0, address token1, uint256 epoch)
+        external
+        view
+        returns (bytes32 askRoot, bytes32 bidRoot);
+    function poolEpoch(bytes32 poolId) external view returns (uint256);
+    function poolId(address token0, address token1) external pure returns (bytes32);
+}
+
 uint160 constant MIN_SQRT_RATIO_PLUS_ONE = 4295128740;
 uint160 constant MAX_SQRT_RATIO_MINUS_ONE = 1461446703485210103287273052203988822378723970341;
 
@@ -765,6 +871,17 @@ function safeApprove(address token, address to, uint256 amount) {
             }
         }
         mstore(0x34, 0)
+    }
+}
+
+function allowance(address token, address owner, address spender) view returns (uint256 amount) {
+    assembly ("memory-safe") {
+        let m := mload(0x40)
+        mstore(0x40, spender)
+        mstore(0x2c, shl(96, owner))
+        mstore(0x0c, 0xdd62ed3e000000000000000000000000)
+        amount := mul(mload(0x20), and(gt(returndatasize(), 0x1f), staticcall(gas(), token, 0x1c, 0x44, 0x20, 0x20)))
+        mstore(0x40, m)
     }
 }
 

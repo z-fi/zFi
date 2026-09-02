@@ -32,6 +32,17 @@ address constant V2_ROUTER_02 = 0x89e5DB8B5aA49aA85AC63f691524311AEB649eba;
 /// branch. Individual pools may empty out over time; those tests skip.
 address constant TKN = 0x01637b14B7378B99dE75A64d50656d98488D9a4d;
 
+// Deepstate: the onchain CLOB. token0 < token1, so a bid buys DEEP with USDG.
+address constant DEEPSTATE = 0x6cf19308C22FC82ea620Fa0B3E94948d20f27B96;
+address constant DEEP = 0x1DA24f6Bb623b9d1aFEae3F3146659A2662D6d27;
+address constant USDG = 0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168;
+
+interface IDeepstateView {
+    function poolId(address, address) external pure returns (bytes32);
+    function poolEpoch(bytes32) external view returns (uint256);
+    function roots(address, address, uint256) external view returns (bytes32 askRoot, bytes32 bidRoot);
+}
+
 /// @dev Second token with a V2 pair against WETH, for the token->token leg.
 address constant TKN2 = 0xF8c0E9B26971C5Df9b754E5E0F5AD78C35770000;
 
@@ -865,6 +876,142 @@ contract RobinhoodTest is Test {
         assertTrue(se != address(router));
         assertGt(se.code.length, 0);
         assertEq(se.balance, 0);
+    }
+
+    // ══════════════════ deepstate, the onchain CLOB ══════════════════
+
+    /// @dev Packed as Deepstate packs it: price || quantity || correction || nonce,
+    /// with the low 64 bits clear on an incoming order.
+    function _order(int32 price, uint160 quantity) internal pure returns (bytes32) {
+        return bytes32((uint256(uint32(price)) << 224) | (uint256(quantity) << 64));
+    }
+
+    /// @dev The live book, or a skip. Deepstate books are per sorted pair and
+    /// epoch, and only a couple of pairs are traded at any time.
+    function _deepBook() internal returns (uint256 epoch) {
+        epoch = IDeepstateView(DEEPSTATE).poolEpoch(IDeepstateView(DEEPSTATE).poolId(DEEP, USDG));
+        (bytes32 askRoot,) = IDeepstateView(DEEPSTATE).roots(DEEP, USDG, epoch);
+        if (askRoot == bytes32(0)) vm.skip(true);
+    }
+
+    function testDeepstateIsDeployedAndSortedAsAssumed() public view {
+        assertGt(DEEPSTATE.code.length, 0);
+        assertTrue(DEEP < USDG, "token0/token1 ordering assumption broke");
+    }
+
+    /// @dev A taker bid at "any price": the limit only decides what may cross, so
+    /// the spend is bounded by the quantity asked for and by `amountInMax`, and
+    /// every resting order still fills at its own price.
+    function testSwapDeepBuysFromTheBook() public {
+        uint256 epoch = _deepBook();
+        uint256 maxIn = 1_000_000e6; // USDG has 6 decimals
+        deal(USDG, alice, maxIn);
+
+        vm.startPrank(alice);
+        IERC20(USDG).approve(address(router), maxIn);
+        (uint256 amountIn, uint256 amountOut) = router.swapDeep(
+            alice, DEEP, USDG, epoch, _order(type(int32).max, 1e18), true, maxIn, 1, block.timestamp
+        );
+        vm.stopPrank();
+
+        assertGt(amountOut, 0, "nothing filled");
+        assertGt(amountIn, 0, "filled without paying");
+        assertEq(IERC20(DEEP).balanceOf(alice), amountOut);
+        assertEq(IERC20(USDG).balanceOf(alice), maxIn - amountIn, "unspent input was not returned");
+        assertEq(IERC20(USDG).balanceOf(address(router)), 0, "router kept input");
+        assertEq(IERC20(DEEP).balanceOf(address(router)), 0, "router kept output");
+    }
+
+    function testSwapDeepEnforcesItsMinimumOut() public {
+        uint256 epoch = _deepBook();
+        uint256 maxIn = 1_000_000e6;
+        deal(USDG, alice, maxIn);
+
+        vm.startPrank(alice);
+        IERC20(USDG).approve(address(router), maxIn);
+        vm.expectRevert(zRouterLite.Slippage.selector);
+        router.swapDeep(
+            alice, DEEP, USDG, epoch, _order(type(int32).max, 1e18), true, maxIn, type(uint128).max, block.timestamp
+        );
+        vm.stopPrank();
+    }
+
+    function testSwapDeepRespectsTheDeadline() public {
+        vm.prank(alice);
+        vm.expectRevert(zRouterLite.Expired.selector);
+        router.swapDeep(alice, DEEP, USDG, 0, _order(0, 1), true, 0, 0, block.timestamp - 1);
+    }
+
+    /// @dev Nothing rests. A resting order would be owned by the router, and only
+    /// the router could cancel it.
+    function testSwapDeepLeavesNothingResting() public {
+        uint256 epoch = _deepBook();
+        (, bytes32 bidRootBefore) = IDeepstateView(DEEPSTATE).roots(DEEP, USDG, epoch);
+
+        uint256 maxIn = 1_000_000e6;
+        deal(USDG, alice, maxIn);
+        vm.startPrank(alice);
+        IERC20(USDG).approve(address(router), maxIn);
+        router.swapDeep(alice, DEEP, USDG, epoch, _order(type(int32).max, 1e18), true, maxIn, 1, block.timestamp);
+        vm.stopPrank();
+
+        (, bytes32 bidRootAfter) = IDeepstateView(DEEPSTATE).roots(DEEP, USDG, epoch);
+        assertEq(bidRootAfter, bidRootBefore, "the router rested a bid it can never cancel");
+    }
+
+    /// @dev The whole point of putting this on the router rather than beside it:
+    /// a CLOB leg and an AMM leg in one `multicall`, netted by the transient
+    /// balances and swept once. This is what split fulfillment is built out of.
+    function testSwapDeepChainsInsideMulticall() public {
+        uint256 epoch = _deepBook();
+        uint256 maxIn = 1_000_000e6;
+        deal(USDG, alice, maxIn);
+
+        bytes[] memory calls = new bytes[](3);
+        calls[0] = abi.encodeWithSelector(zRouterLite.deposit.selector, USDG, maxIn);
+        calls[1] = abi.encodeWithSelector(
+            zRouterLite.swapDeep.selector,
+            address(router),
+            DEEP,
+            USDG,
+            epoch,
+            _order(type(int32).max, 1e18),
+            true,
+            maxIn,
+            uint256(1),
+            block.timestamp
+        );
+        calls[2] = abi.encodeWithSelector(zRouterLite.sweep.selector, DEEP, uint256(0), alice);
+
+        vm.startPrank(alice);
+        IERC20(USDG).approve(address(router), maxIn);
+        router.multicall(calls);
+        vm.stopPrank();
+
+        assertGt(IERC20(DEEP).balanceOf(alice), 0, "chained CLOB output never landed");
+        // The unspent input stayed as a credit rather than bouncing back out.
+        assertGt(IERC20(USDG).balanceOf(address(router)), 0, "refund was not kept for the next leg");
+    }
+
+    /// @dev Selling back into the bid side, which is the other settlement
+    /// direction: the router pays token0 and receives token1.
+    function testSwapDeepSellsIntoTheBook() public {
+        uint256 epoch = _deepBook();
+        (, bytes32 bidRoot) = IDeepstateView(DEEPSTATE).roots(DEEP, USDG, epoch);
+        if (bidRoot == bytes32(0)) vm.skip(true);
+
+        uint256 sell = 1e18;
+        deal(DEEP, alice, sell);
+
+        vm.startPrank(alice);
+        IERC20(DEEP).approve(address(router), sell);
+        (uint256 amountIn, uint256 amountOut) =
+            router.swapDeep(alice, DEEP, USDG, epoch, _order(type(int32).min, uint160(sell)), false, sell, 1, block.timestamp);
+        vm.stopPrank();
+
+        assertGt(amountOut, 0, "nothing filled");
+        assertEq(IERC20(USDG).balanceOf(alice), amountOut);
+        assertEq(IERC20(DEEP).balanceOf(alice), sell - amountIn);
     }
 
     // ══════════════════ permit legs, for one-transaction UX ══════════════════
