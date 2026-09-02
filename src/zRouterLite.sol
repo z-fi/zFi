@@ -16,8 +16,10 @@ pragma solidity ^0.8.36;
 //  - The Sushi branch of `_v2PoolFor`: no Sushi factory. This also frees the
 //    `deadline == type(uint256).max` sentinel, which on mainnet means "Sushi";
 //    here a max deadline simply means no deadline, which is what it reads like.
-//  - permit / permitDAI / permit2*: the zSwap front end approves ERC20 directly.
-//    Permit2 is deployed on 4663 if this is ever wanted back.
+//  - permitDAI: there is no DAI on 4663, and the signature is DAI's alone.
+//  - permit2BatchTransferFrom: it pulls several tokens at once for a multi-leg
+//    route. Every route here is single-hop, and the zSwap front end never emits
+//    it, so the single-token form is the whole requirement.
 //  - ERC6909 entirely: nothing on 4663 issues one. `deposit` and `sweep` drop the
 //    token-id argument rather than carrying a parameter that may only ever be
 //    zero, and the transient-balance slot is keyed on (owner, token) alone.
@@ -434,6 +436,42 @@ contract zRouterLite {
         unwrapETH(amount == 0 ? balanceOf(WETH) : amount);
     }
 
+    // ** PERMIT HELPERS
+    //
+    // Both of these exist to be a leg of a `multicall`: sign, then permit and
+    // swap in one transaction instead of approve-then-swap in two. `multicall`
+    // delegatecalls into this contract, so `msg.sender` inside a permit leg is
+    // still the signer, not the router.
+
+    function permit(address token, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s) public payable {
+        IERC2612(token).permit(msg.sender, address(this), value, deadline, v, r, s);
+    }
+
+    /// @dev Permit2 SignatureTransfer, not AllowanceTransfer: the signature both
+    /// authorises and moves the tokens, so nothing is left approved afterwards.
+    /// The pulled amount is credited transiently, which is what lets the next
+    /// `multicall` leg spend it without a second transfer.
+    function permit2TransferFrom(
+        address token,
+        uint256 amount,
+        uint256 nonce,
+        uint256 deadline,
+        bytes calldata signature
+    ) public payable {
+        IPermit2(PERMIT2)
+            .permitTransferFrom(
+                IPermit2.PermitTransferFrom({
+                    permitted: IPermit2.TokenPermissions({token: token, amount: amount}),
+                    nonce: nonce,
+                    deadline: deadline
+                }),
+                IPermit2.SignatureTransferDetails({to: address(this), requestedAmount: amount}),
+                msg.sender,
+                signature
+            );
+        depositFor(token, amount, address(this));
+    }
+
     // ** APPROVALS
 
     function ensureAllowance(address token, address to) public payable onlyOwner {
@@ -802,6 +840,40 @@ function unwrapETH(uint256 amount) {
         mstore(0x20, amount)
         pop(call(gas(), WETH, 0, 0x1c, 0x24, codesize(), 0x00))
     }
+}
+
+// ** PERMIT HELPERS
+
+address constant PERMIT2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
+
+interface IERC2612 {
+    function permit(address owner, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)
+        external;
+}
+
+interface IPermit2 {
+    struct TokenPermissions {
+        address token;
+        uint256 amount;
+    }
+
+    struct PermitTransferFrom {
+        TokenPermissions permitted;
+        uint256 nonce;
+        uint256 deadline;
+    }
+
+    struct SignatureTransferDetails {
+        address to;
+        uint256 requestedAmount;
+    }
+
+    function permitTransferFrom(
+        PermitTransferFrom calldata permit,
+        SignatureTransferDetails calldata transferDetails,
+        address owner,
+        bytes calldata signature
+    ) external;
 }
 
 // ** TRANSIENT DEPOSIT

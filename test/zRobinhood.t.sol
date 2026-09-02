@@ -72,6 +72,74 @@ contract MockFill {
     receive() external payable {}
 }
 
+address constant PERMIT2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
+
+interface IPermit2Domain {
+    function DOMAIN_SEPARATOR() external view returns (bytes32);
+}
+
+/// @dev A real EIP-2612 token rather than a stub: the router only forwards the
+/// signature, so a stub that skipped ecrecover would test nothing.
+contract PermitToken {
+    string public constant name = "Permit Token";
+    bytes32 public immutable DOMAIN_SEPARATOR;
+    bytes32 public constant PERMIT_TYPEHASH =
+        keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
+
+    mapping(address => uint256) public balanceOf;
+    mapping(address => mapping(address => uint256)) public allowance;
+    mapping(address => uint256) public nonces;
+
+    constructor() {
+        DOMAIN_SEPARATOR = keccak256(
+            abi.encode(
+                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                keccak256(bytes(name)),
+                keccak256("1"),
+                block.chainid,
+                address(this)
+            )
+        );
+    }
+
+    function mint(address to, uint256 amount) public {
+        balanceOf[to] += amount;
+    }
+
+    function transfer(address to, uint256 amount) public returns (bool) {
+        balanceOf[msg.sender] -= amount;
+        balanceOf[to] += amount;
+        return true;
+    }
+
+    function transferFrom(address from, address to, uint256 amount) public returns (bool) {
+        if (allowance[from][msg.sender] != type(uint256).max) allowance[from][msg.sender] -= amount;
+        balanceOf[from] -= amount;
+        balanceOf[to] += amount;
+        return true;
+    }
+
+    function approve(address spender, uint256 amount) public returns (bool) {
+        allowance[msg.sender][spender] = amount;
+        return true;
+    }
+
+    function permit(address owner, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)
+        public
+    {
+        require(block.timestamp <= deadline, "expired");
+        bytes32 digest = keccak256(
+            abi.encodePacked(
+                "\x19\x01",
+                DOMAIN_SEPARATOR,
+                keccak256(abi.encode(PERMIT_TYPEHASH, owner, spender, value, nonces[owner]++, deadline))
+            )
+        );
+        require(ecrecover(digest, v, r, s) == owner, "bad sig");
+        allowance[owner][spender] = value;
+    }
+}
+
 /// @dev Trusted `execute` target that tries to re-enter the V3 callback while it
 /// holds control, and records what came back.
 contract Reenterer {
@@ -783,6 +851,121 @@ contract RobinhoodTest is Test {
         assertTrue(se != address(router));
         assertGt(se.code.length, 0);
         assertEq(se.balance, 0);
+    }
+
+    // ══════════════════ permit legs, for one-transaction UX ══════════════════
+
+    /// @dev The point is the batching: a `permit` leg and the leg that spends the
+    /// allowance ride in one `multicall`, so the user signs instead of sending a
+    /// separate approve first. `multicall` delegatecalls, so `msg.sender` inside
+    /// the permit leg is still the signer.
+    function testPermitLegBatchesWithASpend() public {
+        (address signer, uint256 pk) = makeAddrAndKey("signer");
+        PermitToken token = new PermitToken();
+        token.mint(signer, 10 ether);
+
+        uint256 deadline = block.timestamp + 1 hours;
+        bytes32 digest = keccak256(
+            abi.encodePacked(
+                "\x19\x01",
+                token.DOMAIN_SEPARATOR(),
+                keccak256(
+                    abi.encode(
+                        token.PERMIT_TYPEHASH(), signer, address(router), uint256(10 ether), uint256(0), deadline
+                    )
+                )
+            )
+        );
+        (uint8 v, bytes32 r, bytes32 sg) = vm.sign(pk, digest);
+
+        bytes[] memory calls = new bytes[](3);
+        calls[0] =
+            abi.encodeWithSelector(zRouterLite.permit.selector, address(token), uint256(10 ether), deadline, v, r, sg);
+        calls[1] = abi.encodeWithSelector(zRouterLite.deposit.selector, address(token), uint256(10 ether));
+        calls[2] = abi.encodeWithSelector(zRouterLite.sweep.selector, address(token), uint256(0), alice);
+
+        vm.prank(signer);
+        router.multicall(calls);
+
+        assertEq(token.balanceOf(alice), 10 ether, "permit leg did not authorise the spend");
+        assertEq(token.balanceOf(signer), 0);
+    }
+
+    function testPermitSelectorMatchesTheFrontEnd() public pure {
+        assertEq(zRouterLite.permit.selector, bytes4(0x7ac2ff7b));
+        assertEq(zRouterLite.permit2TransferFrom.selector, bytes4(0x09d31579));
+    }
+
+    /// @dev End to end against the Permit2 actually deployed on 4663 — the
+    /// signature is verified by that contract, not by a mock.
+    function testPermit2TransferFromPullsAndCreditsTransiently() public {
+        assertGt(PERMIT2.code.length, 0, "Permit2 is not deployed on this chain");
+
+        (address signer, uint256 pk) = makeAddrAndKey("p2signer");
+        PermitToken token = new PermitToken();
+        token.mint(signer, 10 ether);
+
+        vm.prank(signer);
+        token.approve(PERMIT2, type(uint256).max);
+
+        uint256 nonce = 1;
+        uint256 deadline = block.timestamp + 1 hours;
+        bytes memory sig = _signPermit2(pk, address(token), 10 ether, nonce, deadline);
+
+        // Pull, then hand the credited balance straight back out to alice.
+        bytes[] memory calls = new bytes[](2);
+        calls[0] = abi.encodeWithSelector(
+            zRouterLite.permit2TransferFrom.selector, address(token), uint256(10 ether), nonce, deadline, sig
+        );
+        calls[1] = abi.encodeWithSelector(zRouterLite.sweep.selector, address(token), uint256(0), alice);
+
+        vm.prank(signer);
+        router.multicall(calls);
+
+        assertEq(token.balanceOf(alice), 10 ether, "permit2 pull never landed");
+        assertEq(token.balanceOf(signer), 0);
+    }
+
+    function testPermit2RejectsASignatureForSomeoneElse() public {
+        (, uint256 pk) = makeAddrAndKey("p2signer");
+        (address mallory,) = makeAddrAndKey("mallory");
+        PermitToken token = new PermitToken();
+        token.mint(mallory, 10 ether);
+        vm.prank(mallory);
+        token.approve(PERMIT2, type(uint256).max);
+
+        uint256 deadline = block.timestamp + 1 hours;
+        bytes memory sig = _signPermit2(pk, address(token), 10 ether, 2, deadline);
+
+        // Signed by `signer`, submitted by `mallory`: Permit2 recovers the wrong
+        // owner and refuses.
+        vm.prank(mallory);
+        vm.expectRevert();
+        router.permit2TransferFrom(address(token), 10 ether, 2, deadline, sig);
+    }
+
+    function _signPermit2(uint256 pk, address token, uint256 amount, uint256 nonce, uint256 deadline)
+        internal
+        view
+        returns (bytes memory)
+    {
+        bytes32 tokenPermissions =
+            keccak256(abi.encode(keccak256("TokenPermissions(address token,uint256 amount)"), token, amount));
+        bytes32 structHash = keccak256(
+            abi.encode(
+                keccak256(
+                    "PermitTransferFrom(TokenPermissions permitted,address spender,uint256 nonce,uint256 deadline)TokenPermissions(address token,uint256 amount)"
+                ),
+                tokenPermissions,
+                address(router),
+                nonce,
+                deadline
+            )
+        );
+        bytes32 digest =
+            keccak256(abi.encodePacked("\x19\x01", IPermit2Domain(PERMIT2).DOMAIN_SEPARATOR(), structHash));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk, digest);
+        return abi.encodePacked(r, s, v);
     }
 
     // ══════════════════ quoter aggregate surface ══════════════════
