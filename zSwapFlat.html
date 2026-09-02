@@ -293,9 +293,15 @@ background:var(--e);margin:.5em auto .1em}
 .invq{padding:10px 11px;margin:-10px -6px;opacity:1}
 .invm,.invsh{padding:10px 3px;margin:-10px -1px}}
 /* ============================================================
-   zFi flat layer — appended override. Markup and script are
-   byte-identical to zSwap.html; everything below is aesthetic.
-   Flat, hairline, no radius, no shadow, Helvetica.
+   zFi flat layer — appended override. Everything below is aesthetic:
+   flat, hairline, no radius, no shadow, Helvetica.
+
+   THIS FILE IS A FROZEN SNAPSHOT, NOT A MIRROR. The markup and script came
+   from zSwap.html as of commit 4fdc705 and nothing regenerates them; the page
+   has moved on since, so fixes landing there do not land here. It is the audit
+   bundle's companion, and it is not what gets deployed — read zSwap.html for
+   current behaviour, and regenerate this file rather than hand-patching it if
+   the flat look is ever wanted again.
    ============================================================ */
 :root{
 --b:#fff;--c:#fff;--p:#fff;--f:#000;--m:#666;--n:#666;
@@ -6528,10 +6534,10 @@ refreshBalance();
 update();
 }catch{}
 }
-stat.innerHTML=token?`${sym} is live at `
+stat.innerHTML=token?`${safeSym(sym)} is live at `
 +`<a href="https://etherscan.io/token/${token}" target="_blank" rel="noreferrer">${short(token)}</a>`
 +` \u00b7 you earn 0.4% of every trade \u2014 collect it from the coin panel`
-:`${sym} is live \u00b7 you earn 0.4% of every trade`;
+:`${safeSym(sym)} is live \u00b7 you earn 0.4% of every trade`;
 lnArtBytes=null;lnArtNote.textContent="none";lnArtNote.classList.remove("set");
 lnPrev.classList.remove("set");lnArt.value="";
 }catch(e){err(e)}

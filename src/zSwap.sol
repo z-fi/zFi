@@ -4,20 +4,20 @@ pragma solidity ^0.8.36;
 
 /// @title zSwap v0.3
 /// @notice Permanently-deployed onchain HTML swap dapp for Ethereum mainnet.
-/// @dev Architecture: the HTML payload (355356 B) is the runtime bytecode of
-///      14 data contracts, deployed separately and passed to the constructor.
+/// @dev Architecture: the HTML payload (378475 B) is the runtime bytecode of
+///      16 data contracts, deployed separately and passed to the constructor.
 ///      html() reassembles them via EXTCODECOPY with proper ABI encoding
 ///      (offset + length + padded data) so any RPC client decodes directly.
 ///      request() implements ERC-5219 for first-class web3:// gateway
-///      compatibility (ERC-4804). Splitting the page across 15 data contracts
+///      compatibility (ERC-4804). Splitting the page across 16 data contracts
 ///      means EIP-170 caps each chunk, not the dapp
-///      (24576 B per chunk, 13284 B headroom).
+///      (24576 B per chunk, 14741 B headroom).
 ///
 ///      The chunk count is fixed in the constructor arity and the page is
-///      immutable, so it is sized to ceil(len/14) with headroom for a release
+///      immutable, so it is sized to ceil(len/16) with headroom for a release
 ///      of growth. It cannot be padded arbitrarily: every chunk must be
-///      non-empty and distinct (see the constructor), so ceil(len/14) must
-///      stay under EIP-170 while len/14 stays non-zero. The page is stored
+///      non-empty and distinct (see the constructor), so ceil(len/16) must
+///      stay under EIP-170 while len/16 stays non-zero. The page is stored
 ///      stripped of comments and indentation - every byte is paid for on
 ///      chain, forever, by whoever deploys the next version.
 ///
@@ -176,7 +176,7 @@ contract zSwap {
     string public constant NAME = "zSwap";
     string public constant VERSION = "0.3";
 
-    /// @dev The HTML payload lives in fourteen separate data contracts whose
+    /// @dev The HTML payload lives in sixteen separate data contracts whose
     /// runtime bytecode IS the markup. Splitting it removes EIP-170 as a
     /// ceiling on the dapp: the 24,576-byte limit now applies per chunk, not to
     /// the page. The chunks are deployed independently and passed in, so this
@@ -196,7 +196,7 @@ contract zSwap {
     address public immutable DATA11;
     /// @dev A twelfth chunk. Same arithmetic as eleven.
     address public immutable DATA12;
-    /// @dev A thirteenth chunk. Same arithmetic again: ceil(len/14) must stay
+    /// @dev A thirteenth chunk. Same arithmetic again: ceil(len/16) must stay
     ///      under EIP-170 with headroom for a release of growth.
     address public immutable DATA13;
     /// @dev A fourteenth chunk. The launchpad's economics, the wave clock and
@@ -216,7 +216,10 @@ contract zSwap {
     ///      It is not a size limit anyone chose - it is ceil(page / 24576) - so
     ///      the only real guard is that `script/build-zSwap-chunks.mjs` and
     ///      this arity are checked against each other before a deploy rather
-    ///      than after one. Sixteen leaves ~20KB, which is room for a while.
+    ///      than after one. Sixteen leaves under a kilobyte spare per chunk on
+    ///      the stripped page - low four figures of total growth, not tens of
+    ///      kilobytes - so `script/strip-zSwap.mjs` reports the real margin and
+    ///      is worth reading before an edit that adds a screen of markup.
     address public immutable DATA16;
 
     /// @dev A missing or duplicated data chunk would permanently serve broken HTML.
@@ -279,7 +282,7 @@ contract zSwap {
     // ------------------------------------------------------------- LINEAGE
     //
     // `html()` is immutable and stays that way. The successor below is a CLAIM
-    // ABOUT LINEAGE, never a redirect: this contract serves its own thirteen chunks
+    // ABOUT LINEAGE, never a redirect: this contract serves its own sixteen chunks
     // forever, whatever the DAO deploys later. Making `html()` forward to a
     // successor would have been the smaller change and it would have cost the
     // one property this design exists for - an address whose bytes cannot move
@@ -568,7 +571,7 @@ contract zSwap {
         return "5219";
     }
 
-    /// @dev Reassembles the page from all thirteen chunks in one pass: each chunk
+    /// @dev Reassembles the page from all sixteen chunks in one pass: each chunk
     /// is copied directly after the previous one at the string body, so no
     /// intermediate copy or concatenation is needed.
     ///

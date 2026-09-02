@@ -245,7 +245,7 @@ contract zSwapResolver {
     // by asking whatever version the chain currently calls newest.
     //
     // THIS IS THE MUTABLE SURFACE, AND IT IS THE ONLY ONE. Every zSwap keeps
-    // serving its own nine chunks at its own address forever; nothing here
+    // serving its own chunks at its own address forever; nothing here
     // reaches into one and changes it. What changes is only WHICH version this
     // address relays, and it changes exactly when `deployNext` lands. That is
     // the whole trade the design makes - immutable fixtures, one moving name -
