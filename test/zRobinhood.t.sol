@@ -460,13 +460,13 @@ contract RobinhoodTest is Test {
         uint256 bal = IERC20(TKN).balanceOf(alice);
 
         bytes[] memory calls = new bytes[](3);
-        calls[0] = abi.encodeWithSelector(zRouterLite.deposit.selector, TKN, uint256(0), bal);
+        calls[0] = abi.encodeWithSelector(zRouterLite.deposit.selector, TKN, bal);
         // `to` is the router, so the output stays credited inside it...
         calls[1] = abi.encodeWithSelector(
             zRouterLite.swapV2.selector, address(router), false, TKN, WETH, bal, uint256(0), block.timestamp
         );
         // ...until this sweeps the whole WETH balance out to alice.
-        calls[2] = abi.encodeWithSelector(zRouterLite.sweep.selector, WETH, uint256(0), uint256(0), alice);
+        calls[2] = abi.encodeWithSelector(zRouterLite.sweep.selector, WETH, uint256(0), alice);
 
         vm.startPrank(alice);
         IERC20(TKN).approve(address(router), bal);
@@ -487,38 +487,26 @@ contract RobinhoodTest is Test {
         router.multicall(calls);
     }
 
-    function testDepositRejectsNonZeroId() public {
-        vm.prank(alice);
-        vm.expectRevert(zRouterLite.InvalidId.selector);
-        router.deposit(TKN, 1, 1);
-    }
-
-    function testSweepRejectsNonZeroId() public {
-        vm.prank(alice);
-        vm.expectRevert(zRouterLite.InvalidId.selector);
-        router.sweep(TKN, 1, 1, alice);
-    }
-
     function testDepositRejectsMismatchedMsgValue() public {
         vm.startPrank(alice);
         vm.expectRevert(zRouterLite.InvalidMsgVal.selector);
-        router.deposit{value: 1 ether}(WETH, 0, 2 ether);
+        router.deposit{value: 1 ether}(WETH, 2 ether);
         vm.expectRevert(zRouterLite.InvalidMsgVal.selector);
-        router.deposit{value: 1 ether}(TKN, 0, 1 ether);
+        router.deposit{value: 1 ether}(TKN, 1 ether);
         vm.stopPrank();
     }
 
     /// @dev Depositing WETH with ether attached wraps on the way in.
     function testDepositWithEtherWrapsToWeth() public {
         vm.prank(alice);
-        router.deposit{value: 1 ether}(WETH, 0, 1 ether);
+        router.deposit{value: 1 ether}(WETH, 1 ether);
         assertEq(IERC20(WETH).balanceOf(address(router)), 1 ether);
     }
 
     function testSweepEther() public {
         vm.deal(address(router), 1 ether);
         uint256 before = alice.balance;
-        router.sweep(address(0), 0, 0, alice);
+        router.sweep(address(0), 0, alice);
         assertEq(alice.balance, before + 1 ether);
     }
 
@@ -709,7 +697,7 @@ contract RobinhoodTest is Test {
             address(filler),
             abi.encodeWithSelector(MockFill.fill.selector, TKN, address(router), bal)
         );
-        calls[1] = abi.encodeWithSelector(zRouterLite.sweep.selector, TKN, uint256(0), uint256(0), alice);
+        calls[1] = abi.encodeWithSelector(zRouterLite.sweep.selector, TKN, uint256(0), alice);
 
         router.multicall(calls);
         assertEq(IERC20(TKN).balanceOf(alice), bal);
@@ -937,6 +925,37 @@ contract RobinhoodTest is Test {
         assertEq(bytes4(chained), zRouterLite.wrap.selector, "chained wrap should be a bare wrap");
         assertEq(bytes4(swept), zRouterLite.multicall.selector, "unchained wrap should sweep");
         assertTrue(chained.length < swept.length);
+    }
+
+    /// @dev The quoter and the router ship as a pair, so the selectors the quoter
+    /// emits must be the ones the router actually exposes. The unwrap path is the
+    /// only place `deposit` and `sweep` appear in built calldata, so decode it and
+    /// check the inner legs rather than trusting the round-trip alone.
+    function testBuiltCalldataUsesTheRoutersOwnSelectors() public view {
+        (, bytes memory callData,,) = quoter.buildBestSwap(alice, false, WETH, address(0), 1 ether, 50, block.timestamp);
+        assertEq(bytes4(callData), zRouterLite.multicall.selector);
+
+        bytes[] memory legs = abi.decode(_tail(callData), (bytes[]));
+        assertEq(legs.length, 3);
+        assertEq(bytes4(legs[0]), zRouterLite.deposit.selector, "deposit selector drifted");
+        assertEq(bytes4(legs[1]), zRouterLite.unwrap.selector, "unwrap selector drifted");
+        assertEq(bytes4(legs[2]), zRouterLite.sweep.selector, "sweep selector drifted");
+
+        // And the arguments decode against the new, id-free signatures.
+        (address depToken, uint256 depAmount) = abi.decode(_tail(legs[0]), (address, uint256));
+        assertEq(depToken, WETH);
+        assertEq(depAmount, 1 ether);
+        (address swToken, uint256 swAmount, address swTo) = abi.decode(_tail(legs[2]), (address, uint256, address));
+        assertEq(swToken, address(0));
+        assertEq(swAmount, 1 ether);
+        assertEq(swTo, alice);
+    }
+
+    function _tail(bytes memory data) internal pure returns (bytes memory out) {
+        out = new bytes(data.length - 4);
+        for (uint256 i; i < out.length; ++i) {
+            out[i] = data[i + 4];
+        }
     }
 
     // ══════════════════ ETH <-> WETH is not a swap ══════════════════

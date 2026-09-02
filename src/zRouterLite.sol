@@ -18,8 +18,9 @@ pragma solidity ^0.8.36;
 //    here a max deadline simply means no deadline, which is what it reads like.
 //  - permit / permitDAI / permit2*: the zSwap front end approves ERC20 directly.
 //    Permit2 is deployed on 4663 if this is ever wanted back.
-//  - ERC6909 deposit/sweep ids: nothing on 4663 issues them. The `id` argument
-//    survives in both signatures for calldata parity and must be zero.
+//  - ERC6909 entirely: nothing on 4663 issues one. `deposit` and `sweep` drop the
+//    token-id argument rather than carrying a parameter that may only ever be
+//    zero, and the transient-balance slot is keyed on (owner, token) alone.
 //
 // WHAT WAS KEPT DESPITE HAVING NO USER ON 4663 YET: the ownable/`trust`/`execute`
 // module, `snwap`/`snwapMulti` and `SafeExecutor`. These are venue-independent —
@@ -32,15 +33,15 @@ pragma solidity ^0.8.36;
 // `multicall` chain a wrap into a swap into a sweep, and the quoter's
 // `buildBestSwap` emits exactly those sequences for the ETH<->WETH path.
 //
-// ABI: `swapV2`, `swapV3`, `swapV4`, `multicall`, `deposit`, `sweep`, `wrap` and
-// `unwrap` keep the mainnet zRouter's exact selectors and argument order —
-// including the `id` argument on `deposit`/`sweep`, which is required to be zero
-// here but is kept so calldata built for one chain is valid on the other.
+// ABI: the three `swap*` entry points, `multicall`, `wrap` and `unwrap` keep the
+// mainnet zRouter's exact selectors and argument order. `deposit`, `sweep` and
+// `ensureAllowance` deliberately do not: each of those carried an ERC6909
+// parameter that has no meaning on this chain, and the paired zQuoterRobinhood
+// builds calldata for these signatures, so the two move together.
 contract zRouterLite {
     error BadSwap();
     error Expired();
     error Slippage();
-    error InvalidId();
     error Unauthorized();
     error InvalidMsgVal();
     error ETHTransferFailed();
@@ -101,8 +102,8 @@ contract zRouterLite {
                 amountOut = (amountIn * 997 * resOut) / (resIn * 1000 + amountIn * 997);
                 require(amountLimit == 0 || amountOut >= amountLimit, Slippage());
             }
-            if (!_useTransientBalance(pool, tokenIn, 0, amountIn)) {
-                if (_useTransientBalance(address(this), tokenIn, 0, amountIn)) {
+            if (!_useTransientBalance(pool, tokenIn, amountIn)) {
+                if (_useTransientBalance(address(this), tokenIn, amountIn)) {
                     safeTransfer(tokenIn, pool, amountIn);
                 } else if (ethIn) {
                     wrapETH(pool, amountIn);
@@ -127,7 +128,7 @@ contract zRouterLite {
             unwrapETH(amountOut);
             _safeTransferETH(to, amountOut);
         } else {
-            depositFor(tokenOut, 0, amountOut, to); // marks output target
+            depositFor(tokenOut, amountOut, to); // marks output target
         }
     }
 
@@ -184,7 +185,7 @@ contract zRouterLite {
             }
             // Handle output tracking for chaining (must always run when !ethOut)
             if (!ethOut) {
-                depositFor(tokenOut, 0, amountOut, to);
+                depositFor(tokenOut, amountOut, to);
             }
         }
     }
@@ -223,7 +224,7 @@ contract zRouterLite {
             require(msg.sender == pool, Unauthorized());
             uint256 amountRequired = uint256(zeroForOne ? amount0Delta : amount1Delta);
 
-            if (_useTransientBalance(address(this), tokenIn, 0, amountRequired)) {
+            if (_useTransientBalance(address(this), tokenIn, amountRequired)) {
                 safeTransfer(tokenIn, pool, amountRequired);
             } else if (ethIn) {
                 wrapETH(pool, amountRequired);
@@ -262,7 +263,7 @@ contract zRouterLite {
                 ),
             (uint256, uint256)
         );
-        depositFor(tokenOut, 0, amountOut, to); // marks output target
+        depositFor(tokenOut, amountOut, to); // marks output target
     }
 
     /// @dev Handle V4 PoolManager swap callback - hookless default.
@@ -300,7 +301,7 @@ contract zRouterLite {
             IV4PoolManager(msg.sender).sync(tokenIn);
             uint256 amountIn = !exactOut ? swapAmount : takeAmount;
 
-            if (_useTransientBalance(address(this), tokenIn, 0, amountIn)) {
+            if (_useTransientBalance(address(this), tokenIn, amountIn)) {
                 if (tokenIn != address(0)) {
                     safeTransfer(tokenIn, msg.sender, amountIn); // V4_POOL_MANAGER
                 }
@@ -362,10 +363,7 @@ contract zRouterLite {
 
     // ** TRANSIENT STORAGE
 
-    /// @dev `id` is kept in the signature for calldata parity with mainnet zRouter
-    /// and must be zero: there is no ERC6909 venue on this chain to address.
-    function deposit(address token, uint256 id, uint256 amount) public payable {
-        require(id == 0, InvalidId());
+    function deposit(address token, uint256 amount) public payable {
         if (msg.value != 0) {
             if (token == WETH) {
                 require(msg.value == amount, InvalidMsgVal());
@@ -377,31 +375,31 @@ contract zRouterLite {
         if (token != address(0) && msg.value == 0) {
             safeTransferFrom(token, msg.sender, address(this), amount);
         }
-        depositFor(token, 0, amount, address(this)); // transient storage tracker
+        depositFor(token, amount, address(this)); // transient storage tracker
     }
 
-    function _useTransientBalance(address user, address token, uint256 id, uint256 amount)
+    /// @dev Keyed on (owner, token): two words, so unlike the mainnet router this
+    /// touches only scratch space and never has to save and restore the free
+    /// memory pointer.
+    function _useTransientBalance(address user, address token, uint256 amount)
         internal
         returns (bool credited)
     {
         assembly ("memory-safe") {
-            let m := mload(0x40)
             mstore(0x00, user)
             mstore(0x20, token)
-            mstore(0x40, id)
-            let slot := keccak256(0x00, 0x60)
+            let slot := keccak256(0x00, 0x40)
             let bal := tload(slot)
             if iszero(lt(bal, amount)) {
                 tstore(slot, sub(bal, amount))
                 credited := 1
             }
-            mstore(0x40, m)
         }
     }
 
     function _safeTransferETH(address to, uint256 amount) internal {
         if (to == address(this)) {
-            depositFor(address(0), 0, amount, to);
+            depositFor(address(0), amount, to);
             return;
         }
         assembly ("memory-safe") {
@@ -416,8 +414,7 @@ contract zRouterLite {
 
     receive() external payable {}
 
-    function sweep(address token, uint256 id, uint256 amount, address to) public payable {
-        require(id == 0, InvalidId());
+    function sweep(address token, uint256 amount, address to) public payable {
         if (token == address(0)) {
             _safeTransferETH(to, amount == 0 ? address(this).balance : amount);
         } else {
@@ -430,7 +427,7 @@ contract zRouterLite {
     function wrap(uint256 amount) public payable {
         amount = amount == 0 ? address(this).balance : amount;
         _safeTransferETH(WETH, amount);
-        depositFor(WETH, 0, amount, address(this));
+        depositFor(WETH, amount, address(this));
     }
 
     function unwrap(uint256 amount) public payable {
@@ -590,7 +587,7 @@ contract zRouterLite {
         uint256 finalBalance = tokenOut == address(0) ? recipient.balance : balanceOfAccount(tokenOut, recipient);
         amountOut = finalBalance - initialBalance;
         if (amountOut < amountOutMin) revert SnwapSlippage(tokenOut, amountOut, amountOutMin);
-        if (recipient == address(this)) depositFor(tokenOut, 0, amountOut, address(this));
+        if (recipient == address(this)) depositFor(tokenOut, amountOut, address(this));
     }
 
     function snwapMulti(
@@ -630,7 +627,7 @@ contract zRouterLite {
                 revert SnwapSlippage(tokensOut[i], amountsOut[i], amountsOutMin[i]);
             }
             if (recipient == address(this)) {
-                depositFor(tokensOut[i], 0, amountsOut[i], address(this));
+                depositFor(tokensOut[i], amountsOut[i], address(this));
             }
         }
     }
@@ -809,15 +806,12 @@ function unwrapETH(uint256 amount) {
 
 // ** TRANSIENT DEPOSIT
 
-function depositFor(address token, uint256 id, uint256 amount, address _for) {
+function depositFor(address token, uint256 amount, address _for) {
     assembly ("memory-safe") {
-        let m := mload(0x40)
         mstore(0x00, _for)
         mstore(0x20, token)
-        mstore(0x40, id)
-        let slot := keccak256(0x00, 0x60)
+        let slot := keccak256(0x00, 0x40)
         tstore(slot, add(tload(slot), amount))
-        mstore(0x40, m)
     }
 }
 

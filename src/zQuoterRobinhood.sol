@@ -31,7 +31,9 @@ import {TickMath, SwapMath, LiquidityMath, IStateViewV4, _sortTokens, _v4PoolId}
 // ABI COMPATIBILITY: `AMM`, `Quote`, `getQuotes` and `buildBestSwap` keep the
 // mainnet zQuoter's exact shapes, including the unused enum ordinals. Front-end
 // code written against this moves to mainnet without an edit; the venues it
-// never sees here simply start appearing.
+// never sees here simply start appearing. The calldata it BUILDS is for
+// src/zRouterLite.sol, whose `deposit` and `sweep` drop the ERC6909 token id —
+// there is no such token on 4663 — so the two contracts ship as a pair.
 address constant WETH = 0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73;
 
 address constant V2_FACTORY = 0x8bcEaA40B9AcdfAedF85AdF4FF01F5Ad6517937f;
@@ -565,12 +567,12 @@ contract zQuoterRobinhood {
     }
 
     function _depUnwrap(uint256 a) internal pure returns (bytes memory d, bytes memory u) {
-        d = abi.encodeWithSelector(IZRouter.deposit.selector, WETH, 0, a);
+        d = abi.encodeWithSelector(IZRouter.deposit.selector, WETH, a);
         u = abi.encodeWithSelector(IZRouter.unwrap.selector, a);
     }
 
     function _sweepAmt(address token, uint256 amount, address to) internal pure returns (bytes memory) {
-        return abi.encodeWithSelector(IZRouter.sweep.selector, token, 0, amount, to);
+        return abi.encodeWithSelector(IZRouter.sweep.selector, token, amount, to);
     }
 
     function _mc2(bytes memory a, bytes memory b) internal pure returns (bytes memory) {
@@ -614,8 +616,8 @@ interface IZRouter {
         payable
         returns (uint256, uint256);
     function multicall(bytes[] calldata) external payable returns (bytes[] memory);
-    function sweep(address, uint256, uint256, address) external payable;
-    function deposit(address, uint256, uint256) external payable;
+    function sweep(address, uint256, address) external payable;
+    function deposit(address, uint256) external payable;
     function wrap(uint256) external payable;
     function unwrap(uint256) external payable;
 }
