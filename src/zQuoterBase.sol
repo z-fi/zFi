@@ -3,53 +3,70 @@ pragma solidity ^0.8.36;
 
 import {TickMath, SwapMath, LiquidityMath, IStateViewV4, _sortTokens, _v4PoolId} from "./zQuoterV4.sol";
 
-// zQuoterRobinhood — quotes Uniswap V2/V3/V4 for zRouterLiteRobinhood on Robinhood Chain.
+// zQuoterBase — quotes Uniswap V2/V3/V4, Aerodrome, Aerodrome Slipstream and
+// zAMM for zRouterLiteBase on Base (8453).
 //
-// Not a port of src/zQuoter.sol: that one is a shell over a base quoter with no
-// code on 4663, and a staticcall to a codeless address returns empty rather than
-// reverting, so a port would quote zeros instead of failing. This does its own
-// math and calls nothing it does not name.
+// A rewrite of the quoter behind 0x772E2810A471dB2CC7ADA0d37D6395476535889a (a
+// lens forwarding to 0xa8Cc0177598531eC7D223E9689fdD50E120b946c), fixing three
+// things that deployment gets wrong:
 //
-// The init-code hashes below are the canonical Uniswap ones, which is the fact
-// the whole design rests on: quoter and router derive pool addresses the same
-// way, so a quote and the calldata built from it cannot name different pools.
+//  1. It quotes Uniswap v3 by calling Uniswap's own quoter at 0x222cA98F. That is
+//     a simulate-and-revert contract; a `try` around it swallows every failure as
+//     "no route", and it is one more address that has to stay deployed and
+//     correct. This walks the ticks itself, with the same engine v4 uses.
+//  2. It sweeps Aerodrome Slipstream at tick spacings 1, 10, 60 and 200, which is
+//     Uniswap's fee/spacing pairing. Slipstream's real spacings are 1, 10, 50,
+//     100, 200 and 2000, so 60 does not exist and 50, 100 and 2000 — where most
+//     of the volume is — were never quoted at all.
+//  3. Its AERO_CL quotes label `feeBps` with the Uniswap tier they were never
+//     taken at, and the builder then reconstructs a spacing from that label. Here
+//     an AERO_CL quote carries its actual tick spacing in `feeBps`, which is the
+//     only value that identifies a Slipstream pool.
 //
-// `AMM`, `Quote`, `getQuotes` and `buildBestSwap` keep mainnet zQuoter's shapes,
-// so front-end code moves between chains unedited. The calldata it BUILDS
-// targets zRouterLiteRobinhood, whose `deposit` and `sweep` drop mainnet's ERC6909 id —
-// the two contracts ship as a pair.
-address constant WETH = 0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73;
+// The AERO convention is kept as-is for compatibility: `feeBps` 2 means the
+// stable pool won and 20 means the volatile one. It is a discriminator, not a
+// fee, and it is what the front end already decodes.
+//
+// Pool addresses are derived the same way `zRouterLiteBase` derives them, so a
+// quote and the calldata built from it cannot name different pools.
+address constant WETH = 0x4200000000000000000000000000000000000006;
 
-address constant V2_FACTORY = 0x8bcEaA40B9AcdfAedF85AdF4FF01F5Ad6517937f;
+address constant V2_FACTORY = 0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6;
 bytes32 constant V2_POOL_INIT_CODE_HASH = 0x96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f;
 
-address constant V3_FACTORY = 0x1f7d7550B1b028f7571E69A784071F0205FD2EfA;
+address constant V3_FACTORY = 0x33128a8fC17869897dcE68Ed026d694621f6FDfD;
 bytes32 constant V3_POOL_INIT_CODE_HASH = 0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54;
 
-// The v4 lens. Its `poolManager()` is the singleton zRouterLiteRobinhood holds — checked.
-address constant V4_STATE_VIEW = 0xF3334192D15450CdD385c8B70e03f9A6bD9E673b;
+// The v4 lens. Its `poolManager()` is the singleton zRouterLiteBase holds — checked.
+address constant V4_STATE_VIEW = 0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71;
+
+address constant ZAMM = 0x000000000000040470635EB91b7CE4D132D616eD;
+
+address constant AERO_FACTORY = 0x420DD381b31aEf6683db6B902084cB0FFECe40Da;
+address constant AERO_IMPLEMENTATION = 0xA4e46b4f701c62e14DF11B48dCe76A7d793CD6d7;
+address constant AERO_CL_FACTORY = 0x5e7BB104d84c7CB9B682AaC2F3d509f5F406809A;
+address constant AERO_CL_IMPLEMENTATION = 0xeC8E5342B19977B4eF8892e02D8DAEcfa1315831;
 
 uint160 constant MIN_SQRT_RATIO_PLUS_ONE = 4295128740;
 uint160 constant MAX_SQRT_RATIO_MINUS_ONE = 1461446703485210103287273052203988822378723970341;
 
 uint256 constant BPS = 10_000;
 
-contract zQuoterRobinhood {
+contract zQuoterBase {
     error NoRoute();
     error IdenticalTokens();
     error SlippageBpsTooHigh();
 
-    /// @dev Ordinals match src/zQuoter.sol so a `source` means the same thing on
-    /// both chains. The four venues that do not exist here are never produced;
-    /// they hold UNI_V3 at 3 and UNI_V4 at 4.
+    /// @dev Base ordinals, unchanged from the deployed quoter so a `source`
+    /// crossing the wire keeps its meaning. Note these are NOT mainnet's: AERO
+    /// sits where SUSHI does there.
     enum AMM {
         UNI_V2,
-        SUSHI,
+        AERO,
         ZAMM,
         UNI_V3,
         UNI_V4,
-        CURVE,
-        LIDO,
+        AERO_CL,
         WETH_WRAP
     }
 
@@ -88,10 +105,24 @@ contract zQuoterRobinhood {
 
     // ====================== AGGREGATE ======================
 
-    /// @notice Quote every venue zRouterLiteRobinhood can execute, and pick the best.
+    /// @dev zAMM fee tiers, in bps. A pool's fee is part of its key, so these are
+    /// separate pools rather than settings on one.
+    function _zammFees() internal pure returns (uint256[4] memory) {
+        return [uint256(1), 5, 30, 100];
+    }
+
+    /// @dev Slipstream's real tick spacings, read off `tickSpacings()`. The
+    /// deployed quoter guesses Uniswap's 1/10/60/200 instead and misses three of
+    /// these while probing a 60 that has never existed on this factory.
+    function _clSpacings() internal pure returns (int24[6] memory) {
+        return [int24(1), 10, 50, 100, 200, 2000];
+    }
+
+    /// @notice Quote every venue zRouterLiteBase can execute, and pick the best.
     /// @param exactOut false = `swapAmount` is the input; true = it is the desired output.
     /// @return best The winning quote, zeroed if nothing quoted.
-    /// @return quotes All nine candidates: V2, then V3 by tier, then V4 by tier.
+    /// @return quotes Twenty candidates in a stable order: V2, AERO, four zAMM
+    ///         tiers, four v3 tiers, four v4 tiers, six Slipstream spacings.
     ///         Entries that did not quote stay at zero so callers can index by venue.
     function getQuotes(bool exactOut, address tokenIn, address tokenOut, uint256 swapAmount)
         public
@@ -101,17 +132,36 @@ contract zQuoterRobinhood {
         require(_normalizeETH(tokenIn) != _normalizeETH(tokenOut), IdenticalTokens());
 
         uint24[4] memory tiers = _tiers();
-        quotes = new Quote[](9);
+        quotes = new Quote[](20);
 
         (uint256 aIn, uint256 aOut) = quoteV2(exactOut, tokenIn, tokenOut, swapAmount);
         quotes[0] = Quote(AMM.UNI_V2, 30, aIn, aOut);
 
+        {
+            uint256 kind;
+            (aIn, aOut, kind) = quoteAero(exactOut, tokenIn, tokenOut, swapAmount);
+            quotes[1] = Quote(AMM.AERO, kind, aIn, aOut);
+        }
+
+        uint256[4] memory zFees = _zammFees();
+        for (uint256 i; i < 4; ++i) {
+            (aIn, aOut) = quoteZAMM(exactOut, zFees[i], tokenIn, tokenOut, 0, 0, swapAmount);
+            quotes[2 + i] = Quote(AMM.ZAMM, zFees[i], aIn, aOut);
+        }
+
         for (uint256 i; i < 4; ++i) {
             (aIn, aOut) = quoteV3(exactOut, tokenIn, tokenOut, tiers[i], swapAmount);
-            quotes[1 + i] = Quote(AMM.UNI_V3, tiers[i] / 100, aIn, aOut);
+            quotes[6 + i] = Quote(AMM.UNI_V3, tiers[i] / 100, aIn, aOut);
 
             (aIn, aOut) = quoteV4(exactOut, tokenIn, tokenOut, tiers[i], swapAmount);
-            quotes[5 + i] = Quote(AMM.UNI_V4, tiers[i] / 100, aIn, aOut);
+            quotes[10 + i] = Quote(AMM.UNI_V4, tiers[i] / 100, aIn, aOut);
+        }
+
+        int24[6] memory spacings = _clSpacings();
+        for (uint256 i; i < 6; ++i) {
+            (aIn, aOut) = quoteAeroCL(exactOut, tokenIn, tokenOut, spacings[i], swapAmount);
+            // The spacing, not a fee: it is what names a Slipstream pool.
+            quotes[14 + i] = Quote(AMM.AERO_CL, uint256(uint24(spacings[i])), aIn, aOut);
         }
 
         best = Quote(AMM.UNI_V2, 0, 0, 0);
@@ -218,7 +268,253 @@ contract zQuoterRobinhood {
                 deadline
             );
         }
+        if (q.source == AMM.AERO) {
+            // Exact-in underneath even for an exact-out quote: the stable curve
+            // has no closed-form inverse, so the solved input is sent as the
+            // amount and the solved output becomes the bound.
+            return abi.encodeWithSelector(
+                IZRouter.swapAero.selector,
+                to,
+                q.feeBps <= 2, // stable discriminator, not a fee
+                tokenIn,
+                tokenOut,
+                exactOut ? q.amountIn : swapAmount,
+                exactOut ? swapAmount : amountLimit,
+                deadline
+            );
+        }
+        if (q.source == AMM.AERO_CL) {
+            return abi.encodeWithSelector(
+                IZRouter.swapAeroCL.selector,
+                to,
+                exactOut,
+                int24(uint24(q.feeBps)), // the spacing itself
+                tokenIn,
+                tokenOut,
+                swapAmount,
+                amountLimit,
+                deadline
+            );
+        }
+        if (q.source == AMM.ZAMM) {
+            return abi.encodeWithSelector(
+                IZRouter.swapVZ.selector,
+                to,
+                exactOut,
+                q.feeBps,
+                tokenIn,
+                tokenOut,
+                uint256(0),
+                uint256(0),
+                swapAmount,
+                amountLimit,
+                deadline
+            );
+        }
         revert NoRoute();
+    }
+
+    // ====================== AERODROME ======================
+
+    /// @dev Quotes both pool kinds and returns the winner. The third return is a
+    /// discriminator, not a fee: 2 means the stable pool won, 20 the volatile
+    /// one. That is the convention the deployed quoter set and the Base front end
+    /// decodes, so it is kept.
+    function quoteAero(bool exactOut, address tokenIn, address tokenOut, uint256 swapAmount)
+        public
+        view
+        returns (uint256 amountIn, uint256 amountOut, uint256 kind)
+    {
+        unchecked {
+            if (swapAmount == 0) return (0, 0, 0);
+            address tIn = _normalizeETH(tokenIn);
+            address tOut = _normalizeETH(tokenOut);
+            if (tIn == tOut) return (0, 0, 0);
+
+            (uint256 vIn, uint256 vOut) = _quoteAeroPool(exactOut, false, tIn, tOut, swapAmount);
+            (uint256 sIn, uint256 sOut) = _quoteAeroPool(exactOut, true, tIn, tOut, swapAmount);
+
+            if (exactOut) {
+                if (vIn != 0 && (sIn == 0 || vIn <= sIn)) return (vIn, vOut, 20);
+                if (sIn != 0) return (sIn, sOut, 2);
+            } else {
+                if (vOut != 0 && vOut >= sOut) return (vIn, vOut, 20);
+                if (sOut != 0) return (sIn, sOut, 2);
+            }
+            return (0, 0, 0);
+        }
+    }
+
+    function _quoteAeroPool(bool exactOut, bool stable, address tokenIn, address tokenOut, uint256 swapAmount)
+        internal
+        view
+        returns (uint256 amountIn, uint256 amountOut)
+    {
+        unchecked {
+            address pool = _aeroPoolFor(tokenIn, tokenOut, stable);
+            if (pool.code.length == 0) return (0, 0);
+
+            if (!exactOut) {
+                amountOut = _aeroOut(pool, tokenIn, swapAmount);
+                return amountOut == 0 ? (0, 0) : (swapAmount, amountOut);
+            }
+            amountIn = _aeroSolveExactOut(pool, tokenIn, swapAmount);
+            return amountIn == 0 ? (0, 0) : (amountIn, swapAmount);
+        }
+    }
+
+    /// @dev `getAmountOut` reverts on some inputs rather than returning zero, so
+    /// it is called through a guard: the search below must be able to probe.
+    function _aeroOut(address pool, address tokenIn, uint256 amountIn) internal view returns (uint256) {
+        (bool ok, bytes memory ret) =
+            pool.staticcall(abi.encodeWithSelector(IAeroPool.getAmountOut.selector, amountIn, tokenIn));
+        if (!ok || ret.length < 32) return 0;
+        return abi.decode(ret, (uint256));
+    }
+
+    /// @dev The stable curve x3y+y3x has no closed-form inverse, so exact-out is
+    /// solved by search. `getAmountOut` is monotone in the input, which is what
+    /// makes this exact rather than approximate: it returns the least input whose
+    /// output reaches the target.
+    ///
+    /// The deployed quoter runs a fixed 64-step doubling and then a fixed 32-step
+    /// bisection whatever the interval, and re-probes the bound after the loop.
+    /// This bounds the doubling by the pool's own reserve and bisects only the
+    /// interval it actually found.
+    function _aeroSolveExactOut(address pool, address tokenIn, uint256 targetOut)
+        internal
+        view
+        returns (uint256)
+    {
+        unchecked {
+            if (targetOut == 0) return 0;
+
+            uint256 hi = 1;
+            uint256 lo;
+            bool bounded;
+            for (uint256 i; i != 128; ++i) {
+                if (_aeroOut(pool, tokenIn, hi) >= targetOut) {
+                    bounded = true;
+                    break;
+                }
+                lo = hi;
+                hi <<= 1;
+                if (hi == 0) return 0; // overflowed without reaching the target
+            }
+            if (!bounded) return 0;
+
+            ++lo; // lo is known too small, hi known sufficient
+            while (lo < hi) {
+                uint256 mid = lo + ((hi - lo) >> 1);
+                if (_aeroOut(pool, tokenIn, mid) >= targetOut) hi = mid;
+                else lo = mid + 1;
+            }
+            return lo;
+        }
+    }
+
+    /// @dev Aerodrome pools are minimal-proxy clones; this hashes the clone
+    /// initcode, matching what the router derives.
+    function _aeroPoolFor(address tokenA, address tokenB, bool stable) internal pure returns (address pool) {
+        (address token0, address token1,) = _sortTokens(tokenA, tokenB);
+        bytes32 salt = keccak256(abi.encodePacked(token0, token1, stable));
+        assembly ("memory-safe") {
+            let ptr := mload(0x40)
+            mstore(add(ptr, 0x38), AERO_FACTORY)
+            mstore(add(ptr, 0x24), 0x5af43d82803e903d91602b57fd5bf3ff)
+            mstore(add(ptr, 0x14), AERO_IMPLEMENTATION)
+            mstore(ptr, 0x3d602d80600a3d3981f3363d3d373d3d3d363d73)
+            mstore(add(ptr, 0x58), salt)
+            mstore(add(ptr, 0x78), keccak256(add(ptr, 0x0c), 0x37))
+            pool := keccak256(add(ptr, 0x43), 0x55)
+        }
+    }
+
+    function _aeroCLPoolFor(address tokenA, address tokenB, int24 tickSpacing)
+        internal
+        pure
+        returns (address pool)
+    {
+        (address token0, address token1,) = _sortTokens(tokenA, tokenB);
+        bytes32 salt = keccak256(abi.encode(token0, token1, tickSpacing));
+        assembly ("memory-safe") {
+            let ptr := mload(0x40)
+            mstore(ptr, 0x3d602d80600a3d3981f3363d3d373d3d3d363d73000000000000000000000000)
+            mstore(add(ptr, 0x14), shl(0x60, AERO_CL_IMPLEMENTATION))
+            mstore(add(ptr, 0x28), 0x5af43d82803e903d91602b57fd5bf3ff00000000000000000000000000000000)
+            mstore(add(ptr, 0x38), shl(0x60, AERO_CL_FACTORY))
+            mstore(add(ptr, 0x4c), salt)
+            mstore(add(ptr, 0x6c), keccak256(ptr, 0x37))
+            pool := keccak256(add(ptr, 0x37), 0x55)
+        }
+    }
+
+    /// @notice Aerodrome Slipstream: a v3 fork keyed by tick spacing.
+    /// @dev Same tick walk as v3 and v4; only where the fee comes from differs.
+    /// The fee is micro-pips, which is what `SwapMath` already expects.
+    function quoteAeroCL(bool exactOut, address tokenIn, address tokenOut, int24 spacing, uint256 swapAmount)
+        public
+        view
+        returns (uint256 amountIn, uint256 amountOut)
+    {
+        (address token0, address token1, bool zeroForOne) =
+            _sortTokens(_normalizeETH(tokenIn), _normalizeETH(tokenOut));
+        if (token0 == token1) return (0, 0);
+
+        address pool = _aeroCLPoolFor(token0, token1, spacing);
+        if (pool.code.length == 0) return (0, 0);
+
+        // The pool's own fee, not the factory's default for the spacing.
+        // Slipstream fees are per-pool and move: the WETH/USDC spacing-100 pool
+        // charges 573 micro-pips where `tickSpacingToFee(100)` still says 500.
+        // Quoting the default is quoting a pool that does not exist.
+        (bool ok, bytes memory ret) = pool.staticcall(abi.encodeWithSelector(IAeroV3Pool.fee.selector));
+        if (!ok || ret.length < 32) return (0, 0);
+        uint24 fee = uint24(abi.decode(ret, (uint256)));
+        if (fee == 0 || fee >= 1_000_000) return (0, 0);
+
+        return _quoteCL(Pool(false, pool, bytes32(0), spacing, fee), exactOut, zeroForOne, swapAmount);
+    }
+
+    // ====================== ZAMM ======================
+
+    /// @dev Constant product with the fee baked into the pool key, so each fee is
+    /// a different pool rather than a setting. ERC6909 ids address zAMM's own
+    /// coins; zero is the ERC20 side.
+    function quoteZAMM(
+        bool exactOut,
+        uint256 feeOrHook,
+        address tokenIn,
+        address tokenOut,
+        uint256 idIn,
+        uint256 idOut,
+        uint256 swapAmount
+    ) public view returns (uint256 amountIn, uint256 amountOut) {
+        unchecked {
+            if (swapAmount == 0 || feeOrHook >= BPS) return (0, 0);
+            (address token0, address token1, bool zeroForOne) = _sortTokens(tokenIn, tokenOut);
+            if (token0 == token1) return (0, 0);
+            (uint256 id0, uint256 id1) = tokenIn == token0 ? (idIn, idOut) : (idOut, idIn);
+
+            uint256 poolId = uint256(keccak256(abi.encode(PoolKey(id0, id1, token0, token1, feeOrHook))));
+            (bool ok, bytes memory ret) =
+                ZAMM.staticcall(abi.encodeWithSelector(IZAMM.pools.selector, poolId));
+            if (!ok || ret.length < 64) return (0, 0);
+            (uint112 r0, uint112 r1) = abi.decode(ret, (uint112, uint112));
+
+            (uint256 resIn, uint256 resOut) = zeroForOne ? (uint256(r0), uint256(r1)) : (uint256(r1), uint256(r0));
+            if (resIn == 0 || resOut == 0) return (0, 0);
+
+            if (exactOut) {
+                if (swapAmount >= resOut) return (0, 0);
+                amountOut = swapAmount;
+                amountIn = (resIn * amountOut * BPS) / ((resOut - amountOut) * (BPS - feeOrHook)) + 1;
+            } else {
+                amountIn = swapAmount;
+                uint256 inWithFee = amountIn * (BPS - feeOrHook);
+                amountOut = (inWithFee * resOut) / (resIn * BPS + inWithFee);
+            }
+        }
     }
 
     // ====================== UNISWAP V2 ======================
@@ -432,8 +728,10 @@ contract zQuoterRobinhood {
                 uint24 pf = zeroForOne ? (protocolFee & 0xfff) : (protocolFee >> 12);
                 swapFee = pf == 0 ? lpFee : uint24(pf + lpFee - (uint256(pf) * uint256(lpFee)) / 1_000_000);
             } else {
+                // Uniswap's slot0 returns seven words and Slipstream's six, so
+                // only the two this needs are required to be there.
                 (bool ok, bytes memory ret) = p.pool.staticcall(abi.encodeWithSelector(IV3Pool.slot0.selector));
-                if (!ok || ret.length < 224) return (0, 0, 0, 0);
+                if (!ok || ret.length < 64) return (0, 0, 0, 0);
                 (sqrtPriceX96, tick) = abi.decode(ret, (uint160, int24));
                 liquidity = IV3Pool(p.pool).liquidity();
                 // v3 takes its protocol fee from the LP's share, not the
@@ -443,11 +741,17 @@ contract zQuoterRobinhood {
         }
     }
 
+    /// @dev Uniswap's `ticks` returns eight values and Slipstream's two. Decoding
+    /// the two-word prefix by hand covers both; the generated decoder would insist
+    /// on the full Uniswap tuple and revert on a Slipstream pool.
     function _liquidityNet(Pool memory p, int24 tick) internal view returns (int128 liqNet) {
         if (p.isV4) {
             (, liqNet) = IStateViewV4(V4_STATE_VIEW).getTickLiquidity(p.id, tick);
         } else {
-            (, liqNet,,,,,,) = IV3Pool(p.pool).ticks(tick);
+            (bool ok, bytes memory ret) =
+                p.pool.staticcall(abi.encodeWithSelector(IV3Pool.ticks.selector, tick));
+            if (!ok || ret.length < 64) return 0;
+            (, liqNet) = abi.decode(ret, (uint128, int128));
         }
     }
 
@@ -536,12 +840,12 @@ contract zQuoterRobinhood {
     }
 
     function _depUnwrap(uint256 a) internal pure returns (bytes memory d, bytes memory u) {
-        d = abi.encodeWithSelector(IZRouter.deposit.selector, WETH, a);
+        d = abi.encodeWithSelector(IZRouter.deposit.selector, WETH, uint256(0), a);
         u = abi.encodeWithSelector(IZRouter.unwrap.selector, a);
     }
 
     function _sweepAmt(address token, uint256 amount, address to) internal pure returns (bytes memory) {
-        return abi.encodeWithSelector(IZRouter.sweep.selector, token, amount, to);
+        return abi.encodeWithSelector(IZRouter.sweep.selector, token, uint256(0), amount, to);
     }
 
     function _mc2(bytes memory a, bytes memory b) internal pure returns (bytes memory) {
@@ -571,6 +875,29 @@ interface IV3Pool {
         returns (uint128, int128, uint256, uint256, int56, uint160, uint32, bool);
 }
 
+interface IAeroPool {
+    function getAmountOut(uint256 amountIn, address tokenIn) external view returns (uint256);
+}
+
+interface IAeroV3Pool {
+    function fee() external view returns (uint24); // micro-pips, per pool
+}
+
+struct PoolKey {
+    uint256 id0;
+    uint256 id1;
+    address token0;
+    address token1;
+    uint256 feeOrHook;
+}
+
+interface IZAMM {
+    function pools(uint256 poolId)
+        external
+        view
+        returns (uint112, uint112, uint32, uint256, uint256, uint256, uint256);
+}
+
 interface IZRouter {
     function swapV2(address, bool, address, address, uint256, uint256, uint256)
         external
@@ -584,9 +911,21 @@ interface IZRouter {
         external
         payable
         returns (uint256, uint256);
+    function swapAero(address, bool, address, address, uint256, uint256, uint256)
+        external
+        payable
+        returns (uint256, uint256);
+    function swapAeroCL(address, bool, int24, address, address, uint256, uint256, uint256)
+        external
+        payable
+        returns (uint256, uint256);
+    function swapVZ(address, bool, uint256, address, address, uint256, uint256, uint256, uint256, uint256)
+        external
+        payable
+        returns (uint256, uint256);
     function multicall(bytes[] calldata) external payable returns (bytes[] memory);
-    function sweep(address, uint256, address) external payable;
-    function deposit(address, uint256) external payable;
+    function sweep(address, uint256, uint256, address) external payable;
+    function deposit(address, uint256, uint256) external payable;
     function wrap(uint256) external payable;
     function unwrap(uint256) external payable;
 }

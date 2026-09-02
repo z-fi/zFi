@@ -5,7 +5,7 @@ import "forge-std/Test.sol";
 
 // Selective imports on purpose: both files declare file-scope constants named
 // WETH, V2_FACTORY and so on, and a plain `import "..."` of both would collide.
-import {zRouterLite} from "../src/zRouterLite.sol";
+import {zRouterLiteRobinhood} from "../src/zRouterLiteRobinhood.sol";
 import {zQuoterRobinhood} from "../src/zQuoterRobinhood.sol";
 
 /// @dev NOT pinned to a block, deliberately. The public Robinhood RPC keeps only
@@ -167,7 +167,7 @@ contract Reenterer {
 }
 
 contract RobinhoodTest is Test {
-    zRouterLite router;
+    zRouterLiteRobinhood router;
     zQuoterRobinhood quoter;
 
     address alice = makeAddr("alice");
@@ -178,7 +178,7 @@ contract RobinhoodTest is Test {
         vm.createSelectFork(RPC);
         // The constructor takes ownership from tx.origin, so set both.
         vm.prank(deployer, deployer);
-        router = new zRouterLite();
+        router = new zRouterLiteRobinhood();
         quoter = new zQuoterRobinhood(address(router));
         vm.deal(alice, 100 ether);
     }
@@ -458,11 +458,11 @@ contract RobinhoodTest is Test {
     function testDeadlineIsEnforcedOnEveryVenue() public {
         uint256 past = block.timestamp - 1;
         vm.startPrank(alice);
-        vm.expectRevert(zRouterLite.Expired.selector);
+        vm.expectRevert(zRouterLiteRobinhood.Expired.selector);
         router.swapV2{value: 1 wei}(alice, false, address(0), TKN, 1 wei, 0, past);
-        vm.expectRevert(zRouterLite.Expired.selector);
+        vm.expectRevert(zRouterLiteRobinhood.Expired.selector);
         router.swapV3{value: 1 wei}(alice, false, 10_000, address(0), TKN, 1 wei, 0, past);
-        vm.expectRevert(zRouterLite.Expired.selector);
+        vm.expectRevert(zRouterLiteRobinhood.Expired.selector);
         router.swapV4{value: 1 wei}(alice, false, 10_000, 200, address(0), TKN, 1 wei, 0, past);
         vm.stopPrank();
     }
@@ -483,15 +483,15 @@ contract RobinhoodTest is Test {
         _need(quoted);
 
         vm.startPrank(alice);
-        vm.expectRevert(zRouterLite.Slippage.selector);
+        vm.expectRevert(zRouterLiteRobinhood.Slippage.selector);
         router.swapV2{value: 0.01 ether}(alice, false, address(0), TKN, 0.01 ether, quoted + 1, block.timestamp);
 
-        vm.expectRevert(zRouterLite.Slippage.selector);
+        vm.expectRevert(zRouterLiteRobinhood.Slippage.selector);
         router.swapV3{value: 0.01 ether}(
             alice, false, 10_000, address(0), TKN, 0.01 ether, type(uint128).max, block.timestamp
         );
 
-        vm.expectRevert(zRouterLite.Slippage.selector);
+        vm.expectRevert(zRouterLiteRobinhood.Slippage.selector);
         router.swapV4{value: 0.01 ether}(
             alice, false, 10_000, 200, address(0), TKN, 0.01 ether, type(uint128).max, block.timestamp
         );
@@ -500,11 +500,11 @@ contract RobinhoodTest is Test {
 
     function testZeroAmountWithNoBalanceIsBadSwap() public {
         vm.startPrank(alice);
-        vm.expectRevert(zRouterLite.BadSwap.selector);
+        vm.expectRevert(zRouterLiteRobinhood.BadSwap.selector);
         router.swapV2(alice, false, TKN, address(0), 0, 0, block.timestamp);
-        vm.expectRevert(zRouterLite.BadSwap.selector);
+        vm.expectRevert(zRouterLiteRobinhood.BadSwap.selector);
         router.swapV3(alice, false, 10_000, TKN, address(0), 0, 0, block.timestamp);
-        vm.expectRevert(zRouterLite.BadSwap.selector);
+        vm.expectRevert(zRouterLiteRobinhood.BadSwap.selector);
         router.swapV4(alice, false, 10_000, 200, TKN, address(0), 0, 0, block.timestamp);
         vm.stopPrank();
     }
@@ -519,7 +519,7 @@ contract RobinhoodTest is Test {
 
     function testUnlockCallbackRejectsStrangers() public {
         vm.prank(alice);
-        vm.expectRevert(zRouterLite.Unauthorized.selector);
+        vm.expectRevert(zRouterLiteRobinhood.Unauthorized.selector);
         router.unlockCallback("");
     }
 
@@ -539,13 +539,13 @@ contract RobinhoodTest is Test {
         uint256 bal = IERC20(TKN).balanceOf(alice);
 
         bytes[] memory calls = new bytes[](3);
-        calls[0] = abi.encodeWithSelector(zRouterLite.deposit.selector, TKN, bal);
+        calls[0] = abi.encodeWithSelector(zRouterLiteRobinhood.deposit.selector, TKN, bal);
         // `to` is the router, so the output stays credited inside it...
         calls[1] = abi.encodeWithSelector(
-            zRouterLite.swapV2.selector, address(router), false, TKN, WETH, bal, uint256(0), block.timestamp
+            zRouterLiteRobinhood.swapV2.selector, address(router), false, TKN, WETH, bal, uint256(0), block.timestamp
         );
         // ...until this sweeps the whole WETH balance out to alice.
-        calls[2] = abi.encodeWithSelector(zRouterLite.sweep.selector, WETH, uint256(0), alice);
+        calls[2] = abi.encodeWithSelector(zRouterLiteRobinhood.sweep.selector, WETH, uint256(0), alice);
 
         vm.startPrank(alice);
         IERC20(TKN).approve(address(router), bal);
@@ -559,18 +559,18 @@ contract RobinhoodTest is Test {
     function testMulticallBubblesTheInnerRevert() public {
         bytes[] memory calls = new bytes[](1);
         calls[0] = abi.encodeWithSelector(
-            zRouterLite.swapV2.selector, alice, false, address(0), TKN, uint256(1), uint256(0), block.timestamp - 1
+            zRouterLiteRobinhood.swapV2.selector, alice, false, address(0), TKN, uint256(1), uint256(0), block.timestamp - 1
         );
         vm.prank(alice);
-        vm.expectRevert(zRouterLite.Expired.selector);
+        vm.expectRevert(zRouterLiteRobinhood.Expired.selector);
         router.multicall(calls);
     }
 
     function testDepositRejectsMismatchedMsgValue() public {
         vm.startPrank(alice);
-        vm.expectRevert(zRouterLite.InvalidMsgVal.selector);
+        vm.expectRevert(zRouterLiteRobinhood.InvalidMsgVal.selector);
         router.deposit{value: 1 ether}(WETH, 2 ether);
-        vm.expectRevert(zRouterLite.InvalidMsgVal.selector);
+        vm.expectRevert(zRouterLiteRobinhood.InvalidMsgVal.selector);
         router.deposit{value: 1 ether}(TKN, 1 ether);
         vm.stopPrank();
     }
@@ -579,7 +579,7 @@ contract RobinhoodTest is Test {
     /// credits this call with ether it never received.
     function testDepositRejectsPhantomEther() public {
         vm.prank(alice);
-        vm.expectRevert(zRouterLite.InvalidMsgVal.selector);
+        vm.expectRevert(zRouterLiteRobinhood.InvalidMsgVal.selector);
         router.deposit(address(0), 1 ether);
     }
 
@@ -628,18 +628,18 @@ contract RobinhoodTest is Test {
 
     function testOnlyOwnerCanTrustOrTransfer() public {
         vm.startPrank(alice);
-        vm.expectRevert(zRouterLite.Unauthorized.selector);
+        vm.expectRevert(zRouterLiteRobinhood.Unauthorized.selector);
         router.trust(alice, true);
-        vm.expectRevert(zRouterLite.Unauthorized.selector);
+        vm.expectRevert(zRouterLiteRobinhood.Unauthorized.selector);
         router.transferOwnership(alice);
-        vm.expectRevert(zRouterLite.Unauthorized.selector);
+        vm.expectRevert(zRouterLiteRobinhood.Unauthorized.selector);
         router.ensureAllowance(TKN, alice);
         vm.stopPrank();
     }
 
     function testTransferOwnershipEmitsAndMoves() public {
         vm.expectEmit(true, true, false, false);
-        emit zRouterLite.OwnershipTransferred(deployer, alice);
+        emit zRouterLiteRobinhood.OwnershipTransferred(deployer, alice);
         vm.prank(deployer);
         router.transferOwnership(alice);
         assertEq(router.owner(), alice);
@@ -657,7 +657,7 @@ contract RobinhoodTest is Test {
         Reenterer target = new Reenterer();
         assertFalse(router.isTrustedForCall(address(target)));
         vm.prank(deployer);
-        vm.expectRevert(zRouterLite.Unauthorized.selector);
+        vm.expectRevert(zRouterLiteRobinhood.Unauthorized.selector);
         router.execute(address(target), 0, abi.encodeWithSelector(Reenterer.poke.selector, address(router), bytes("")));
     }
 
@@ -678,7 +678,7 @@ contract RobinhoodTest is Test {
         router.trust(address(target), false);
         vm.stopPrank();
 
-        vm.expectRevert(zRouterLite.Unauthorized.selector);
+        vm.expectRevert(zRouterLiteRobinhood.Unauthorized.selector);
         router.execute(address(target), 0, abi.encodeWithSelector(Reenterer.poke.selector, address(router), bytes("")));
     }
 
@@ -703,7 +703,7 @@ contract RobinhoodTest is Test {
     }
 
     function testExecuteLocksTheV4Callback() public {
-        bytes memory cb = abi.encodeWithSelector(zRouterLite.unlockCallback.selector, bytes(""));
+        bytes memory cb = abi.encodeWithSelector(zRouterLiteRobinhood.unlockCallback.selector, bytes(""));
 
         Reenterer target = new Reenterer();
         vm.prank(deployer);
@@ -764,7 +764,7 @@ contract RobinhoodTest is Test {
         MockFill filler = new MockFill();
         IERC20(TKN).approve(address(router), bal);
 
-        vm.expectRevert(abi.encodeWithSelector(zRouterLite.SnwapSlippage.selector, TKN, bal - 1, bal));
+        vm.expectRevert(abi.encodeWithSelector(zRouterLiteRobinhood.SnwapSlippage.selector, TKN, bal - 1, bal));
         router.snwap(
             TKN, bal, alice, TKN, bal, address(filler), abi.encodeWithSelector(MockFill.fill.selector, TKN, alice, bal - 1)
         );
@@ -781,7 +781,7 @@ contract RobinhoodTest is Test {
 
         bytes[] memory calls = new bytes[](2);
         calls[0] = abi.encodeWithSelector(
-            zRouterLite.snwap.selector,
+            zRouterLiteRobinhood.snwap.selector,
             TKN,
             bal,
             address(router),
@@ -790,7 +790,7 @@ contract RobinhoodTest is Test {
             address(filler),
             abi.encodeWithSelector(MockFill.fill.selector, TKN, address(router), bal)
         );
-        calls[1] = abi.encodeWithSelector(zRouterLite.sweep.selector, TKN, uint256(0), alice);
+        calls[1] = abi.encodeWithSelector(zRouterLiteRobinhood.sweep.selector, TKN, uint256(0), alice);
 
         router.multicall(calls);
         assertEq(IERC20(TKN).balanceOf(alice), bal);
@@ -857,7 +857,7 @@ contract RobinhoodTest is Test {
         mins[0] = bal;
         mins[1] = 1; // no ether is ever delivered, so this one must trip
 
-        vm.expectRevert(abi.encodeWithSelector(zRouterLite.SnwapSlippage.selector, address(0), 0, 1));
+        vm.expectRevert(abi.encodeWithSelector(zRouterLiteRobinhood.SnwapSlippage.selector, address(0), 0, 1));
         router.snwapMulti(
             TKN,
             bal,
@@ -929,7 +929,7 @@ contract RobinhoodTest is Test {
 
         vm.startPrank(alice);
         IERC20(USDG).approve(address(router), maxIn);
-        vm.expectRevert(zRouterLite.Slippage.selector);
+        vm.expectRevert(zRouterLiteRobinhood.Slippage.selector);
         router.swapDeep(
             alice, DEEP, USDG, epoch, _order(type(int32).max, 1e18), true, maxIn, type(uint128).max, block.timestamp
         );
@@ -938,7 +938,7 @@ contract RobinhoodTest is Test {
 
     function testSwapDeepRespectsTheDeadline() public {
         vm.prank(alice);
-        vm.expectRevert(zRouterLite.Expired.selector);
+        vm.expectRevert(zRouterLiteRobinhood.Expired.selector);
         router.swapDeep(alice, DEEP, USDG, 0, _order(0, 1), true, 0, 0, block.timestamp - 1);
     }
 
@@ -968,9 +968,9 @@ contract RobinhoodTest is Test {
         deal(USDG, alice, maxIn);
 
         bytes[] memory calls = new bytes[](3);
-        calls[0] = abi.encodeWithSelector(zRouterLite.deposit.selector, USDG, maxIn);
+        calls[0] = abi.encodeWithSelector(zRouterLiteRobinhood.deposit.selector, USDG, maxIn);
         calls[1] = abi.encodeWithSelector(
-            zRouterLite.swapDeep.selector,
+            zRouterLiteRobinhood.swapDeep.selector,
             address(router),
             DEEP,
             USDG,
@@ -981,7 +981,7 @@ contract RobinhoodTest is Test {
             uint256(1),
             block.timestamp
         );
-        calls[2] = abi.encodeWithSelector(zRouterLite.sweep.selector, DEEP, uint256(0), alice);
+        calls[2] = abi.encodeWithSelector(zRouterLiteRobinhood.sweep.selector, DEEP, uint256(0), alice);
 
         vm.startPrank(alice);
         IERC20(USDG).approve(address(router), maxIn);
@@ -1041,9 +1041,9 @@ contract RobinhoodTest is Test {
 
         bytes[] memory calls = new bytes[](3);
         calls[0] =
-            abi.encodeWithSelector(zRouterLite.permit.selector, address(token), uint256(10 ether), deadline, v, r, sg);
-        calls[1] = abi.encodeWithSelector(zRouterLite.deposit.selector, address(token), uint256(10 ether));
-        calls[2] = abi.encodeWithSelector(zRouterLite.sweep.selector, address(token), uint256(0), alice);
+            abi.encodeWithSelector(zRouterLiteRobinhood.permit.selector, address(token), uint256(10 ether), deadline, v, r, sg);
+        calls[1] = abi.encodeWithSelector(zRouterLiteRobinhood.deposit.selector, address(token), uint256(10 ether));
+        calls[2] = abi.encodeWithSelector(zRouterLiteRobinhood.sweep.selector, address(token), uint256(0), alice);
 
         vm.prank(signer);
         router.multicall(calls);
@@ -1053,8 +1053,8 @@ contract RobinhoodTest is Test {
     }
 
     function testPermitSelectorMatchesTheFrontEnd() public pure {
-        assertEq(zRouterLite.permit.selector, bytes4(0x7ac2ff7b));
-        assertEq(zRouterLite.permit2TransferFrom.selector, bytes4(0x09d31579));
+        assertEq(zRouterLiteRobinhood.permit.selector, bytes4(0x7ac2ff7b));
+        assertEq(zRouterLiteRobinhood.permit2TransferFrom.selector, bytes4(0x09d31579));
     }
 
     /// @dev End to end against the Permit2 actually deployed on 4663 — the
@@ -1076,9 +1076,9 @@ contract RobinhoodTest is Test {
         // Pull, then hand the credited balance straight back out to alice.
         bytes[] memory calls = new bytes[](2);
         calls[0] = abi.encodeWithSelector(
-            zRouterLite.permit2TransferFrom.selector, address(token), uint256(10 ether), nonce, deadline, sig
+            zRouterLiteRobinhood.permit2TransferFrom.selector, address(token), uint256(10 ether), nonce, deadline, sig
         );
-        calls[1] = abi.encodeWithSelector(zRouterLite.sweep.selector, address(token), uint256(0), alice);
+        calls[1] = abi.encodeWithSelector(zRouterLiteRobinhood.sweep.selector, address(token), uint256(0), alice);
 
         vm.prank(signer);
         router.multicall(calls);
@@ -1266,8 +1266,8 @@ contract RobinhoodTest is Test {
             quoter.buildBestSwap(address(router), false, address(0), WETH, 1 ether, 50, block.timestamp);
         (, bytes memory swept,,) = quoter.buildBestSwap(alice, false, address(0), WETH, 1 ether, 50, block.timestamp);
 
-        assertEq(bytes4(chained), zRouterLite.wrap.selector, "chained wrap should be a bare wrap");
-        assertEq(bytes4(swept), zRouterLite.multicall.selector, "unchained wrap should sweep");
+        assertEq(bytes4(chained), zRouterLiteRobinhood.wrap.selector, "chained wrap should be a bare wrap");
+        assertEq(bytes4(swept), zRouterLiteRobinhood.multicall.selector, "unchained wrap should sweep");
         assertTrue(chained.length < swept.length);
     }
 
@@ -1277,13 +1277,13 @@ contract RobinhoodTest is Test {
     /// check the inner legs rather than trusting the round-trip alone.
     function testBuiltCalldataUsesTheRoutersOwnSelectors() public view {
         (, bytes memory callData,,) = quoter.buildBestSwap(alice, false, WETH, address(0), 1 ether, 50, block.timestamp);
-        assertEq(bytes4(callData), zRouterLite.multicall.selector);
+        assertEq(bytes4(callData), zRouterLiteRobinhood.multicall.selector);
 
         bytes[] memory legs = abi.decode(_tail(callData), (bytes[]));
         assertEq(legs.length, 3);
-        assertEq(bytes4(legs[0]), zRouterLite.deposit.selector, "deposit selector drifted");
-        assertEq(bytes4(legs[1]), zRouterLite.unwrap.selector, "unwrap selector drifted");
-        assertEq(bytes4(legs[2]), zRouterLite.sweep.selector, "sweep selector drifted");
+        assertEq(bytes4(legs[0]), zRouterLiteRobinhood.deposit.selector, "deposit selector drifted");
+        assertEq(bytes4(legs[1]), zRouterLiteRobinhood.unwrap.selector, "unwrap selector drifted");
+        assertEq(bytes4(legs[2]), zRouterLiteRobinhood.sweep.selector, "sweep selector drifted");
 
         // And the arguments decode against the new, id-free signatures.
         (address depToken, uint256 depAmount) = abi.decode(_tail(legs[0]), (address, uint256));

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.36;
 
-// zRouterLite — Uniswap V2/V3/V4 and the Deepstate CLOB on Robinhood Chain (4663).
+// zRouterLiteRobinhood — Uniswap V2/V3/V4 and the Deepstate CLOB on Robinhood Chain (4663).
 //
 // The mainnet zRouter also carries zAMM, Sushi, Curve and a Lido staker. None of
 // that is deployed here, so none of it is in this contract; what remains is the
@@ -17,7 +17,7 @@ pragma solidity ^0.8.36;
 //    no such token exists on 4663. Every other selector is unchanged, and
 //    zQuoterRobinhood builds calldata for these signatures, so the two ship as a
 //    pair.
-contract zRouterLite {
+contract zRouterLiteRobinhood {
     error BadSwap();
     error Expired();
     error Slippage();
