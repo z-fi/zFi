@@ -16,14 +16,17 @@ pragma solidity ^0.8.36;
 //  - The Sushi branch of `_v2PoolFor`: no Sushi factory. This also frees the
 //    `deadline == type(uint256).max` sentinel, which on mainnet means "Sushi";
 //    here a max deadline simply means no deadline, which is what it reads like.
-//  - snwap / snwapMulti / SafeExecutor: solver fills need a solver network.
-//  - owner, `trust`, `execute`: their only purpose was gating that executor.
-//  - The `tload(0x00)` callback lock: its sole writer was `execute`. With no
-//    arbitrary outbound call in the contract there is nothing to lock against,
-//    and the callbacks still authenticate — V3 against the pool address it
-//    re-derives, V4 against the singleton PoolManager.
 //  - permit / permitDAI / permit2*: the zSwap front end approves ERC20 directly.
 //    Permit2 is deployed on 4663 if this is ever wanted back.
+//  - ERC6909 deposit/sweep ids: nothing on 4663 issues them. The `id` argument
+//    survives in both signatures for calldata parity and must be zero.
+//
+// WHAT WAS KEPT DESPITE HAVING NO USER ON 4663 YET: the ownable/`trust`/`execute`
+// module, `snwap`/`snwapMulti` and `SafeExecutor`. These are venue-independent —
+// they are how a solver fill or a future integration reaches this router at all,
+// and retrofitting them would mean a new address. `execute` brings the
+// `tload(0x00)` callback lock with it, which is not optional: while an arbitrary
+// trusted target has control, the V3 and V4 callbacks must be unreachable.
 //
 // WHAT WAS KEPT VERBATIM: the transient-balance credit system. It is what lets
 // `multicall` chain a wrap into a swap into a sweep, and the quoter's
@@ -41,13 +44,24 @@ contract zRouterLite {
     error Unauthorized();
     error InvalidMsgVal();
     error ETHTransferFailed();
+    error SnwapSlippage(address token, uint256 received, uint256 minimum);
+
+    event OwnershipTransferred(address indexed from, address indexed to);
+
+    SafeExecutor public immutable safeExecutor;
 
     modifier checkDeadline(uint256 deadline) {
         require(block.timestamp <= deadline, Expired());
         _;
     }
 
-    constructor() payable {}
+    /// @dev `tx.origin` rather than `msg.sender` because this is meant to be
+    /// deployed through the CREATE2 factory at 0x4e59b448... for a vanity
+    /// address: `msg.sender` there is the factory, not whoever is deploying.
+    constructor() payable {
+        safeExecutor = new SafeExecutor();
+        emit OwnershipTransferred(address(0), _owner = tx.origin);
+    }
 
     // ** UNISWAP V2
 
@@ -175,10 +189,14 @@ contract zRouterLite {
         }
     }
 
-    /// @dev `uniswapV3SwapCallback`. Authenticated by re-deriving the pool from
-    /// the tokens and fee carried in the callback data: only the pool a `swapV3`
-    /// in this transaction could have called can satisfy it.
+    /// @dev `uniswapV3SwapCallback`. Two layers: the `tload` lock refuses the
+    /// callback outright while `execute` has an arbitrary call outstanding, and
+    /// outside that the pool is re-derived from the tokens and fee carried in the
+    /// callback data, so only the pool a `swapV3` could have called satisfies it.
     fallback() external payable {
+        assembly ("memory-safe") {
+            if gt(tload(0x00), 0) { revert(0, 0) }
+        }
         unchecked {
             int256 amount0Delta;
             int256 amount1Delta;
@@ -250,6 +268,10 @@ contract zRouterLite {
     /// @dev Handle V4 PoolManager swap callback - hookless default.
     function unlockCallback(bytes calldata callbackData) public payable returns (bytes memory result) {
         require(msg.sender == V4_POOL_MANAGER, Unauthorized());
+
+        assembly ("memory-safe") {
+            if gt(tload(0x00), 0) { revert(0, 0) }
+        }
 
         (
             address payer,
@@ -415,6 +437,12 @@ contract zRouterLite {
         unwrapETH(amount == 0 ? balanceOf(WETH) : amount);
     }
 
+    // ** APPROVALS
+
+    function ensureAllowance(address token, address to) public payable onlyOwner {
+        safeApprove(token, to, type(uint256).max);
+    }
+
     // ** POOL HELPERS
 
     function _v2PoolFor(address tokenA, address tokenB) internal pure returns (address v2pool, bool zeroForOne) {
@@ -476,6 +504,135 @@ contract zRouterLite {
         returns (address token0, address token1, bool zeroForOne)
     {
         (token0, token1) = (zeroForOne = tokenA < tokenB) ? (tokenA, tokenB) : (tokenB, tokenA);
+    }
+
+    // ** EXECUTE EXTENSIONS
+
+    address _owner;
+
+    modifier onlyOwner() {
+        require(msg.sender == _owner, Unauthorized());
+        _;
+    }
+
+    mapping(address target => bool) _isTrustedForCall;
+
+    function owner() public view returns (address) {
+        return _owner;
+    }
+
+    function isTrustedForCall(address target) public view returns (bool) {
+        return _isTrustedForCall[target];
+    }
+
+    function trust(address target, bool ok) public payable onlyOwner {
+        _isTrustedForCall[target] = ok;
+    }
+
+    function transferOwnership(address newOwner) public payable onlyOwner {
+        emit OwnershipTransferred(msg.sender, _owner = newOwner);
+    }
+
+    /// @dev Calls out AS the router, which is why it is both trust-gated and
+    /// wrapped in the callback lock: while an arbitrary target has control, the
+    /// V3 and V4 callbacks must not be reachable, or the target could drive a
+    /// swap that names someone else as `payer`.
+    function execute(address target, uint256 value, bytes calldata data) public payable returns (bytes memory result) {
+        require(_isTrustedForCall[target], Unauthorized());
+        assembly ("memory-safe") {
+            tstore(0x00, 1) // lock callback (V3/V4)
+            result := mload(0x40)
+            calldatacopy(result, data.offset, data.length)
+            if iszero(call(gas(), target, value, result, data.length, codesize(), 0x00)) {
+                returndatacopy(result, 0x00, returndatasize())
+                revert(result, returndatasize())
+            }
+            mstore(result, returndatasize())
+            let o := add(result, 0x20)
+            returndatacopy(o, 0x00, returndatasize())
+            mstore(0x40, add(o, returndatasize()))
+            tstore(0x00, 0) // unlock callback
+        }
+    }
+
+    // ** SNWAP - GENERIC EXECUTOR
+
+    /// @dev Permissionless, unlike `execute`, because the outbound call is made
+    /// by `safeExecutor` rather than by this contract: that helper holds no
+    /// approvals and no balances, so an arbitrary `executor` gets no authority it
+    /// did not already have. The accounting is a before/after balance delta on
+    /// `recipient`, so whatever the executor does internally is irrelevant —
+    /// only what lands is paid for.
+    function snwap(
+        address tokenIn,
+        uint256 amountIn,
+        address recipient,
+        address tokenOut,
+        uint256 amountOutMin,
+        address executor,
+        bytes calldata executorData
+    ) public payable returns (uint256 amountOut) {
+        uint256 initialBalance = tokenOut == address(0) ? recipient.balance : balanceOfAccount(tokenOut, recipient);
+
+        if (tokenIn != address(0)) {
+            if (amountIn != 0) {
+                safeTransferFrom(tokenIn, msg.sender, executor, amountIn);
+            } else {
+                unchecked {
+                    uint256 bal = balanceOf(tokenIn);
+                    if (bal > 1) safeTransfer(tokenIn, executor, bal - 1);
+                }
+            }
+        }
+
+        safeExecutor.execute{value: msg.value}(executor, executorData);
+
+        uint256 finalBalance = tokenOut == address(0) ? recipient.balance : balanceOfAccount(tokenOut, recipient);
+        amountOut = finalBalance - initialBalance;
+        if (amountOut < amountOutMin) revert SnwapSlippage(tokenOut, amountOut, amountOutMin);
+        if (recipient == address(this)) depositFor(tokenOut, 0, amountOut, address(this));
+    }
+
+    function snwapMulti(
+        address tokenIn,
+        uint256 amountIn,
+        address recipient,
+        address[] calldata tokensOut,
+        uint256[] calldata amountsOutMin,
+        address executor,
+        bytes calldata executorData
+    ) public payable returns (uint256[] memory amountsOut) {
+        uint256 len = tokensOut.length;
+        uint256[] memory initBals = new uint256[](len);
+        for (uint256 i; i != len; ++i) {
+            initBals[i] = tokensOut[i] == address(0) ? recipient.balance : balanceOfAccount(tokensOut[i], recipient);
+        }
+
+        if (tokenIn != address(0)) {
+            if (amountIn != 0) {
+                safeTransferFrom(tokenIn, msg.sender, executor, amountIn);
+            } else {
+                unchecked {
+                    uint256 bal = balanceOf(tokenIn);
+                    if (bal > 1) safeTransfer(tokenIn, executor, bal - 1);
+                }
+            }
+        }
+
+        safeExecutor.execute{value: msg.value}(executor, executorData);
+
+        amountsOut = new uint256[](len);
+        for (uint256 i; i != len; ++i) {
+            uint256 finalBal =
+                tokensOut[i] == address(0) ? recipient.balance : balanceOfAccount(tokensOut[i], recipient);
+            amountsOut[i] = finalBal - initBals[i];
+            if (amountsOut[i] < amountsOutMin[i]) {
+                revert SnwapSlippage(tokensOut[i], amountsOut[i], amountsOutMin[i]);
+            }
+            if (recipient == address(this)) {
+                depositFor(tokensOut[i], 0, amountsOut[i], address(this));
+            }
+        }
     }
 }
 
@@ -595,9 +752,35 @@ function safeTransferFrom(address token, address from, address to, uint256 amoun
     }
 }
 
+error ApproveFailed();
+
+function safeApprove(address token, address to, uint256 amount) {
+    assembly ("memory-safe") {
+        mstore(0x14, to)
+        mstore(0x34, amount)
+        mstore(0x00, 0x095ea7b3000000000000000000000000)
+        let success := call(gas(), token, 0, 0x10, 0x44, 0x00, 0x20)
+        if iszero(and(eq(mload(0x00), 1), success)) {
+            if iszero(lt(or(iszero(extcodesize(token)), returndatasize()), success)) {
+                mstore(0x00, 0x3e3f8f73)
+                revert(0x1c, 0x04)
+            }
+        }
+        mstore(0x34, 0)
+    }
+}
+
 function balanceOf(address token) view returns (uint256 amount) {
     assembly ("memory-safe") {
         mstore(0x14, address())
+        mstore(0x00, 0x70a08231000000000000000000000000)
+        amount := mul(mload(0x20), and(gt(returndatasize(), 0x1f), staticcall(gas(), token, 0x10, 0x24, 0x20, 0x20)))
+    }
+}
+
+function balanceOfAccount(address token, address account) view returns (uint256 amount) {
+    assembly ("memory-safe") {
+        mstore(0x14, account)
         mstore(0x00, 0x70a08231000000000000000000000000)
         amount := mul(mload(0x20), and(gt(returndatasize(), 0x1f), staticcall(gas(), token, 0x10, 0x24, 0x20, 0x20)))
     }
@@ -635,5 +818,21 @@ function depositFor(address token, uint256 id, uint256 amount, address _for) {
         let slot := keccak256(0x00, 0x60)
         tstore(slot, add(tload(slot), amount))
         mstore(0x40, m)
+    }
+}
+
+// modified from 0xAC4c6e212A361c968F1725b4d055b47E63F80b75 - sushi yum
+
+/// @dev SafeExecutor - has no token approvals, safe for arbitrary external calls
+contract SafeExecutor {
+    function execute(address target, bytes calldata data) public payable {
+        assembly ("memory-safe") {
+            let m := mload(0x40)
+            calldatacopy(m, data.offset, data.length)
+            if iszero(call(gas(), target, callvalue(), m, data.length, codesize(), 0x00)) {
+                returndatacopy(m, 0x00, returndatasize())
+                revert(m, returndatasize())
+            }
+        }
     }
 }
