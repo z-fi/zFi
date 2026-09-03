@@ -168,4 +168,32 @@ contract VenueMath is Test {
         assertEq(gin, qin, "v2 exact-out drift");
         assertEq(gout, 50_000e6);
     }
+
+    /// @dev Base's V3 factory has fee tier 200 enabled at tickSpacing 4, and the
+    /// WETH/USDC pool at that tier is funded. `_spacingFromBps` falls through to
+    /// `int24(bps)` = 2 for it, so the tick walk reads the wrong bitmap words.
+    function testV3Fee200SpacingFallback() public {
+        address pool = 0x1C450D7d1FD98A0b04E30deCFc83497b33A4F608;
+        emit log_named_uint("pool liquidity", uint256(IPoolQ(pool).liquidity()));
+        emit log_named_int("pool tickSpacing", int256(IPoolQ(pool).tickSpacing()));
+        uint256[3] memory amts = [uint256(0.01 ether), 1 ether, 20 ether];
+        for (uint256 i; i < 3; ++i) {
+            uint256 snap = vm.snapshotState();
+            (, uint256 q) = quoter.quoteV3(false, address(0), U, 200, amts[i]);
+            emit log_named_uint("amount", amts[i]);
+            emit log_named_uint("quoted", q);
+            if (q != 0) {
+                vm.prank(alice);
+                (, uint256 got) = router.swapV3{value: amts[i]}(alice, false, 200, address(0), U, amts[i], 0, block.timestamp);
+                emit log_named_uint("actual", got);
+                assertEq(got, q, "fee-200 quote drifted from execution");
+            }
+            vm.revertToState(snap);
+        }
+    }
+}
+
+interface IPoolQ {
+    function liquidity() external view returns (uint128);
+    function tickSpacing() external view returns (int24);
 }

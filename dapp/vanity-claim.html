@@ -66,6 +66,7 @@
     <h2>Wallet</h2>
     <div class="row">
       <button id="connect">Connect</button>
+      <span class="hint" id="wallets"></span>
       <button id="simulate" class="ghost" disabled>Simulate</button>
       <button id="send" disabled>Send</button>
     </div>
@@ -90,10 +91,36 @@ const DEFAULT_CD =
   'f9a922582de349956d614c4f64a3209de042090d41249f2915a2b681fca3b636';
 
 const $ = (id) => document.getElementById(id);
+
+// Wallet discovery. Modern wallets announce via EIP-6963 rather than only
+// injecting window.ethereum, and injection is async — so poll briefly for both
+// instead of deciding on first paint that no wallet exists.
+let provider = null;
+const announced = [];
+window.addEventListener('eip6963:announceProvider', (e) => {
+  announced.push(e.detail);
+  if (!provider) provider = e.detail.provider;
+});
+window.dispatchEvent(new Event('eip6963:requestProvider'));
+
+async function getProvider() {
+  for (let i = 0; i < 20; i++) {
+    if (provider) return provider;
+    if (window.ethereum) return (provider = window.ethereum);
+    window.dispatchEvent(new Event('eip6963:requestProvider'));
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  return null;
+}
 const show = (el, text, cls) => { el.textContent = text; el.className = 'msg show ' + (cls || ''); };
 let account = null;
 
 $('to').textContent = VANITY_MARKET;
+setTimeout(() => {
+  $('wallets').textContent = announced.length
+    ? 'detected: ' + announced.map((a) => a.info.name).join(', ')
+    : (window.ethereum ? 'detected: injected provider' : 'no wallet detected yet');
+}, 400);
 $('cd').value = DEFAULT_CD;
 
 // Decode locally so what you approve is what is shown — no trust in the page's prose.
@@ -121,14 +148,14 @@ function decode() {
 $('cd').addEventListener('input', decode);
 decode();
 
-async function ensureBase() {
-  const chain = await ethereum.request({ method: 'eth_chainId' });
+async function ensureBase(p) {
+  const chain = await p.request({ method: 'eth_chainId' });
   if (chain === BASE) return;
   try {
-    await ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: BASE }] });
+    await p.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: BASE }] });
   } catch (e) {
     if (e.code !== 4902) throw e;
-    await ethereum.request({
+    await p.request({
       method: 'wallet_addEthereumChain',
       params: [{
         chainId: BASE, chainName: 'Base',
@@ -142,10 +169,20 @@ async function ensureBase() {
 
 $('connect').onclick = async () => {
   try {
-    if (!window.ethereum) return show($('acct'), 'No injected wallet found.', 'bad');
-    const accts = await ethereum.request({ method: 'eth_requestAccounts' });
+    const p = await getProvider();
+    if (!p) {
+      return show($('acct'),
+        'No wallet found.\n\n' +
+        (location.protocol === 'file:'
+          ? 'This page is open over file://, where most wallets do not inject.\n' +
+            'Serve it over localhost instead:\n\n' +
+            '  cd ' + '/Users/z/zFi/dapp' + ' && python3 -m http.server 8000\n' +
+            '  then open http://localhost:8000/vanity-claim.html'
+          : 'Unlock your wallet extension and reload.'), 'bad');
+    }
+    const accts = await p.request({ method: 'eth_requestAccounts' });
     account = accts[0];
-    await ensureBase();
+    await ensureBase(p);
     const claimer = $('d-claimer').textContent.toLowerCase();
     const match = account.toLowerCase() === claimer;
     show($('acct'), account + (match ? '  ✓ matches claimer' : '  ✗ NOT the claimer — this will revert'),
@@ -160,8 +197,8 @@ const tx = () => ({ from: account, to: VANITY_MARKET, data: $('cd').value.trim()
 $('simulate').onclick = async () => {
   show($('out'), 'Simulating…');
   try {
-    await ethereum.request({ method: 'eth_call', params: [tx(), 'latest'] });
-    const gas = await ethereum.request({ method: 'eth_estimateGas', params: [tx()] });
+    await provider.request({ method: 'eth_call', params: [tx(), 'latest'] });
+    const gas = await provider.request({ method: 'eth_estimateGas', params: [tx()] });
     show($('out'), 'Simulation succeeded. Estimated gas: ' + BigInt(gas).toString(), 'ok');
   } catch (e) {
     // Surface the revert payload rather than a generic failure.
@@ -173,7 +210,7 @@ $('simulate').onclick = async () => {
 $('send').onclick = async () => {
   show($('out'), 'Confirm in your wallet…');
   try {
-    const hash = await ethereum.request({ method: 'eth_sendTransaction', params: [tx()] });
+    const hash = await provider.request({ method: 'eth_sendTransaction', params: [tx()] });
     $('out').innerHTML = 'Sent: <a href="https://basescan.org/tx/' + hash + '" target="_blank" rel="noopener">' +
                          hash + '</a>';
     $('out').className = 'msg show ok';

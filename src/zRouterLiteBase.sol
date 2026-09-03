@@ -2,22 +2,6 @@
 pragma solidity ^0.8.36;
 
 // zRouterLiteBase — Uniswap V2/V3/V4 and Aerodrome on Base (8453).
-//
-// A rewrite of the zRouter deployed at 0x0000000000404FECAf36E6184245475eE1254835,
-// not a copy. Same venue coverage and the same swap selectors, but with the
-// extensions that deployment predates: an owner, `trust`/`execute`, `snwap` over
-// a SafeExecutor, EIP-2612 and Permit2 legs, and the transient callback lock that
-// `execute` requires. `ensureAllowance` is owner-gated here; on that deployment it
-// is callable by anyone.
-//
-// zAMM is not here. It is deployed on Base but every pair and fee tier reads
-// empty, so quoting it was four guaranteed-misses per request and executing it was
-// a venue nobody uses. Its ERC6909 ids went with it: nothing else on this chain
-// issues one, so `deposit`, `sweep` and the transient balances all lost the
-// argument — which makes this router's ABI identical to the Robinhood one.
-//
-// `swapV4Router` is not carried over. It forwarded arbitrary calldata to a v4
-// periphery router, which is `execute` with no trust check and no lock.
 contract zRouterLiteBase {
     error BadSwap();
     error Expired();
@@ -36,12 +20,8 @@ contract zRouterLiteBase {
         _;
     }
 
-    /// @dev Ownership is ordinary transferrable ownership — `_owner` is storage
-    /// and `transferOwnership` moves it. Only the SEED is fixed: through a CREATE3
-    /// factory `msg.sender` is the factory's proxy and `tx.origin` is whichever key
-    /// sent the transaction, so neither is the right initial owner. Seeding from a
-    /// constant means the deploy key confers no authority and can be rotated
-    /// freely afterwards.
+    /// @dev Owner is seeded, not inherited: under a factory deploy neither
+    /// msg.sender nor tx.origin is the right party. Transferrable thereafter.
     constructor() payable {
         safeExecutor = new SafeExecutor();
         emit OwnershipTransferred(address(0), _owner = INITIAL_OWNER);
@@ -155,11 +135,7 @@ contract zRouterLiteBase {
                 else require(uint256(-(zeroForOne ? a1 : a0)) >= amountLimit, Slippage());
             }
 
-            // An exact-out swap can come up short: the pool stops at the price
-            // limit or runs out of liquidity and fills only part of the request.
-            // `amountLimit` bounds the INPUT on this branch, so without this the
-            // caller pays up to their maximum and silently receives less than the
-            // amount they asked for.
+            // amountLimit bounds the INPUT here, so a short fill needs its own check.
             if (exactOut) {
                 require(uint256(-(zeroForOne ? a1 : a0)) >= swapAmount, Slippage());
             }
@@ -179,9 +155,8 @@ contract zRouterLiteBase {
         }
     }
 
-    /// @dev `uniswapV3SwapCallback`. The lock refuses it outright while `execute`
-    /// has an arbitrary call outstanding; otherwise the caller must be the pool
-    /// re-derived from the callback data.
+    /// @dev `uniswapV3SwapCallback`, shared with Slipstream. Caller must be the
+    /// pool re-derived from the callback data, and `execute` locks it out entirely.
     fallback() external payable {
         assembly ("memory-safe") {
             if gt(tload(0x00), 0) { revert(0, 0) }
@@ -340,9 +315,7 @@ contract zRouterLiteBase {
 
     // ** AERODROME (V2-shaped, volatile or stable)
 
-    /// @dev Exact-in only. The stable curve has no closed-form inverse, so an
-    /// exact-out would have to be solved by search — the quoter does that off to
-    /// the side and sends the solved input here.
+    /// @dev Exact-in only; the stable curve has no closed-form inverse.
     function swapAero(
         address to,
         bool stable,
@@ -393,9 +366,8 @@ contract zRouterLiteBase {
 
     // ** AERODROME SLIPSTREAM (concentrated liquidity)
 
-    /// @dev A v3 fork keyed by tick spacing rather than fee tier, and it calls
-    /// back with the same `uniswapV3SwapCallback` selector — which is why the
-    /// callback data carries a flag saying which factory to re-derive against.
+    /// @dev A v3 fork keyed by tick spacing. Shares the callback selector, so the
+    /// callback data carries a flag for which factory to re-derive against.
     function swapAeroCL(
         address to,
         bool exactOut,
@@ -435,11 +407,7 @@ contract zRouterLiteBase {
                 else require(uint256(-(zeroForOne ? a1 : a0)) >= amountLimit, Slippage());
             }
 
-            // An exact-out swap can come up short: the pool stops at the price
-            // limit or runs out of liquidity and fills only part of the request.
-            // `amountLimit` bounds the INPUT on this branch, so without this the
-            // caller pays up to their maximum and silently receives less than the
-            // amount they asked for.
+            // amountLimit bounds the INPUT here, so a short fill needs its own check.
             if (exactOut) {
                 require(uint256(-(zeroForOne ? a1 : a0)) >= swapAmount, Slippage());
             }
@@ -474,9 +442,7 @@ contract zRouterLiteBase {
 
     // ** TRANSIENT STORAGE
 
-    /// @dev Four total cases, one per funding source. Ether must actually be
-    /// attached to be credited — the deployed router credits a bare
-    /// `deposit(address(0), 0, n)` with ether it never received.
+    /// @dev Ether must actually be attached to be credited.
     function deposit(address token, uint256 amount) public payable {
         if (token == address(0)) {
             require(msg.value == amount, InvalidMsgVal());
@@ -507,21 +473,14 @@ contract zRouterLiteBase {
         }
     }
 
-    /// @dev What a previous leg actually credited, falling back to the raw balance
-    /// when there is no credit. `swapAmount == 0` means "spend what the last leg
-    /// produced"; reading the balance for that is wrong, because anyone can send
-    /// the router a single wei and the leg then tries to spend one wei more than
-    /// it was credited — which either pulls a second full payment from the caller
-    /// or reverts the whole chain.
+    /// @dev What the previous leg credited, or the balance if uncredited. Not the
+    /// balance alone: anyone can donate a wei and break a `swapAmount == 0` leg.
     function _selfAmount(address token) internal view returns (uint256 amount) {
         amount = _creditOf(address(this), token);
         if (amount == 0) amount = balanceOf(token);
     }
 
-    /// @dev MUST hash the same two words `depositFor` and `_useTransientBalance`
-    /// do. It hashed three while those hashed two, so it read a slot nothing ever
-    /// wrote, always returned zero, and `_selfAmount` fell back to the raw balance
-    /// — silently undoing the dust fix it exists to implement.
+    /// @dev MUST hash the same words as `depositFor` and `_useTransientBalance`.
     function _creditOf(address user, address token) internal view returns (uint256 bal) {
         assembly ("memory-safe") {
             mstore(0x00, user)
@@ -573,17 +532,13 @@ contract zRouterLiteBase {
         depositFor(address(0), amount, address(this));
     }
 
-    // ** PERMIT HELPERS
-    //
-    // Both are meant to be a `multicall` leg: sign, then permit and swap in one
-    // transaction. `multicall` delegatecalls, so `msg.sender` here is the signer.
+    // ** PERMIT HELPERS — meant as a `multicall` leg; delegatecall preserves msg.sender.
 
     function permit(address token, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s) public payable {
         IERC2612(token).permit(msg.sender, address(this), value, deadline, v, r, s);
     }
 
-    /// @dev SignatureTransfer, not AllowanceTransfer: nothing is left approved.
-    /// The pull is credited transiently for the next leg to spend.
+    /// @dev SignatureTransfer: nothing is left approved. Credited transiently.
     function permit2TransferFrom(
         address token,
         uint256 amount,
@@ -644,9 +599,8 @@ contract zRouterLiteBase {
         v3pool = _computeV3pool(token0, token1, fee);
     }
 
-    /// @dev The `mstore(0x35, ...)` pair overlaps the free memory pointer at 0x40
-    /// and looks like it corrupts it. It does not: the pointer is under 2**88, so
-    /// it lives entirely in bytes 0x55-0x5f, which neither store touches.
+    /// @dev The 0x35 stores overlap the free memory pointer but cannot corrupt it:
+    /// the pointer is under 2**88, living in bytes 0x55-0x5f.
     function _computeV3pool(address token0, address token1, uint24 fee) internal pure returns (address v3pool) {
         bytes32 salt = _hash(token0, token1, fee);
         assembly ("memory-safe") {
@@ -669,9 +623,8 @@ contract zRouterLiteBase {
         }
     }
 
-    /// @dev Aerodrome pools are minimal-proxy clones, so this hashes the clone
-    /// initcode rather than a pool init-code hash. Salt is packed for the classic
-    /// factory and abi-encoded for Slipstream — the two differ, deliberately.
+    /// @dev Clone-proxy pools: hashes the clone initcode. Classic packs the salt,
+    /// Slipstream abi-encodes it.
     function _aeroPoolFor(address tokenA, address tokenB, bool stable)
         internal
         pure
@@ -747,9 +700,8 @@ contract zRouterLiteBase {
         emit OwnershipTransferred(msg.sender, _owner = newOwner);
     }
 
-    /// @dev Calls out AS the router, so it is both trust-gated and wrapped in the
-    /// callback lock — otherwise the target could drive a swap naming someone
-    /// else as `payer`.
+    /// @dev Calls out AS the router: trust-gated, and locks the swap callbacks so
+    /// a target cannot drive a swap naming someone else as payer.
     function execute(address target, uint256 value, bytes calldata data) public payable returns (bytes memory result) {
         require(_isTrustedForCall[target], Unauthorized());
         assembly ("memory-safe") {
@@ -770,10 +722,8 @@ contract zRouterLiteBase {
 
     // ** SNWAP - GENERIC EXECUTOR
 
-    /// @dev Permissionless, unlike `execute`: the call is made by `safeExecutor`,
-    /// which holds no approvals and no balances, so an arbitrary `executor` gains
-    /// nothing. Payment is a before/after balance delta on `recipient` — only
-    /// what lands is paid for.
+    /// @dev Permissionless: the call is made by `safeExecutor`, which holds no
+    /// approvals or balances. Paid on a before/after balance delta on `recipient`.
     function snwap(
         address tokenIn,
         uint256 amountIn,
@@ -847,11 +797,7 @@ contract zRouterLiteBase {
     }
 }
 
-// ** BASE (8453)
-//
-// Every derivation below was checked against its factory's own registry rather
-// than trusted: `getPair`, `getPool` and the two Aerodrome clone factories all
-// return the address these constants rebuild.
+// ** BASE (8453) — every derivation checked against its factory's own registry.
 
 address constant WETH = 0x4200000000000000000000000000000000000006;
 
@@ -863,14 +809,11 @@ bytes32 constant V3_POOL_INIT_CODE_HASH = 0xe34f199b19b2b4f47f68442619d555527d24
 
 address constant V4_POOL_MANAGER = 0x498581fF718922c3f8e6A244956aF099B2652b2b;
 
-// Aerodrome deploys pools as minimal-proxy clones, so the pool address is a
-// CREATE2 of the clone initcode rather than of the pool's own. Both
-// implementations were read back off their factories.
+// Clone-proxy pools: the address is a CREATE2 of the clone initcode.
 address constant AERO_FACTORY = 0x420DD381b31aEf6683db6B902084cB0FFECe40Da;
 address constant AERO_IMPLEMENTATION = 0xA4e46b4f701c62e14DF11B48dCe76A7d793CD6d7;
 address constant AERO_CL_FACTORY = 0x5e7BB104d84c7CB9B682AaC2F3d509f5F406809A;
 address constant AERO_CL_IMPLEMENTATION = 0xeC8E5342B19977B4eF8892e02D8DAEcfa1315831;
-
 
 address constant INITIAL_OWNER = 0x1C0Aa8cCD568d90d61659F060D1bFb1e6f855A20;
 
@@ -1089,8 +1032,7 @@ function depositFor(address token, uint256 amount, address _for) {
     }
 }
 
-/// @dev Holds no approvals and no balances, so arbitrary calls made through it
-/// carry no authority. Modified from 0xAC4c6e212A361c968F1725b4d055b47E63F80b75.
+/// @dev Holds no approvals or balances, so calls through it carry no authority.
 contract SafeExecutor {
     function execute(address target, bytes calldata data) public payable {
         assembly ("memory-safe") {

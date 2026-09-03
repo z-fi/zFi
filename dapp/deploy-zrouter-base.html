@@ -1,0 +1,209 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Deploy zRouterLiteBase — Base</title>
+<style>
+  :root { color-scheme: light dark; --bg:#0b0d10; --fg:#e6e8eb; --mut:#8b949e; --line:#232a31;
+          --ok:#3fb950; --bad:#f85149; --warn:#d29922; --acc:#58a6ff; }
+  @media (prefers-color-scheme: light) {
+    :root { --bg:#fff; --fg:#14171a; --mut:#57606a; --line:#d8dee4; --ok:#1a7f37; --bad:#cf222e; --warn:#9a6700; --acc:#0969da; }
+  }
+  * { box-sizing:border-box }
+  body { margin:0; background:var(--bg); color:var(--fg); padding:28px 18px; display:flex; justify-content:center;
+         font:14px/1.55 ui-sans-serif,-apple-system,system-ui,sans-serif }
+  main { width:100%; max-width:700px }
+  h1 { font-size:17px; margin:0 0 2px }
+  .sub { color:var(--mut); margin:0 0 22px }
+  section { border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-bottom:14px }
+  h2 { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--mut); margin:0 0 10px; font-weight:600 }
+  dl { display:grid; grid-template-columns:auto 1fr; gap:5px 14px; margin:0 }
+  dt { color:var(--mut) }
+  dd { margin:0; font-family:ui-monospace,Menlo,monospace; font-size:12.5px; word-break:break-all }
+  button { font:inherit; font-weight:600; padding:9px 15px; border-radius:8px; border:1px solid var(--line);
+           background:var(--acc); color:#fff; cursor:pointer }
+  button.ghost { background:transparent; color:var(--fg) }
+  button:disabled { opacity:.45; cursor:not-allowed }
+  .row { display:flex; gap:9px; align-items:center; flex-wrap:wrap }
+  .msg { margin-top:11px; padding:9px 11px; border-radius:8px; border:1px solid var(--line); display:none;
+         font-family:ui-monospace,Menlo,monospace; font-size:12px; word-break:break-all; white-space:pre-wrap }
+  .msg.show { display:block }
+  .ok { color:var(--ok); border-color:var(--ok) }
+  .bad { color:var(--bad); border-color:var(--bad) }
+  .warn { color:var(--warn); border-color:var(--warn) }
+  .hint { color:var(--mut); font-size:12.5px; margin-top:9px }
+  a { color:var(--acc) }
+  ul { margin:8px 0 0; padding-left:18px; color:var(--mut); font-size:12.5px }
+  li { margin:3px 0 }
+</style>
+
+<main>
+  <h1>Deploy zRouterLiteBase</h1>
+  <p class="sub">Burns your VanityMarket NFT and deploys the router to its address on Base.
+     One shot: the token is consumed and the address is permanent.</p>
+
+  <section>
+    <h2>Preflight</h2>
+    <dl>
+      <dt>Chain</dt><dd id="p-chain">—</dd>
+      <dt>NFT owner</dt><dd id="p-owner">—</dd>
+      <dt>You</dt><dd id="p-you">—</dd>
+      <dt>Deploys to</dt><dd id="p-addr">—</dd>
+      <dt>Target occupied</dt><dd id="p-occupied">—</dd>
+      <dt>Initcode</dt><dd id="p-code">—</dd>
+      <dt>Initcode keccak</dt><dd id="p-hash">—</dd>
+      <dt>Initial owner</dt><dd id="p-iowner">0x1C0Aa8cCD568d90d61659F060D1bFb1e6f855A20</dd>
+    </dl>
+    <div class="msg" id="checks"></div>
+  </section>
+
+  <section>
+    <h2>Transaction</h2>
+    <dl>
+      <dt>To</dt><dd>0x000000000000b361194cfe6312EE3210d53C15AA <span class="hint">VanityMarket</span></dd>
+      <dt>Function</dt><dd>deploy(uint256 id, bytes initcode) &nbsp;<span class="hint">0x61ff715f</span></dd>
+      <dt>id</dt><dd id="t-id"></dd>
+      <dt>Value</dt><dd>0 ETH</dd>
+    </dl>
+    <div class="row" style="margin-top:12px">
+      <button id="connect">Connect</button>
+      <button id="check" class="ghost" disabled>Run checks</button>
+      <button id="simulate" class="ghost" disabled>Simulate</button>
+      <button id="send" disabled>Deploy</button>
+    </div>
+    <div class="msg" id="out"></div>
+    <ul>
+      <li>Checks must pass before Deploy enables. It stays disabled if you are not the NFT owner.</li>
+      <li>Simulate runs eth_call first, so a revert costs nothing.</li>
+      <li>Verify the initcode keccak against your own build before sending.</li>
+    </ul>
+  </section>
+</main>
+
+<script src="./zrouterbase-initcode.js"></script>
+<script>
+const VANITY_MARKET = '0x000000000000b361194cfe6312EE3210d53C15AA';
+const ID = '0x2c8b14a270eb080c2662a12936bb6b2babf15bf883895f911babdf02e56d8f37';
+const EXPECTED_ADDR = '0x000000000000fb114709235f1ccbffb925f600e4';
+const EXPECTED_HASH = '0x47ef43ab4e12ca1fd2b144b344e77c659e136b821b85516bd6d269f5d11c2756';
+const BASE = '0x2105';
+const NONCE = 10;
+
+const $ = (id) => document.getElementById(id);
+const show = (el, t, c) => { el.textContent = t; el.className = 'msg show ' + (c || ''); };
+let provider = null, account = null, checksPassed = false;
+
+const announced = [];
+window.addEventListener('eip6963:announceProvider', (e) => { announced.push(e.detail); if (!provider) provider = e.detail.provider; });
+window.dispatchEvent(new Event('eip6963:requestProvider'));
+async function getProvider() {
+  for (let i = 0; i < 20; i++) {
+    if (provider) return provider;
+    if (window.ethereum) return (provider = window.ethereum);
+    window.dispatchEvent(new Event('eip6963:requestProvider'));
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  return null;
+}
+
+$('t-id').textContent = ID;
+$('p-code').textContent = window.ZROUTER_INITCODE
+  ? ((window.ZROUTER_INITCODE.length - 2) / 2) + ' bytes'
+  : 'MISSING — zrouterbase-initcode.js did not load';
+$('p-hash').textContent = EXPECTED_HASH;
+
+const call = (to, data) => provider.request({ method: 'eth_call', params: [{ to, data }, 'latest'] });
+const enc = (sel, words) => sel + words.map((w) => w.replace(/^0x/, '').padStart(64, '0')).join('');
+
+async function ensureBase(p) {
+  const c = await p.request({ method: 'eth_chainId' });
+  if (c === BASE) return;
+  try { await p.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: BASE }] }); }
+  catch (e) {
+    if (e.code !== 4902) throw e;
+    await p.request({ method: 'wallet_addEthereumChain', params: [{
+      chainId: BASE, chainName: 'Base', nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+      rpcUrls: ['https://mainnet.base.org'], blockExplorerUrls: ['https://basescan.org'] }] });
+  }
+}
+
+$('connect').onclick = async () => {
+  try {
+    const p = await getProvider();
+    if (!p) return show($('checks'),
+      location.protocol === 'file:'
+        ? 'No wallet over file://. Serve locally:\n  cd dapp && python3 -m http.server 8017\n  http://localhost:8017/deploy-zrouter-base.html'
+        : 'No wallet found. Unlock the extension and reload.', 'bad');
+    account = (await p.request({ method: 'eth_requestAccounts' }))[0];
+    await ensureBase(p);
+    $('p-you').textContent = account;
+    $('p-chain').textContent = 'Base (8453)';
+    $('check').disabled = false;
+    show($('checks'), 'Connected. Run checks.', '');
+  } catch (e) { show($('checks'), e.message || String(e), 'bad'); }
+};
+
+$('check').onclick = async () => {
+  checksPassed = false; $('simulate').disabled = true; $('send').disabled = true;
+  const fail = [];
+  try {
+    // ownerOf(uint256)
+    const ownerRaw = await call(VANITY_MARKET, enc('0x6352211e', [ID]));
+    const owner = '0x' + ownerRaw.slice(26);
+    $('p-owner').textContent = owner;
+    if (owner.toLowerCase() !== account.toLowerCase()) fail.push('You are not the NFT owner — deploy would revert.');
+
+    // computeAddress(bytes32,uint8)
+    const addrRaw = await call(VANITY_MARKET, enc('0xe7139a09', [ID, '0x' + NONCE.toString(16)]));
+    const addr = '0x' + addrRaw.slice(26);
+    $('p-addr').textContent = addr;
+    if (addr.toLowerCase() !== EXPECTED_ADDR) fail.push('Deploy address is not the expected router address.');
+
+    // target must be empty
+    const code = await provider.request({ method: 'eth_getCode', params: [addr, 'latest'] });
+    const occupied = code && code !== '0x';
+    $('p-occupied').textContent = occupied ? 'YES — ' + ((code.length - 2) / 2) + ' bytes' : 'no';
+    if (occupied) fail.push('Target already has code.');
+
+    if (!window.ZROUTER_INITCODE) fail.push('Initcode file did not load.');
+
+    if (fail.length) { show($('checks'), 'BLOCKED:\n- ' + fail.join('\n- '), 'bad'); return; }
+    checksPassed = true;
+    $('simulate').disabled = false; $('send').disabled = false;
+    show($('checks'), 'All checks passed.\nYou own the NFT, the address matches, the target is empty.', 'ok');
+  } catch (e) { show($('checks'), 'Check failed: ' + (e.message || e), 'bad'); }
+};
+
+// deploy(uint256,bytes) — head is id + offset(0x40), then length + padded body
+function deployCalldata() {
+  const code = window.ZROUTER_INITCODE.replace(/^0x/, '');
+  const len = (code.length / 2).toString(16).padStart(64, '0');
+  const body = code + '0'.repeat((64 - (code.length % 64)) % 64);
+  return '0x61ff715f' + ID.replace(/^0x/, '').padStart(64, '0') +
+         (64).toString(16).padStart(64, '0') + len + body;
+}
+
+const tx = () => ({ from: account, to: VANITY_MARKET, data: deployCalldata(), value: '0x0' });
+
+$('simulate').onclick = async () => {
+  show($('out'), 'Simulating…');
+  try {
+    const r = await provider.request({ method: 'eth_call', params: [tx(), 'latest'] });
+    const gas = await provider.request({ method: 'eth_estimateGas', params: [tx()] });
+    show($('out'), 'Simulation OK.\ndeployed -> 0x' + (r || '').slice(26) +
+                   '\nestimated gas: ' + BigInt(gas).toString(), 'ok');
+  } catch (e) {
+    const d = (e && e.data && (e.data.data || e.data)) || '';
+    show($('out'), 'Would revert:\n' + (e.message || e) + (d ? '\nrevert data: ' + d : ''), 'bad');
+  }
+};
+
+$('send').onclick = async () => {
+  if (!checksPassed) return show($('out'), 'Run checks first.', 'bad');
+  show($('out'), 'Confirm in your wallet…', 'warn');
+  try {
+    const hash = await provider.request({ method: 'eth_sendTransaction', params: [tx()] });
+    $('out').innerHTML = 'Sent: <a href="https://basescan.org/tx/' + hash + '" target="_blank" rel="noopener">' + hash + '</a>';
+    $('out').className = 'msg show ok';
+  } catch (e) { show($('out'), e.message || String(e), 'bad'); }
+};
+</script>
