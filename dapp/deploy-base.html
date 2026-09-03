@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Deploy zRouterLiteBase — Base</title>
+<title>Deploy zFi — Base</title>
 <style>
   :root { color-scheme: light dark; --bg:#0b0d10; --fg:#e6e8eb; --mut:#8b949e; --line:#232a31;
           --ok:#3fb950; --bad:#f85149; --warn:#d29922; --acc:#58a6ff; }
@@ -37,12 +37,12 @@
 </style>
 
 <main>
-  <h1>Deploy zRouterLiteBase</h1>
-  <p class="sub">Burns your VanityMarket NFT and deploys the router to its address on Base.
-     One shot: the token is consumed and the address is permanent.</p>
+  <h1>Deploy zFi on Base</h1>
+  <p class="sub">Step 1 burns your VanityMarket NFT to place the router. Step 2 deploys the
+     quoter through CreateX at a mined address. Both are permanent.</p>
 
   <section>
-    <h2>Preflight</h2>
+    <h2>Step 1 — zRouterLiteBase via VanityMarket</h2>
     <dl>
       <dt>Chain</dt><dd id="p-chain">—</dd>
       <dt>NFT owner</dt><dd id="p-owner">—</dd>
@@ -57,7 +57,7 @@
   </section>
 
   <section>
-    <h2>Transaction</h2>
+    <h2>Step 1 — transaction</h2>
     <dl>
       <dt>To</dt><dd>0x000000000000b361194cfe6312EE3210d53C15AA <span class="hint">VanityMarket</span></dd>
       <dt>Function</dt><dd>deploy(uint256 id, bytes initcode) &nbsp;<span class="hint">0x61ff715f</span></dd>
@@ -77,9 +77,34 @@
       <li>Verify the initcode keccak against your own build before sending.</li>
     </ul>
   </section>
+
+  <section>
+    <h2>Step 2 — zQuoterBase via CreateX</h2>
+    <dl>
+      <dt>To</dt><dd>0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed <span class="hint">CreateX</span></dd>
+      <dt>Function</dt><dd>deployCreate3(bytes32 salt, bytes initCode) &nbsp;<span class="hint">0x9c36a286</span></dd>
+      <dt>Deploys to</dt><dd>0x000000fF982A225Bc7472Ad36759F6Fff0BC5455</dd>
+      <dt>Occupied</dt><dd id="q-occupied">—</dd>
+      <dt>Initcode</dt><dd id="q-code">—</dd>
+      <dt>Initcode keccak</dt><dd id="q-hash">0x375fa2406710d5e347581dca2774ffee839d4a2b763a9f8a335ed56e8644315d</dd>
+      <dt>Router it targets</dt><dd id="q-router">—</dd>
+    </dl>
+    <div class="row" style="margin-top:12px">
+      <button id="q-check" class="ghost" disabled>Run checks</button>
+      <button id="q-simulate" class="ghost" disabled>Simulate</button>
+      <button id="q-send" disabled>Deploy quoter</button>
+    </div>
+    <div class="msg" id="q-out"></div>
+    <ul>
+      <li>The salt is prefixed with your address, so only you can use it — and it yields the
+          same address on every chain.</li>
+      <li>Checks confirm the router exists first: the quoter hardcodes it.</li>
+    </ul>
+  </section>
 </main>
 
 <script src="./zrouterbase-initcode.js"></script>
+<script src="./zquoterbase-initcode.js"></script>
 <script>
 const VANITY_MARKET = '0x000000000000b361194cfe6312EE3210d53C15AA';
 const ID = '0x2c8b14a270eb080c2662a12936bb6b2babf15bf883895f911babdf02e56d8f37';
@@ -131,13 +156,14 @@ $('connect').onclick = async () => {
     const p = await getProvider();
     if (!p) return show($('checks'),
       location.protocol === 'file:'
-        ? 'No wallet over file://. Serve locally:\n  cd dapp && python3 -m http.server 8017\n  http://localhost:8017/deploy-zrouter-base.html'
+        ? 'No wallet over file://. Serve locally:\n  cd dapp && python3 -m http.server 8017\n  http://localhost:8017/deploy-base.html'
         : 'No wallet found. Unlock the extension and reload.', 'bad');
     account = (await p.request({ method: 'eth_requestAccounts' }))[0];
     await ensureBase(p);
     $('p-you').textContent = account;
     $('p-chain').textContent = 'Base (8453)';
     $('check').disabled = false;
+    $('q-check').disabled = false;
     show($('checks'), 'Connected. Run checks.', '');
   } catch (e) { show($('checks'), e.message || String(e), 'bad'); }
 };
@@ -195,6 +221,78 @@ $('simulate').onclick = async () => {
     const d = (e && e.data && (e.data.data || e.data)) || '';
     show($('out'), 'Would revert:\n' + (e.message || e) + (d ? '\nrevert data: ' + d : ''), 'bad');
   }
+};
+
+
+// ---- Step 2: quoter through CreateX ----
+const CREATEX = '0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed';
+const Q_SALT = '0x1c0aa8ccd568d90d61659f060d1bfb1e6f855a200001b09900000000000bd1eb';
+const Q_GUARDED = '0x42e2f093a9d451ff3cbba2e1b31877634aa241af93b543321d88cb4b4189a5b2';
+const Q_ADDR = '0x000000ff982a225bc7472ad36759f6fff0bc5455';
+let qChecks = false;
+
+$('q-code').textContent = window.ZQUOTER_INITCODE
+  ? ((window.ZQUOTER_INITCODE.length - 2) / 2) + ' bytes'
+  : 'MISSING — zquoterbase-initcode.js did not load';
+
+function quoterCalldata() {
+  const code = window.ZQUOTER_INITCODE.replace(/^0x/, '');
+  const len = (code.length / 2).toString(16).padStart(64, '0');
+  const body = code + '0'.repeat((64 - (code.length % 64)) % 64);
+  return '0x9c36a286' + Q_SALT.replace(/^0x/, '') +
+         (64).toString(16).padStart(64, '0') + len + body;
+}
+const qTx = () => ({ from: account, to: CREATEX, data: quoterCalldata(), value: '0x0' });
+
+$('q-check').onclick = async () => {
+  qChecks = false; $('q-simulate').disabled = true; $('q-send').disabled = true;
+  const fail = [];
+  try {
+    // CreateX must agree with the mined address
+    const got = await call(CREATEX, '0x' + '6cec2536' + Q_GUARDED.replace(/^0x/, ''));
+    const addr = '0x' + got.slice(26);
+    if (addr.toLowerCase() !== Q_ADDR) fail.push('CreateX derives ' + addr + ', not the mined address.');
+
+    const qc = await provider.request({ method: 'eth_getCode', params: [Q_ADDR, 'latest'] });
+    const occ = qc && qc !== '0x';
+    $('q-occupied').textContent = occ ? 'YES — already deployed' : 'no';
+    if (occ) fail.push('Quoter address already has code.');
+
+    // the router it hardcodes must exist, or every built swap targets nothing
+    const rc = await provider.request({ method: 'eth_getCode', params: [EXPECTED_ADDR, 'latest'] });
+    const routerLive = rc && rc !== '0x';
+    $('q-router').textContent = EXPECTED_ADDR + (routerLive ? '  ✓ deployed' : '  ✗ NOT deployed');
+    if (!routerLive) fail.push('Router is not deployed yet — deploy step 1 first.');
+
+    if (!window.ZQUOTER_INITCODE) fail.push('Quoter initcode did not load.');
+
+    if (fail.length) return show($('q-out'), 'BLOCKED:\n- ' + fail.join('\n- '), 'bad');
+    qChecks = true; $('q-simulate').disabled = false; $('q-send').disabled = false;
+    show($('q-out'), 'All checks passed. Address free, router live.', 'ok');
+  } catch (e) { show($('q-out'), 'Check failed: ' + (e.message || e), 'bad'); }
+};
+
+$('q-simulate').onclick = async () => {
+  show($('q-out'), 'Simulating…');
+  try {
+    const r = await provider.request({ method: 'eth_call', params: [qTx(), 'latest'] });
+    const g = await provider.request({ method: 'eth_estimateGas', params: [qTx()] });
+    show($('q-out'), 'Simulation OK.\ndeployed -> 0x' + (r || '').slice(26) +
+                     '\nestimated gas: ' + BigInt(g).toString(), 'ok');
+  } catch (e) {
+    const d = (e && e.data && (e.data.data || e.data)) || '';
+    show($('q-out'), 'Would revert:\n' + (e.message || e) + (d ? '\nrevert data: ' + d : ''), 'bad');
+  }
+};
+
+$('q-send').onclick = async () => {
+  if (!qChecks) return show($('q-out'), 'Run checks first.', 'bad');
+  show($('q-out'), 'Confirm in your wallet…', 'warn');
+  try {
+    const h = await provider.request({ method: 'eth_sendTransaction', params: [qTx()] });
+    $('q-out').innerHTML = 'Sent: <a href="https://basescan.org/tx/' + h + '" target="_blank" rel="noopener">' + h + '</a>';
+    $('q-out').className = 'msg show ok';
+  } catch (e) { show($('q-out'), e.message || String(e), 'bad'); }
 };
 
 $('send').onclick = async () => {
