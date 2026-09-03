@@ -73,7 +73,9 @@ contract BaseTest is Test {
     zQuoterBase quoter;
 
     address alice = makeAddr("alice");
-    address deployer = makeAddr("deployer");
+    /// @dev The router hardcodes its initial owner, so the tests must use that
+    /// same address for every onlyOwner call rather than whoever deploys.
+    address deployer = 0x1C0Aa8cCD568d90d61659F060D1bFb1e6f855A20;
     address nowhere = makeAddr("nowhere");
 
     /// @dev Environment-driven so a fast private endpoint can be used locally
@@ -295,13 +297,17 @@ contract BaseTest is Test {
     /// solves exact-out by search. The test that matters is that the solved input
     /// really does buy at least the target when executed.
     function testAeroStableExactOutSolvesExactly() public {
-        (uint256 solvedIn,,) = quoter.quoteAero(true, USDC, AERO, 1e18);
+        // The kind matters: quoteAero returns whichever of the two pools won, and
+        // executing the solved input against the OTHER one is a different curve.
+        // This test hardcoded `false` and passed only while volatile happened to win.
+        (uint256 solvedIn,, uint256 kind) = quoter.quoteAero(true, USDC, AERO, 1e18);
         _need(solvedIn);
+        bool stable = kind <= 2;
 
         deal(USDC, alice, solvedIn);
         vm.startPrank(alice);
         IERC20(USDC).approve(address(router), solvedIn);
-        (, uint256 amountOut) = router.swapAero(alice, false, USDC, AERO, solvedIn, 0, block.timestamp);
+        (, uint256 amountOut) = router.swapAero(alice, stable, USDC, AERO, solvedIn, 0, block.timestamp);
         vm.stopPrank();
 
         assertGe(amountOut, 1e18, "solved input did not reach the target");
@@ -440,8 +446,11 @@ contract BaseTest is Test {
         for (uint256 i; i < calls.length; ++i) {
             bytes memory c = calls[i];
             if (bytes4(c) != zRouterLiteBase.sweep.selector) continue;
+            // sweep(token, amount, to): `to` is arg2, so c+0x64. It was c+0x84 while
+            // sweep carried an ERC6909 id; left there it reads past the argument and
+            // the assertion below passes without checking anything.
             address dest;
-            assembly { dest := mload(add(c, 0x84)) }
+            assembly { dest := mload(add(c, 0x64)) }
             assertTrue(dest != ZROUTER, "a sweep still points at the router");
         }
     }
@@ -449,6 +458,171 @@ contract BaseTest is Test {
     function testLimitMatchesTheEmbeddedBound() public view {
         assertEq(quoter.limit(false, 1000, 100), 990);
         assertEq(quoter.limit(true, 1000, 100), 1010);
+    }
+
+
+    /// @dev The router is not meant to hold anything between transactions and its
+    /// `sweep` is public, so whatever a builder leaves behind is anyone's. The rest
+    /// of this suite checks sweep DESTINATIONS in the built calldata; this checks
+    /// the actual outcome. Gap found by an audit agent's own repro harness.
+    function testBuildersLeaveNothingInTheRouter() public {
+        uint256 amt = 1 ether;
+
+        (zQuoterBase.Quote memory q, bytes memory cd,, uint256 mv) =
+            quoter.buildBestSwap(alice, false, address(0), USDC, amt, 100, block.timestamp);
+        _need(q.amountOut);
+        vm.prank(alice);
+        (bool ok,) = address(router).call{value: mv}(cd);
+        assertTrue(ok, "direct build reverted");
+        _assertRouterEmpty("after buildBestSwap");
+
+        (zQuoterBase.Quote memory a,,, bytes memory mc, uint256 mv2) =
+            quoter.buildBestSwapViaETHMulticall(alice, alice, false, address(0), USDC, amt, 100, block.timestamp);
+        _need(a.amountOut);
+        vm.prank(alice);
+        (ok,) = address(router).call{value: mv2}(mc);
+        assertTrue(ok, "hub build reverted");
+        _assertRouterEmpty("after buildBestSwapViaETHMulticall");
+
+        (zQuoterBase.Quote[2] memory legs, bytes memory smc, uint256 mv3) =
+            quoter.buildSplitSwap(alice, address(0), USDC, amt, 100, block.timestamp);
+        _need(legs[0].amountOut + legs[1].amountOut);
+        vm.prank(alice);
+        (ok,) = address(router).call{value: mv3}(smc);
+        assertTrue(ok, "split build reverted");
+        _assertRouterEmpty("after buildSplitSwap");
+
+        (zQuoterBase.Quote[2] memory hlegs, bytes memory hmc, uint256 mv4) =
+            quoter.buildHybridSplit(alice, address(0), USDC, amt, 200, block.timestamp);
+        _need(hlegs[0].amountOut + hlegs[1].amountOut);
+        vm.prank(alice);
+        (ok,) = address(router).call{value: mv4}(hmc);
+        assertTrue(ok, "hybrid build reverted");
+        _assertRouterEmpty("after buildHybridSplit");
+    }
+
+    function _assertRouterEmpty(string memory whenIt) internal view {
+        assertEq(address(router).balance, 0, string.concat("ether stranded ", whenIt));
+        assertEq(IERC20(WETH).balanceOf(address(router)), 0, string.concat("WETH stranded ", whenIt));
+        assertEq(IERC20(USDC).balanceOf(address(router)), 0, string.concat("output stranded ", whenIt));
+    }
+
+    // ══════════ exact-out execution (was entirely untested on Base) ══════════
+
+    /// @dev On this branch `amountLimit` bounds the INPUT, so the delivered amount
+    /// is only guaranteed by the router's own shortfall guard. Also checks the
+    /// overpaid ether comes back.
+    function testExactOutV3MatchesAndRefunds() public {
+        (uint256 quotedIn,) = quoter.quoteV3(true, address(0), USDC, 500, 1000e6);
+        _need(quotedIn);
+
+        uint256 before = alice.balance;
+        vm.prank(alice);
+        (uint256 amountIn, uint256 amountOut) =
+            router.swapV3{value: quotedIn * 2}(alice, true, 500, address(0), USDC, 1000e6, quotedIn, block.timestamp);
+
+        assertEq(amountOut, 1000e6, "not exact out");
+        assertEq(amountIn, quotedIn, "V3 exact-out quote drifted");
+        assertEq(alice.balance, before - quotedIn, "overpaid ether not refunded");
+        _assertRouterEmpty("after V3 exact-out");
+    }
+
+    function testExactOutV4MatchesAndRefunds() public {
+        (uint256 quotedIn,) = quoter.quoteV4(true, address(0), USDC, 500, 1000e6);
+        _need(quotedIn);
+
+        uint256 before = alice.balance;
+        vm.prank(alice);
+        (uint256 amountIn, uint256 amountOut) = router.swapV4{value: quotedIn * 2}(
+            alice, true, 500, 10, address(0), USDC, 1000e6, quotedIn, block.timestamp
+        );
+
+        assertEq(amountOut, 1000e6);
+        assertEq(amountIn, quotedIn, "V4 exact-out quote drifted");
+        assertEq(alice.balance, before - quotedIn, "overpaid ether not refunded");
+    }
+
+    /// @dev Slipstream shares the V3 callback, so this exercises the venue flag on
+    /// the exact-out path specifically.
+    function testExactOutAeroCLMatchesAndRefunds() public {
+        (uint256 quotedIn,) = quoter.quoteAeroCL(true, address(0), USDC, 100, 1000e6);
+        _need(quotedIn);
+
+        uint256 before = alice.balance;
+        vm.prank(alice);
+        (uint256 amountIn, uint256 amountOut) = router.swapAeroCL{value: quotedIn * 2}(
+            alice, true, 100, address(0), USDC, 1000e6, quotedIn, block.timestamp
+        );
+
+        assertEq(amountOut, 1000e6);
+        assertEq(amountIn, quotedIn, "Slipstream exact-out quote drifted");
+        assertEq(alice.balance, before - quotedIn, "overpaid ether not refunded");
+    }
+
+    function testExactOutViaBuildBestSwapIsExecutable() public {
+        (zQuoterBase.Quote memory best, bytes memory cd, uint256 amountLimit, uint256 mv) =
+            quoter.buildBestSwap(alice, true, address(0), USDC, 1000e6, 100, block.timestamp);
+        _need(best.amountIn);
+        assertEq(mv, amountLimit, "exact-out must attach the upper bound");
+
+        vm.prank(alice);
+        (bool ok,) = address(router).call{value: mv}(cd);
+        assertTrue(ok, "exact-out build reverted");
+        assertEq(IERC20(USDC).balanceOf(alice), 1000e6, "not exact out");
+        _assertRouterEmpty("after exact-out build");
+    }
+
+    // ══════════ guards that Base had none of ══════════
+
+    function testSlippageBoundIsEnforced() public {
+        (, uint256 quoted) = quoter.quoteV3(false, address(0), USDC, 500, 1 ether);
+        _need(quoted);
+
+        vm.startPrank(alice);
+        vm.expectRevert(zRouterLiteBase.Slippage.selector);
+        router.swapV3{value: 1 ether}(alice, false, 500, address(0), USDC, 1 ether, quoted + 1, block.timestamp);
+        vm.expectRevert(zRouterLiteBase.Slippage.selector);
+        router.swapAeroCL{value: 1 ether}(
+            alice, false, 100, address(0), USDC, 1 ether, type(uint128).max, block.timestamp
+        );
+        vm.expectRevert(zRouterLiteBase.Slippage.selector);
+        router.swapAero{value: 1 ether}(alice, false, address(0), USDC, 1 ether, type(uint128).max, block.timestamp);
+        vm.stopPrank();
+    }
+
+    function testZeroAmountWithNoBalanceIsBadSwap() public {
+        vm.startPrank(alice);
+        vm.expectRevert(zRouterLiteBase.BadSwap.selector);
+        router.swapV2(alice, false, USDC, WETH, 0, 0, block.timestamp);
+        vm.expectRevert(zRouterLiteBase.BadSwap.selector);
+        router.swapAero(alice, false, USDC, WETH, 0, 0, block.timestamp);
+        vm.expectRevert(zRouterLiteBase.BadSwap.selector);
+        router.swapAeroCL(alice, false, 100, USDC, WETH, 0, 0, block.timestamp);
+        vm.stopPrank();
+    }
+
+    /// @dev The one callback serves BOTH Uniswap V3 and Slipstream, picked by a
+    /// flag in the callback data. Neither derivation may accept a stranger — and
+    /// the flag must not let a caller claim to be the other factory's pool.
+    function testCallbackRejectsStrangersOnBothDerivations() public {
+        for (uint256 i; i < 2; ++i) {
+            bool isAeroCL = i == 1;
+            bytes memory cb = abi.encodeWithSignature(
+                "uniswapV3SwapCallback(int256,int256,bytes)",
+                int256(1),
+                int256(-1),
+                abi.encodePacked(false, false, isAeroCL, alice, WETH, USDC, alice, uint24(isAeroCL ? 100 : 500))
+            );
+            vm.prank(alice);
+            (bool ok,) = address(router).call(cb);
+            assertFalse(ok, "callback accepted a stranger");
+        }
+    }
+
+    function testUnlockCallbackRejectsStrangers() public {
+        vm.prank(alice);
+        vm.expectRevert(zRouterLiteBase.Unauthorized.selector);
+        router.unlockCallback("");
     }
 
     // ══════════ audit regressions ══════════
@@ -475,7 +649,7 @@ contract BaseTest is Test {
             address(router), false, USDC, WETH,
             uint256(0), uint256(0), block.timestamp // spend the credit
         );
-        calls[2] = abi.encodeWithSelector(zRouterLiteBase.sweep.selector, WETH, uint256(0), uint256(0), alice);
+        calls[2] = abi.encodeWithSelector(zRouterLiteBase.sweep.selector, WETH, uint256(0), alice);
 
         vm.prank(alice);
         router.multicall{value: 1 ether}(calls);
@@ -494,7 +668,7 @@ contract BaseTest is Test {
         calls[0] = abi.encodeWithSelector(zRouterLiteBase.deposit.selector, WETH, uint256(1 ether));
         calls[1] = abi.encodeWithSelector(zRouterLiteBase.unwrap.selector, uint256(0));
         calls[2] = abi.encodeWithSelector(
-            zRouterLiteBase.sweep.selector, address(0), uint256(0), uint256(1 ether), alice
+            zRouterLiteBase.sweep.selector, address(0), uint256(1 ether), alice
         );
 
         vm.startPrank(alice);
@@ -598,7 +772,11 @@ contract BaseTest is Test {
 
     // ══════════ the extensions this build adds over the deployed router ══════════
 
-    function testDeployerOwnsTheRouter() public view {
+    /// @dev Ownership must not depend on who sent the deploy transaction: through
+    /// a CREATE3 factory `msg.sender` is the factory's proxy and `tx.origin` is an
+    /// arbitrary key. It is a constant.
+    function testInitialOwnerIsTheConstant() public view {
+        assertEq(router.owner(), 0x1C0Aa8cCD568d90d61659F060D1bFb1e6f855A20);
         assertEq(router.owner(), deployer);
     }
 
@@ -611,6 +789,24 @@ contract BaseTest is Test {
 
         vm.prank(deployer);
         router.ensureAllowance(USDC, alice);
+    }
+
+    /// @dev The seed is fixed; ownership itself is not. `_owner` is storage.
+    function testOwnershipIsTransferrable() public {
+        vm.expectEmit(true, true, false, false);
+        emit zRouterLiteBase.OwnershipTransferred(deployer, alice);
+        vm.prank(deployer);
+        router.transferOwnership(alice);
+        assertEq(router.owner(), alice);
+
+        // and the old owner loses authority immediately
+        vm.prank(deployer);
+        vm.expectRevert(zRouterLiteBase.Unauthorized.selector);
+        router.trust(alice, true);
+
+        vm.prank(alice);
+        router.trust(alice, true);
+        assertTrue(router.isTrustedForCall(alice));
     }
 
     function testExecuteRejectsUntrustedTargets() public {
@@ -635,7 +831,7 @@ contract BaseTest is Test {
             uint256(0),
             block.timestamp
         );
-        calls[1] = abi.encodeWithSelector(zRouterLiteBase.sweep.selector, USDC, uint256(0), uint256(0), alice);
+        calls[1] = abi.encodeWithSelector(zRouterLiteBase.sweep.selector, USDC, uint256(0), alice);
 
         vm.prank(alice);
         router.multicall{value: 1 ether}(calls);

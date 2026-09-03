@@ -231,7 +231,9 @@ contract RobinhoodTest is Test {
     zQuoterRobinhood quoter;
 
     address alice = makeAddr("alice");
-    address deployer = makeAddr("deployer");
+    /// @dev The router hardcodes its initial owner, so the tests must use that
+    /// same address for every onlyOwner call rather than whoever deploys.
+    address deployer = 0x1C0Aa8cCD568d90d61659F060D1bFb1e6f855A20;
     address nowhere = makeAddr("nowhere"); // a "token" that exists in no venue
 
     function setUp() public {
@@ -683,7 +685,11 @@ contract RobinhoodTest is Test {
 
     // ══════════════════ ownable / trust / execute ══════════════════
 
-    function testDeployerOwnsTheRouter() public view {
+    /// @dev Ownership must not depend on who sent the deploy transaction: through
+    /// a CREATE3 factory `msg.sender` is the factory's proxy and `tx.origin` is an
+    /// arbitrary key. It is a constant.
+    function testInitialOwnerIsTheConstant() public view {
+        assertEq(router.owner(), 0x1C0Aa8cCD568d90d61659F060D1bFb1e6f855A20);
         assertEq(router.owner(), deployer);
     }
 
@@ -1328,6 +1334,52 @@ contract RobinhoodTest is Test {
         assertEq(quoter.limit(true, 1000, 100), 1010);
     }
 
+
+    /// @dev The router is not meant to hold anything between transactions and its
+    /// `sweep` is public, so whatever a builder leaves behind is anyone's. The rest
+    /// of this suite checks sweep DESTINATIONS in the built calldata; this checks
+    /// the actual outcome. Gap found by an audit agent's own repro harness.
+    function testBuildersLeaveNothingInTheRouter() public {
+        uint256 amt = 0.01 ether;
+
+        (zQuoterRobinhood.Quote memory q, bytes memory cd,, uint256 mv) =
+            quoter.buildBestSwap(alice, false, address(0), TKN, amt, 100, block.timestamp);
+        _need(q.amountOut);
+        vm.prank(alice);
+        (bool ok,) = address(router).call{value: mv}(cd);
+        assertTrue(ok, "direct build reverted");
+        _assertRouterEmpty("after buildBestSwap");
+
+        (zQuoterRobinhood.Quote memory a,,, bytes memory mc, uint256 mv2) =
+            quoter.buildBestSwapViaETHMulticall(alice, alice, false, address(0), TKN, amt, 100, block.timestamp);
+        _need(a.amountOut);
+        vm.prank(alice);
+        (ok,) = address(router).call{value: mv2}(mc);
+        assertTrue(ok, "hub build reverted");
+        _assertRouterEmpty("after buildBestSwapViaETHMulticall");
+
+        (zQuoterRobinhood.Quote[2] memory legs, bytes memory smc, uint256 mv3) =
+            quoter.buildSplitSwap(alice, address(0), TKN, amt, 100, block.timestamp);
+        _need(legs[0].amountOut + legs[1].amountOut);
+        vm.prank(alice);
+        (ok,) = address(router).call{value: mv3}(smc);
+        assertTrue(ok, "split build reverted");
+        _assertRouterEmpty("after buildSplitSwap");
+
+        (zQuoterRobinhood.Quote[2] memory hlegs, bytes memory hmc, uint256 mv4) =
+            quoter.buildHybridSplit(alice, address(0), TKN, amt, 200, block.timestamp);
+        _need(hlegs[0].amountOut + hlegs[1].amountOut);
+        vm.prank(alice);
+        (ok,) = address(router).call{value: mv4}(hmc);
+        assertTrue(ok, "hybrid build reverted");
+        _assertRouterEmpty("after buildHybridSplit");
+    }
+
+    function _assertRouterEmpty(string memory whenIt) internal view {
+        assertEq(address(router).balance, 0, string.concat("ether stranded ", whenIt));
+        assertEq(IERC20(WETH).balanceOf(address(router)), 0, string.concat("WETH stranded ", whenIt));
+        assertEq(IERC20(TKN).balanceOf(address(router)), 0, string.concat("output stranded ", whenIt));
+    }
     // ══════════════════ audit regressions ══════════════════
 
     /// @dev A leg with `swapAmount == 0` means "spend what the previous leg

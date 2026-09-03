@@ -1,0 +1,182 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Claim vanity — Base</title>
+<style>
+  :root { color-scheme: light dark; --bg:#0b0d10; --fg:#e6e8eb; --mut:#8b949e; --line:#232a31;
+          --ok:#3fb950; --bad:#f85149; --acc:#58a6ff; }
+  @media (prefers-color-scheme: light) {
+    :root { --bg:#fff; --fg:#14171a; --mut:#57606a; --line:#d8dee4; --ok:#1a7f37; --bad:#cf222e; --acc:#0969da; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.55 ui-sans-serif,-apple-system,system-ui,sans-serif;
+         padding:28px 18px; display:flex; justify-content:center; }
+  main { width:100%; max-width:680px; }
+  h1 { font-size:17px; margin:0 0 2px; }
+  .sub { color:var(--mut); margin:0 0 22px; }
+  section { border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-bottom:14px; }
+  h2 { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--mut); margin:0 0 10px; font-weight:600; }
+  dl { display:grid; grid-template-columns:auto 1fr; gap:5px 14px; margin:0; }
+  dt { color:var(--mut); }
+  dd { margin:0; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px; word-break:break-all; }
+  button { font:inherit; font-weight:600; padding:9px 15px; border-radius:8px; border:1px solid var(--line);
+           background:var(--acc); color:#fff; cursor:pointer; }
+  button.ghost { background:transparent; color:var(--fg); }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  .row { display:flex; gap:9px; align-items:center; flex-wrap:wrap; }
+  textarea { width:100%; min-height:84px; font-family:ui-monospace,Menlo,monospace; font-size:11.5px;
+             background:transparent; color:var(--fg); border:1px solid var(--line); border-radius:8px; padding:9px; }
+  .msg { margin-top:11px; padding:9px 11px; border-radius:8px; border:1px solid var(--line); display:none;
+         font-family:ui-monospace,Menlo,monospace; font-size:12px; word-break:break-all; white-space:pre-wrap; }
+  .msg.show { display:block; }
+  .ok { color:var(--ok); border-color:var(--ok); }
+  .bad { color:var(--bad); border-color:var(--bad); }
+  a { color:var(--acc); }
+  .hint { color:var(--mut); font-size:12.5px; margin-top:9px; }
+</style>
+
+<main>
+  <h1>Claim vanity salt — Base</h1>
+  <p class="sub">Calls <code>claimGivenUpWithSig</code> on VanityMarket. Simulates first, so a revert
+     shows here instead of costing gas.</p>
+
+  <section>
+    <h2>What this transaction does</h2>
+    <dl>
+      <dt>To</dt><dd id="to"></dd>
+      <dt>Function</dt><dd>claimGivenUpWithSig(address,uint256,uint8,address,uint256,bytes)</dd>
+      <dt>Recipient</dt><dd id="d-to"></dd>
+      <dt>Salt id</dt><dd id="d-id"></dd>
+      <dt>Nonce</dt><dd id="d-nonce"></dd>
+      <dt>Claimer</dt><dd id="d-claimer"></dd>
+      <dt>Deadline</dt><dd id="d-deadline"></dd>
+      <dt>Signature</dt><dd id="d-sig"></dd>
+      <dt>Value</dt><dd>0 ETH</dd>
+    </dl>
+    <p class="hint" id="yields"></p>
+  </section>
+
+  <section>
+    <h2>Calldata</h2>
+    <textarea id="cd" spellcheck="false"></textarea>
+    <p class="hint">Edit only if you know why. The panel above re-decodes on every change.</p>
+  </section>
+
+  <section>
+    <h2>Wallet</h2>
+    <div class="row">
+      <button id="connect">Connect</button>
+      <button id="simulate" class="ghost" disabled>Simulate</button>
+      <button id="send" disabled>Send</button>
+    </div>
+    <div class="msg" id="acct"></div>
+    <div class="msg" id="out"></div>
+  </section>
+</main>
+
+<script>
+const VANITY_MARKET = '0x000000000000b361194cfe6312EE3210d53C15AA';
+const BASE = '0x2105'; // 8453
+const DEFAULT_CD =
+  '0xf1369568' +
+  '0000000000000000000000001c0aa8ccd568d90d61659f060d1bfb1e6f855a20' +
+  '2c8b14a270eb080c2662a12936bb6b2babf15bf883895f911babdf02e56d8f37' +
+  '000000000000000000000000000000000000000000000000000000000000000a' +
+  '0000000000000000000000001c0aa8ccd568d90d61659f060d1bfb1e6f855a20' +
+  '000000000000000000000000000000000000000000000000000000006c7ac976' +
+  '00000000000000000000000000000000000000000000000000000000000000c0' +
+  '0000000000000000000000000000000000000000000000000000000000000040' +
+  'ef06396cd8b3f6adabc674cf427cdeab0119d7b68d58b223fdd518715b800edd' +
+  'f9a922582de349956d614c4f64a3209de042090d41249f2915a2b681fca3b636';
+
+const $ = (id) => document.getElementById(id);
+const show = (el, text, cls) => { el.textContent = text; el.className = 'msg show ' + (cls || ''); };
+let account = null;
+
+$('to').textContent = VANITY_MARKET;
+$('cd').value = DEFAULT_CD;
+
+// Decode locally so what you approve is what is shown — no trust in the page's prose.
+function decode() {
+  const cd = $('cd').value.trim().replace(/^0x/, '');
+  const w = (i) => cd.slice(8 + i * 64, 8 + (i + 1) * 64);
+  const addr = (s) => '0x' + s.slice(24);
+  try {
+    $('d-to').textContent = addr(w(0));
+    $('d-id').textContent = '0x' + w(1);
+    $('d-nonce').textContent = BigInt('0x' + w(2)).toString();
+    $('d-claimer').textContent = addr(w(3));
+    const dl = Number(BigInt('0x' + w(4)));
+    const expired = dl * 1000 < Date.now();
+    $('d-deadline').textContent = new Date(dl * 1000).toISOString().replace('T', ' ').slice(0, 19) +
+      ' UTC' + (expired ? '  ← EXPIRED' : '');
+    $('d-sig').textContent = '0x' + cd.slice(8 + 7 * 64) || '(none)';
+    $('yields').textContent =
+      'The claimer must be the address that sends this transaction. Nothing is deployed by this call — ' +
+      'it mints the ERC-721 that represents the salt; deploying comes later via deploy(id, initcode).';
+  } catch (e) {
+    $('yields').textContent = 'Could not decode calldata: ' + e.message;
+  }
+}
+$('cd').addEventListener('input', decode);
+decode();
+
+async function ensureBase() {
+  const chain = await ethereum.request({ method: 'eth_chainId' });
+  if (chain === BASE) return;
+  try {
+    await ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: BASE }] });
+  } catch (e) {
+    if (e.code !== 4902) throw e;
+    await ethereum.request({
+      method: 'wallet_addEthereumChain',
+      params: [{
+        chainId: BASE, chainName: 'Base',
+        nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+        rpcUrls: ['https://mainnet.base.org'],
+        blockExplorerUrls: ['https://basescan.org'],
+      }],
+    });
+  }
+}
+
+$('connect').onclick = async () => {
+  try {
+    if (!window.ethereum) return show($('acct'), 'No injected wallet found.', 'bad');
+    const accts = await ethereum.request({ method: 'eth_requestAccounts' });
+    account = accts[0];
+    await ensureBase();
+    const claimer = $('d-claimer').textContent.toLowerCase();
+    const match = account.toLowerCase() === claimer;
+    show($('acct'), account + (match ? '  ✓ matches claimer' : '  ✗ NOT the claimer — this will revert'),
+         match ? 'ok' : 'bad');
+    $('simulate').disabled = false;
+    $('send').disabled = false;
+  } catch (e) { show($('acct'), e.message || String(e), 'bad'); }
+};
+
+const tx = () => ({ from: account, to: VANITY_MARKET, data: $('cd').value.trim(), value: '0x0' });
+
+$('simulate').onclick = async () => {
+  show($('out'), 'Simulating…');
+  try {
+    await ethereum.request({ method: 'eth_call', params: [tx(), 'latest'] });
+    const gas = await ethereum.request({ method: 'eth_estimateGas', params: [tx()] });
+    show($('out'), 'Simulation succeeded. Estimated gas: ' + BigInt(gas).toString(), 'ok');
+  } catch (e) {
+    // Surface the revert payload rather than a generic failure.
+    const d = e && (e.data && (e.data.data || e.data)) || '';
+    show($('out'), 'Would revert:\n' + (e.message || e) + (d ? '\nrevert data: ' + d : ''), 'bad');
+  }
+};
+
+$('send').onclick = async () => {
+  show($('out'), 'Confirm in your wallet…');
+  try {
+    const hash = await ethereum.request({ method: 'eth_sendTransaction', params: [tx()] });
+    $('out').innerHTML = 'Sent: <a href="https://basescan.org/tx/' + hash + '" target="_blank" rel="noopener">' +
+                         hash + '</a>';
+    $('out').className = 'msg show ok';
+  } catch (e) { show($('out'), e.message || String(e), 'bad'); }
+};
+</script>

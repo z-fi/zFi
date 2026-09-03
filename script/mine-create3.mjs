@@ -1,6 +1,11 @@
 // Mine a CreateX CREATE3 salt for a vanity address that is IDENTICAL on every chain.
 //
-//   node script/mine-create3.mjs <deployer> <prefix-hex> [workers]
+//   node script/mine-create3.mjs <deployer> <prefix-hex> [workers] [label]
+//
+// `label` distinguishes independent searches. The walk is deterministic — same
+// deployer and same start counter give the same salt — so mining twice for two
+// contracts returns the SAME address unless the searches start somewhere
+// different. Pass a different label per contract.
 //
 // CreateX lives at the same address with the same codehash on mainnet, Base and
 // Robinhood Chain, and CREATE3 derives the address from (deployer, salt) alone —
@@ -18,7 +23,7 @@ import { Worker, isMainThread, parentPort, workerData } from 'node:worker_thread
 import { cpus } from 'node:os'
 import { create3Address } from './create3-derive.mjs'
 
-const [deployerArg, prefixArg, workersArg] = process.argv.slice(2)
+const [deployerArg, prefixArg, workersArg, labelArg] = process.argv.slice(2)
 
 if (isMainThread) {
   if (!deployerArg || !prefixArg) {
@@ -36,7 +41,9 @@ if (isMainThread) {
   let total = 0
   let done = false
   for (let i = 0; i < n; i++) {
-    const w = new Worker(new URL(import.meta.url), { workerData: { deployer, prefix, seed: i } })
+    const w = new Worker(new URL(import.meta.url), {
+      workerData: { deployer, prefix, seed: i, label: labelArg || '' },
+    })
     w.on('message', (m) => {
       if (m.tried) {
         total += m.tried
@@ -56,9 +63,13 @@ if (isMainThread) {
     })
   }
 } else {
-  const { deployer, prefix, seed } = workerData
+  const { deployer, prefix, seed, label } = workerData
   const buf = Buffer.alloc(11)
   buf.writeUInt8(seed, 0)
+  // Offset the walk by the label so independent searches do not converge.
+  let base = 0n
+  for (const ch of label) base = base * 131n + BigInt(ch.charCodeAt(0))
+  buf.writeUInt16BE(Number(base % 65536n), 1)
   let counter = 0n
   let tried = 0
   for (;;) {

@@ -3,32 +3,24 @@ pragma solidity ^0.8.36;
 
 import {TickMath, SwapMath, LiquidityMath, IStateViewV4, _sortTokens, _v4PoolId} from "./zQuoterV4.sol";
 
-// zQuoterBase — quotes Uniswap V2/V3/V4, Aerodrome and Aerodrome
-// Slipstream for zRouterLiteBase on Base (8453).
+// zQuoterBase — quotes Uniswap V2/V3/V4, Aerodrome and Slipstream, and builds the
+// calldata for zRouterLiteBase, on Base (8453).
 //
-// A rewrite of the quoter behind 0x772E2810A471dB2CC7ADA0d37D6395476535889a (a
-// lens forwarding to 0xa8Cc0177598531eC7D223E9689fdD50E120b946c), fixing three
-// things that deployment gets wrong:
+// Pool addresses are derived exactly as the router derives them, so a quote and
+// the calldata built from it cannot name different pools. That is the invariant
+// the fork tests check by asserting quote == execution to the wei.
 //
-//  1. It quotes Uniswap v3 by calling Uniswap's own quoter at 0x222cA98F. That is
-//     a simulate-and-revert contract; a `try` around it swallows every failure as
-//     "no route", and it is one more address that has to stay deployed and
-//     correct. This walks the ticks itself, with the same engine v4 uses.
-//  2. It sweeps Aerodrome Slipstream at tick spacings 1, 10, 60 and 200, which is
-//     Uniswap's fee/spacing pairing. Slipstream's real spacings are 1, 10, 50,
-//     100, 200 and 2000, so 60 does not exist and 50, 100 and 2000 — where most
-//     of the volume is — were never quoted at all.
-//  3. Its AERO_CL quotes label `feeBps` with the Uniswap tier they were never
-//     taken at, and the builder then reconstructs a spacing from that label. Here
-//     an AERO_CL quote carries its actual tick spacing in `feeBps`, which is the
-//     only value that identifies a Slipstream pool.
+// `feeBps` is overloaded per venue, deliberately: for AERO_CL it is the TICK
+// SPACING, the only value that names a Slipstream pool; for AERO it is a
+// discriminator, 2 for stable and 20 for volatile; elsewhere it is the fee tier.
 //
-// The AERO convention is kept as-is for compatibility: `feeBps` 2 means the
-// stable pool won and 20 means the volatile one. It is a discriminator, not a
-// fee, and it is what the front end already decodes.
-//
-// Pool addresses are derived the same way `zRouterLiteBase` derives them, so a
-// quote and the calldata built from it cannot name different pools.
+// Three fixes over the quoter behind 0x772E2810 (itself a lens onto 0xa8Cc0177):
+// v3 is walked here rather than delegated to Uniswap's simulate-and-revert quoter
+// behind a `try` that reads every failure as "no route"; Slipstream is swept at
+// its real spacings, 1/10/50/100/200/2000, not Uniswap's 1/10/60/200 — 60 has
+// never existed on that factory and 100 is the deepest pool on the chain; and its
+// fee is read per pool, since 573 micro-pips where the spacing default says 500
+// is normal there.
 address constant WETH = 0x4200000000000000000000000000000000000006;
 
 address constant V2_FACTORY = 0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6;
@@ -105,9 +97,7 @@ contract zQuoterBase {
 
     // ====================== AGGREGATE ======================
 
-    /// @dev Slipstream's real tick spacings, read off `tickSpacings()`. The
-    /// deployed quoter guesses Uniswap's 1/10/60/200 instead and misses three of
-    /// these while probing a 60 that has never existed on this factory.
+    /// @dev Read off `tickSpacings()`. Not Uniswap's pairing — see the header.
     function _clSpacings() internal pure returns (int24[6] memory) {
         return [int24(1), 10, 50, 100, 200, 2000];
     }
@@ -131,14 +121,9 @@ contract zQuoterBase {
         (uint256 aIn, uint256 aOut) = quoteV2(exactOut, tokenIn, tokenOut, swapAmount);
         quotes[0] = Quote(AMM.UNI_V2, 30, aIn, aOut);
 
-        // Aerodrome classic is exact-in only: `swapAero` reads the pool's own
-        // `getAmountOut` and spends whatever it is given. An exact-out route
-        // through it has to pin the input at a solved number, which leaves the
-        // user with no tolerance at all — any reserve movement between quote and
-        // block reverts the swap, and `slippageBps` cannot be honoured because
-        // there is no input bound to widen. So it does not compete for exact-out;
-        // the other five venues do that properly. `quoteAero` still answers an
-        // exact-out question for callers who want the number.
+        // Aerodrome classic is exact-in only, so an exact-out route through it
+        // would have to pin the input and could honour no slippage at all. It does
+        // not compete for exact-out; `quoteAero` still answers one directly.
         if (!exactOut) {
             uint256 kind;
             (aIn, aOut, kind) = quoteAero(false, tokenIn, tokenOut, swapAmount);
@@ -541,10 +526,8 @@ contract zQuoterBase {
         unchecked {
             if (refundTo == ZROUTER && to != ZROUTER) refundTo = to;
 
-            // The wrap check comes BEFORE the distinctness check, deliberately.
-            // Mainnet normalizes ETH to WETH first and only then looks for the
-            // ETH/WETH pair, so its fast path is unreachable and the call reverts
-            // on a request that is perfectly well formed.
+            // Wrap check BEFORE distinctness: mainnet normalizes ETH to WETH
+            // first, making its own fast path unreachable.
             if ((tokenIn == address(0) && tokenOut == WETH) || (tokenIn == WETH && tokenOut == address(0))) {
                 a = Quote(AMM.WETH_WRAP, 0, swapAmount, swapAmount);
                 if (tokenIn == address(0)) {
@@ -1124,18 +1107,14 @@ contract zQuoterBase {
 
             if (zeroForOne) {
                 (int16 wordPos, uint8 bitPos) = _position(compressed);
-                // Uniswap writes the mask as two terms and it is not stylistic:
-                // `(1 << (bitPos + 1)) - 1` looks equivalent but `bitPos` is a
-                // uint8, so at 255 the increment wraps to zero inside this
-                // unchecked block and the mask becomes 0 — the word then reads as
-                // empty and every initialized tick in it is skipped.
+                // Two terms, as Uniswap writes it: `(1 << (bitPos + 1)) - 1`
+                // wraps to 0 at bitPos 255 because bitPos is a uint8 and this
+                // block is unchecked, making the whole word read as empty.
                 uint256 mask = ((uint256(1) << bitPos) - 1) + (uint256(1) << bitPos);
                 uint256 masked = _bitmapWord(p, wordPos) & mask;
                 initialized = masked != 0;
-                // The uninitialized case stops at bit 0 of this word. Stepping a
-                // further spacing past it would enter the next word without ever
-                // reading its bitmap, so bit 255 down there could be crossed
-                // without picking up its liquidityNet.
+                // Stops at bit 0 of this word: a further spacing would enter the
+                // next word without ever reading its bitmap.
                 next = initialized
                     ? (compressed - int24(uint24(bitPos) - uint24(_msb(masked)))) * spacing
                     : (compressed - int24(uint24(bitPos))) * spacing;
@@ -1201,12 +1180,12 @@ contract zQuoterBase {
     }
 
     function _depUnwrap(uint256 a) internal pure returns (bytes memory d, bytes memory u) {
-        d = abi.encodeWithSelector(IZRouter.deposit.selector, WETH, uint256(0), a);
+        d = abi.encodeWithSelector(IZRouter.deposit.selector, WETH, a);
         u = abi.encodeWithSelector(IZRouter.unwrap.selector, a);
     }
 
     function _sweepAmt(address token, uint256 amount, address to) internal pure returns (bytes memory) {
-        return abi.encodeWithSelector(IZRouter.sweep.selector, token, uint256(0), amount, to);
+        return abi.encodeWithSelector(IZRouter.sweep.selector, token, amount, to);
     }
 
     function _mc2(bytes memory a, bytes memory b) internal pure returns (bytes memory) {
@@ -1266,8 +1245,12 @@ interface IZRouter {
         payable
         returns (uint256, uint256);
     function multicall(bytes[] calldata) external payable returns (bytes[] memory);
-    function sweep(address, uint256, uint256, address) external payable;
-    function deposit(address, uint256, uint256) external payable;
+    // Must mirror zRouterLiteBase exactly. These lost their ERC6909 id with zAMM;
+    // a stale declaration here still compiles and still produces calldata — it just
+    // produces calldata for a selector the router does not have, which lands in the
+    // router's fallback (the V3 swap callback) and reverts.
+    function sweep(address, uint256, address) external payable;
+    function deposit(address, uint256) external payable;
     function wrap(uint256) external payable;
     function unwrap(uint256) external payable;
 }

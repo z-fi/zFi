@@ -35,11 +35,15 @@ contract zRouterLiteRobinhood {
         _;
     }
 
-    /// @dev `tx.origin`, not `msg.sender`: deployed through the CREATE2 factory,
-    /// `msg.sender` is the factory.
+    /// @dev Ownership is ordinary transferrable ownership — `_owner` is storage
+    /// and `transferOwnership` moves it. Only the SEED is fixed: through a CREATE3
+    /// factory `msg.sender` is the factory's proxy and `tx.origin` is whichever key
+    /// sent the transaction, so neither is the right initial owner. Seeding from a
+    /// constant means the deploy key confers no authority and can be rotated
+    /// freely afterwards.
     constructor() payable {
         safeExecutor = new SafeExecutor();
-        emit OwnershipTransferred(address(0), _owner = tx.origin);
+        emit OwnershipTransferred(address(0), _owner = INITIAL_OWNER);
     }
 
     // ** UNISWAP V2
@@ -805,6 +809,8 @@ interface IDeepstate {
     function poolEpoch(bytes32 poolId) external view returns (uint256);
     function poolId(address token0, address token1) external pure returns (bytes32);
 }
+
+address constant INITIAL_OWNER = 0x1C0Aa8cCD568d90d61659F060D1bFb1e6f855A20;
 
 uint160 constant MIN_SQRT_RATIO_PLUS_ONE = 4295128740;
 uint160 constant MAX_SQRT_RATIO_MINUS_ONE = 1461446703485210103287273052203988822378723970341;

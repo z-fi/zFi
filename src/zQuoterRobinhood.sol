@@ -298,10 +298,8 @@ contract zQuoterRobinhood {
         unchecked {
             if (refundTo == ZROUTER && to != ZROUTER) refundTo = to;
 
-            // The wrap check comes BEFORE the distinctness check, deliberately.
-            // Mainnet normalizes ETH to WETH first and only then looks for the
-            // ETH/WETH pair, so its fast path is unreachable and the call reverts
-            // on a request that is perfectly well formed.
+            // Wrap check BEFORE distinctness: mainnet normalizes ETH to WETH
+            // first, making its own fast path unreachable.
 
             if ((tokenIn == address(0) && tokenOut == WETH) || (tokenIn == WETH && tokenOut == address(0))) {
                 a = Quote(AMM.WETH_WRAP, 0, swapAmount, swapAmount);
@@ -886,18 +884,14 @@ contract zQuoterRobinhood {
 
             if (zeroForOne) {
                 (int16 wordPos, uint8 bitPos) = _position(compressed);
-                // Uniswap writes the mask as two terms and it is not stylistic:
-                // `(1 << (bitPos + 1)) - 1` looks equivalent but `bitPos` is a
-                // uint8, so at 255 the increment wraps to zero inside this
-                // unchecked block and the mask becomes 0 — the word then reads as
-                // empty and every initialized tick in it is skipped.
+                // Two terms, as Uniswap writes it: `(1 << (bitPos + 1)) - 1`
+                // wraps to 0 at bitPos 255 because bitPos is a uint8 and this
+                // block is unchecked, making the whole word read as empty.
                 uint256 mask = ((uint256(1) << bitPos) - 1) + (uint256(1) << bitPos);
                 uint256 masked = _bitmapWord(p, wordPos) & mask;
                 initialized = masked != 0;
-                // The uninitialized case stops at bit 0 of this word. Stepping a
-                // further spacing past it would enter the next word without ever
-                // reading its bitmap, so bit 255 down there could be crossed
-                // without picking up its liquidityNet.
+                // Stops at bit 0 of this word: a further spacing would enter the
+                // next word without ever reading its bitmap.
                 next = initialized
                     ? (compressed - int24(uint24(bitPos) - uint24(_msb(masked)))) * spacing
                     : (compressed - int24(uint24(bitPos))) * spacing;

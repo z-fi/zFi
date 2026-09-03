@@ -36,11 +36,15 @@ contract zRouterLiteBase {
         _;
     }
 
-    /// @dev `tx.origin`, not `msg.sender`: deployed through the CREATE2 factory,
-    /// `msg.sender` is the factory.
+    /// @dev Ownership is ordinary transferrable ownership — `_owner` is storage
+    /// and `transferOwnership` moves it. Only the SEED is fixed: through a CREATE3
+    /// factory `msg.sender` is the factory's proxy and `tx.origin` is whichever key
+    /// sent the transaction, so neither is the right initial owner. Seeding from a
+    /// constant means the deploy key confers no authority and can be rotated
+    /// freely afterwards.
     constructor() payable {
         safeExecutor = new SafeExecutor();
-        emit OwnershipTransferred(address(0), _owner = tx.origin);
+        emit OwnershipTransferred(address(0), _owner = INITIAL_OWNER);
     }
 
     // ** UNISWAP V2
@@ -514,14 +518,15 @@ contract zRouterLiteBase {
         if (amount == 0) amount = balanceOf(token);
     }
 
+    /// @dev MUST hash the same two words `depositFor` and `_useTransientBalance`
+    /// do. It hashed three while those hashed two, so it read a slot nothing ever
+    /// wrote, always returned zero, and `_selfAmount` fell back to the raw balance
+    /// — silently undoing the dust fix it exists to implement.
     function _creditOf(address user, address token) internal view returns (uint256 bal) {
         assembly ("memory-safe") {
-            let m := mload(0x40)
             mstore(0x00, user)
             mstore(0x20, token)
-            mstore(0x40, 0)
-            bal := tload(keccak256(0x00, 0x60))
-            mstore(0x40, m)
+            bal := tload(keccak256(0x00, 0x40))
         }
     }
 
@@ -866,6 +871,8 @@ address constant AERO_IMPLEMENTATION = 0xA4e46b4f701c62e14DF11B48dCe76A7d793CD6d
 address constant AERO_CL_FACTORY = 0x5e7BB104d84c7CB9B682AaC2F3d509f5F406809A;
 address constant AERO_CL_IMPLEMENTATION = 0xeC8E5342B19977B4eF8892e02D8DAEcfa1315831;
 
+
+address constant INITIAL_OWNER = 0x1C0Aa8cCD568d90d61659F060D1bFb1e6f855A20;
 
 uint160 constant MIN_SQRT_RATIO_PLUS_ONE = 4295128740;
 uint160 constant MAX_SQRT_RATIO_MINUS_ONE = 1461446703485210103287273052203988822378723970341;
