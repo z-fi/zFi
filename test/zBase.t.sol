@@ -170,8 +170,17 @@ contract BaseTest is Test {
         assertEq(IStateView(V4_STATE_VIEW).poolManager(), V4_POOL_MANAGER);
     }
 
-    function testZammIsDeployed() public view {
-        assertGt(ZAMM.code.length, 0);
+    /// @dev zAMM IS deployed on Base — this is not a "not deployed" exclusion. It
+    /// is excluded because every pair and fee tier reads empty, so quoting it was
+    /// four guaranteed-empty staticcalls per request. The slots stay reserved so a
+    /// `source` ordinal keeps its meaning across chains.
+    function testZammIsDeployedButDeliberatelyNotQuoted() public view {
+        assertGt(ZAMM.code.length, 0, "precondition: zAMM exists on Base");
+        (, zQuoterBase.Quote[] memory q) = quoter.getQuotes(false, address(0), USDC, 1 ether);
+        for (uint256 i = 2; i < 6; ++i) {
+            assertEq(q[i].amountIn, 0, "a zAMM slot was populated");
+            assertEq(q[i].amountOut, 0, "a zAMM slot was populated");
+        }
     }
 
     // ══════════ the Slipstream spacing fix ══════════
@@ -482,7 +491,7 @@ contract BaseTest is Test {
         assertTrue(ok);
 
         bytes[] memory calls = new bytes[](3);
-        calls[0] = abi.encodeWithSelector(zRouterLiteBase.deposit.selector, WETH, uint256(0), uint256(1 ether));
+        calls[0] = abi.encodeWithSelector(zRouterLiteBase.deposit.selector, WETH, uint256(1 ether));
         calls[1] = abi.encodeWithSelector(zRouterLiteBase.unwrap.selector, uint256(0));
         calls[2] = abi.encodeWithSelector(
             zRouterLiteBase.sweep.selector, address(0), uint256(0), uint256(1 ether), alice
@@ -508,18 +517,6 @@ contract BaseTest is Test {
         // ...but the solver is still callable for anyone who wants the number.
         (uint256 solvedIn,,) = quoter.quoteAero(true, USDC, AERO, 1e18);
         assertGt(solvedIn, 0, "the exact-out solver should still answer directly");
-    }
-
-    /// @dev zAMM settles by pulling from the router, so the route needs a standing
-    /// allowance. It used to exist only if the owner had primed it, so every
-    /// quoter-built zAMM route reverted until someone remembered.
-    function testZammRouteNeedsNoOwnerPriming() public {
-        // Nothing has been approved; the allowance is granted on demand.
-        (, bytes memory ret) = USDC.staticcall(
-            abi.encodeWithSignature("allowance(address,address)", address(router), ZAMM)
-        );
-        assertEq(abi.decode(ret, (uint256)), 0, "precondition: not primed");
-        assertEq(router.owner(), deployer);
     }
 
     // ══════════ the aggregate surface ══════════
@@ -560,10 +557,9 @@ contract BaseTest is Test {
         (, zQuoterBase.Quote[] memory q) = quoter.getQuotes(false, address(0), USDC, 1 ether);
         assertTrue(q[0].source == zQuoterBase.AMM.UNI_V2);
         assertTrue(q[1].source == zQuoterBase.AMM.AERO);
-        uint256[4] memory zFees = [uint256(1), 5, 30, 100];
-        for (uint256 i; i < 4; ++i) {
-            assertTrue(q[2 + i].source == zQuoterBase.AMM.ZAMM);
-            assertEq(q[2 + i].feeBps, zFees[i]);
+        // Slots 2..5 are zAMM's, reserved and left zeroed.
+        for (uint256 i = 2; i < 6; ++i) {
+            assertEq(q[i].amountOut, 0);
         }
         uint256[4] memory tiers = [uint256(1), 5, 30, 100];
         for (uint256 i; i < 4; ++i) {
@@ -611,10 +607,10 @@ contract BaseTest is Test {
     function testEnsureAllowanceIsOwnerGatedHere() public {
         vm.prank(alice);
         vm.expectRevert(zRouterLiteBase.Unauthorized.selector);
-        router.ensureAllowance(USDC, false, alice);
+        router.ensureAllowance(USDC, alice);
 
         vm.prank(deployer);
-        router.ensureAllowance(USDC, false, alice);
+        router.ensureAllowance(USDC, alice);
     }
 
     function testExecuteRejectsUntrustedTargets() public {
@@ -657,7 +653,7 @@ contract BaseTest is Test {
         assertEq(IERC20(USDC).balanceOf(address(router)), quoted);
 
         // The credit is what lets a following leg spend it.
-        router.sweep(USDC, 0, 0, alice);
+        router.sweep(USDC, 0, alice);
         assertEq(IERC20(USDC).balanceOf(alice), quoted);
     }
 

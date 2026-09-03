@@ -1192,6 +1192,26 @@ contract RobinhoodTest is Test {
 
 
 
+    // ══════════ hybrid split ══════════
+
+    function testHybridSelectorMatchesMainnet() public pure {
+        assertEq(zQuoterRobinhood.buildHybridSplit.selector, bytes4(0x85f86a90));
+    }
+
+    /// @dev With WETH the only hub, an ether-in request has no hub to route
+    /// through, so this must fall back to the direct route rather than revert.
+    function testHybridFallsBackWhenTheHubIsTheInput() public {
+        (zQuoterRobinhood.Quote[2] memory legs, bytes memory mc, uint256 mv) =
+            quoter.buildHybridSplit(alice, address(0), TKN, 1 ether, 200, block.timestamp);
+        _need(legs[0].amountOut);
+        assertEq(legs[1].amountOut, 0, "found a hub route where none exists");
+
+        vm.prank(alice);
+        (bool ok,) = address(router).call{value: mv}(mc);
+        assertTrue(ok, "hybrid fallback reverted");
+        assertGt(IERC20(TKN).balanceOf(alice), 0);
+    }
+
     // ══════════ split routing ══════════
 
     function testSplitSelectorMatchesMainnet() public pure {

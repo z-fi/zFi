@@ -541,6 +541,103 @@ contract zQuoterRobinhood {
         }
     }
 
+
+    /// @notice Split one exact-in trade between the best direct venue and the best
+    /// hub route. Same return shape as `buildSplitSwap`.
+    /// @dev On this chain the only hub is WETH, so this can only fire for a
+    /// token-to-token trade: an ether-in request normalizes to WETH, the hub then
+    /// equals tokenIn and is skipped, and the call falls back to the direct route.
+    /// It exists so both L2 quoters answer the same ABI, not because it will run
+    /// often here.
+    function buildHybridSplit(
+        address to,
+        address tokenIn,
+        address tokenOut,
+        uint256 swapAmount,
+        uint256 slippageBps,
+        uint256 deadline
+    ) public view returns (Quote[2] memory legs, bytes memory multicall, uint256 msgValue) {
+        unchecked {
+            if ((tokenIn == address(0) && tokenOut == WETH) || (tokenIn == WETH && tokenOut == address(0))) {
+                (legs[0], multicall, msgValue) = _fallbackBest(to, tokenIn, tokenOut, swapAmount, slippageBps, deadline);
+                return (legs, multicall, msgValue);
+            }
+            require(_normalizeETH(tokenIn) != _normalizeETH(tokenOut), IdenticalTokens());
+
+            bool ethIn = tokenIn == address(0);
+            address legTo = ethIn ? ZROUTER : to;
+            uint256 bestTotal;
+            uint256 bestPct;
+            bytes memory bestHubCd;
+            address bestMid;
+
+            uint256[3] memory pcts = [uint256(25), 50, 75];
+            for (uint256 i; i < 3; ++i) {
+                uint256 a1 = (swapAmount * pcts[i]) / 100;
+                (bool okD, Quote memory qd,,) =
+                    _bestSingleHop(legTo, false, tokenIn, tokenOut, a1, slippageBps, deadline);
+                if (!okD || qd.amountOut == 0) continue;
+
+                (Quote memory hb, bytes memory hcd, address hmid) =
+                    _hubLeg(legTo, tokenIn, tokenOut, swapAmount - a1, slippageBps, deadline);
+                if (hb.amountOut == 0) continue;
+
+                if (qd.amountOut + hb.amountOut > bestTotal) {
+                    bestTotal = qd.amountOut + hb.amountOut;
+                    bestPct = pcts[i];
+                    legs[0] = qd;
+                    legs[1] = hb;
+                    bestHubCd = hcd;
+                    bestMid = hmid;
+                }
+            }
+
+            if (bestTotal == 0) {
+                (legs[0], multicall, msgValue) = _fallbackBest(to, tokenIn, tokenOut, swapAmount, slippageBps, deadline);
+                legs[1] = Quote(AMM.UNI_V2, 0, 0, 0);
+                return (legs, multicall, msgValue);
+            }
+
+            uint256 direct = (swapAmount * bestPct) / 100;
+            bytes[] memory c = new bytes[](ethIn ? 5 : 3);
+            uint256 k;
+            c[k++] = _buildSwap(
+                legTo, false, tokenIn, tokenOut, direct, limit(false, legs[0].amountOut, slippageBps), deadline, legs[0]
+            );
+            c[k++] = bestHubCd;
+            c[k++] = _buildSwap(
+                legTo, false, bestMid, tokenOut, 0, limit(false, legs[1].amountOut, slippageBps), deadline, legs[1]
+            );
+            if (ethIn) {
+                c[k++] = _sweepTo(tokenOut, to);
+                c[k++] = _sweepTo(address(0), to);
+            }
+
+            multicall = _mc(c);
+            msgValue = ethIn ? swapAmount : 0;
+        }
+    }
+
+    /// @dev The best hub route for one amount: the landing quote, hop-1 calldata,
+    /// and the hub it went through — which the caller needs as hop-2's tokenIn.
+    function _hubLeg(address to, address tokenIn, address tokenOut, uint256 amount, uint256 bps, uint256 dl)
+        internal
+        view
+        returns (Quote memory b, bytes memory ca, address mid_)
+    {
+        address[1] memory hubs = _hubs();
+        for (uint256 h; h < hubs.length; ++h) {
+            address mid = hubs[h];
+            if (mid == _normalizeETH(tokenIn) || mid == _normalizeETH(tokenOut)) continue;
+            (bool okA, Quote memory qa, bytes memory cda,) = _bestSingleHop(ZROUTER, false, tokenIn, mid, amount, bps, dl);
+            if (!okA || qa.amountOut == 0) continue;
+            (bool okB, Quote memory qb,,) =
+                _bestSingleHop(to, false, mid, tokenOut, limit(false, qa.amountOut, bps), bps, dl);
+            if (!okB || qb.amountOut == 0) continue;
+            if (qb.amountOut > b.amountOut) (b, ca, mid_) = (qb, cda, mid);
+        }
+    }
+
     // ====================== UNISWAP V2 ======================
 
     /// @dev Constant product at 0.30%. Cannot revert: a missing pair has no code
