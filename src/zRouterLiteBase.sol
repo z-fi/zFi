@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.36;
 
-// zRouterLiteBase — Uniswap V2/V3/V4, Aerodrome and zAMM on Base (8453).
+// zRouterLiteBase — Uniswap V2/V3/V4 and Aerodrome on Base (8453).
 //
 // A rewrite of the zRouter deployed at 0x0000000000404FECAf36E6184245475eE1254835,
 // not a copy. Same venue coverage and the same swap selectors, but with the
@@ -10,8 +10,11 @@ pragma solidity ^0.8.36;
 // `execute` requires. `ensureAllowance` is owner-gated here; on that deployment it
 // is callable by anyone.
 //
-// ERC6909 ids stay, unlike the Robinhood build: zAMM issues them, so `deposit`,
-// `sweep` and the transient balances all have to address them.
+// zAMM is not here. It is deployed on Base but every pair and fee tier reads
+// empty, so quoting it was four guaranteed-misses per request and executing it was
+// a venue nobody uses. Its ERC6909 ids went with it: nothing else on this chain
+// issues one, so `deposit`, `sweep` and the transient balances all lost the
+// argument — which makes this router's ABI identical to the Robinhood one.
 //
 // `swapV4Router` is not carried over. It forwarded arbitrary calldata to a v4
 // periphery router, which is `execute` with no trust check and no lock.
@@ -78,8 +81,8 @@ contract zRouterLiteBase {
                 amountOut = (amountIn * 997 * resOut) / (resIn * 1000 + amountIn * 997);
                 require(amountLimit == 0 || amountOut >= amountLimit, Slippage());
             }
-            if (!_useTransientBalance(pool, tokenIn, 0, amountIn)) {
-                if (_useTransientBalance(address(this), tokenIn, 0, amountIn)) {
+            if (!_useTransientBalance(pool, tokenIn, amountIn)) {
+                if (_useTransientBalance(address(this), tokenIn, amountIn)) {
                     safeTransfer(tokenIn, pool, amountIn);
                 } else if (ethIn) {
                     wrapETH(pool, amountIn);
@@ -104,7 +107,7 @@ contract zRouterLiteBase {
             unwrapETH(amountOut);
             _safeTransferETH(to, amountOut);
         } else {
-            depositFor(tokenOut, 0, amountOut, to);
+            depositFor(tokenOut, amountOut, to);
         }
     }
 
@@ -167,7 +170,7 @@ contract zRouterLiteBase {
                 }
             }
             if (!ethOut) {
-                depositFor(tokenOut, 0, amountOut, to);
+                depositFor(tokenOut, amountOut, to);
             }
         }
     }
@@ -209,7 +212,7 @@ contract zRouterLiteBase {
             require(msg.sender == pool, Unauthorized());
             uint256 amountRequired = uint256(zeroForOne ? amount0Delta : amount1Delta);
 
-            if (_useTransientBalance(address(this), tokenIn, 0, amountRequired)) {
+            if (_useTransientBalance(address(this), tokenIn, amountRequired)) {
                 safeTransfer(tokenIn, pool, amountRequired);
             } else if (ethIn) {
                 wrapETH(pool, amountRequired);
@@ -248,7 +251,7 @@ contract zRouterLiteBase {
                 ),
             (uint256, uint256)
         );
-        depositFor(tokenOut, 0, amountOut, to);
+        depositFor(tokenOut, amountOut, to);
     }
 
     /// @dev V4 swap callback. Hookless pools only.
@@ -286,7 +289,7 @@ contract zRouterLiteBase {
             IV4PoolManager(msg.sender).sync(tokenIn);
             uint256 amountIn = !exactOut ? swapAmount : takeAmount;
 
-            if (_useTransientBalance(address(this), tokenIn, 0, amountIn)) {
+            if (_useTransientBalance(address(this), tokenIn, amountIn)) {
                 if (tokenIn != address(0)) {
                     safeTransfer(tokenIn, msg.sender, amountIn);
                 }
@@ -360,8 +363,8 @@ contract zRouterLiteBase {
         amountOut = IAeroPool(pool).getAmountOut(amountIn, tokenIn);
         require(amountLimit == 0 || amountOut >= amountLimit, Slippage());
 
-        if (!_useTransientBalance(pool, tokenIn, 0, amountIn)) {
-            if (_useTransientBalance(address(this), tokenIn, 0, amountIn)) {
+        if (!_useTransientBalance(pool, tokenIn, amountIn)) {
+            if (_useTransientBalance(address(this), tokenIn, amountIn)) {
                 safeTransfer(tokenIn, pool, amountIn);
             } else if (ethIn) {
                 wrapETH(pool, amountIn);
@@ -380,7 +383,7 @@ contract zRouterLiteBase {
             unwrapETH(amountOut);
             _safeTransferETH(to, amountOut);
         } else {
-            depositFor(tokenOut, 0, amountOut, to);
+            depositFor(tokenOut, amountOut, to);
         }
     }
 
@@ -446,98 +449,8 @@ contract zRouterLiteBase {
                     _safeTransferETH(msg.sender, swapAmount);
                 }
             }
-            if (!ethOut) depositFor(tokenOut, 0, amountOut, to);
+            if (!ethOut) depositFor(tokenOut, amountOut, to);
         }
-    }
-
-    // ** ZAMM
-
-    /// @dev zAMM settles to `to` itself and takes payment from this contract, so
-    /// the input is pulled in first. `idIn`/`idOut` are ERC6909 ids; zero means
-    /// the ERC20 side of the same address.
-    function swapVZ(
-        address to,
-        bool exactOut,
-        uint256 feeOrHook,
-        address tokenIn,
-        address tokenOut,
-        uint256 idIn,
-        uint256 idOut,
-        uint256 swapAmount,
-        uint256 amountLimit,
-        uint256 deadline
-    ) public payable checkDeadline(deadline) returns (uint256 amountIn, uint256 amountOut) {
-        (address token0, address token1, bool zeroForOne) = _sortTokens(tokenIn, tokenOut);
-        (uint256 id0, uint256 id1) = tokenIn == token0 ? (idIn, idOut) : (idOut, idIn);
-        PoolKey memory key = PoolKey(id0, id1, token0, token1, feeOrHook);
-
-        bool ethIn = tokenIn == address(0);
-        uint256 pull = !exactOut ? swapAmount : amountLimit;
-
-        if (!ethIn && !_useTransientBalance(address(this), tokenIn, idIn, pull)) {
-            if (idIn == 0) safeTransferFrom(tokenIn, msg.sender, address(this), pull);
-            else IERC6909(tokenIn).transferFrom(msg.sender, address(this), idIn, pull);
-        }
-
-        // zAMM settles by pulling from this contract, so it needs standing
-        // authority. Granted on demand rather than primed by the owner: otherwise
-        // every zAMM route the quoter picks reverts until someone remembers to
-        // call `ensureAllowance` for that token.
-        if (!ethIn) {
-            if (idIn == 0) {
-                if (allowance(tokenIn, address(this), ZAMM) < pull) {
-                    safeApprove(tokenIn, ZAMM, type(uint256).max);
-                }
-            } else {
-                IERC6909(tokenIn).setOperator(ZAMM, true);
-            }
-        }
-
-        uint256 result = exactOut
-            ? IZAMM(ZAMM).swapExactOut{value: ethIn ? amountLimit : 0}(
-                key, swapAmount, amountLimit, zeroForOne, to, deadline
-            )
-            : IZAMM(ZAMM).swapExactIn{value: ethIn ? swapAmount : 0}(
-                key, swapAmount, amountLimit, zeroForOne, to, deadline
-            );
-
-        (amountIn, amountOut) = exactOut ? (result, swapAmount) : (swapAmount, result);
-
-        // Exact-out overpays by construction; hand the remainder back. The third
-        // arm is not optional: with `idIn` set, the overpayment is an ERC6909
-        // balance, and reading `balanceOf(address)` on a pure-6909 issuer returns
-        // nothing — the helper reports zero and the refund is silently skipped,
-        // stranding the remainder for the next passer-by to sweep.
-        if (exactOut && to != address(this)) {
-            uint256 refund;
-            if (ethIn) {
-                refund = address(this).balance;
-                if (refund != 0) _safeTransferETH(msg.sender, refund);
-            } else if (idIn == 0) {
-                refund = balanceOf(tokenIn);
-                if (refund != 0) safeTransfer(tokenIn, msg.sender, refund);
-            } else {
-                refund = IERC6909(tokenIn).balanceOf(address(this), idIn);
-                if (refund != 0) IERC6909(tokenIn).transfer(msg.sender, idIn, refund);
-            }
-        }
-        depositFor(tokenOut, idOut, amountOut, to);
-    }
-
-    /// @dev For use after `deposit` or a swap leg has funded this contract.
-    function addLiquidity(
-        PoolKey calldata poolKey,
-        uint256 amount0Desired,
-        uint256 amount1Desired,
-        uint256 amount0Min,
-        uint256 amount1Min,
-        address to,
-        uint256 deadline
-    ) public payable returns (uint256 amount0, uint256 amount1, uint256 liquidity) {
-        return IZAMM(ZAMM)
-            .addLiquidity{value: poolKey.token0 == address(0) ? amount0Desired : 0}(
-                poolKey, amount0Desired, amount1Desired, amount0Min, amount1Min, to, deadline
-            );
     }
 
     // ** MULTISWAP HELPER
@@ -560,36 +473,33 @@ contract zRouterLiteBase {
     /// @dev Four total cases, one per funding source. Ether must actually be
     /// attached to be credited — the deployed router credits a bare
     /// `deposit(address(0), 0, n)` with ether it never received.
-    function deposit(address token, uint256 id, uint256 amount) public payable {
+    function deposit(address token, uint256 amount) public payable {
         if (token == address(0)) {
-            require(id == 0 && msg.value == amount, InvalidMsgVal());
+            require(msg.value == amount, InvalidMsgVal());
         } else if (token == WETH && msg.value != 0) {
-            require(id == 0 && msg.value == amount, InvalidMsgVal());
+            require(msg.value == amount, InvalidMsgVal());
             _safeTransferETH(WETH, amount); // wrap
         } else {
             require(msg.value == 0, InvalidMsgVal());
-            if (id == 0) safeTransferFrom(token, msg.sender, address(this), amount);
-            else IERC6909(token).transferFrom(msg.sender, address(this), id, amount);
+            safeTransferFrom(token, msg.sender, address(this), amount);
         }
-        depositFor(token, id, amount, address(this));
+        depositFor(token, amount, address(this));
     }
 
-    function _useTransientBalance(address user, address token, uint256 id, uint256 amount)
+    /// @dev Keyed on (owner, token) — two words, so this stays in scratch space.
+    function _useTransientBalance(address user, address token, uint256 amount)
         internal
         returns (bool credited)
     {
         assembly ("memory-safe") {
-            let m := mload(0x40)
             mstore(0x00, user)
             mstore(0x20, token)
-            mstore(0x40, id)
-            let slot := keccak256(0x00, 0x60)
+            let slot := keccak256(0x00, 0x40)
             let bal := tload(slot)
             if iszero(lt(bal, amount)) {
                 tstore(slot, sub(bal, amount))
                 credited := 1
             }
-            mstore(0x40, m)
         }
     }
 
@@ -617,7 +527,7 @@ contract zRouterLiteBase {
 
     function _safeTransferETH(address to, uint256 amount) internal {
         if (to == address(this)) {
-            depositFor(address(0), 0, amount, to);
+            depositFor(address(0), amount, to);
             return;
         }
         assembly ("memory-safe") {
@@ -632,13 +542,11 @@ contract zRouterLiteBase {
 
     receive() external payable {}
 
-    function sweep(address token, uint256 id, uint256 amount, address to) public payable {
+    function sweep(address token, uint256 amount, address to) public payable {
         if (token == address(0)) {
             _safeTransferETH(to, amount == 0 ? address(this).balance : amount);
-        } else if (id == 0) {
-            safeTransfer(token, to, amount == 0 ? balanceOf(token) : amount);
         } else {
-            IERC6909(token).transfer(to, id, amount == 0 ? IERC6909(token).balanceOf(address(this), id) : amount);
+            safeTransfer(token, to, amount == 0 ? balanceOf(token) : amount);
         }
     }
 
@@ -647,7 +555,7 @@ contract zRouterLiteBase {
     function wrap(uint256 amount) public payable {
         amount = amount == 0 ? address(this).balance : amount;
         _safeTransferETH(WETH, amount);
-        depositFor(WETH, 0, amount, address(this));
+        depositFor(WETH, amount, address(this));
     }
 
     /// @dev Consumes the WETH credit and re-credits the ether, so a chained
@@ -655,9 +563,9 @@ contract zRouterLiteBase {
     /// WETH credit outlives the WETH and the ether arrives uncredited.
     function unwrap(uint256 amount) public payable {
         if (amount == 0) amount = _selfAmount(WETH);
-        _useTransientBalance(address(this), WETH, 0, amount);
+        _useTransientBalance(address(this), WETH, amount);
         unwrapETH(amount);
-        depositFor(address(0), 0, amount, address(this));
+        depositFor(address(0), amount, address(this));
     }
 
     // ** PERMIT HELPERS
@@ -689,14 +597,13 @@ contract zRouterLiteBase {
                 msg.sender,
                 signature
             );
-        depositFor(token, 0, amount, address(this));
+        depositFor(token, amount, address(this));
     }
 
     // ** APPROVALS
 
-    function ensureAllowance(address token, bool is6909, address to) public payable onlyOwner {
-        if (is6909) IERC6909(token).setOperator(to, true);
-        else safeApprove(token, to, type(uint256).max);
+    function ensureAllowance(address token, address to) public payable onlyOwner {
+        safeApprove(token, to, type(uint256).max);
     }
 
     // ** POOL HELPERS
@@ -889,7 +796,7 @@ contract zRouterLiteBase {
         uint256 finalBalance = tokenOut == address(0) ? recipient.balance : balanceOfAccount(tokenOut, recipient);
         amountOut = finalBalance - initialBalance;
         if (amountOut < amountOutMin) revert SnwapSlippage(tokenOut, amountOut, amountOutMin);
-        if (recipient == address(this)) depositFor(tokenOut, 0, amountOut, address(this));
+        if (recipient == address(this)) depositFor(tokenOut, amountOut, address(this));
     }
 
     function snwapMulti(
@@ -929,7 +836,7 @@ contract zRouterLiteBase {
                 revert SnwapSlippage(tokensOut[i], amountsOut[i], amountsOutMin[i]);
             }
             if (recipient == address(this)) {
-                depositFor(tokensOut[i], 0, amountsOut[i], address(this));
+                depositFor(tokensOut[i], amountsOut[i], address(this));
             }
         }
     }
@@ -951,8 +858,6 @@ bytes32 constant V3_POOL_INIT_CODE_HASH = 0xe34f199b19b2b4f47f68442619d555527d24
 
 address constant V4_POOL_MANAGER = 0x498581fF718922c3f8e6A244956aF099B2652b2b;
 
-address constant ZAMM = 0x000000000000040470635EB91b7CE4D132D616eD;
-
 // Aerodrome deploys pools as minimal-proxy clones, so the pool address is a
 // CREATE2 of the clone initcode rather than of the pool's own. Both
 // implementations were read back off their factories.
@@ -973,36 +878,6 @@ interface IV2Pool {
 interface IAeroPool {
     function swap(uint256 amount0Out, uint256 amount1Out, address to, bytes calldata data) external;
     function getAmountOut(uint256 amountIn, address tokenIn) external view returns (uint256);
-}
-
-struct PoolKey {
-    uint256 id0;
-    uint256 id1;
-    address token0;
-    address token1;
-    uint256 feeOrHook;
-}
-
-interface IZAMM {
-    function swapExactIn(PoolKey calldata, uint256, uint256, bool, address, uint256)
-        external
-        payable
-        returns (uint256);
-    function swapExactOut(PoolKey calldata, uint256, uint256, bool, address, uint256)
-        external
-        payable
-        returns (uint256);
-    function addLiquidity(PoolKey calldata, uint256, uint256, uint256, uint256, address, uint256)
-        external
-        payable
-        returns (uint256, uint256, uint256);
-}
-
-interface IERC6909 {
-    function setOperator(address spender, bool approved) external returns (bool);
-    function balanceOf(address owner, uint256 id) external view returns (uint256);
-    function transfer(address receiver, uint256 id, uint256 amount) external returns (bool);
-    function transferFrom(address sender, address receiver, uint256 id, uint256 amount) external returns (bool);
 }
 
 interface IV3Pool {
@@ -1198,15 +1073,12 @@ interface IPermit2 {
 
 // ** TRANSIENT DEPOSIT
 
-function depositFor(address token, uint256 id, uint256 amount, address _for) {
+function depositFor(address token, uint256 amount, address _for) {
     assembly ("memory-safe") {
-        let m := mload(0x40)
         mstore(0x00, _for)
         mstore(0x20, token)
-        mstore(0x40, id)
-        let slot := keccak256(0x00, 0x60)
+        let slot := keccak256(0x00, 0x40)
         tstore(slot, add(tload(slot), amount))
-        mstore(0x40, m)
     }
 }
 

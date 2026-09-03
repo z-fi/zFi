@@ -433,3 +433,20 @@ yul = false
 [[profile.default.compilation_restrictions]]
 paths = "src/dao/ZorgConviction.sol"
 max_optimizer_runs = 200
+
+# zQuoterBase carries six venue families, the twenty-slot sweep, hub routing and
+# split routing in one contract. At the default 9,999,999 runs it measures
+# 28,913 B, 4,337 OVER EIP-170; the optimizer is inlining the shared
+# concentrated-liquidity engine into every venue that calls it. Same trade as the
+# boards above: pay runtime gas to keep a shippable artifact. The headroom here is
+# a build setting, so any edit that grows this file must re-check `--sizes`.
+[[profile.default.compilation_restrictions]]
+paths = "src/zQuoterBase.sol"
+max_optimizer_runs = 200
+
+# zQuoterRobinhood is the same shape with three venues instead of six, and fits
+# at the default. Pinned anyway so the two chains' quoters are built alike and a
+# size regression on one is visible on the other.
+[[profile.default.compilation_restrictions]]
+paths = "src/zQuoterRobinhood.sol"
+max_optimizer_runs = 200

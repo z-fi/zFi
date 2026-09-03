@@ -46,6 +46,11 @@ interface IDeepstateView {
 /// @dev Second token with a V2 pair against WETH, for the token->token leg.
 address constant TKN2 = 0xF8c0E9B26971C5Df9b754E5E0F5AD78C35770000;
 
+/// @dev The canonical zRouter address, which the quoter hardcodes. `deployCodeTo`
+/// runs the constructor there; a plain `vm.etch` of runtime code would leave
+/// `_owner` unset and `safeExecutor` bound to a different deployment.
+address constant ZROUTER = 0x000000000000FB114709235f1ccBFfb925F600e4;
+
 bytes32 constant V2_POOL_INIT_CODE_HASH = 0x96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f;
 bytes32 constant V3_POOL_INIT_CODE_HASH = 0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54;
 
@@ -233,8 +238,9 @@ contract RobinhoodTest is Test {
         vm.createSelectFork(RPC);
         // The constructor takes ownership from tx.origin, so set both.
         vm.prank(deployer, deployer);
-        router = new zRouterLiteRobinhood();
-        quoter = new zQuoterRobinhood(address(router));
+        deployCodeTo("zRouterLiteRobinhood.sol:zRouterLiteRobinhood", ZROUTER);
+        router = zRouterLiteRobinhood(payable(ZROUTER));
+        quoter = new zQuoterRobinhood();
         vm.deal(alice, 100 ether);
     }
 
@@ -1184,6 +1190,124 @@ contract RobinhoodTest is Test {
         return abi.encodePacked(r, s, v);
     }
 
+
+
+    // ══════════ split routing ══════════
+
+    function testSplitSelectorMatchesMainnet() public pure {
+        assertEq(zQuoterRobinhood.buildSplitSwap.selector, bytes4(0x892af013));
+    }
+
+    /// @dev Whatever it decides — a true split or a one-sided fallback — the
+    /// multicall must execute as-is and deliver at least what it promised.
+    function testSplitSwapIsExecutableAndDelivers() public {
+        (zQuoterRobinhood.Quote[2] memory legs, bytes memory mc, uint256 mv) =
+            quoter.buildSplitSwap(alice, address(0), TKN, 1 ether, 100, block.timestamp);
+        _need(legs[0].amountOut + legs[1].amountOut);
+        assertEq(mv, 1 ether);
+
+        vm.prank(alice);
+        (bool ok,) = address(router).call{value: mv}(mc);
+        assertTrue(ok, "split multicall reverted");
+
+        uint256 got = IERC20(TKN).balanceOf(alice);
+        uint256 promised = legs[0].amountOut + legs[1].amountOut;
+        assertGe(got, quoter.limit(false, promised, 100), "delivered under the promised bound");
+    }
+
+    /// @dev A split has to at least tie the single best venue, or it is not worth
+    /// two legs of gas.
+    function testSplitIsNeverWorseThanTheBestSingleVenue() public view {
+        (zQuoterRobinhood.Quote memory best,) = quoter.getQuotes(false, address(0), TKN, 1 ether);
+        (zQuoterRobinhood.Quote[2] memory legs,,) =
+            quoter.buildSplitSwap(alice, address(0), TKN, 1 ether, 100, block.timestamp);
+        if (best.amountOut == 0) return;
+        assertGe(legs[0].amountOut + legs[1].amountOut, best.amountOut, "split priced worse than direct");
+    }
+
+    /// @dev Splitting a wrap is meaningless; it should fall through to one leg.
+    function testSplitFallsBackForAWrap() public {
+        (zQuoterRobinhood.Quote[2] memory legs, bytes memory mc, uint256 mv) =
+            quoter.buildSplitSwap(alice, address(0), WETH, 1 ether, 50, block.timestamp);
+        assertTrue(legs[0].source == zQuoterRobinhood.AMM.WETH_WRAP);
+        assertEq(legs[1].amountOut, 0, "second leg should be empty for a wrap");
+
+        vm.prank(alice);
+        (bool ok,) = address(router).call{value: mv}(mc);
+        assertTrue(ok, "wrap fallback reverted");
+        assertEq(IERC20(WETH).balanceOf(alice), 1 ether);
+    }
+
+    // ══════════ hub routing (zSwap's second entry point) ══════════
+
+    /// @dev zSwap hardcodes this selector at zSwap.html:2808. If it drifts, the
+    /// page silently stops routing on this chain.
+    function testViaEthMulticallSelectorIsWhatZSwapCalls() public pure {
+        assertEq(zQuoterRobinhood.buildBestSwapViaETHMulticall.selector, bytes4(0xe453166e));
+        assertEq(zQuoterRobinhood.buildBestSwap.selector, bytes4(0xe7798987));
+    }
+
+    function testViaEthMulticallWrapFastPath() public {
+        (zQuoterRobinhood.Quote memory a,, bytes[] memory calls, bytes memory mc, uint256 mv) =
+            quoter.buildBestSwapViaETHMulticall(alice, alice, false, address(0), WETH, 1 ether, 50, block.timestamp);
+
+        assertTrue(a.source == zQuoterRobinhood.AMM.WETH_WRAP);
+        assertEq(calls.length, 2);
+        assertEq(mv, 1 ether);
+
+        vm.prank(alice);
+        (bool ok,) = address(router).call{value: mv}(mc);
+        assertTrue(ok, "wrap multicall reverted");
+        assertEq(IERC20(WETH).balanceOf(alice), 1 ether);
+    }
+
+    /// @dev ETH -> TKN has a direct pool on three venues, so the direct route should
+    /// win and the builder should hand back a single-leg multicall.
+    function testViaEthMulticallPrefersDirectWhenItIsBest() public {
+        (zQuoterRobinhood.Quote memory a,, bytes[] memory calls, bytes memory mc, uint256 mv) =
+            quoter.buildBestSwapViaETHMulticall(alice, alice, false, address(0), TKN, 1 ether, 100, block.timestamp);
+        _need(a.amountOut);
+        assertEq(calls.length, 1, "took a hub route for a pair with a deep direct pool");
+
+        vm.prank(alice);
+        (bool ok,) = address(router).call{value: mv}(mc);
+        assertTrue(ok, "direct multicall reverted");
+        assertGt(IERC20(TKN).balanceOf(alice), 0);
+    }
+
+    /// @dev Whatever it picks, direct or hubbed, the multicall it returns has to be
+    /// executable as-is and actually deliver.
+    function testViaEthMulticallIsExecutableForATokenPair() public {
+        (zQuoterRobinhood.Quote memory a,,, bytes memory mc, uint256 mv) =
+            quoter.buildBestSwapViaETHMulticall(alice, alice, false, address(0), TKN2, 1 ether, 200, block.timestamp);
+        _need(a.amountOut);
+
+        vm.prank(alice);
+        (bool ok,) = address(router).call{value: mv}(mc);
+        assertTrue(ok, "multicall reverted");
+        assertGt(IERC20(TKN2).balanceOf(alice), 0);
+    }
+
+    /// @dev Leftovers must never be left addressed to the router: its `sweep` is
+    /// public, so anyone could take them.
+    function testViaEthMulticallNeverRefundsToTheRouter() public view {
+        (,, bytes[] memory calls,,) = quoter.buildBestSwapViaETHMulticall(
+            alice, ZROUTER, false, address(0), TKN, 1 ether, 100, block.timestamp
+        );
+        for (uint256 i; i < calls.length; ++i) {
+            bytes memory c = calls[i];
+            if (bytes4(c) != zRouterLiteRobinhood.sweep.selector) continue;
+            address dest;
+            assembly { dest := mload(add(c, 0x64)) }
+            assertTrue(dest != ZROUTER, "a sweep still points at the router");
+        }
+    }
+
+    function testLimitMatchesTheEmbeddedBound() public view {
+        assertEq(quoter.limit(false, 1000, 100), 990);
+        assertEq(quoter.limit(true, 1000, 100), 1010);
+    }
+
     // ══════════════════ audit regressions ══════════════════
 
     /// @dev A leg with `swapAmount == 0` means "spend what the previous leg
@@ -1428,8 +1552,9 @@ contract RobinhoodTest is Test {
         assertEq(outV4, 0);
     }
 
-    function testQuoterKnowsItsRouter() public view {
-        assertEq(quoter.ZROUTER(), address(router));
+    function testQuoterTargetsTheCanonicalRouter() public view {
+        assertEq(address(router), ZROUTER);
+        assertGt(ZROUTER.code.length, 0);
     }
 
     /// @dev When the caller asks for the output to stay in the router, the built

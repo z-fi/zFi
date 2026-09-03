@@ -10,8 +10,14 @@ import {zQuoterBase} from "../src/zQuoterBase.sol";
 /// here compares a quote against what execution actually returns, or a derived
 /// address against the factory's own registry. Neither needs a fixed block, and
 /// a venue that has emptied out skips rather than fails.
-string constant RPC = "https://mainnet.base.org";
-
+/// @dev Read from the environment so a fast private endpoint can be used locally
+/// without its API key ending up in the repo. The default is deliberately a public
+/// node rather than mainnet.base.org: the hub and split builders sweep twenty
+/// venues per leg across five hubs, tens of thousands of storage reads per test,
+/// and that endpoint rate-limits into "operation timed out" — a failure that reads
+/// exactly like a broken quoter.
+///
+///   BASE_RPC_URL=https://base.gateway.tenderly.co/<key> forge test --match-path test/zBase.t.sol
 address constant WETH = 0x4200000000000000000000000000000000000006;
 address constant USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
 address constant AERO = 0x940181a94A35A4569E4529A3CDfB74e38FD98631;
@@ -23,6 +29,12 @@ address constant V4_STATE_VIEW = 0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71;
 address constant AERO_FACTORY = 0x420DD381b31aEf6683db6B902084cB0FFECe40Da;
 address constant AERO_CL_FACTORY = 0x5e7BB104d84c7CB9B682AaC2F3d509f5F406809A;
 address constant ZAMM = 0x000000000000040470635EB91b7CE4D132D616eD;
+
+/// @dev The canonical zRouter address. The quoter hardcodes it, so the router
+/// under test has to actually live there — `deployCodeTo` runs the constructor at
+/// that address, which a plain `vm.etch` of runtime code would not (it would
+/// leave `_owner` unset and `safeExecutor` pointing at another deployment).
+address constant ZROUTER = 0x000000000000FB114709235f1ccBFfb925F600e4;
 
 bytes32 constant V2_POOL_INIT_CODE_HASH = 0x96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f;
 bytes32 constant V3_POOL_INIT_CODE_HASH = 0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54;
@@ -64,16 +76,23 @@ contract BaseTest is Test {
     address deployer = makeAddr("deployer");
     address nowhere = makeAddr("nowhere");
 
+    /// @dev Environment-driven so a fast private endpoint can be used locally
+    /// without its API key ending up in the repo.
+    function _rpc() internal view returns (string memory) {
+        return vm.envOr("BASE_RPC_URL", string("https://base-rpc.publicnode.com"));
+    }
+
     function setUp() public {
-        vm.createSelectFork(RPC);
+        vm.createSelectFork(_rpc());
         // `makeAddr` is not guaranteed to land on an empty account when forking:
         // on Base, alice's address holds a live proxy that forwards every ether it
         // receives, which silently ate the output of an ETH-out swap.
         vm.etch(alice, "");
         vm.etch(deployer, "");
         vm.prank(deployer, deployer);
-        router = new zRouterLiteBase();
-        quoter = new zQuoterBase(address(router));
+        deployCodeTo("zRouterLiteBase.sol:zRouterLiteBase", ZROUTER);
+        router = zRouterLiteBase(payable(ZROUTER));
+        quoter = new zQuoterBase();
         vm.deal(alice, 1000 ether);
     }
 
@@ -279,6 +298,150 @@ contract BaseTest is Test {
         assertGe(amountOut, 1e18, "solved input did not reach the target");
     }
 
+
+
+    // ══════════ hybrid split (direct + hub) ══════════
+
+    function testHybridSelectorMatchesMainnet() public pure {
+        assertEq(zQuoterBase.buildHybridSplit.selector, bytes4(0x85f86a90));
+    }
+
+    /// @dev Splits across route DEPTHS rather than across venues: part direct,
+    /// part through a hub. Whatever it returns must execute and deliver.
+    function testHybridSplitIsExecutableAndDelivers() public {
+        (zQuoterBase.Quote[2] memory legs, bytes memory mc, uint256 mv) =
+            quoter.buildHybridSplit(alice, address(0), AERO, 1 ether, 200, block.timestamp);
+        _need(legs[0].amountOut + legs[1].amountOut);
+        assertEq(mv, 1 ether);
+
+        vm.prank(alice);
+        (bool ok,) = address(router).call{value: mv}(mc);
+        assertTrue(ok, "hybrid multicall reverted");
+        assertGt(IERC20(AERO).balanceOf(alice), 0, "hybrid delivered nothing");
+    }
+
+    function testHybridFallsBackForAWrap() public view {
+        (zQuoterBase.Quote[2] memory legs,,) =
+            quoter.buildHybridSplit(alice, address(0), WETH, 1 ether, 50, block.timestamp);
+        assertTrue(legs[0].source == zQuoterBase.AMM.WETH_WRAP);
+    }
+
+    // ══════════ split routing ══════════
+
+    function testSplitSelectorMatchesMainnet() public pure {
+        assertEq(zQuoterBase.buildSplitSwap.selector, bytes4(0x892af013));
+    }
+
+    /// @dev Whatever it decides — a true split or a one-sided fallback — the
+    /// multicall must execute as-is and deliver at least what it promised.
+    function testSplitSwapIsExecutableAndDelivers() public {
+        (zQuoterBase.Quote[2] memory legs, bytes memory mc, uint256 mv) =
+            quoter.buildSplitSwap(alice, address(0), USDC, 1 ether, 100, block.timestamp);
+        _need(legs[0].amountOut + legs[1].amountOut);
+        assertEq(mv, 1 ether);
+
+        vm.prank(alice);
+        (bool ok,) = address(router).call{value: mv}(mc);
+        assertTrue(ok, "split multicall reverted");
+
+        uint256 got = IERC20(USDC).balanceOf(alice);
+        uint256 promised = legs[0].amountOut + legs[1].amountOut;
+        assertGe(got, quoter.limit(false, promised, 100), "delivered under the promised bound");
+    }
+
+    /// @dev A split has to at least tie the single best venue, or it is not worth
+    /// two legs of gas.
+    function testSplitIsNeverWorseThanTheBestSingleVenue() public view {
+        (zQuoterBase.Quote memory best,) = quoter.getQuotes(false, address(0), USDC, 1 ether);
+        (zQuoterBase.Quote[2] memory legs,,) =
+            quoter.buildSplitSwap(alice, address(0), USDC, 1 ether, 100, block.timestamp);
+        if (best.amountOut == 0) return;
+        assertGe(legs[0].amountOut + legs[1].amountOut, best.amountOut, "split priced worse than direct");
+    }
+
+    /// @dev Splitting a wrap is meaningless; it should fall through to one leg.
+    function testSplitFallsBackForAWrap() public {
+        (zQuoterBase.Quote[2] memory legs, bytes memory mc, uint256 mv) =
+            quoter.buildSplitSwap(alice, address(0), WETH, 1 ether, 50, block.timestamp);
+        assertTrue(legs[0].source == zQuoterBase.AMM.WETH_WRAP);
+        assertEq(legs[1].amountOut, 0, "second leg should be empty for a wrap");
+
+        vm.prank(alice);
+        (bool ok,) = address(router).call{value: mv}(mc);
+        assertTrue(ok, "wrap fallback reverted");
+        assertEq(IERC20(WETH).balanceOf(alice), 1 ether);
+    }
+
+    // ══════════ hub routing (zSwap's second entry point) ══════════
+
+    /// @dev zSwap hardcodes this selector at zSwap.html:2808. If it drifts, the
+    /// page silently stops routing on Base.
+    function testViaEthMulticallSelectorIsWhatZSwapCalls() public pure {
+        assertEq(zQuoterBase.buildBestSwapViaETHMulticall.selector, bytes4(0xe453166e));
+        assertEq(zQuoterBase.buildBestSwap.selector, bytes4(0xe7798987));
+    }
+
+    function testViaEthMulticallWrapFastPath() public {
+        (zQuoterBase.Quote memory a,, bytes[] memory calls, bytes memory mc, uint256 mv) =
+            quoter.buildBestSwapViaETHMulticall(alice, alice, false, address(0), WETH, 1 ether, 50, block.timestamp);
+
+        assertTrue(a.source == zQuoterBase.AMM.WETH_WRAP);
+        assertEq(calls.length, 2);
+        assertEq(mv, 1 ether);
+
+        vm.prank(alice);
+        (bool ok,) = address(router).call{value: mv}(mc);
+        assertTrue(ok, "wrap multicall reverted");
+        assertEq(IERC20(WETH).balanceOf(alice), 1 ether);
+    }
+
+    /// @dev ETH -> USDC is deep everywhere, so the direct route should win and the
+    /// builder should hand back a single-leg multicall.
+    function testViaEthMulticallPrefersDirectWhenItIsBest() public {
+        (zQuoterBase.Quote memory a,, bytes[] memory calls, bytes memory mc, uint256 mv) =
+            quoter.buildBestSwapViaETHMulticall(alice, alice, false, address(0), USDC, 1 ether, 100, block.timestamp);
+        _need(a.amountOut);
+        assertEq(calls.length, 1, "took a hub route for a pair with a deep direct pool");
+
+        vm.prank(alice);
+        (bool ok,) = address(router).call{value: mv}(mc);
+        assertTrue(ok, "direct multicall reverted");
+        assertGt(IERC20(USDC).balanceOf(alice), 0);
+    }
+
+    /// @dev Whatever it picks, direct or hubbed, the multicall it returns has to be
+    /// executable as-is and actually deliver.
+    function testViaEthMulticallIsExecutableForATokenPair() public {
+        (zQuoterBase.Quote memory a,,, bytes memory mc, uint256 mv) =
+            quoter.buildBestSwapViaETHMulticall(alice, alice, false, address(0), AERO, 1 ether, 200, block.timestamp);
+        _need(a.amountOut);
+
+        vm.prank(alice);
+        (bool ok,) = address(router).call{value: mv}(mc);
+        assertTrue(ok, "multicall reverted");
+        assertGt(IERC20(AERO).balanceOf(alice), 0);
+    }
+
+    /// @dev Leftovers must never be left addressed to the router: its `sweep` is
+    /// public, so anyone could take them.
+    function testViaEthMulticallNeverRefundsToTheRouter() public view {
+        (,, bytes[] memory calls,,) = quoter.buildBestSwapViaETHMulticall(
+            alice, ZROUTER, false, address(0), USDC, 1 ether, 100, block.timestamp
+        );
+        for (uint256 i; i < calls.length; ++i) {
+            bytes memory c = calls[i];
+            if (bytes4(c) != zRouterLiteBase.sweep.selector) continue;
+            address dest;
+            assembly { dest := mload(add(c, 0x84)) }
+            assertTrue(dest != ZROUTER, "a sweep still points at the router");
+        }
+    }
+
+    function testLimitMatchesTheEmbeddedBound() public view {
+        assertEq(quoter.limit(false, 1000, 100), 990);
+        assertEq(quoter.limit(true, 1000, 100), 1010);
+    }
+
     // ══════════ audit regressions ══════════
 
     /// @dev A leg with `swapAmount == 0` spends what the previous leg credited.
@@ -430,8 +593,11 @@ contract BaseTest is Test {
         quoter.getQuotes(false, address(0), WETH, 1 ether);
     }
 
-    function testQuoterKnowsItsRouter() public view {
-        assertEq(quoter.ZROUTER(), address(router));
+    /// @dev The quoter builds calldata for the canonical address, so the router it
+    /// quotes for and the router it names must be the same contract.
+    function testQuoterTargetsTheCanonicalRouter() public view {
+        assertEq(address(router), ZROUTER);
+        assertGt(ZROUTER.code.length, 0);
     }
 
     // ══════════ the extensions this build adds over the deployed router ══════════
