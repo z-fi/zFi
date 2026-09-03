@@ -206,7 +206,11 @@ library V4TickBitmap {
             if (zeroForOne) {
                 // search left (<=)
                 (int16 wordPos, uint8 bitPos) = _position(compressed);
-                uint256 mask = ((uint256(1) << (bitPos + 1)) - 1); // ones up to and including bitPos
+                // Two terms, the way Uniswap writes it, and not stylistic:
+                // `(1 << (bitPos + 1)) - 1` wraps to 0 at bitPos 255 because
+                // bitPos is a uint8 and this block is unchecked, which makes the
+                // whole word read as empty.
+                uint256 mask = ((uint256(1) << bitPos) - 1) + (uint256(1) << bitPos);
                 uint256 bitmap = IStateViewV4(stateView).getTickBitmap(poolId, wordPos);
                 uint256 masked = bitmap & mask;
                 initialized = masked != 0;
@@ -216,7 +220,9 @@ library V4TickBitmap {
                     int24 offset = int24(uint24(bitPos) - uint24(msb));
                     next = (compressed - offset) * tickSpacing;
                 } else {
-                    next = (compressed - int24(uint24(bitPos))) * tickSpacing - tickSpacing;
+                    // Stop at bit 0 of this word. A further spacing would enter
+                    // the next word without ever reading its bitmap.
+                    next = (compressed - int24(uint24(bitPos))) * tickSpacing;
                 }
             } else {
                 // search right (>)
