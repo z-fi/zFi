@@ -79,7 +79,7 @@
   </section>
 
   <section>
-    <h2>Step 2 — zQuoterBase via CreateX</h2>
+    <h2>Step 2 — zQuoterBase via CreateX <span class="hint">one click: verify → simulate → send</span></h2>
     <dl>
       <dt>To</dt><dd>0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed <span class="hint">CreateX</span></dd>
       <dt>Function</dt><dd>deployCreate3(bytes32 salt, bytes initCode) &nbsp;<span class="hint">0x9c36a286</span></dd>
@@ -90,12 +90,15 @@
       <dt>Router it targets</dt><dd id="q-router">—</dd>
     </dl>
     <div class="row" style="margin-top:12px">
-      <button id="q-check" class="ghost" disabled>Run checks</button>
-      <button id="q-simulate" class="ghost" disabled>Simulate</button>
-      <button id="q-send" disabled>Deploy quoter</button>
+      <button id="q-go">Deploy quoter</button>
+      <button id="q-check" class="ghost" disabled>Checks only</button>
+      <button id="q-simulate" class="ghost" disabled>Simulate only</button>
+      <button id="q-send" class="ghost" disabled>Send only</button>
     </div>
     <div class="msg" id="q-out"></div>
     <ul>
+      <li>Deploy runs all three steps and stops at the first failure, so nothing is signed
+          unless the simulation succeeded and gas headroom is sufficient.</li>
       <li>The salt is prefixed with your address, so only you can use it — and it yields the
           same address on every chain.</li>
       <li>Checks confirm the router exists first: the quoter hardcodes it.</li>
@@ -164,6 +167,7 @@ $('connect').onclick = async () => {
     $('p-chain').textContent = 'Base (8453)';
     $('check').disabled = false;
     $('q-check').disabled = false;
+    $('q-go').disabled = false;
     show($('checks'), 'Connected. Run checks.', '');
   } catch (e) { show($('checks'), e.message || String(e), 'bad'); }
 };
@@ -283,6 +287,44 @@ $('q-simulate').onclick = async () => {
     const d = (e && e.data && (e.data.data || e.data)) || '';
     show($('q-out'), 'Would revert:\n' + (e.message || e) + (d ? '\nrevert data: ' + d : ''), 'bad');
   }
+};
+
+// One click: connect if needed, verify, simulate, then send. Each step gates the
+// next, so a failure stops before the wallet is ever asked to sign.
+$('q-go').onclick = async () => {
+  try {
+    if (!account) { await $('connect').onclick(); if (!account) return; }
+
+    show($('q-out'), '1/3 verifying on chain…', 'warn');
+    await $('q-check').onclick();
+    if (!qChecks) return; // q-check already printed why
+
+    show($('q-out'), '2/3 simulating…', 'warn');
+    try {
+      await provider.request({ method: 'eth_call', params: [qTx(), 'latest'] });
+    } catch (e) {
+      const d = (e && e.data && (e.data.data || e.data)) || '';
+      return show($('q-out'), 'Simulation reverted — nothing sent.\n' + (e.message || e) +
+                              (d ? '\nrevert data: ' + d : ''), 'bad');
+    }
+
+    const gas = await provider.request({ method: 'eth_estimateGas', params: [qTx()] });
+    const price = await provider.request({ method: 'eth_gasPrice', params: [] });
+    const bal = await provider.request({ method: 'eth_getBalance', params: [account, 'latest'] });
+    const cost = BigInt(gas) * BigInt(price);
+    if (BigInt(bal) < (cost * 3n) / 2n) {
+      return show($('q-out'),
+        'Insufficient gas headroom — nothing sent.\n' +
+        'cost ~' + cost.toString() + ' wei, balance ' + BigInt(bal).toString() + ' wei.\n' +
+        'Wallets pad the limit; top up before retrying.', 'bad');
+    }
+
+    show($('q-out'), '3/3 confirm in your wallet…\nestimated gas ' + BigInt(gas).toString(), 'warn');
+    const h = await provider.request({ method: 'eth_sendTransaction', params: [qTx()] });
+    $('q-out').innerHTML = 'Sent: <a href="https://basescan.org/tx/' + h +
+      '" target="_blank" rel="noopener">' + h + '</a><br>Quoter: ' + Q_ADDR;
+    $('q-out').className = 'msg show ok';
+  } catch (e) { show($('q-out'), e.message || String(e), 'bad'); }
 };
 
 $('q-send').onclick = async () => {
