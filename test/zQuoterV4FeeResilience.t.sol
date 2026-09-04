@@ -38,7 +38,7 @@ contract zQuoterV4FeeResilienceTest is Test {
     /// the helper, BASE and the PoolManager all exist - the same block the other
     /// repaired zQuoter suites use.
     string constant DEFAULT_RPC = "https://gateway.tenderly.co/public/mainnet";
-    uint256 constant DEFAULT_FORK_BLOCK = 25_640_000;
+    uint256 constant DEFAULT_FORK_BLOCK = 25_906_900;
 
     function setUp() public {
         vm.createSelectFork(vm.envOr("ETH_RPC_URL", string(DEFAULT_RPC)), vm.envOr("FORK_BLOCK", DEFAULT_FORK_BLOCK));

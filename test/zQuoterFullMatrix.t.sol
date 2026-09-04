@@ -26,7 +26,7 @@ contract zQuoterFullMatrixTest is Test {
     /// overridable by env. The block is chosen to be AFTER the currently
     /// deployed zQuoter/zRouter, so live-address tests are possible here.
     string constant DEFAULT_RPC = "https://gateway.tenderly.co/public/mainnet";
-    uint256 constant DEFAULT_FORK_BLOCK = 25_640_000;
+    uint256 constant DEFAULT_FORK_BLOCK = 25_906_900;
 
     zQuoter q;
 

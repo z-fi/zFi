@@ -21,7 +21,7 @@ interface IERC20 {
 
 contract zQuoterAccuracyTest is Test {
     string constant DEFAULT_RPC = "https://gateway.tenderly.co/public/mainnet";
-    uint256 constant DEFAULT_FORK_BLOCK = 25_640_000;
+    uint256 constant DEFAULT_FORK_BLOCK = 25_906_900;
 
     address constant ROUTER = 0x000000000000FB114709235f1ccBFfb925F600e4;
     address constant ETH = address(0);

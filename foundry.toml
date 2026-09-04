@@ -58,8 +58,12 @@ evm_version = "prague"
 # this key, so FOUNDRY_ETH_RPC_URL does not reach them. zQuoterFullMatrix reads
 # vm.envOr("ETH_RPC_URL", ...) and does. Grep before assuming an override took effect.
 eth_rpc_url = "https://eth-mainnet.public.blastapi.io"
-# Must be AFTER the deployments the quoter depends on. zQuoter staticcalls the V4 helper
-# at 0x00005d8a3675b7b00BA172Aa85485Fc5D23121B6, and at the previous pin of 24_880_000 that
+# Must be AFTER the deployments the quoter depends on. zQuoter staticcalls a V4 helper
+# — now 0x56033EBF90EbdEf9D74b38e5F7201c0624EFef01, live from block 25_906_5xx, which is
+# why the pin moved off 25_640_000: at that block the NEW helper had no code and the same
+# garbage returned (4.5e37 again), which is the failure described below repeating with a
+# different address. The previous helper was 0x00005d8a3675b7b00BA172Aa85485Fc5D23121B6,
+# and at the older pin of 24_880_000 that
 # address had ZERO bytes of code (as did the live zQuoter at 0x0000002d...). A staticcall to
 # a codeless address succeeds with empty returndata, so V4 legs decoded to garbage: a
 # WBTC->ETH quote came back as 4.5e37 wei instead of ~3.2e18, won venue selection with the
@@ -74,7 +78,7 @@ eth_rpc_url = "https://eth-mainnet.public.blastapi.io"
 # protocol-fee composition documented in src/zQuoterV4.sol is actually exercised rather
 # than trivially correct. It matches the block the newer suites already self-pin to
 # (zQuoterFullMatrix, zQuoterPerVenueExec), so the repo now forks one consistent state.
-fork_block_number = 25_640_000
+fork_block_number = 25_906_900
 no_rpc_rate_limit = true
 
 # Foundry's default per-test gas cap is 2^30. test/zQuoterFullMatrix.t.sol quotes AND
