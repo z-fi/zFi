@@ -12,7 +12,7 @@ Verify the quoter bytecode before signing:
 
     forge build --contracts src/zQuoterBase.sol --skip 'test/**'
     # keccak of .bytecode.object from out/zQuoterBase.sol/zQuoterBase.json
-    # must equal 0xf4cc7c306c7b77d2267a35eb16ea7a7a3e880f29f3150276342bebc7892219a2
+    # must equal 0x702d5b717f59d4fb34f48bf8bbb34978af2eecdd097471bb3ab6e65f29a483b1
 
 Verify on Basescan after deploying. zQuoterBase is pinned to 200 optimizer runs
 in foundry.toml, and forge verify-contract ignores compilation_restrictions, so

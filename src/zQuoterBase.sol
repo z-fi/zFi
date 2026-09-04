@@ -14,13 +14,6 @@ import {TickMath, SwapMath, LiquidityMath, IStateViewV4, _sortTokens, _v4PoolId}
 // SPACING, the only value that names a Slipstream pool; for AERO it is a
 // discriminator, 2 for stable and 20 for volatile; elsewhere it is the fee tier.
 //
-// Three fixes over the quoter behind 0x772E2810 (itself a lens onto 0xa8Cc0177):
-// v3 is walked here rather than delegated to Uniswap's simulate-and-revert quoter
-// behind a `try` that reads every failure as "no route"; Slipstream is swept at
-// its real spacings, 1/10/50/100/200/2000, not Uniswap's 1/10/60/200 — 60 has
-// never existed on that factory and 100 is the deepest pool on the chain; and its
-// fee is read per pool, since 573 micro-pips where the spacing default says 500
-// is normal there.
 address constant WETH = 0x4200000000000000000000000000000000000006;
 
 address constant V2_FACTORY = 0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6;
@@ -1256,10 +1249,6 @@ interface IZRouter {
         payable
         returns (uint256, uint256);
     function multicall(bytes[] calldata) external payable returns (bytes[] memory);
-    // Must mirror zRouterLiteBase exactly. These lost their ERC6909 id with zAMM;
-    // a stale declaration here still compiles and still produces calldata — it just
-    // produces calldata for a selector the router does not have, which lands in the
-    // router's fallback (the V3 swap callback) and reverts.
     function sweep(address, uint256, address) external payable;
     function deposit(address, uint256) external payable;
     function wrap(uint256) external payable;
