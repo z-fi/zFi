@@ -422,7 +422,7 @@ if (exported) {
     const { wcToWallet } = exported;
     const toWallet = ['eth_sendTransaction', 'eth_signTransaction', 'personal_sign', 'eth_sign',
       'eth_signTypedData', 'eth_signTypedData_v3', 'eth_signTypedData_v4',
-      'wallet_switchEthereumChain', 'wallet_sendCalls', 'wallet_getCapabilities',
+      'wallet_switchEthereumChain', 'wallet_addEthereumChain', 'wallet_sendCalls', 'wallet_getCapabilities',
       'wallet_getCallsStatus', 'wallet_revokePermissions'];
     const toNode = ['eth_call', 'eth_getCode', 'eth_gasPrice', 'eth_getBalance',
       'eth_blockNumber', 'eth_getTransactionReceipt', 'eth_getBlockByNumber'];
