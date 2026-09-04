@@ -85,7 +85,12 @@ contract BaseTest is Test {
     }
 
     function setUp() public {
-        vm.createSelectFork(_rpc());
+        // Pin when BASE_FORK_BLOCK is set. The hub and split builders read tens of
+        // thousands of storage slots per test; unpinned, every run refetches them
+        // and the gateway drops the connection. Pinned, Foundry caches them.
+        uint256 blk = vm.envOr("BASE_FORK_BLOCK", uint256(0));
+        if (blk == 0) vm.createSelectFork(_rpc());
+        else vm.createSelectFork(_rpc(), blk);
         // `makeAddr` is not guaranteed to land on an empty account when forking:
         // on Base, alice's address holds a live proxy that forwards every ether it
         // receives, which silently ate the output of an ETH-out swap.
@@ -623,6 +628,38 @@ contract BaseTest is Test {
         vm.prank(alice);
         vm.expectRevert(zRouterLiteBase.Unauthorized.selector);
         router.unlockCallback("");
+    }
+
+    /// @dev Base enables fee tiers 200 and 400, spacing 4 and 8, which no bps table
+    /// maps. v3 pools are addressed by fee alone, so a derived spacing still reaches
+    /// the real pool and walks the wrong bitmap — the quote diverges while execution
+    /// is fine. Mainnet has neither tier, so the Robinhood sibling cannot catch this.
+    function testV3NonStandardTiersQuoteWhatExecutionPays() public {
+        uint24[2] memory fees = [uint24(200), uint24(400)];
+        for (uint256 i; i < 2; ++i) {
+            address pool = IV3Factory(V3_FACTORY).getPool(WETH, USDC, fees[i]);
+            if (pool == address(0)) continue;
+            (, uint256 quoted) = quoter.quoteV3(false, address(0), USDC, fees[i], 0.05 ether);
+            if (quoted == 0) continue;
+
+            uint256 before = IERC20(USDC).balanceOf(alice);
+            vm.prank(alice);
+            (, uint256 got) = router.swapV3{value: 0.05 ether}(
+                alice, false, fees[i], address(0), USDC, 0.05 ether, 0, block.timestamp
+            );
+            assertEq(got, quoted, "quote drifted from execution on a non-standard tier");
+            assertEq(IERC20(USDC).balanceOf(alice) - before, got);
+        }
+    }
+
+    /// @dev The exact-in hub build was the only ETH-in builder without a trailing
+    /// ether sweep; hop one targets ZROUTER, which suppresses the router's refund.
+    function testHubExactInSweepsEtherWhenNotChaining() public view {
+        (,, bytes[] memory calls,,) = quoter.buildBestSwapViaETHMulticall(
+            alice, alice, false, address(0), AERO, 1 ether, 200, block.timestamp
+        );
+        if (calls.length < 2) return; // direct route won
+        assertEq(bytes4(calls[calls.length - 1]), zRouterLiteBase.sweep.selector, "no trailing ether sweep");
     }
 
     // ══════════ audit regressions ══════════

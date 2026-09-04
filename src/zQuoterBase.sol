@@ -601,13 +601,18 @@ contract zQuoterBase {
             }
 
             if (!plan.isExactOut) {
-                calls = new bytes[](2);
+                // A first leg that stops at the price limit leaves ether here, and
+                // hop one targets ZROUTER so the router's own refund is suppressed.
+                bool ethInput = tokenIn == address(0);
+                bool chaining = to == ZROUTER;
+                calls = new bytes[]((ethInput && !chaining) ? 3 : 2);
                 calls[0] = plan.ca;
                 // swapAmount 0: the router spends what leg one credited.
                 calls[1] = _buildSwap(
                     to, false, plan.mid, tokenOut, 0, limit(false, plan.b.amountOut, slippageBps), deadline, plan.b
                 );
-                msgValue = tokenIn == address(0) ? swapAmount : 0;
+                if (ethInput && !chaining) calls[2] = _sweepTo(address(0), refundTo);
+                msgValue = ethInput ? swapAmount : 0;
             } else {
                 bool chaining = to == ZROUTER;
                 bool ethInput = tokenIn == address(0);
@@ -938,8 +943,13 @@ contract zQuoterBase {
         );
         if (pool.code.length == 0) return (0, 0);
 
+        // Spacing comes from the pool. Deriving it is wrong on Base: the factory
+        // enables 200->4 and 400->8, which no bps table here maps, and v3 pools are
+        // addressed by fee alone so a bad spacing still reaches a real pool and
+        // walks the wrong bitmap. v4 must keep deriving it — there it is part of
+        // the pool id, so a wrong guess names a pool that does not exist.
         return _quoteCL(
-            Pool(false, pool, bytes32(0), _spacingFromBps(uint16(fee / 100)), fee), exactOut, zeroForOne, swapAmount
+            Pool(false, pool, bytes32(0), IV3Pool(pool).tickSpacing(), fee), exactOut, zeroForOne, swapAmount
         );
     }
 
@@ -1206,6 +1216,7 @@ interface IV2Pool {
 }
 
 interface IV3Pool {
+    function tickSpacing() external view returns (int24);
     function slot0() external view returns (uint160, int24, uint16, uint16, uint16, uint8, bool);
     function liquidity() external view returns (uint128);
     function tickBitmap(int16) external view returns (uint256);

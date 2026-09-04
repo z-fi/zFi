@@ -374,13 +374,18 @@ contract zQuoterRobinhood {
             }
 
             if (!plan.isExactOut) {
-                calls = new bytes[](2);
+                // A first leg that stops at the price limit leaves ether here, and
+                // hop one targets ZROUTER so the router's own refund is suppressed.
+                bool ethInput = tokenIn == address(0);
+                bool chaining = to == ZROUTER;
+                calls = new bytes[]((ethInput && !chaining) ? 3 : 2);
                 calls[0] = plan.ca;
                 // swapAmount 0: the router spends what leg one credited.
                 calls[1] = _buildSwap(
                     to, false, plan.mid, tokenOut, 0, limit(false, plan.b.amountOut, slippageBps), deadline, plan.b
                 );
-                msgValue = tokenIn == address(0) ? swapAmount : 0;
+                if (ethInput && !chaining) calls[2] = _sweepTo(address(0), refundTo);
+                msgValue = ethInput ? swapAmount : 0;
             } else {
                 bool chaining = to == ZROUTER;
                 bool ethInput = tokenIn == address(0);
