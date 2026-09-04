@@ -479,7 +479,22 @@ const PLQLENS="0x000000956bf20A41C54BaE4a4b6F5C8A166DAB4E";
 const PPLENS="0x000000Bad3a2fa57ed74fa06000573ccddF6B7fB";
 const PI_WORDS=19,PI_POOL=0,PI_LIQ=9,PI_HOOK=10,PI_SL=3,PI_SH=4,
 PI_FEE=5,PI_R0=6,PI_R1=7,PI_PX=8,PI_CBPS=12;
-const CHAIN_ID=1;
+let CHAIN_ID=1;
+const CHAIN_ICON_BASE=`<svg viewBox="0 0 32 32" width="20" height="20" aria-hidden="true"><rect width="32" height="32" fill="#0052FF"/><path d="M16 5.4A10.6 10.6 0 0 0 5.5 14.7h13.9v2.6H5.5A10.6 10.6 0 1 0 16 5.4Z" fill="#fff" transform="rotate(180 16 16)"/></svg>`;
+const CHAIN_ICON_RH=`<svg viewBox="0 0 32 32" width="20" height="20" aria-hidden="true"><rect width="32" height="32" fill="#CCFF00"/><g transform="translate(4 4)" fill="#110E08"><path d="M2.84 24h.53c.096 0 .192-.048.224-.128C7.591 13.696 11.94 8.656 14.67 5.638c.112-.128.064-.225-.096-.225h-4.88a.55.55 0 0 0-.45.225L5.746 9.972c-.514.642-.642 1.236-.642 2.086v4.43c-1.14 3.194-1.862 5.361-2.392 7.32-.032.125.016.192.129.192M20.447.646c-.754-.802-4.157-.834-5.73-.224a3 3 0 0 0-.786.465 41 41 0 0 0-3.323 3.178c-.112.113-.064.225.097.225h5.409c.497 0 .786.289.786.786v6.1c0 .16.128.208.225.064l3.258-4.254c.53-.69.69-.898.835-1.861.192-1.413.08-3.58-.77-4.479m-6.982 16.18 2.231-3.676a.7.7 0 0 0 .064-.29V6.73c0-.16-.112-.225-.224-.097-3.355 3.74-5.971 7.672-8.395 12.407-.06.12.016.225.16.177l5.009-1.54c.565-.174.882-.402 1.155-.852"/></g></svg>`;
+const CHAINS={
+1:{name:"Ethereum",short:"ETH",sweep4:true,tokenlist:"0x0000006013dF75A31678B786061C2B54bf531524",
+wrapped:"0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",explorer:"https://etherscan.io",
+rpcs:["https://ethereum-rpc.publicnode.com","https://eth-mainnet.public.blastapi.io"]},
+8453:{name:"Base",short:"BASE",sweep4:false,tokenlist:"0x0000000000000000000000000000000000000000",
+wrapped:"0x4200000000000000000000000000000000000006",explorer:"https://basescan.org",
+icon:CHAIN_ICON_BASE,rpcs:["https://mainnet.base.org","https://base-rpc.publicnode.com"]},
+4663:{name:"Robinhood",short:"RH",sweep4:false,tokenlist:"0x0000000000000000000000000000000000000000",
+wrapped:"0x0bd7d308f8e1639fab988df18a8011f41eacad73",explorer:"https://robinscan.io",
+rpcs:["https://rpc.mainnet.chain.robinhood.com"]},
+};
+CHAINS[4663].icon=CHAIN_ICON_RH;
+const chainCfg=()=>CHAINS[CHAIN_ID]||CHAINS[1];
 const SHARE_HOST="new.zswap.wei.limo";
 const ZERO="0x0000000000000000000000000000000000000000";
 const WETH="0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2";
@@ -3735,7 +3750,10 @@ return"0x"+SEL_SNWAP+encAddr(tokenIn)+encUint(amountIn)+encAddr(recipient)+encAd
 const encCheckpoint=(executor,token,recipient)=>encSnwap(
 ZERO,0n,recipient,ZERO,0n,executor,"0x"+SEL_CHECKPOINT+encAddr(token)
 );
-const encSweep=(token,amount,to)=>"0x"+SEL_SWEEP+encAddr(token)+encUint(0)+encUint(amount)+encAddr(to);
+const SEL_SWEEP3="dc2c256f";
+const encSweep=(token,amount,to)=>chainCfg().sweep4
+?"0x"+SEL_SWEEP+encAddr(token)+encUint(0)+encUint(amount)+encAddr(to)
+:"0x"+SEL_SWEEP3+encAddr(token)+encUint(amount)+encAddr(to);
 function encPermit2Hybrid(ammData,fills,tokenIn,tokenOut,recipient,refundTo,deadline,bookIn,bookOut){
 const bookData=encFillPlan(fills,tokenIn,tokenOut,recipient,refundTo,deadline);
 const steps=[encCheckpoint(SWAPBOL,tokenIn,refundTo)];
