@@ -450,3 +450,12 @@ max_optimizer_runs = 200
 [[profile.default.compilation_restrictions]]
 paths = "src/zQuoterRobinhood.sol"
 max_optimizer_runs = 200
+
+# Fork tests against a remote node need throttling, not a faster node. The Base
+# hub and split builders read tens of thousands of slots per test; run in
+# parallel with the default retry budget, the provider drops the connection and
+# forge reports it as a test failure indistinguishable from a real one. Three
+# providers, an anvil fork and cache warming all failed until these were set.
+# On the command line the equivalent is:
+#   --threads 1 --fork-retries 20 --fork-retry-backoff 3000 --compute-units-per-second 100
+compute_units_per_second = 100
