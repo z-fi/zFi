@@ -208,7 +208,7 @@ contract zSwapDeployTest is Test {
         // compared across 30 ordered pairs in both directions before switching,
         // same best-source and same amounts on every one.
         assertTrue(
-            _contains(html, bytes("const ZQUOTER=\"0xc7a03f9ed2be5feea18ce93e12f4f05c98287c16\"")),
+            _contains(html, bytes("const ZQUOTER=\"0x000000bd2db80567c23e353ca95a251c573cbf9b\"")),
             "wrong zQuoter deployment"
         );
         assertTrue(_contains(html, bytes("Q(\"e453166e\"")), "missing 1/2-hop builder");

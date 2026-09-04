@@ -2,7 +2,7 @@
 the first onchain superdapp
 
 [zRouter](https://etherscan.io/address/0x000000000000FB114709235f1ccBFfb925F600e4)
-[zQuoter](https://etherscan.io/address/0xc7a03f9ed2be5feea18ce93e12f4f05c98287c16)
+[zQuoter](https://etherscan.io/address/0x000000bd2db80567c23e353ca95a251c573cbf9b)
 [zSwap source](src/zSwap.sol)
 
 ## Canonical deployments
@@ -77,7 +77,7 @@ the holder. A sell therefore cannot be wrapped in `snwap`, whose executor sees
 
 | | address | |
 |---|---|---|
-| zQuoterV4 | [`0x00005d8a3675b7b00BA172Aa85485Fc5D23121B6`](https://etherscan.io/address/0x00005d8a3675b7b00BA172Aa85485Fc5D23121B6) | ordinary V4 pools, `view`, correct fee math |
+| zQuoterV4 | [`0x56033EBF90EbdEf9D74b38e5F7201c0624EFef01`](https://etherscan.io/address/0x56033EBF90EbdEf9D74b38e5F7201c0624EFef01) | ordinary V4 pools, `view`, correct fee math |
 | V4QuoteLens | [`0x000000c3aE1692983941495162A4AAB40660E65F`](https://etherscan.io/address/0x000000c3aE1692983941495162A4AAB40660E65F) | V4 pools priced by a hook |
 | V4Port | [`0x000000dfb53Fa7f1c486470034741d5BCBE14BE9`](https://etherscan.io/address/0x000000dfb53Fa7f1c486470034741d5BCBE14BE9) | executes any V4 pool, either direction |
 
@@ -90,7 +90,7 @@ ETH/USDC V4 pool, 0.1 ETH in returns a quote of 93,281,193 where the truth is
 191,274,994, a 51% under-quote; other pools over-quote by 2054x.
 
 That is the BASE quoter, and nothing reads it for V4. The hub zQuoter
-[`0xc7a03f9ed2be5feea18ce93e12f4f05c98287c16`](https://etherscan.io/address/0xc7a03f9ed2be5feea18ce93e12f4f05c98287c16)
+[`0x000000bd2db80567c23e353ca95a251c573cbf9b`](https://etherscan.io/address/0x000000bd2db80567c23e353ca95a251c573cbf9b)
 already routes its V4 leg to `zQuoterV4` above, which matches Uniswap's
 canonical quoter exactly. zSwap's V4 quotes are correct today.
 
@@ -173,7 +173,7 @@ Path and query parameters are ignored — the contract is a single-page app serv
 Once loaded, `zSwap.html` is a self-contained swap UI that:
 
 - Connects an injected wallet (MetaMask, Rabby, etc.) on Ethereum mainnet.
-- Quotes via [zQuoter](https://etherscan.io/address/0xc7a03f9ed2be5feea18ce93e12f4f05c98287c16) across Uniswap V2/V3/V4, Sushi, Curve, Lido, and zAMM.
+- Quotes via [zQuoter](https://etherscan.io/address/0x000000bd2db80567c23e353ca95a251c573cbf9b) across Uniswap V2/V3/V4, Sushi, Curve, Lido, and zAMM.
 - Compares those AMM routes with live current Swapboard, legacy Swapboard v1, and Dutchboard liquidity, then composes a better exact-in or exact-out split when one exists.
 - Routes the swap through [zRouter](https://etherscan.io/address/0x000000000000FB114709235f1ccBFfb925F600e4), handling ERC-20 approvals and native ETH.
 - Keeps split routes atomic for ETH and ERC-20 input, with EIP-2612, Permit2, and EIP-5792 wallet batching available through the same swap button.

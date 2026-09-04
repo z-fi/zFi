@@ -8,7 +8,7 @@
 // under-deliver. Eight of the fifty-six ordered pairs quoted and then reverted.
 // The routing calldata here comes from buildBestSwap, so this address IS the
 // fix; `quoteCurve` below is only read for the per-venue comparison.
-const ZQUOTER = '0xc7a03f9ed2be5feea18ce93e12f4f05c98287c16';
+const ZQUOTER = '0x000000bd2db80567c23e353ca95a251c573cbf9b';
 const ZROUTER = '0x000000000000FB114709235f1ccBFfb925F600e4';
 const MC3 = '0xcA11bde05977b3631167028862bE2a173976CA11';
 const ZERO = '0x0000000000000000000000000000000000000000';

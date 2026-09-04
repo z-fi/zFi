@@ -2,7 +2,7 @@
 the first onchain superdapp
 
 [zRouter](https://etherscan.io/address/0x000000000000FB114709235f1ccBFfb925F600e4)
-[zQuoter](https://etherscan.io/address/0xc7a03f9ed2be5feea18ce93e12f4f05c98287c16)
+[zQuoter](https://etherscan.io/address/0x000000bd2db80567c23e353ca95a251c573cbf9b)
 [zSwap source](src/zSwap.sol)
 
 ## zSwap: permanent onchain HTML dapp
@@ -36,7 +36,7 @@ Path and query parameters are ignored — the contract is a single-page app serv
 Once loaded, `zSwap.html` is a self-contained swap UI that:
 
 - Connects an injected wallet (MetaMask, Rabby, etc.) on Ethereum mainnet.
-- Quotes via [zQuoter](https://etherscan.io/address/0xc7a03f9ed2be5feea18ce93e12f4f05c98287c16) across Uniswap V2/V3/V4, Sushi, Curve, Lido, and zAMM.
+- Quotes via [zQuoter](https://etherscan.io/address/0x000000bd2db80567c23e353ca95a251c573cbf9b) across Uniswap V2/V3/V4, Sushi, Curve, Lido, and zAMM.
 - Compares those AMM routes with live current Swapboard, legacy Swapboard v1, and Dutchboard liquidity, then composes a better exact-in or exact-out split when one exists.
 - Routes the swap through [zRouter](https://etherscan.io/address/0x000000000000FB114709235f1ccBFfb925F600e4), handling ERC-20 approvals and native ETH.
 - Keeps split routes atomic for ETH and ERC-20 input, with EIP-2612, Permit2, and EIP-5792 wallet batching available through the same swap button.
