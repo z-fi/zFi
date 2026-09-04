@@ -34,7 +34,7 @@ IZQuoterBase constant _BASE = IZQuoterBase(0x658bF1A6608210FDE7310760f391AD4eC80
 /// fee exceeded 100%, returning a constant independent of input (~2013x high).
 /// zQuoterV4 is the base's own V4 code with that one expression corrected; it
 /// matches Uniswap's canonical quoter exactly.
-address constant _V4 = 0x00005d8a3675b7b00BA172Aa85485Fc5D23121B6;
+address constant _V4 = 0x56033EBF90EbdEf9D74b38e5F7201c0624EFef01;
 
 contract zQuoter {
     enum AMM {

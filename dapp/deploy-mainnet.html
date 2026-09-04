@@ -1,0 +1,274 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>zFi Mainnet Quoter Deployer</title>
+<style>
+  :root { color-scheme: light dark; --bg:#0b0d10; --fg:#e6e8eb; --mut:#8b949e; --line:#232a31;
+          --ok:#3fb950; --bad:#f85149; --warn:#d29922; --acc:#58a6ff; }
+  @media (prefers-color-scheme: light) {
+    :root { --bg:#fff; --fg:#14171a; --mut:#57606a; --line:#d8dee4; --ok:#1a7f37; --bad:#cf222e; --warn:#9a6700; --acc:#0969da; }
+  }
+  * { box-sizing:border-box }
+  body { margin:0; background:var(--bg); color:var(--fg); padding:28px 18px; display:flex; justify-content:center;
+         font:14px/1.55 ui-sans-serif,-apple-system,system-ui,sans-serif }
+  main { width:100%; max-width:700px }
+  h1 { font-size:17px; margin:0 0 2px }
+  .sub { color:var(--mut); margin:0 0 22px }
+  section { border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-bottom:14px }
+  h2 { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--mut); margin:0 0 10px; font-weight:600 }
+  dl { display:grid; grid-template-columns:auto 1fr; gap:5px 14px; margin:0 }
+  dt { color:var(--mut) }
+  dd { margin:0; font-family:ui-monospace,Menlo,monospace; font-size:12.5px; word-break:break-all }
+  button { font:inherit; font-weight:600; padding:9px 15px; border-radius:8px; border:1px solid var(--line);
+           background:var(--acc); color:#fff; cursor:pointer }
+  button.ghost { background:transparent; color:var(--fg) }
+  button:disabled { opacity:.45; cursor:not-allowed }
+  .row { display:flex; gap:9px; align-items:center; flex-wrap:wrap }
+  .msg { margin-top:11px; padding:9px 11px; border-radius:8px; border:1px solid var(--line); display:none;
+         font-family:ui-monospace,Menlo,monospace; font-size:12px; word-break:break-all; white-space:pre-wrap }
+  .msg.show { display:block }
+  .ok { color:var(--ok); border-color:var(--ok) }
+  .bad { color:var(--bad); border-color:var(--bad) }
+  .warn { color:var(--warn); border-color:var(--warn) }
+  .hint { color:var(--mut); font-size:12.5px; margin-top:9px }
+  a { color:var(--acc) }
+  ul { margin:8px 0 0; padding-left:18px; color:var(--mut); font-size:12.5px }
+  li { margin:3px 0 }
+</style>
+
+<main>
+  <h1>Deploy zQuoter — Ethereum mainnet</h1>
+  <p class="sub">Two steps, and the ORDER IS LOAD-BEARING. The shell staticcalls the
+     v4 helper, and a staticcall to a codeless address returns empty rather than
+     reverting — so a shell deployed first decodes uninitialized memory and quotes
+     nonsense large enough to win every route. Helper first, always.</p>
+
+  <section>
+    <h2>Wallet</h2>
+    <div class="row" id="wallet-list"><span class="hint">Looking for wallets…</span></div>
+    <div class="row"><button id="connect">Connect</button></div>
+    <dl>
+      <dt>You</dt><dd id="p-you">—</dd>
+      <dt>Chain</dt><dd id="p-chain">—</dd>
+    </dl>
+    <div class="msg" id="w-out"></div>
+  </section>
+
+  <section>
+    <h2>Step 1 — v4 helper (deploy this first)</h2>
+    <div class="row">
+      <button id="a-check" class="ghost" disabled>Check</button>
+      <button id="a-sim" class="ghost" disabled>Simulate</button>
+      <button id="a-send" disabled>Deploy helper</button>
+    </div>
+    <dl>
+      <dt>Contract</dt><dd>zQuoterV4 — carries the tick-bitmap fix</dd>
+      <dt>Deploys to</dt><dd>0x56033EBF90EbdEf9D74b38e5F7201c0624EFef01</dd>
+      <dt>Replaces</dt><dd>0x00005d8a3675b7b00BA172Aa85485Fc5D23121B6 (stays live, unused)</dd>
+      <dt>Occupied</dt><dd id="a-occ">—</dd>
+      <dt>Initcode</dt><dd id="a-code">—</dd>
+    </dl>
+    <p class="hint">The old helper's mask wraps to zero at bitPos 255, making a whole
+       bitmap word read as empty and the tick walk skip initialized ticks.</p>
+    <div class="msg" id="a-out"></div>
+  </section>
+
+  <section>
+    <h2>Step 2 — quoter shell</h2>
+    <div class="row">
+      <button id="b-check" class="ghost" disabled>Check</button>
+      <button id="b-sim" class="ghost" disabled>Simulate</button>
+      <button id="b-send" disabled>Deploy shell</button>
+    </div>
+    <dl>
+      <dt>Contract</dt><dd>zQuoter — _V4 repointed at the new helper</dd>
+      <dt>Deploys to</dt><dd>0x000000bd2DB80567c23E353ca95a251c573cBf9B</dd>
+      <dt>Same address as</dt><dd>Base and Robinhood</dd>
+      <dt>Helper live</dt><dd id="b-helper">—</dd>
+      <dt>Occupied</dt><dd id="b-occ">—</dd>
+      <dt>Initcode</dt><dd id="b-code">—</dd>
+    </dl>
+    <p class="hint">Blocked until the helper has code. Afterwards, point zSwap's
+       ZQUOTER at this address; the old shell at 0xc7a03f9e keeps working meanwhile.</p>
+    <div class="msg" id="b-out"></div>
+  </section>
+</main>
+
+<script src="./zquoterv4-initcode.js"></script>
+<script src="./zquoter-mainnet-initcode.js"></script>
+<script>
+const CREATEX = '0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed';
+const MAINNET = '0x1';
+const A_SALT = '0x1c0aa8ccd568d90d61659f060d1bfb1e6f855a20000000000000000000007634';
+const A_ADDR = '0x56033ebf90ebdef9d74b38e5f7201c0624efef01';
+const B_SALT = '0x1c0aa8ccd568d90d61659f060d1bfb1e6f855a200005b47e0000000000405e3a';
+const B_ADDR = '0x000000bd2db80567c23e353ca95a251c573cbf9b';
+
+const $ = (id) => document.getElementById(id);
+const show = (el, t, c) => { el.textContent = t; el.className = 'msg show ' + (c || ''); };
+let provider = null, account = null;
+
+// Every installed wallet announces itself under EIP-6963. Taking the first to
+// answer picks whichever extension won the race — usually not the one you meant
+// — and `window.ethereum` is worse, since the last extension to load overwrites
+// it. So collect them all and let the choice be explicit.
+const wallets = new Map(); // rdns -> { info, provider }
+let chosen = null;
+
+window.addEventListener('eip6963:announceProvider', (e) => {
+  wallets.set(e.detail.info.rdns, e.detail);
+  renderWallets();
+});
+function scan() { window.dispatchEvent(new Event('eip6963:requestProvider')); }
+scan();
+// Extensions inject asynchronously, so keep asking for a moment.
+for (const ms of [50, 150, 400, 900, 1800]) setTimeout(scan, ms);
+
+function legacy() {
+  // Pre-6963 wallets, and the array some multi-wallet setups expose.
+  const out = [];
+  const eth = window.ethereum;
+  if (!eth) return out;
+  const list = Array.isArray(eth.providers) ? eth.providers : [eth];
+  for (const p of list) {
+    const name = p.isMetaMask ? 'MetaMask' : p.isRabby ? 'Rabby'
+      : p.isCoinbaseWallet ? 'Coinbase Wallet' : p.isBraveWallet ? 'Brave' : 'Injected wallet';
+    out.push({ info: { name, rdns: 'legacy:' + name }, provider: p });
+  }
+  return out;
+}
+
+function renderWallets() {
+  const box = $('wallet-list');
+  const seen = new Map(wallets);
+  for (const w of legacy()) if (![...seen.values()].some((x) => x.provider === w.provider)) seen.set(w.info.rdns, w);
+
+  box.textContent = '';
+  if (!seen.size) {
+    const s = document.createElement('span');
+    s.className = 'hint';
+    s.textContent = 'No wallet detected yet.';
+    box.appendChild(s);
+    return;
+  }
+  for (const w of seen.values()) {
+    const b = document.createElement('button');
+    b.className = chosen === w.provider ? '' : 'ghost';
+    b.textContent = w.info.name;
+    b.onclick = () => { chosen = provider = w.provider; renderWallets(); connect(); };
+    box.appendChild(b);
+  }
+}
+
+async function getProvider() {
+  if (chosen) return chosen;
+  for (let i = 0; i < 20; i++) {
+    if (wallets.size === 1) return (provider = [...wallets.values()][0].provider);
+    if (wallets.size > 1) return null; // ambiguous: make the user pick
+    const l = legacy();
+    if (l.length === 1) return (provider = l[0].provider);
+    scan();
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  return null;
+}
+
+const codeAt = (a) => provider.request({ method: 'eth_getCode', params: [a, 'latest'] });
+function encWithBytes(sel, head, hex) {
+  const code = hex.replace(/^0x/, '');
+  const len = (code.length / 2).toString(16).padStart(64, '0');
+  const body = code + '0'.repeat((64 - (code.length % 64)) % 64);
+  const off = ((head.length + 1) * 32).toString(16).padStart(64, '0');
+  return sel + head.map((w) => w.replace(/^0x/, '').padStart(64, '0')).join('') + off + len + body;
+}
+
+$('a-code').textContent = window.ZQUOTERV4_INITCODE
+  ? ((window.ZQUOTERV4_INITCODE.length - 2) / 2) + ' bytes' : 'MISSING';
+$('b-code').textContent = window.ZQUOTER_MAINNET_INITCODE
+  ? ((window.ZQUOTER_MAINNET_INITCODE.length - 2) / 2) + ' bytes' : 'MISSING';
+
+async function ensureMainnet(p) {
+  const c = await p.request({ method: 'eth_chainId' });
+  if (c !== MAINNET) await p.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: MAINNET }] });
+}
+
+async function connect() {
+  try {
+    const p = await getProvider();
+    if (!p) return show($('w-out'), wallets.size > 1
+      ? 'More than one wallet installed. Pick one above.'
+      : 'No wallet found. Over file:// serve locally instead:\n  cd dapp && python3 -m http.server 8017', 'bad');
+    account = (await p.request({ method: 'eth_requestAccounts' }))[0];
+    await ensureMainnet(p);
+    $('p-you').textContent = account;
+    $('p-chain').textContent = 'Ethereum mainnet (1)';
+    $('a-check').disabled = false; $('b-check').disabled = false;
+    show($('w-out'), 'Connected via ' + walletName(p) + '.', 'ok');
+  } catch (e) { show($('w-out'), e.message || String(e), 'bad'); }
+}
+function walletName(p) {
+  for (const w of wallets.values()) if (w.provider === p) return w.info.name;
+  for (const w of legacy()) if (w.provider === p) return w.info.name;
+  return 'injected wallet';
+}
+$('connect').onclick = connect;
+renderWallets();
+
+function saltDeployer(salt) { return '0x' + salt.replace(/^0x/, '').slice(0, 40); }
+
+function wire(tag, salt, addr, initGetter, extraChecks) {
+  const tx = () => ({ from: account, to: CREATEX, value: '0x0',
+    data: encWithBytes('0x9c36a286', [salt], initGetter()) });
+
+  $(tag + '-check').onclick = async () => {
+    $(tag + '-sim').disabled = true; $(tag + '-send').disabled = true;
+    const fail = [];
+    try {
+      const c = await codeAt(addr);
+      const occ = c && c !== '0x';
+      $(tag + '-occ').textContent = occ ? 'YES — already deployed' : 'no';
+      if (occ) fail.push('Target already has code.');
+      if (!initGetter()) fail.push('Initcode did not load.');
+      const sd = saltDeployer(salt);
+      if (!account || account.toLowerCase() !== sd) fail.push('Salt is permissioned to ' + sd + '.');
+      if (extraChecks) await extraChecks(fail);
+      if (fail.length) return show($(tag + '-out'), 'BLOCKED:\n- ' + fail.join('\n- '), 'bad');
+      $(tag + '-sim').disabled = false; $(tag + '-send').disabled = false;
+      show($(tag + '-out'), 'All checks passed.', 'ok');
+    } catch (e) { show($(tag + '-out'), 'Check failed: ' + (e.message || e), 'bad'); }
+  };
+
+  $(tag + '-sim').onclick = async () => {
+    show($(tag + '-out'), 'Simulating…');
+    try {
+      const r = await provider.request({ method: 'eth_call', params: [tx(), 'latest'] });
+      const g = await provider.request({ method: 'eth_estimateGas', params: [tx()] });
+      show($(tag + '-out'), 'Simulation OK.\ndeployed -> 0x' + (r || '').slice(26) +
+        '\nestimated gas: ' + BigInt(g).toString(), 'ok');
+    } catch (e) {
+      const d = (e && e.data && (e.data.data || e.data)) || '';
+      show($(tag + '-out'), 'Would revert:\n' + (e.message || e) + (d ? '\nrevert data: ' + d : ''), 'bad');
+    }
+  };
+
+  $(tag + '-send').onclick = async () => {
+    show($(tag + '-out'), 'Confirm in your wallet…');
+    try {
+      const h = await provider.request({ method: 'eth_sendTransaction', params: [tx()] });
+      show($(tag + '-out'), 'Sent: ' + h + '\n-> ' + addr, 'ok');
+    } catch (e) { show($(tag + '-out'), e.message || String(e), 'bad'); }
+  };
+}
+
+wire('a', A_SALT, A_ADDR, () => window.ZQUOTERV4_INITCODE, null);
+wire('b', B_SALT, B_ADDR, () => window.ZQUOTER_MAINNET_INITCODE, async (fail) => {
+  const hc = await codeAt(A_ADDR);
+  const live = hc && hc !== '0x';
+  $('b-helper').textContent = A_ADDR + (live ? '  \u2713 deployed' : '  \u2717 NOT deployed');
+  if (!live) {
+    fail.push('The v4 helper is not deployed. Deploying the shell first would make '
+      + 'every v4 tier decode uninitialized memory and win the route with nonsense. '
+      + 'Do step 1 first.');
+  }
+});
+</script>
