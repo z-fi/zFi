@@ -212,6 +212,19 @@ contract FeeToken {
     }
 }
 
+/// @dev Two separate router calls inside ONE transaction. Transient storage
+/// lives for the whole transaction, so the tally must reset per call — each
+/// really did carry its own ether.
+contract Batcher {
+    function twice(address router, bytes[] calldata inner) external payable {
+        uint256 half = msg.value / 2;
+        (bool a,) = router.call{value: half}(abi.encodeWithSignature("multicall(bytes[])", inner));
+        require(a, "first");
+        (bool b,) = router.call{value: half}(abi.encodeWithSignature("multicall(bytes[])", inner));
+        require(b, "second");
+    }
+}
+
 contract PermitToken {
     string public constant name = "Permit Token";
     bytes32 public immutable DOMAIN_SEPARATOR;
@@ -1372,6 +1385,58 @@ contract RobinhoodTest is Test {
         vm.prank(alice);
         router.multicall{value: 1 ether}(calls);
         assertEq(address(router).balance, 1 ether);
+    }
+
+    /// @dev Two router calls in one transaction each carried their own ether, so
+    /// both may claim it. Without the per-call reset the second would be charged
+    /// for what the first already tallied.
+    function testSequentialMulticallsEachGetAFreshTally() public {
+        Batcher b = new Batcher();
+        bytes[] memory inner = new bytes[](1);
+        inner[0] = abi.encodeCall(router.deposit, (address(0), 0.5 ether));
+        vm.deal(address(this), 5 ether);
+        b.twice{value: 1 ether}(address(router), inner);
+        assertEq(address(router).balance, 1 ether, "both calls credited");
+    }
+
+    /// @dev A nested multicall shares the outer tally, because delegatecall
+    /// hands it the same msg.value. Claiming it twice must fail.
+    function testNestedMulticallCannotClaimTheValueTwice() public {
+        bytes[] memory inner = new bytes[](1);
+        inner[0] = abi.encodeCall(router.deposit, (address(0), 1 ether));
+
+        bytes[] memory outer = new bytes[](2);
+        outer[0] = abi.encodeCall(router.multicall, (inner));
+        outer[1] = abi.encodeCall(router.deposit, (address(0), 1 ether));
+
+        vm.deal(alice, 5 ether);
+        vm.prank(alice);
+        vm.expectRevert();
+        router.multicall{value: 1 ether}(outer);
+    }
+
+    /// @dev The same nesting is fine when the legs sum to what was attached.
+    function testNestedMulticallMaySplitTheAttachedValue() public {
+        bytes[] memory inner = new bytes[](1);
+        inner[0] = abi.encodeCall(router.deposit, (address(0), 0.5 ether));
+
+        bytes[] memory outer = new bytes[](2);
+        outer[0] = abi.encodeCall(router.multicall, (inner));
+        outer[1] = abi.encodeCall(router.deposit, (address(0), 0.5 ether));
+
+        vm.deal(alice, 5 ether);
+        vm.prank(alice);
+        router.multicall{value: 1 ether}(outer);
+        assertEq(address(router).balance, 1 ether);
+    }
+
+    /// @dev Alone, an overpayment has no later leg to claim it and would be
+    /// left for `sweep`. Batched, it is legitimate — another leg may take it.
+    function testDepositAloneRejectsAnOverpayment() public {
+        vm.deal(alice, 5 ether);
+        vm.prank(alice);
+        vm.expectRevert();
+        router.deposit{value: 2 ether}(address(0), 1 ether);
     }
 
     /// @dev The WETH withdraw was `pop`ped, so a failure was swallowed and

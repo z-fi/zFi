@@ -1,0 +1,412 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Deploy zFi — Robinhood</title>
+<style>
+  :root { color-scheme: light dark; --bg:#0b0d10; --fg:#e6e8eb; --mut:#8b949e; --line:#232a31;
+          --ok:#3fb950; --bad:#f85149; --warn:#d29922; --acc:#58a6ff; }
+  @media (prefers-color-scheme: light) {
+    :root { --bg:#fff; --fg:#14171a; --mut:#57606a; --line:#d8dee4; --ok:#1a7f37; --bad:#cf222e; --warn:#9a6700; --acc:#0969da; }
+  }
+  * { box-sizing:border-box }
+  body { margin:0; background:var(--bg); color:var(--fg); padding:28px 18px; display:flex; justify-content:center;
+         font:14px/1.55 ui-sans-serif,-apple-system,system-ui,sans-serif }
+  main { width:100%; max-width:700px }
+  h1 { font-size:17px; margin:0 0 2px }
+  .sub { color:var(--mut); margin:0 0 22px }
+  section { border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-bottom:14px }
+  h2 { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--mut); margin:0 0 10px; font-weight:600 }
+  dl { display:grid; grid-template-columns:auto 1fr; gap:5px 14px; margin:0 }
+  dt { color:var(--mut) }
+  dd { margin:0; font-family:ui-monospace,Menlo,monospace; font-size:12.5px; word-break:break-all }
+  button { font:inherit; font-weight:600; padding:9px 15px; border-radius:8px; border:1px solid var(--line);
+           background:var(--acc); color:#fff; cursor:pointer }
+  button.ghost { background:transparent; color:var(--fg) }
+  button:disabled { opacity:.45; cursor:not-allowed }
+  .row { display:flex; gap:9px; align-items:center; flex-wrap:wrap }
+  .msg { margin-top:11px; padding:9px 11px; border-radius:8px; border:1px solid var(--line); display:none;
+         font-family:ui-monospace,Menlo,monospace; font-size:12px; word-break:break-all; white-space:pre-wrap }
+  .msg.show { display:block }
+  .ok { color:var(--ok); border-color:var(--ok) }
+  .bad { color:var(--bad); border-color:var(--bad) }
+  .warn { color:var(--warn); border-color:var(--warn) }
+  .hint { color:var(--mut); font-size:12.5px; margin-top:9px }
+  a { color:var(--acc) }
+  ul { margin:8px 0 0; padding-left:18px; color:var(--mut); font-size:12.5px }
+  li { margin:3px 0 }
+</style>
+
+<main>
+  <h1>Deploy zFi — Robinhood Chain (4663)</h1>
+  <p class="sub">Three steps, in order: claim the vanity id, deploy the router into it,
+     then deploy the quoter through CreateX. Each step checks and simulates before it
+     will let you send.</p>
+
+  <section>
+    <h2>Wallet</h2>
+    <div class="row" id="wallet-list"><span class="hint">Looking for wallets…</span></div>
+    <div class="row">
+      <button id="connect">Connect</button>
+      <button id="c-check" class="ghost" disabled>1. Check claim</button>
+      <button id="c-send" disabled>1. Claim</button>
+    </div>
+    <dl>
+      <dt>You</dt><dd id="p-you">—</dd>
+      <dt>Chain</dt><dd id="p-chain">—</dd>
+    </dl>
+    <div class="msg" id="c-out"></div>
+  </section>
+
+  <section>
+    <h2>Step 1 — claim the vanity id</h2>
+    <dl>
+      <dt>To</dt><dd>0x000000000000b361194cfe6312EE3210d53C15AA</dd>
+      <dt>Function</dt><dd>claimGivenUpWithSig(address,uint256,uint8,address,uint256,bytes)</dd>
+      <dt>Salt id</dt><dd id="c-id"></dd>
+      <dt>Yields</dt><dd id="c-addr">—</dd>
+      <dt>Already minted</dt><dd id="c-minted">—</dd>
+    </dl>
+    <p class="hint">The same signed payload used on Base. The signature is chain-agnostic,
+       so it claims the identical id here — verified by simulation before sending.</p>
+  </section>
+
+  <section>
+    <h2>Step 2 — router into the vanity address</h2>
+    <div class="row">
+      <button id="r-check" class="ghost" disabled>2. Check router</button>
+      <button id="r-sim" class="ghost" disabled>Simulate</button>
+      <button id="r-send" disabled>2. Deploy router</button>
+    </div>
+    <dl>
+      <dt>To</dt><dd>0x000000000000b361194cfe6312EE3210d53C15AA</dd>
+      <dt>Function</dt><dd>deploy(uint256,bytes)</dd>
+      <dt>Deploys to</dt><dd>0x000000000000FB114709235f1ccBFfb925F600e4</dd>
+      <dt>You own the id</dt><dd id="r-own">—</dd>
+      <dt>Address occupied</dt><dd id="r-occ">—</dd>
+      <dt>Initcode</dt><dd id="r-code">—</dd>
+      <dt>keccak256</dt><dd id="r-hash">—</dd>
+    </dl>
+    <div class="msg" id="r-out"></div>
+  </section>
+
+  <section>
+    <h2>Step 3 — quoter through CreateX</h2>
+    <div class="row">
+      <button id="q-check" class="ghost" disabled>3. Check quoter</button>
+      <button id="q-sim" class="ghost" disabled>Simulate</button>
+      <button id="q-send" disabled>3. Deploy quoter</button>
+    </div>
+    <dl>
+      <dt>To</dt><dd>0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed</dd>
+      <dt>Function</dt><dd>deployCreate3(bytes32,bytes)</dd>
+      <dt>Deploys to</dt><dd>0x000000bd2DB80567c23E353ca95a251c573cBf9B</dd>
+      <dt>Salt deployer</dt><dd id="q-deployer">—</dd>
+      <dt>Address occupied</dt><dd id="q-occ">—</dd>
+      <dt>Router live</dt><dd id="q-router">—</dd>
+      <dt>Initcode</dt><dd id="q-code">—</dd>
+      <dt>keccak256</dt><dd id="q-hash">—</dd>
+    </dl>
+    <p class="hint">Same salt as Base, so this lands on the same address here — and on
+       mainnet later, if you redeploy with it.</p>
+    <div class="msg" id="q-out"></div>
+  </section>
+</main>
+
+<script src="./zrouterrobinhood-initcode.js"></script>
+<script src="./zquoterrobinhood-initcode.js"></script>
+<script>
+const VANITY_MARKET = '0x000000000000b361194cfe6312EE3210d53C15AA';
+const CREATEX = '0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed';
+const ID = '0x2c8b14a270eb080c2662a12936bb6b2babf15bf883895f911babdf02e56d8f37';
+const ROUTER_ADDR = '0x000000000000fb114709235f1ccbffb925f600e4';
+const Q_SALT = '0x1c0aa8ccd568d90d61659f060d1bfb1e6f855a200005b47e0000000000405e3a';
+const Q_GUARDED = '0xc0c4389dfdda69d3d11fe83fd5d14a20871d899ad9b5362b2005751124f2b0ca';
+const Q_ADDR = '0x000000bd2db80567c23e353ca95a251c573cbf9b';
+const CLAIM_CD = '0xf13695680000000000000000000000001c0aa8ccd568d90d61659f060d1bfb1e6f855a202c8b14a270eb080c2662a12936bb6b2babf15bf883895f911babdf02e56d8f37000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000001c0aa8ccd568d90d61659f060d1bfb1e6f855a20000000000000000000000000000000000000000000000000000000006c7ac97600000000000000000000000000000000000000000000000000000000000000c00000000000000000000000000000000000000000000000000000000000000040ef06396cd8b3f6adabc674cf427cdeab0119d7b68d58b223fdd518715b800eddf9a922582de349956d614c4f64a3209de042090d41249f2915a2b681fca3b636';
+const RH = '0x1237'; // 4663
+
+const $ = (id) => document.getElementById(id);
+const show = (el, t, c) => { el.textContent = t; el.className = 'msg show ' + (c || ''); };
+let provider = null, account = null;
+
+// Every installed wallet announces itself under EIP-6963. Taking the first to
+// answer picks whichever extension won the race — usually not the one you meant
+// — and `window.ethereum` is worse, since the last extension to load overwrites
+// it. So collect them all and let the choice be explicit.
+const wallets = new Map(); // rdns -> { info, provider }
+let chosen = null;
+
+window.addEventListener('eip6963:announceProvider', (e) => {
+  wallets.set(e.detail.info.rdns, e.detail);
+  renderWallets();
+});
+function scan() { window.dispatchEvent(new Event('eip6963:requestProvider')); }
+scan();
+// Extensions inject asynchronously, so keep asking for a moment.
+for (const ms of [50, 150, 400, 900, 1800]) setTimeout(scan, ms);
+
+function legacy() {
+  // Pre-6963 wallets, and the array some multi-wallet setups expose.
+  const out = [];
+  const eth = window.ethereum;
+  if (!eth) return out;
+  const list = Array.isArray(eth.providers) ? eth.providers : [eth];
+  for (const p of list) {
+    const name = p.isMetaMask ? 'MetaMask' : p.isRabby ? 'Rabby'
+      : p.isCoinbaseWallet ? 'Coinbase Wallet' : p.isBraveWallet ? 'Brave' : 'Injected wallet';
+    out.push({ info: { name, rdns: 'legacy:' + name }, provider: p });
+  }
+  return out;
+}
+
+function renderWallets() {
+  const box = $('wallet-list');
+  const seen = new Map(wallets);
+  for (const w of legacy()) if (![...seen.values()].some((x) => x.provider === w.provider)) seen.set(w.info.rdns, w);
+
+  box.textContent = '';
+  if (!seen.size) {
+    const s = document.createElement('span');
+    s.className = 'hint';
+    s.textContent = 'No wallet detected yet.';
+    box.appendChild(s);
+    return;
+  }
+  for (const w of seen.values()) {
+    const b = document.createElement('button');
+    b.className = chosen === w.provider ? '' : 'ghost';
+    b.textContent = w.info.name;
+    b.onclick = () => { chosen = provider = w.provider; renderWallets(); connect(); };
+    box.appendChild(b);
+  }
+}
+
+async function getProvider() {
+  if (chosen) return chosen;
+  for (let i = 0; i < 20; i++) {
+    if (wallets.size === 1) return (provider = [...wallets.values()][0].provider);
+    if (wallets.size > 1) return null; // ambiguous: make the user pick
+    const l = legacy();
+    if (l.length === 1) return (provider = l[0].provider);
+    scan();
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  return null;
+}
+
+const call = (to, data) => provider.request({ method: 'eth_call', params: [{ to, data }, 'latest'] });
+const codeAt = (a) => provider.request({ method: 'eth_getCode', params: [a, 'latest'] });
+const enc = (sel, words) => sel + words.map((w) => w.replace(/^0x/, '').padStart(64, '0')).join('');
+const keccak = async (hex) => null; // not needed in-page; hashes are pinned in the initcode files
+
+// bytes argument at a fixed one-word offset, which is all these two calls need.
+function encWithBytes(sel, head, hex) {
+  const code = hex.replace(/^0x/, '');
+  const len = (code.length / 2).toString(16).padStart(64, '0');
+  const body = code + '0'.repeat((64 - (code.length % 64)) % 64);
+  const off = ((head.length + 1) * 32).toString(16).padStart(64, '0');
+  return sel + head.map((w) => w.replace(/^0x/, '').padStart(64, '0')).join('') + off + len + body;
+}
+
+$('c-id').textContent = ID;
+$('r-code').textContent = window.ZROUTER_RH_INITCODE
+  ? ((window.ZROUTER_RH_INITCODE.length - 2) / 2) + ' bytes'
+  : 'MISSING — zrouterrobinhood-initcode.js did not load';
+$('q-code').textContent = window.ZQUOTER_RH_INITCODE
+  ? ((window.ZQUOTER_RH_INITCODE.length - 2) / 2) + ' bytes'
+  : 'MISSING — zquoterrobinhood-initcode.js did not load';
+
+async function ensureRH(p) {
+  const c = await p.request({ method: 'eth_chainId' });
+  if (c === RH) return;
+  try { await p.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: RH }] }); }
+  catch (e) {
+    if (e.code !== 4902) throw e;
+    await p.request({ method: 'wallet_addEthereumChain', params: [{
+      chainId: RH, chainName: 'Robinhood Chain',
+      nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+      rpcUrls: ['https://rpc.mainnet.chain.robinhood.com'],
+      blockExplorerUrls: ['https://explorer.mainnet.chain.robinhood.com'] }] });
+  }
+}
+
+async function connect() {
+  try {
+    const p = await getProvider();
+    if (!p) return show($('c-out'), wallets.size > 1
+      ? 'More than one wallet is installed. Pick the one you want above.'
+      :
+      location.protocol === 'file:'
+        ? 'No wallet over file://. Serve locally:\n  cd dapp && python3 -m http.server 8017\n  http://localhost:8017/deploy-robinhood.html'
+        : 'No wallet found. Unlock the extension and reload.', 'bad');
+    account = (await p.request({ method: 'eth_requestAccounts' }))[0];
+    await ensureRH(p);
+    $('p-you').textContent = account;
+    $('p-chain').textContent = 'Robinhood Chain (4663)';
+    $('c-check').disabled = false;
+    $('r-check').disabled = false;
+    $('q-check').disabled = false;
+    show($('c-out'), 'Connected via ' + walletName(p) + '. Run the step 1 check.', 'ok');
+  } catch (e) { show($('c-out'), e.message || String(e), 'bad'); }
+}
+function walletName(p) {
+  for (const w of wallets.values()) if (w.provider === p) return w.info.name;
+  for (const w of legacy()) if (w.provider === p) return w.info.name;
+  return 'injected wallet';
+}
+$('connect').onclick = connect;
+renderWallets();
+
+// ---- Step 1: claim ----
+$('c-check').onclick = async () => {
+  $('c-send').disabled = true;
+  const fail = [];
+  try {
+    const claimer = '0x' + CLAIM_CD.slice(10 + 3 * 64 + 24, 10 + 4 * 64);
+    if (!account || account.toLowerCase() !== claimer) {
+      fail.push('Payload names claimer ' + claimer + '; connected as ' + (account || 'nobody') + '.');
+    }
+    // ownerOf reverts for an unminted id, which is the state we want.
+    let minted = false, owner = null;
+    try { owner = '0x' + (await call(VANITY_MARKET, enc('0x6352211e', [ID]))).slice(26); minted = true; }
+    catch (e) { minted = false; }
+    $('c-minted').textContent = minted ? 'YES — owner ' + owner : 'no — claimable';
+    if (minted && owner.toLowerCase() !== (account || '').toLowerCase()) {
+      fail.push('Already claimed by ' + owner + '.');
+    }
+    if (minted) {
+      const a = '0x' + (await call(VANITY_MARKET, enc('0x11a800bc', [ID]))).slice(26);
+      $('c-addr').textContent = a;
+    } else {
+      $('c-addr').textContent = 'resolves after claim (expect ' + ROUTER_ADDR + ')';
+    }
+    if (fail.length) return show($('c-out'), 'BLOCKED:\n- ' + fail.join('\n- '), 'bad');
+    if (minted) return show($('c-out'), 'Already claimed by you. Skip to step 2.', 'ok');
+
+    await provider.request({ method: 'eth_call', params: [{ from: account, to: VANITY_MARKET, data: CLAIM_CD }, 'latest'] });
+    $('c-send').disabled = false;
+    show($('c-out'), 'Simulation OK — the Base payload claims this id here. Ready to send.', 'ok');
+  } catch (e) { show($('c-out'), 'Check failed: ' + (e.message || e), 'bad'); }
+};
+
+$('c-send').onclick = async () => {
+  show($('c-out'), 'Confirm in your wallet…');
+  try {
+    const h = await provider.request({ method: 'eth_sendTransaction',
+      params: [{ from: account, to: VANITY_MARKET, data: CLAIM_CD, value: '0x0' }] });
+    show($('c-out'), 'Sent: ' + h + '\nRun the step 2 check once it confirms.', 'ok');
+  } catch (e) { show($('c-out'), e.message || String(e), 'bad'); }
+};
+
+// ---- Step 2: router ----
+const routerTx = () => ({
+  from: account, to: VANITY_MARKET, value: '0x0',
+  data: encWithBytes('0x61ff715f', [ID], window.ZROUTER_RH_INITCODE),
+});
+
+$('r-check').onclick = async () => {
+  $('r-sim').disabled = true; $('r-send').disabled = true;
+  const fail = [];
+  try {
+    let owner = null;
+    try { owner = '0x' + (await call(VANITY_MARKET, enc('0x6352211e', [ID]))).slice(26); } catch (e) {}
+    $('r-own').textContent = owner ? (owner.toLowerCase() === account.toLowerCase() ? 'yes' : 'NO — ' + owner) : 'not claimed yet';
+    if (!owner) fail.push('Id is not claimed — do step 1 first.');
+    else if (owner.toLowerCase() !== account.toLowerCase()) fail.push('Id belongs to ' + owner + '.');
+
+    if (owner) {
+      const a = ('0x' + (await call(VANITY_MARKET, enc('0x11a800bc', [ID]))).slice(26)).toLowerCase();
+      if (a !== ROUTER_ADDR) fail.push('Id resolves to ' + a + ', not the router address.');
+    }
+    const rc = await codeAt(ROUTER_ADDR);
+    const occ = rc && rc !== '0x';
+    $('r-occ').textContent = occ ? 'YES — already deployed' : 'no';
+    if (occ) fail.push('Router address already has code.');
+    if (!window.ZROUTER_RH_INITCODE) fail.push('Router initcode did not load.');
+
+    if (fail.length) return show($('r-out'), 'BLOCKED:\n- ' + fail.join('\n- '), 'bad');
+    $('r-sim').disabled = false; $('r-send').disabled = false;
+    show($('r-out'), 'All checks passed.', 'ok');
+  } catch (e) { show($('r-out'), 'Check failed: ' + (e.message || e), 'bad'); }
+};
+
+$('r-sim').onclick = async () => {
+  show($('r-out'), 'Simulating…');
+  try {
+    await provider.request({ method: 'eth_call', params: [routerTx(), 'latest'] });
+    const g = await provider.request({ method: 'eth_estimateGas', params: [routerTx()] });
+    show($('r-out'), 'Simulation OK. Estimated gas: ' + BigInt(g).toString(), 'ok');
+  } catch (e) {
+    const d = (e && e.data && (e.data.data || e.data)) || '';
+    show($('r-out'), 'Would revert:\n' + (e.message || e) + (d ? '\nrevert data: ' + d : ''), 'bad');
+  }
+};
+
+$('r-send').onclick = async () => {
+  show($('r-out'), 'Confirm in your wallet…');
+  try {
+    const h = await provider.request({ method: 'eth_sendTransaction', params: [routerTx()] });
+    show($('r-out'), 'Sent: ' + h + '\nRouter: ' + ROUTER_ADDR, 'ok');
+  } catch (e) { show($('r-out'), e.message || String(e), 'bad'); }
+};
+
+// ---- Step 3: quoter ----
+const quoterTx = () => ({
+  from: account, to: CREATEX, value: '0x0',
+  data: encWithBytes('0x9c36a286', [Q_SALT], window.ZQUOTER_RH_INITCODE),
+});
+
+$('q-check').onclick = async () => {
+  $('q-sim').disabled = true; $('q-send').disabled = true;
+  const fail = [];
+  try {
+    const got = await call(CREATEX, '0x6cec2536' + Q_GUARDED.replace(/^0x/, ''));
+    const addr = ('0x' + got.slice(26)).toLowerCase();
+    if (addr !== Q_ADDR) fail.push('CreateX derives ' + addr + ', not the mined address.');
+
+    const qc = await codeAt(Q_ADDR);
+    const occ = qc && qc !== '0x';
+    $('q-occ').textContent = occ ? 'YES — already deployed' : 'no';
+    if (occ) fail.push('Quoter address already has code.');
+
+    const rc = await codeAt(ROUTER_ADDR);
+    const live = rc && rc !== '0x';
+    $('q-router').textContent = ROUTER_ADDR + (live ? '  \u2713 deployed' : '  \u2717 NOT deployed');
+    if (!live) fail.push('Router is not deployed — do step 2 first.');
+
+    // The salt carries a 20-byte sender prefix; CreateX honours it for that address only.
+    const saltDeployer = '0x' + Q_SALT.replace(/^0x/, '').slice(0, 40);
+    $('q-deployer').textContent = saltDeployer +
+      (account && account.toLowerCase() === saltDeployer ? '  \u2713 connected' : '  \u2717 connect this account');
+    if (!account || account.toLowerCase() !== saltDeployer) {
+      fail.push('Salt is permissioned to ' + saltDeployer + '.');
+    }
+    if (!window.ZQUOTER_RH_INITCODE) fail.push('Quoter initcode did not load.');
+
+    if (fail.length) return show($('q-out'), 'BLOCKED:\n- ' + fail.join('\n- '), 'bad');
+    $('q-sim').disabled = false; $('q-send').disabled = false;
+    show($('q-out'), 'All checks passed. Address free, router live.', 'ok');
+  } catch (e) { show($('q-out'), 'Check failed: ' + (e.message || e), 'bad'); }
+};
+
+$('q-sim').onclick = async () => {
+  show($('q-out'), 'Simulating…');
+  try {
+    const r = await provider.request({ method: 'eth_call', params: [quoterTx(), 'latest'] });
+    const g = await provider.request({ method: 'eth_estimateGas', params: [quoterTx()] });
+    show($('q-out'), 'Simulation OK.\ndeployed -> 0x' + (r || '').slice(26) +
+                     '\nestimated gas: ' + BigInt(g).toString(), 'ok');
+  } catch (e) {
+    const d = (e && e.data && (e.data.data || e.data)) || '';
+    show($('q-out'), 'Would revert:\n' + (e.message || e) + (d ? '\nrevert data: ' + d : ''), 'bad');
+  }
+};
+
+$('q-send').onclick = async () => {
+  show($('q-out'), 'Confirm in your wallet…');
+  try {
+    const h = await provider.request({ method: 'eth_sendTransaction', params: [quoterTx()] });
+    show($('q-out'), 'Sent: ' + h + '\nQuoter: ' + Q_ADDR, 'ok');
+  } catch (e) { show($('q-out'), e.message || String(e), 'bad'); }
+};
+</script>

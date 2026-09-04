@@ -486,8 +486,11 @@ contract zRouterLiteRobinhood {
         depositFor(token, amount, address(this));
     }
 
-    /// @dev Shut while Deepstate holds control. Every path that moves the whole
-    /// router balance to a caller-chosen address must check this.
+    /// @dev Shut while Deepstate holds control. `swapDeep` bills the caller a
+    /// measured balance delta, so every path that can move this contract's
+    /// balances must check this — the outright drains (`sweep`, `snwap`), and
+    /// equally the swap and wrap legs, which spend raw router balance that
+    /// belongs to the filling caller for the length of the fill.
     function _requireBookIdle() internal view {
         assembly ("memory-safe") {
             if gt(tload(0x01), 0) { revert(0, 0) }
@@ -502,11 +505,16 @@ contract zRouterLiteRobinhood {
     /// would spuriously starve it.
     function _claimMsgValue(uint256 amount) internal {
         uint256 used;
+        bool batched;
         assembly ("memory-safe") {
-            if gt(tload(0x03), 0) { used := tload(0x02) }
+            batched := gt(tload(0x03), 0)
+            if batched { used := tload(0x02) }
         }
         used += amount;
-        require(used <= msg.value, InvalidMsgVal());
+        // Inside a batch a later leg may still claim the rest, so only the
+        // total is capped. Alone there is no later leg, and an overpayment
+        // would sit here for the permissionless `sweep` to take.
+        require(batched ? used <= msg.value : used == msg.value, InvalidMsgVal());
         assembly ("memory-safe") {
             tstore(0x02, used)
         }

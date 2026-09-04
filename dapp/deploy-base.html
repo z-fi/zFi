@@ -83,7 +83,8 @@
     <dl>
       <dt>To</dt><dd>0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed <span class="hint">CreateX</span></dd>
       <dt>Function</dt><dd>deployCreate3(bytes32 salt, bytes initCode) &nbsp;<span class="hint">0x9c36a286</span></dd>
-      <dt>Deploys to</dt><dd>0x000000fF982A225Bc7472Ad36759F6Fff0BC5455</dd>
+      <dt>Deploys to</dt><dd>0x000000bd2DB80567c23E353ca95a251c573cBf9B</dd>
+      <dt>Salt deployer</dt><dd id="q-deployer">—</dd>
       <dt>Occupied</dt><dd id="q-occupied">—</dd>
       <dt>Initcode</dt><dd id="q-code">—</dd>
       <dt>Initcode keccak</dt><dd id="q-hash">0x702d5b717f59d4fb34f48bf8bbb34978af2eecdd097471bb3ab6e65f29a483b1</dd>
@@ -230,9 +231,9 @@ $('simulate').onclick = async () => {
 
 // ---- Step 2: quoter through CreateX ----
 const CREATEX = '0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed';
-const Q_SALT = '0x1c0aa8ccd568d90d61659f060d1bfb1e6f855a200001b09900000000000bd1eb';
-const Q_GUARDED = '0x42e2f093a9d451ff3cbba2e1b31877634aa241af93b543321d88cb4b4189a5b2';
-const Q_ADDR = '0x000000ff982a225bc7472ad36759f6fff0bc5455';
+const Q_SALT = '0x1c0aa8ccd568d90d61659f060d1bfb1e6f855a200005b47e0000000000405e3a';
+const Q_GUARDED = '0xc0c4389dfdda69d3d11fe83fd5d14a20871d899ad9b5362b2005751124f2b0ca';
+const Q_ADDR = '0x000000bd2db80567c23e353ca95a251c573cbf9b';
 let qChecks = false;
 
 $('q-code').textContent = window.ZQUOTER_INITCODE
@@ -269,6 +270,16 @@ $('q-check').onclick = async () => {
     if (!routerLive) fail.push('Router is not deployed yet — deploy step 1 first.');
 
     if (!window.ZQUOTER_INITCODE) fail.push('Quoter initcode did not load.');
+
+    // The salt carries a 20-byte sender prefix, so CreateX only honours it for
+    // that address. Connecting a different wallet reverts inside CreateX with
+    // nothing readable; say so here instead.
+    const saltDeployer = '0x' + Q_SALT.replace(/^0x/, '').slice(0, 40);
+    $('q-deployer').textContent = saltDeployer +
+      (account && account.toLowerCase() === saltDeployer ? '  \u2713 connected' : '  \u2717 connect this account');
+    if (!account || account.toLowerCase() !== saltDeployer) {
+      fail.push('Salt is permissioned to ' + saltDeployer + '; connected as ' + (account || 'nobody') + '.');
+    }
 
     if (fail.length) return show($('q-out'), 'BLOCKED:\n- ' + fail.join('\n- '), 'bad');
     qChecks = true; $('q-simulate').disabled = false; $('q-send').disabled = false;
