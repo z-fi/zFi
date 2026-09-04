@@ -1,11 +1,13 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="object-src 'none';base-uri 'none';form-action 'none'">
 <title>zFi</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400' width='400' height='400'%3E%3Crect width='400' height='400' fill='%23000'/%3E%3CclipPath id='frame'%3E%3Crect width='400' height='400'/%3E%3C/clipPath%3E%3Cg clip-path='url(%23frame)'%3E%3Cpath d='M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z' fill='white'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml">
 <meta name="theme-color" id="tc" content="#fff">
-<style>:root{color-scheme:light;--b:#fff;--c:#fff;--p:#fff;--f:#000;--m:#666;--n:#666;--e:#ddd;--k:#000;--kf:#fff;--kh:#333;--fh:#f5f5f5;--e2:#ddd;--w:#c33;--hd:#000;--dm:#999}
-.d{color-scheme:dark;--b:#0a0a0a;--c:#0a0a0a;--p:#0a0a0a;--f:#e8e8e0;--m:#888;--n:#888;--e:#2a2a2a;--k:#e8e8e0;--kf:#0a0a0a;--kh:#ccc;--fh:#161616;--e2:#2a2a2a;--w:#e57373;--hd:#333;--dm:#5f5f5f}
+<style>:root{color-scheme:light;--b:#fff;--c:#fff;--p:#fff;--f:#000;--m:#666;--n:#666;--e:#ddd;--k:#000;--kf:#fff;--kh:#333;--fh:#f5f5f5;--e2:#ddd;--w:#c33;--hd:#000;--dm:#767676}
+.d{color-scheme:dark;--b:#0a0a0a;--c:#0a0a0a;--p:#0a0a0a;--f:#e8e8e0;--m:#888;--n:#888;--e:#2a2a2a;--k:#e8e8e0;--kf:#0a0a0a;--kh:#ccc;--fh:#161616;--e2:#2a2a2a;--w:#e57373;--hd:#333;--dm:#7b7b7b}
 :focus-visible{outline:2px solid var(--f);outline-offset:2px}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}.flip:hover{transform:none}}
 body{background:var(--b);color:var(--f);font-family:Helvetica,Arial,sans-serif;min-height:100dvh;margin:0;padding:1em .85em;display:flex;flex-direction:column;box-sizing:border-box}
@@ -15,7 +17,7 @@ body{background:var(--b);color:var(--f);font-family:Helvetica,Arial,sans-serif;m
 .invs.pop::after{background:var(--w)}.invs.pop{opacity:.35}.invb{position:absolute;width:2px;height:7px;background:#16a34a;pointer-events:none}.invd{position:absolute;width:2px;height:6px;background:#c33;pointer-events:none}.invh{position:absolute;top:4px;left:8px;right:8px;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--m);pointer-events:none;font-variant-numeric:tabular-nums;display:flex;justify-content:space-between;align-items:center;gap:.6em}.invq{pointer-events:auto;cursor:pointer;padding:1px 5px;border:1px solid var(--e);color:var(--f);opacity:.7}.invm{pointer-events:auto;cursor:pointer;color:var(--f);text-decoration:underline;text-underline-offset:2px}.invmsg{color:var(--m)}.invsh{pointer-events:auto;cursor:pointer;color:var(--m);text-decoration:underline;text-underline-offset:2px}.invq:hover{opacity:1}
 #addr{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
 #addr.on:hover{color:var(--f);text-decoration:line-through}
-#sd{position:fixed;top:.85em;right:.85em;width:1.75em;height:1.75em;display:inline-flex;align-items:center;justify-content:center;border:0;background:transparent;cursor:pointer;color:var(--m);opacity:.4;z-index:2;padding:0;transition:opacity .15s}#sd:hover,#sd:focus-visible{opacity:.9}
+#sd{position:fixed;top:.85em;right:.85em;width:1.85em;height:1.85em;display:inline-flex;align-items:center;justify-content:center;border:0;background:transparent;cursor:pointer;color:var(--m);opacity:.7;z-index:2;padding:0;transition:opacity .15s}#sd:hover,#sd:focus-visible{opacity:.9}
 #logoLink{position:fixed;top:.85em;left:.85em;width:1.75em;height:1.75em;z-index:1;
 display:block;opacity:.85;transition:opacity .15s}
 #logoLink:hover,#logoLink:focus-visible{opacity:1}
@@ -54,9 +56,9 @@ option,optgroup{background-color:var(--c);color:var(--f)}
 svg{vertical-align:middle;flex-shrink:0}
 .flip{display:flex;align-items:center;justify-content:center;position:relative;z-index:2;margin:-.92em auto;width:1.85em;height:1.85em;border:1px solid var(--e);background:var(--c);cursor:pointer;color:var(--m);padding:0;transition:border-color .15s,color .15s,transform .25s}
 .flip:hover{border-color:var(--f);color:var(--f);transform:rotate(180deg)}
-.primary{width:100%;box-sizing:border-box;border:1px solid var(--e);padding:1.15em .9em;overflow-wrap:anywhere;line-height:1.3;font-size:.82em;background:transparent;color:var(--f);cursor:pointer;margin-top:.95em;font-weight:700;text-transform:uppercase;letter-spacing:.14em;transition:border-color .15s,color .15s}
-.primary:hover:not(:disabled){border-color:var(--f)}
-.primary:disabled{color:var(--dm);cursor:not-allowed}
+.primary{width:100%;box-sizing:border-box;border:1px solid var(--f);padding:1.15em .9em;overflow-wrap:anywhere;line-height:1.3;font-size:.82em;background:transparent;color:var(--f);cursor:pointer;margin-top:.95em;font-weight:700;text-transform:uppercase;letter-spacing:.14em;transition:border-color .15s,color .15s,background .15s}
+.primary:hover:not(:disabled){background:var(--fh)}
+.primary:disabled{border-color:var(--e);color:var(--dm);cursor:not-allowed}
 .rcpt{width:100%;box-sizing:border-box;margin-top:-1px;padding:.66em .85em;border:1px solid var(--e);background:transparent;transition:border-color .15s;color:var(--f);font-size:.75em;outline:0;font-family:inherit}
 #lq.on,#ln.on,#wn.on{background:var(--k);color:var(--kf)}
 .lqrow{padding:.62em .7em;border:1px solid var(--e);margin:-1px 0 0}
@@ -76,6 +78,7 @@ svg{vertical-align:middle;flex-shrink:0}
 .lqnew .dly .r{display:flex;gap:.4em;align-items:center}
 .lqnew .dly .r input{width:6.5em}
 .lqout{font-size:.72em;color:var(--m);line-height:1.55;min-height:1.1em}
+.lqout:empty{display:none}
 .lqbar{position:relative;height:9px;border:1px solid var(--e);margin:.5em 0 .35em}
 .lqbar>i{position:absolute;top:-4px;width:2px;height:15px;background:var(--f);
 left:var(--at,50%);transform:translateX(-1.5px)}
@@ -103,7 +106,7 @@ white-space:nowrap;flex:0 0 auto;text-align:center;transition:background .15s,co
 #rcvEl{display:block;font-size:.7em;color:var(--m);margin:.35em 0 .6em;word-break:break-all;text-align:center}
 #rcvEl:empty{display:none}
 #stat{font-size:.8em;color:var(--n);word-break:break-all;margin-top:.75em;text-align:center}
-#stat:not(:empty){margin-bottom:.5em}
+#stat:not(:empty){margin-bottom:.5em}#stat:empty{margin-top:0}
 #stat a{color:var(--f);text-decoration:underline}
 .hdr{display:flex;justify-content:space-between;align-items:center;gap:.5em}
 #lqPanel,#lnPanel{margin-top:.85em}
@@ -113,7 +116,10 @@ white-space:nowrap;flex:0 0 auto;text-align:center;transition:background .15s,co
 .tabs button.on{color:var(--f);font-weight:700;box-shadow:inset 0 -2px 0 var(--f)}
 .tabs button:hover:not(.on),.tabs button:focus-visible:not(.on){color:var(--f)}
 .hide{display:none!important}
-#book{margin-top:.4em;max-height:17em;overflow-y:auto;overscroll-behavior:contain}
+#book{margin-top:.4em;max-height:min(28em,58vh);overflow-y:auto;overscroll-behavior:contain}
+.px{color:var(--f);font-variant-numeric:tabular-nums}
+.bkh{position:sticky;top:0;z-index:1;background:var(--c);padding-top:.5em}
+.bkh h6{margin-top:0}
 #book:empty{display:none}
 #book h6{font-size:.7em;text-transform:uppercase;letter-spacing:.14em;color:var(--m);margin:.75em 0 .35em;font-weight:400;display:flex;justify-content:space-between}
 .o{display:flex;justify-content:space-between;align-items:center;flex-wrap:nowrap;gap:.5em;padding:.6em .75em;border:1px solid var(--e);margin-bottom:-1px;font-size:.75em}
@@ -125,13 +131,13 @@ white-space:nowrap;flex:0 0 auto;text-align:center;transition:background .15s,co
 .o i{font-style:normal;color:var(--m);display:block;font-size:.9em;overflow-wrap:break-word}
 .o i a{word-break:break-all}
 .o a{color:var(--m)}
-.o button{border:1px solid var(--e);padding:.4em .7em;font-size:.85em;font-weight:400;letter-spacing:.08em;text-transform:uppercase;background:transparent;color:var(--f);cursor:pointer;flex:0 0 auto;transition:background .15s,color .15s,border-color .15s}
-.o button:hover:not(:disabled),.o button:focus-visible:not(:disabled){border-color:var(--f)}
+.o button,.p button{border:1px solid var(--e);padding:.4em .7em;font-size:.85em;font-weight:400;letter-spacing:.08em;text-transform:uppercase;background:transparent;color:var(--f);cursor:pointer;flex:0 0 auto;transition:background .15s,color .15s,border-color .15s}
+.o button:hover:not(:disabled),.o button:focus-visible:not(:disabled),.p button:hover:not(:disabled),.p button:focus-visible:not(:disabled){border-color:var(--f)}
 #foot{display:flex;justify-content:center;align-items:baseline;gap:.6em;flex-wrap:wrap;margin-top:1.3em;padding-top:.9em;border-top:1px solid var(--e);font-size:.6em;color:var(--m);letter-spacing:.1em;text-transform:uppercase}
 #foot span:empty{display:none}
 #foot a{color:var(--m);text-decoration:none}
 #foot a:hover{color:var(--f)}
-.o button:disabled{background:transparent;border-color:transparent;color:var(--m);cursor:default;font-weight:400}
+.o button:disabled,.p button:disabled{background:transparent;border-color:transparent;color:var(--m);cursor:default;font-weight:400}
 .bkf{display:flex;flex-wrap:wrap;gap:.3em;margin:.35em 0 .45em}
 .bkc{font-size:.68em;padding:.35em .6em;border:1px solid var(--e);letter-spacing:.1em;text-transform:uppercase;
 background:transparent;color:var(--m);cursor:pointer;font-family:inherit;font-weight:600;
@@ -149,7 +155,7 @@ white-space:nowrap;transition:background .15s,color .15s}
 .ic dl{display:grid;grid-template-columns:auto 1fr;gap:.15em .6em;margin:0}
 .ic dt{color:var(--m)}
 .ic dd{margin:0;color:var(--f);font-variant-numeric:tabular-nums;text-align:right}
-.tg{display:inline-block;font-size:.85em;padding:.05em .35em;background:var(--e2);color:var(--n);margin-left:.3em}
+.tg{display:inline-block;font-size:.85em;padding:.05em .35em;background:var(--e2);color:var(--f);margin-left:.3em}
 .tg.w{background:transparent;border:0;color:var(--w);font-weight:600;
 text-transform:uppercase;font-size:.62em;letter-spacing:.1em;padding:0;
 vertical-align:.1em;line-height:1;text-decoration:none;margin-left:.5em}
@@ -158,17 +164,21 @@ vertical-align:.1em;line-height:1;text-decoration:none;margin-left:.5em}
 .dly select{font-size:1em}
 #lnArtNote{color:var(--n);font-variant-numeric:tabular-nums}
 #lnArtNote.set{color:var(--f)}
-.lnbtn{font:inherit;font-size:1em;color:var(--f);background:transparent;border:1px solid var(--e);padding:.2em .6em;cursor:pointer}.wnbtn{display:block;width:100%;box-sizing:border-box;font:inherit;font-size:.75em;color:var(--f);background:var(--p);border:1px solid var(--e);padding:.65em .8em;margin-top:.5em;cursor:pointer;text-align:center;transition:border-color .15s,color .15s}.wnbtn:hover{border-color:var(--f)}.wnbtn.mut{color:var(--m);cursor:default;border-color:transparent}.wnbtn.mut:hover{border-color:transparent}
+.lnbtn{font:inherit;font-size:.85em;letter-spacing:.08em;text-transform:uppercase;color:var(--f);background:transparent;border:1px solid var(--e);padding:.4em .7em;cursor:pointer;transition:border-color .15s}.wnbtn{display:block;width:100%;box-sizing:border-box;font:inherit;font-size:.75em;color:var(--f);background:var(--p);border:1px solid var(--e);padding:.65em .8em;margin-top:.5em;cursor:pointer;text-align:center;transition:border-color .15s,color .15s}.wnbtn:hover{border-color:var(--f)}.wnbtn.mut{color:var(--m);cursor:default;border-color:transparent}.wnbtn.mut:hover{border-color:transparent}
 #fcEl{display:block;text-align:center;color:var(--m);font-size:.72em;letter-spacing:.03em;margin-top:.9em}
 .fclink{font:inherit;color:var(--m);background:none;border:0;border-bottom:1px solid var(--e);padding:0 0 .1em;margin-left:.35em;cursor:pointer;letter-spacing:inherit}
 .fclink:hover{color:var(--f);border-color:var(--f)}
 .fclink:disabled{cursor:default;opacity:.6}
-.lnbtn:hover{background:var(--e)}
+.lnbtn:hover{border-color:var(--f)}
 #lnArtRow{gap:.6em}
 #lnArtRow>span{display:flex;align-items:center;gap:.6em}
 #lnPrev{width:1.6em;height:1.6em;object-fit:cover;display:none}
 #lnPrev.set{display:block}
-.lnon #chTog,.lnon #chBox,.lnon #bkTog,.lnon #book,.lnon #pos{display:none!important}
+.lqon{display:flex;flex-direction:column}
+.lqon>*{order:2}
+.lqon>.meta,.lqon>.tabs,.lqon>.panel,.lqon>.flip,.lqon>#rcvPanel{order:0}
+.lqon>#rc,.lqon>#rcvEl{order:1}
+.lnon>.tabs .on,.wnon>.tabs .on{color:var(--m);font-weight:600;box-shadow:none}.lnon #chTog,.lnon #chBox,.lnon #bkTog,.lnon #book,.lnon #pos{display:none!important}
 .docs{margin-top:.5em}
 .docs details{border-top:1px solid var(--e)}
 .docs details:last-child{border-bottom:1px solid var(--e)}
@@ -194,10 +204,11 @@ margin-top:.55em;padding-top:.55em;border-top:1px solid var(--e);color:var(--f)}
 .cbmsg{display:block;margin-top:.5em}
 .lnhdr>small+small{color:var(--dm);text-transform:none;letter-spacing:.01em;font-size:.65em;font-weight:400;text-align:right;text-wrap:balance}
 #wnRollEl{display:block;font-size:.72em;line-height:1.55;color:var(--m)}
-#lnNote,#floorNote{display:block;font-size:.7em;line-height:1.45;color:var(--m);text-align:center;text-wrap:balance;margin:.55em .2em 0}
-#lnNote:empty,#floorNote:empty{display:none}
+#lnNote,#floorNote,#wnNote{display:block;font-size:.7em;line-height:1.45;color:var(--m);text-align:center;text-wrap:balance;margin:.55em .2em 0}
+#lnNote:empty,#floorNote:empty,#wnNote:empty{display:none}
 .lnu{display:flex;align-items:baseline;gap:.3em;color:var(--m);flex:0 1 auto;min-width:0}
 .lnu input{width:7em;flex:0 1 7em;min-width:0}
+.lnu i{font-style:normal;min-width:2.6em}
 .tipr{display:flex;align-items:center;gap:.5em}
 .tipr small{color:var(--m);font-size:.95em}
 .dly input{width:9em;flex:0 1 9em;min-width:0;border:0;border-bottom:1px solid var(--e2);transition:border-color .15s;background:transparent;color:var(--f);text-align:right;outline:0;font:inherit;font-variant-numeric:tabular-nums}
@@ -211,9 +222,7 @@ margin-top:.55em;padding-top:.55em;border-top:1px solid var(--e);color:var(--f)}
 .p span{flex:1;min-width:8em}
 .p b{display:block;font-weight:600;font-variant-numeric:tabular-nums;word-break:break-word}
 .p i{font-style:normal;color:var(--m);display:block;font-size:.9em}
-.p button{border:0;padding:.4em .7em;font-size:.95em;font-weight:600;background:var(--k);color:var(--kf);cursor:pointer;margin-left:auto}
-.p button:hover:not(:disabled),.p button:focus-visible:not(:disabled){background:var(--kh)}
-.p button:disabled{background:transparent;color:var(--m);cursor:default;font-weight:400}
+.p button{margin-left:auto}
 #rate{text-wrap:balance}
 #bal,#bal1,#rate{display:block;font-size:.75em;line-height:1.35;margin-top:.5em;text-align:right}
 #bal:empty,#bal1:empty,#rate:empty{display:none}
@@ -227,7 +236,7 @@ margin-top:.55em;padding-top:.55em;border-top:1px solid var(--e);color:var(--f)}
 .rank{display:block;margin-top:.45em;color:var(--m);font-size:.92em;line-height:1.5}
 .rank i{font-style:normal;display:flex;justify-content:space-between;gap:1em;cursor:pointer}
 .rank i.w{color:var(--f);font-weight:600}
-.rank i.pin{text-decoration:underline}
+.rank i.pin u{text-decoration:underline}
 .rank u{text-decoration:none;color:var(--m)}
 #rate .rk{cursor:pointer;padding:0 .25em;opacity:.6}
 #rate .rk:hover{opacity:1}
@@ -293,6 +302,7 @@ display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hi
 .sc b{display:block;color:var(--f);font-size:1.15em;word-break:break-all}
 .sc .scw{color:var(--w)}
 .sc button{margin-top:.5em;padding:.4em .8em;font-size:1em}
+body:has(.tkp:not(.hide))::before{content:"";position:fixed;inset:0;z-index:39;pointer-events:none;background:#0006}
 @media(max-width:30em){#slipL span{display:none}}
 @media(pointer:coarse){
 #th,#lk,#lq,#ln,#wn{width:36px;height:36px}
@@ -300,12 +310,10 @@ display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hi
 #addr{padding:.55em 0;margin:-.55em 0}
 .tkb{padding:.7em 0 .7em .5em;margin:-.7em 0}
 .flip{width:2.4em;height:2.4em;margin:-1.2em auto}
-#slip{padding:.5em .1em}
+#slipL{padding:.5em 0;margin:-.5em .15em -.5em 0}
 .chtog{padding:1em .1em}
 .fclink{padding:.55em 0;margin:-.55em 0 -.55em .35em}
 .docs summary{padding:1em .2em}
-body:has(.tkp:not(.hide))::before{content:"";position:fixed;inset:0;z-index:39;
-pointer-events:none;background:#0000008c}
 .tkp{position:fixed;left:0;right:0;bottom:0;top:auto;width:100%;max-width:none;
 box-sizing:border-box;border-left:0;border-right:0;
 max-height:82vh;border-bottom:0;
@@ -314,7 +322,7 @@ padding-bottom:env(safe-area-inset-bottom,0)}
 background:var(--e);margin:.5em auto .1em}
 .tkd{-webkit-line-clamp:1}
 .tkr{padding:.75em .9em}
-#tkFind{padding:.85em .9em;font-size:16px}.rcpt,.meta input,.dly input,.lqin{font-size:16px}.lnbtn{padding:.4em .8em}.p button,.o button,.lqbtn{padding:.6em .8em}.chtf button{padding:.5em}
+#tkFind{padding:.85em .9em;font-size:16px}.rcpt,.meta input,.dly input,.lqin{font-size:16px}.lnbtn{padding:.6em .8em}.p button,.o button,.lqbtn{padding:.6em .8em}.chtf button{padding:.5em}
 .tabs button{padding:.95em .5em}
 .dly{padding:.9em .8em}
 .wnbtn{padding:.95em .8em}
@@ -332,7 +340,7 @@ background:var(--e);margin:.5em auto .1em}
 <div class="meta"><span id="addr" role="button" tabindex="0" title="Connect a wallet">Connect</span><label id="slipL" title="Slippage"><span>Slippage </span><input id="slip" type="number" value="0.5" min="0.01" max="10" step="0.1">%</label><button id="lq" title="Liquidity for this pair" aria-label="Toggle liquidity mode" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.2c3.6 4 6 7.2 6 10.1a6 6 0 0 1-12 0c0-2.9 2.4-6.1 6-10.1z"/></svg></button><button id="ln" title="Launch a coin" aria-label="Toggle launch mode" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/></svg></button><button id="wn" title="Claim a .wei name" aria-label="Toggle names mode" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" fill-rule="evenodd" shape-rendering="crispEdges" aria-hidden="true"><path d="M3 1h1v1H3zM5 2h1v1H5zM10 2h1v1h-1zM12 1h1v1h-1zM4 4h8v1H4zM3 5h10v1H3zM2 6h12v3H2zM3 9h10v1H3zM4 10h8v1H4zM5 11h2v1H5zM9 11h2v1H9zM2 12h3v1H2zM7 12h2v1H7zM11 12h3v1h-3zM1 13h2v1H1zM13 13h2v1h-2zM3 6h3v2H3zM10 6h3v2h-3z"/></svg></button><button id="lk" title="Copy shareable link" aria-label="Copy shareable link"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5.5 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v.5"/></svg></button><button id="th" title="Toggle theme" aria-label="Toggle theme"></button></div>
 <div class="tabs" role="tablist"><button id="tabSwap" class="on" role="tab" aria-selected="true">Swap</button><button id="tabSend" role="tab" aria-selected="false">Send</button><button id="tabBook" role="tab" aria-selected="false">Orders</button></div>
 <div class="panel"><div class="hdr"><small id="payL">You pay</small><span class="pill"><span id="fromIcon"></span><select id="fromSel" aria-labelledby="payL"></select><button type="button" class="tkb" id="fromPick" aria-haspopup="listbox" aria-expanded="false"><span class="tkbs"></span><span class="tkbc">▾</span></button></span></div><div class="row" id="amtRow"><input id="amt" type="text" inputmode="decimal" placeholder="0.0" aria-label="Amount to pay" autocomplete="off" spellcheck="false"></div><small id="bal"></small></div>
-<button id="flip" class="flip" title="Flip tokens" aria-label="Flip tokens"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14m-5-5 5 5 5-5"/></svg></button>
+<button id="flip" class="flip" title="Flip tokens" aria-label="Flip tokens"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14m-5-5 5 5 5-5"/></svg></button>
 <div class="panel" id="rcvPanel"><div class="hdr"><small id="rcvHdr">You receive</small><span class="pill"><span id="toIcon"></span><select id="toSel" aria-labelledby="rcvHdr"></select><button type="button" class="tkb" id="toPick" aria-haspopup="listbox" aria-expanded="false"><span class="tkbs"></span><span class="tkbc">▾</span></button></span></div><div class="row" id="outRow"><input id="outAmt" type="text" inputmode="decimal" placeholder="0.0" aria-label="Amount to receive" autocomplete="off" spellcheck="false"></div><small id="bal1" class="hide"></small><small id="rate" role="status" aria-live="polite"></small><small id="rankBox" class="rank hide"></small></div>
 <div id="lqPanel" class="hide"><div class="hdr"><small>Liquidity</small><small id="lqSub"></small></div><div id="lqList"></div></div>
 <div id="lnPanel" class="hide">
@@ -342,10 +350,10 @@ background:var(--e);margin:.5em auto .1em}
 <label class="dly">Symbol<input id="lnSym" maxlength="16" placeholder="ZCAT" autocomplete="off" spellcheck="false"></label>
 <label class="dly" id="lnSupplyL">Supply<input id="lnSupply" inputmode="decimal" value="1,000,000,000" autocomplete="off" spellcheck="false"></label>
 <div class="lngap" id="lnMktL">Market</div>
-<label class="dly" id="lnMcapL" title="The pool holds NO ether at launch - this is its virtual ether reserve, and it is the only thing deciding where on the curve your market opens. It sets the opening price and how hard that price is to move, which are the same knob: roughly this much buying moves the market halfway. Small numbers mean the first buyer takes a huge share of the supply.">Starting market cap<span class="lnu"><input id="lnMcap" inputmode="decimal" value="30" autocomplete="off" spellcheck="false">ETH</span></label>
-<label class="dly" id="lnAllocL" title="The percentage of total supply paid to the creator at launch. Everything else is seeded into the pool. Capped at 20%.">Creator keeps<span class="lnu"><input id="lnAlloc" inputmode="decimal" value="0" autocomplete="off" spellcheck="false">%</span></label>
-<label class="dly hide" id="lnGoalL" title="What the whole raise comes to. Ten million units are offered and the price is this divided by ten million, so a backer always knows what one unit costs and what it is a claim on.">Goal<span class="lnu"><input id="lnGoal" inputmode="decimal" value="10" autocomplete="off" spellcheck="false">ETH</span></label>
-<label class="dly hide" id="lnDaysL" title="How long backing stays open. After this, the sale closes and nobody else can buy in.">Runs for<span class="lnu"><input id="lnDays" inputmode="decimal" value="30" autocomplete="off" spellcheck="false">days</span></label>
+<label class="dly" id="lnMcapL" title="The pool holds NO ether at launch - this is its virtual ether reserve, and it is the only thing deciding where on the curve your market opens. It sets the opening price and how hard that price is to move, which are the same knob: roughly this much buying moves the market halfway. Small numbers mean the first buyer takes a huge share of the supply.">Starting market cap<span class="lnu"><input id="lnMcap" inputmode="decimal" value="30" autocomplete="off" spellcheck="false"><i>ETH</i></span></label>
+<label class="dly" id="lnAllocL" title="The percentage of total supply paid to the creator at launch. Everything else is seeded into the pool. Capped at 20%.">Creator keeps<span class="lnu"><input id="lnAlloc" inputmode="decimal" value="0" autocomplete="off" spellcheck="false"><i>%</i></span></label>
+<label class="dly hide" id="lnGoalL" title="What the whole raise comes to. Ten million units are offered and the price is this divided by ten million, so a backer always knows what one unit costs and what it is a claim on.">Goal<span class="lnu"><input id="lnGoal" inputmode="decimal" value="10" autocomplete="off" spellcheck="false"><i>ETH</i></span></label>
+<label class="dly hide" id="lnDaysL" title="How long backing stays open. After this, the sale closes and nobody else can buy in.">Runs for<span class="lnu"><input id="lnDays" inputmode="decimal" value="30" autocomplete="off" spellcheck="false"><i>days</i></span></label>
 <label class="dly hide" id="lnVestL" title="How slowly the ether reaches you. The clock starts the moment you launch and runs whether or not anyone has backed you yet, so this wants to be well longer than the raise - what has not been released is exactly what a backer can still burn their token back for, and a release that finishes when backing closes leaves them nothing. The rate is your GOAL divided by this window, so a raise that falls short of the goal is emptied proportionally sooner - a tenth of the goal, a tenth of the window.">Released over<select id="lnVest"><option value="7889238">3 months</option><option value="15778476">6 months</option><option value="31556952" selected>12 months</option><option value="63113904">2 years</option></select></label>
 <div class="lngap">Optional</div>
 <label class="dly" id="lnArtRow" title="Held on-chain as contract code, not as a link. Nothing to pin and no gateway to go dark. Editable later, so a rough mark now costs nothing.">Logo<span><img id="lnPrev" alt=""><small id="lnArtNote">none</small><button type="button" id="lnPick" class="lnbtn">Choose</button></span></label>
@@ -399,7 +407,8 @@ background:var(--e);margin:.5em auto .1em}
 <p><b>Fixed limit</b> &mdash; a price you name. It rests until someone fills it or you cancel.</p>
 <p><b>Dutch decay</b> &mdash; starts above your floor and falls to it over a window you choose. It has two clocks: the decay, then how long it rests at the floor before the escrow returns to you. Set that to <em>Forever</em> and it waits until you cancel.</p>
 <p><b>Climbing bid</b> &mdash; the mirror: a bid that rises toward a ceiling you name.</p>
-<p>Orders are escrowed on chain when placed, so a fill cannot fail for want of funds, and cancelling returns the escrow. Boards are denominated in WETH &mdash; an order asking for ETH is asking for WETH, and pays out as such.</p></details>
+<p>Orders are escrowed on chain when placed, so a fill cannot fail for want of funds, and cancelling returns the escrow. Boards are denominated in WETH &mdash; an order asking for ETH is asking for WETH, and pays out as such.</p>
+<p>The <b>book</b> under the form is live and takeable. Yours sit at the top; everyone else&rsquo;s come cheapest first for the pair above, each row carrying its own unit price. <b>Fill</b> takes a single order, in part where it allows it. That same book is priced into every Swap quote &mdash; a swap that beats the pools on resting orders says <em>Orderbook</em> beside the rate, with the share it took.</p></details>
 <details><summary>Liquidity <em><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.2c3.6 4 6 7.2 6 10.1a6 6 0 0 1-12 0c0-2.9 2.4-6.1 6-10.1z"/></svg></em></summary>
 <p>Precision pools are <b>bands</b>, not endless curves. A position earns fees only while the price is inside its band, and holds one asset or the other at the edges. A wider band is safer and earns less; a narrow one is the opposite.</p>
 <p>The bar on each row shows where the price sits in that band. <em>Out of range</em> means it is earning nothing right now.</p></details>
@@ -469,7 +478,7 @@ const PFACTORY="0x000000Eb27B557aB426d9E99cFd54EC455799e81";
 const PLQLENS="0x000000956bf20A41C54BaE4a4b6F5C8A166DAB4E";
 const PPLENS="0x000000Bad3a2fa57ed74fa06000573ccddF6B7fB";
 const PI_WORDS=19,PI_POOL=0,PI_LIQ=9,PI_HOOK=10,PI_SL=3,PI_SH=4,
-PI_FEE=5,PI_R0=6,PI_R1=7,PI_PX=8;
+PI_FEE=5,PI_R0=6,PI_R1=7,PI_PX=8,PI_CBPS=12;
 const CHAIN_ID=1;
 const SHARE_HOST="new.zswap.wei.limo";
 const ZERO="0x0000000000000000000000000000000000000000";
@@ -570,7 +579,7 @@ const encPRouteWeth=(pools,tokenOut,amountIn,minOut,to)=>
 const encPRoute=(pools,tokenIn,tokenOut,amountIn,minOut,to)=>
 "0x"+SEL_PROUTE+encUint(192)+encAddr(tokenIn)+encAddr(tokenOut)+encUint(amountIn)
 +encUint(minOut)+encAddr(to)+encUint(BigInt(pools.length))+pools.map(encAddr).join("");
-const SEL_PAIR_COUNT="355da246",SEL_CREATORBPS="17773ebb";
+const SEL_PAIR_COUNT="355da246";
 const PPOLICY="0x00000045fc7b570Be4d71F67219508ebD295EC6D";
 const SEL_ROUTABLE="9662c498",SEL_QUOTE_ALL="89941805";
 const LQ_SCAN=128;
@@ -603,7 +612,7 @@ const b=decBest(q);
 if(!b)continue;
 if(b.out<=out)continue;
 pool=b.pool;out=b.out;fA=vars[i].tokenIn;won=vars[i];
-try{if(c)n=Number(BigInt(c))}catch{n=0}
+try{n=c?Number(BigInt(c)):0}catch{n=0}
 }
 if(!pool||!won)return await hubHop(f,t,amountIn,sender,block);
 const tA=won.c0===fA?won.c1:won.c0;
@@ -728,7 +737,8 @@ for(let i=0;i<L.length;i++){const b=r2[i]&&D(r2[i]);
 if(b&&b.best.amountOut>0n&&(!B||b.best.amountOut>B.b.best.amountOut))B={...L[i],b}}
 if(!B)return null;
 const c=[B.a.callData,B.b.callData,encSweep(B.h,0n,rf),encSweep(ZERO,0n,rf)];
-return{best:{source:B.b.best.source,feeBps:B.b.best.feeBps,amountIn:amt,amountOut:B.b.best.amountOut},
+const ha=B.a.best.feeBps||0n,hb=B.b.best.feeBps||0n;
+return{best:{source:B.b.best.source,feeBps:ha+hb-ha*hb/10000n,amountIn:amt,amountOut:B.b.best.amountOut},
 callData:encCalls(c),amountLimit:B.b.amountLimit,
 msgValue:f.addr===ZERO?amt:0n,spender:f.addr===ZERO?null:ZROUTER};
 }
@@ -874,7 +884,9 @@ for(let i=0;i<n;i++)o.push(BigInt("0x"+h.slice(128+i*64,192+i*64)));return o};
 const encBool=b=>pad32(b?"1":"0");
 const toHex=v=>"0x"+BigInt(v).toString(16);
 const parseUnits=(s,dec)=>{
-const t=s.trim().replace(/,/g,"");
+const r=s.trim();
+if(r.includes(",")&&!/^\d{1,3}(?:,\d{3})+(?:\.\d*)?$/.test(r))throw Error("ambiguous comma — use . for decimals");
+const t=r.replace(/,/g,"");
 if(!/^(?:\d+|\d*\.\d+|\d+\.)$/.test(t))throw Error("invalid amount");
 const[ip,fp=""]=t.split(".");
 if(fp.length>dec)throw Error("too many decimals");
@@ -977,12 +989,13 @@ const RPCS_PIN="0x8C7348D039f58C4e9cfA936EF410eec759213b12";
 const SOLVER_FILL_PIN="0x7A2f21e476cA2ADde027BC868c5a083338EEfE54";
 const SOLVER_EXEC_PIN="0x4f6633342045C80Efa6c8CAc41b9bdc6145168C4";
 const SRC_SOLVER=9;
-const SOLVER_DEADLINE=1500,SOLVER_STRIKES=3;
-let solverLanes=null,solverFill=null,solverExec=null,solversTried=0;
+const SOLVER_DEADLINE=1500,SOLVER_STRIKES=3,SOLVER_COOL=60000;
+let solverLanes=null,solverFill=null,solverExec=null,solversJob=null;
 const _strikes=new Map();
-const laneDown=n=>(_strikes.get(n)||0)>=SOLVER_STRIKES;
-const laneSaw=(n,st)=>{if(st===401||st===403||st===429)_strikes.set(n,(_strikes.get(n)||0)+1);else _strikes.delete(n)};
-const laneThrew=(n,e)=>{if(!e||e.name!=="AbortError")_strikes.set(n,(_strikes.get(n)||0)+1)};
+const laneHurt=n=>{const s=_strikes.get(n),t=Date.now();_strikes.set(n,{n:(s&&t-s.t<SOLVER_COOL?s.n:0)+1,t})};
+const laneDown=n=>{const s=_strikes.get(n);return!!s&&Date.now()-s.t<SOLVER_COOL&&s.n>=SOLVER_STRIKES};
+const laneSaw=(n,st)=>{if(st===401||st===403||st===429)laneHurt(n)};
+const laneThrew=(n,e)=>{if(!e||e.name!=="AbortError")laneHurt(n)};
 const laneOk=c=>!!c&&isAddr(c.target)&&(c.spender==null||isAddr(c.spender))
 &&/^0x[0-9a-fA-F]*$/.test(c.data||"")&&strip0x(c.data||"").length%2===0;
 const decSolvers=h=>{const b=strip0x(h||"");if(b.length<128)return[];
@@ -1006,15 +1019,13 @@ handicapBps:BigInt(W(t+3)),
 enabled:W(t+4)===1});
 }
 return out}catch{return[]}};
-const loadSolvers=async()=>{
-if(solverLanes||solversTried)return;
-solversTried=1;
+const loadSolvers=()=>solversJob||(solversJob=(async()=>{
 try{
 const list=SOLVERS_PIN;
 solverFill=SOLVER_FILL_PIN;
 const ex=await nodeRead("eth_call",[{to:solverFill,data:"0x"+SEL_EXEC},L]).catch(()=>null);
 const exec="0x"+strip0x(ex||"0x").slice(24);
-if(!isAddr(exec))return;
+if(!isAddr(exec)){solversJob=null;return}
 if(exec.toLowerCase()!==SOLVER_EXEC_PIN.toLowerCase()){solverLanes=[];return}
 solverExec=SOLVER_EXEC_PIN;
 const raw=await nodeRead("eth_call",[{to:list,data:"0x"+SEL_SLIST},L]);
@@ -1022,7 +1033,8 @@ solverLanes=decSolvers(raw).filter(x=>x.enabled
 &&x.adapter.toLowerCase()===SOLVER_FILL_PIN.toLowerCase()
 &&/^https:\/\/\S+$/.test(x.endpoint)
 &&SOLVER_SHAPES[x.name]);
-}catch{solverLanes=[]}};
+}catch{solversJob=null}
+})());
 const lanePost=async(name,url,body,ms)=>{
 const ac=new AbortController(),k=setTimeout(()=>ac.abort(),ms);
 try{const r=await fetch(url,{method:"POST",headers:{"content-type":"application/json"},
@@ -1143,8 +1155,9 @@ const nodeRead=async(method,params)=>{
 let last;
 const pin=rpcPin();
 const tries=Math.min(rpcPool.length,RPC_TRIES);
+const p=rpcPi;
 for(let i=pin?-1:0;i<tries;i++){
-const j=(rpcPi+i)%rpcPool.length;
+const j=(p+i)%rpcPool.length;
 const u=i<0?pin:rpcPool[j];
 try{const r=await httpRead(u,method,params);if(i>=0)rpcPi=j;
 if(!curated)loadCurated().catch(()=>{});
@@ -1152,14 +1165,16 @@ return r}
 catch(e){last=e;if(!e.retry)throw e}}
 throw last||Error("no read node answered")};
 const isSign=m=>m===S||m.indexOf("wallet_")===0||m==="eth_requestAccounts"||m==="eth_accounts"||WC_SIGN.indexOf(m)>=0;
+const hexOk=r=>typeof r==="string"&&!/^0x[0-9a-fA-F]*$/.test(r)?Promise.reject(Error("bad hex from node")):r;
 const rpc=(method,params)=>{const e=prov();
-return e?e.request({method,params})
-:isSign(method)?Promise.reject(Object.assign(Error(NO_WALLET),{noWallet:true})):nodeRead(method,params)};
+const p=e?e.request({method,params})
+:isSign(method)?Promise.reject(Object.assign(Error(NO_WALLET),{noWallet:true})):nodeRead(method,params);
+return method===C?p.then(hexOk):p};
 const rpcRead=async(method,params,tries=4)=>{
 let last;
 for(let i=0;i<tries;i++){
 try{return await rpc(method,params)}
-catch(e){last=e;await new Promise(r=>setTimeout(r,300*(i+1)))}
+catch(e){last=e;if(i+1<tries)await new Promise(r=>setTimeout(r,300*(i+1)))}
 }
 throw last;
 };
@@ -1216,7 +1231,7 @@ if(s.length!==64||/[^0-9a-fA-F]/.test(s)||/[^0]/.test(s.slice(0,24)))return"";
 const a="0x"+s.slice(24).toLowerCase();
 return /^0x0{40}$/.test(a)?"":a};
 const nameOk=n=>/^[a-z0-9.-]+$/.test(n)
-&&n.split(".").every(l=>l.length>0&&l[0]!=="-"&&l[l.length-1]!=="-");
+&&n.split(".").every(l=>l.length>0&&l.length<64&&l[0]!=="-"&&l[l.length-1]!=="-");
 const nsFwd=async(reg,n)=>{const id=await rpc(C,[{to:reg,data:"0x"+SEL_CID+encStr(n)},L]);
 if(strip0x(id||"").length!==64)return"";
 return retAddr(await rpc(C,[{to:reg,data:"0x"+SEL_RES+strip0x(id)},L]))};
@@ -1416,7 +1431,7 @@ const MC3_LANES=12;
 let mc3Live=0;
 const mc3Waiting=[];
 const mc3Gate=async fn=>{
-if(mc3Live>=MC3_LANES)await new Promise(r=>mc3Waiting.push(r));
+while(mc3Live>=MC3_LANES)await new Promise(r=>mc3Waiting.push(r));
 mc3Live++;
 try{return await fn()}
 finally{mc3Live--;const next=mc3Waiting.shift();if(next)next()}
@@ -1453,11 +1468,11 @@ return Promise.resolve(bnVal);
 };
 const codeSeen={};
 const CODE_MISS_TTL=60000;
-const hasCode=async(a,block)=>{
+const hasCode=async a=>{
 if(codeSeen[a]===true)return true;
 const miss=codeSeen[a];
 if(miss&&Date.now()-miss<CODE_MISS_TTL)return false;
-const h=await rpc("eth_getCode",[a,block||L]);
+const h=await rpc("eth_getCode",[a,L]);
 const ok=(h||"").length>4;
 codeSeen[a]=ok||Date.now();
 return ok;
@@ -1491,13 +1506,15 @@ a=a.toLowerCase();
 if(!/^0x[0-9a-f]{40}$/.test(a))throw Error("invalid address");
 const i=TOKENS.findIndex(t=>t.addr.toLowerCase()===a);
 if(i>=0)return i;
-if((await rpcRead("eth_getCode",[a,L])).length<5)throw Error("no contract at that address");
+if((await rpcRead("eth_getCode",[a,L],2)).length<5)throw Error("no contract at that address");
 const[symRet,decRet,is721,is1155]=await mc3Deep([
 {to:a,data:"0x95d89b41"},{to:a,data:"0x313ce567"},
 {to:a,data:supports(IFACE_721)},{to:a,data:supports(IFACE_1155)}]);
 let uriRet=null;
 try{uriRet=await rpc(C,[{to:a,data:"0x"+SEL_CONTRACTURI},L])}catch{}
 const yes=h=>{try{return !!h&&BigInt(h)===1n}catch{return false}};
+const dup=TOKENS.findIndex(t=>t.addr.toLowerCase()===a);
+if(dup>=0)return dup;
 let sym="?";
 try{sym=decodeString(symRet||"0x").trim().replace(/[<>&"'`]/g,"").replace(/[\u0000-\u001f\u007f]/g,"").slice(0,16)||"?"}catch{}
 if(TOKENS.some(t=>t.sym.toLowerCase()===sym.toLowerCase()))sym+=" "+a.slice(0,6)+"\u2026";
@@ -2025,7 +2042,7 @@ if(senderPub)out.set(senderPub,1);
 out.set(iv,head);out.set(sealed,head+12);
 return b64(out)};
 const decode=(symKey,msg)=>{
-const b=unb64(msg);
+let b;try{b=unb64(msg)}catch{return null}
 if(!b.length)return null;
 const t=b[0];
 if(t!==0&&t!==1)return null;
@@ -2419,7 +2436,7 @@ const id=LS[WK];
 if(PROV||!id||id==="wc")return;
 wkScan();
 for(let i=0;i<8;i++){
-const d=W6963.find(x=>x.info.rdns===id);
+const m=W6963.filter(x=>x.info.rdns===id),d=m.length===1?m[0]:null;
 if(d){
 try{const a=await Promise.race([d.provider.request({method:"eth_accounts"}),
 new Promise(r=>setTimeout(()=>r(null),1500))]);
@@ -2603,7 +2620,7 @@ fcSync();
 cbSync();
 const my=++seq;
 quoting=false;
-if(wnMode)return;
+if(wnMode||lnMode)return;
 if(lqMode)return loadLq();
 if(tab==="book")return render();
 if(tab==="send")return updateSend();
@@ -2896,7 +2913,7 @@ plannerBounded=plannerBounded||!!p.bounded;
 }
 }
 const pin=lanePin();
-if(!isIn&&r&&r.amountLimit>0n&&pin!=="On-chain"){
+if(!isIn&&r&&r.amountLimit>0n){
 try{
 await loadSolvers();
 const lanes=(solverLanes||[]).filter(x=>!laneDown(x.name)&&SOLVER_SHAPES_OUT[x.name]);
@@ -2909,7 +2926,7 @@ laneCached(`${x.name}|${ck}`,
 .then(q=>q?{...q,lane:x}:null).catch(()=>null),dl])));
 const laneCeil=c=>{const d=c.inp+(c.inp*slipBps)/10000n;
 return c.cap&&c.cap>0n?bmin(c.cap,d):d};
-const chainCeil=r.best.amountIn+(r.best.amountIn*slipBps)/10000n;
+const chainCeil=r.amountLimit;
 let win=null;
 for(const c of tried){
 if(!laneOk(c)||!c.inp)continue;
@@ -2945,7 +2962,7 @@ hybrid=null;
 }catch{}
 }
 const pin2=lanePin();
-if(isIn&&r&&r.amountLimit>0n&&pin2!=="On-chain"){
+if(isIn&&r&&r.amountLimit>0n){
 try{
 await loadSolvers();
 const lanes=(solverLanes||[]).filter(x=>!laneDown(x.name));
@@ -2957,7 +2974,7 @@ laneCached(`${x.name}|${ck}`,
 ()=>SOLVER_SHAPES[x.name](x.endpoint,f.addr,t.addr,swapAmt,Number(slipBps),SOLVER_DEADLINE,f.dec,t.dec))
 .then(q=>q?{...q,lane:x}:null).catch(()=>null),
 deadline_])));
-const chainFloor=r.best.amountOut-(r.best.amountOut*slipBps)/10000n;
+const chainFloor=r.amountLimit;
 let win=null;
 for(const c of tried){
 if(!laneOk(c)||!c.out)continue;
@@ -2999,7 +3016,7 @@ if(isIn){outAmt.value=trimAmt(finalOut,t.dec);fitFont(outAmt)}
 else{amt.value=trimAmt(finalIn,f.dec);fitFont(amt)}
 const rx=(+formatUnits(finalOut,t.dec))/(+formatUnits(finalIn,f.dec));
 const s=r.best.source,raw=SOURCES[s]||"?";
-const src=r.best.source===SRC_SOLVER?`${r.best.lane} solver${r.best.forced?" \u00b7 pinned":""}`:hybrid?"Orderbook + AMM":(s===3||s===4||s===SRC_PRECISION)&&r.best.feeBps?`${raw}\u00a0${Number(r.best.feeBps)/100}%`:raw;
+const src=r.best.source===SRC_SOLVER?`${r.best.lane} solver${r.best.forced?" \u00b7 pinned":""}`:hybrid?bookShare(hybrid,raw):(s===3||s===4||s===SRC_PRECISION)&&r.best.feeBps?`${raw}\u00a0${Number(r.best.feeBps)/100}%`:raw;
 rate.textContent=isFinite(rx)?`1 ${f.sym} ≈ ${rx>=1?rx.toLocaleString("en-US",{maximumFractionDigits:4}):rx.toPrecision(4)} ${t.sym} · ${src}`:"";
 rankBox.textContent="";
 if(rank&&rank.length>1){
@@ -3042,7 +3059,7 @@ rate.title=`Exact maximum: ${exactMax} ${f.sym}`;
 }
 if(r.slipBps>slipBps)rate.textContent+=` · Split — bound widened to ${Number(r.slipBps)/100}%`;
 if(bookIncomplete)rate.textContent+=" · Book scan capped";
-if(plannerBounded)rate.textContent+=" · Planner heuristic/capped";
+if(plannerBounded)rate.textContent+=" · Book split approximate";
 if(bookUnavailable)rate.textContent+=" · AMM only (books offline)";
 if(pq&&pq.capped)rate.textContent+=` · Precision scan capped (${LQ_SCAN})`;
 if(isIn&&f.launched&&(t.addr===ZERO||t.addr.toLowerCase()===WETH.toLowerCase())){
@@ -3134,7 +3151,7 @@ addr.onclick=()=>{account?disconnect():connect()};
 addr.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();account?disconnect():connect()}};
 const AUTO_Q_MAX=5;
 const updateSoon=()=>{clearTimeout(debounceT);debounceT=setTimeout(()=>{debounceT=0;update()},250)};
-const setMode=m=>{mode=m;const o=m==="in"?outAmt:amt;o.value="";fitFont(o);last=null;sendReady=null;render()};
+const setMode=m=>{++seq;quoting=false;mode=m;const o=m==="in"?outAmt:amt;o.value="";fitFont(o);last=null;sendReady=null;render()};
 amt.addEventListener("input",()=>{
 if(lqMode){fitFont(amt);lqPreviewSoon();return}
 if(tab==="book"){fitFont(amt);render();return}setMode("in");fitFont(amt);updateSoon()});
@@ -3424,7 +3441,7 @@ throw Error(`Not enough ${m.sym} to fill: it costs ${trimAmt(need,m.dec)} `
 };
 const known=a=>TOKENS.find(t=>t.addr.toLowerCase()===a.toLowerCase());
 const sm=i=>i.replace('width="20" height="20"','width="15" height="15"');
-const escan=(a,id)=>`<a href="https://etherscan.io/${id!=null?`nft/${a}/${id}`:`token/${a}`}" target="_blank" rel="noreferrer">${a.slice(0,6)}…${a.slice(-4)} ↗</a>`;
+const escan=(a,id)=>!isAddr(a)?"":`<a href="https://etherscan.io/${id!=null?`nft/${a}/${id}`:`token/${a}`}" target="_blank" rel="noreferrer">${a.slice(0,6)}…${a.slice(-4)} ↗</a>`;
 const SEL_CONTRACTURI="e8a3d485";
 const okDataImg=u=>typeof u==="string"&&u.length<=60000
 &&/^data:image\/[a-z.+-]{2,20};base64,[A-Za-z0-9+/=]+$/i.test(u);
@@ -3467,7 +3484,8 @@ if(isNft)return{ic:genIcon("#"),txt:`#${amt}`,ok:0,link:escan(addr,amt)};
 const raw=meta&&meta.sym?meta:await tokMeta(addr),m={...raw,sym:safeSym(raw.sym)};
 const lg=k?"":logoCache[addr.toLowerCase()];
 const ic=k?sm(k.icon):lg?`<img src="${lg}" width="15" height="15">`:genIcon(m.sym);
-return{ic,txt:`${trimAmt(amt,m.dec)} ${k?safeSym(k.sym):'“'+m.sym+'”'}`,ok:!!k,link:addr===ZERO?"ETH":escan(addr)};
+return{ic,txt:`${trimAmt(amt,m.dec)} ${k?safeSym(k.sym):'“'+m.sym+'”'}`,ok:!!k,
+sym:k?safeSym(k.sym):m.sym,dec:m.dec,link:addr===ZERO?"ETH":escan(addr)};
 }
 let floorSeq=0;
 nftId.addEventListener("input",()=>{syncOrderType();showFloor();render()});
@@ -3478,12 +3496,14 @@ const live=tab==="book"&&side!==null&&!nftId.value.trim();
 if(!live){el.classList.add("hide");el.textContent="";return}
 const seq=++floorSeq,t=TOKENS[side];
 el.classList.remove("hide");el.textContent="Checking floor bids…";
-const rows=await collectionFloor(t.addr).catch(()=>[]);
+const oth=isNft(fromSel.value)?toSel.value:fromSel.value;
+const qt=isNft(oth)?ZERO:(TOKENS[oth].addr===ZERO?WETH:TOKENS[oth].addr);
+const rows=await collectionFloor(t.addr,qt).catch(()=>[]);
 if(seq!==floorSeq)return;
 if(!rows.length){el.textContent="No standing bids on this collection.";return}
 const best=rows[0],q=known(best.quote);
 el.textContent=`${rows.length} collection bid${rows.length>1?"s":""} · best pays `
-+`${trimAmt(best.proceeds,q?q.dec:18)} ${q?q.sym:"?"} for any ${t.sym}`;
++`${trimAmt(best.price/best.initial,q?q.dec:best.qDec??18)} ${q?q.sym:safeSym(best.qSym||"?")} for any ${t.sym}`;
 }
 function decBidRows(hex){
 const out=[];
@@ -3524,9 +3544,9 @@ tSym:txt(15),qSym:txt(16),
 return out;
 }catch{return out}
 }
-async function collectionFloor(collection){
+async function collectionFloor(collection,quote=ZERO){
 if(FLOORVIEW===ZERO||FLOOR===ZERO)return[];
-const data="0x"+SEL_COLL_BIDS+encAddr(FLOOR)+encAddr(collection)+encAddr(ZERO)
+const data="0x"+SEL_COLL_BIDS+encAddr(FLOOR)+encAddr(collection)+encAddr(quote)
 +encUint(0)+encUint(16)+encUint(256);
 const raw=await rpc(C,[{to:FLOORVIEW,data},L]).catch(()=>null);
 if(!raw)return[];
@@ -3590,6 +3610,13 @@ tB:addr(b+352),aB:word(b+384),sB:safeSym(text(b,13)),dB:dec(word(b+448)),board:a
 return{rows,next};
 }
 const betterRate=(a,b)=>a.aA*b.aB>b.aA*a.aB;
+const bookShare=(h,amm)=>{
+const rest=h.ammIn!==undefined?h.ammIn:h.ammOut;
+if(!rest)return"Orderbook";
+const mine=h.ammIn!==undefined?h.bookIn:h.bookOut;
+const pct=Number(mine*100n/(mine+rest));
+return`Orderbook ${pct<1?"<1":pct}% + ${amm}`;
+};
 const MAX_BOOK_LEGS=32,AON_PAIR_SEEDS=24;
 function planBookExactIn(rows,amountIn,ammOut,ammIn){
 if(!amountIn||!ammIn)return null;
@@ -3716,6 +3743,7 @@ steps.push(encSweep(tokenIn,0n,refundTo));
 return encCalls(steps);
 }
 async function swapCandidates(tokenIn,tokenOut,block){
+if(tokenOut===ZERO&&tokenIn.toLowerCase()===WETH.toLowerCase())return[];
 const key=tokenIn.toLowerCase()+":"+tokenOut.toLowerCase(),old=candCache[key];
 if(old&&Date.now()-old.at<15000&&old.block===block){
 old.rows.incomplete=old.incomplete;old.rows.unavailable=old.unavailable;
@@ -3725,8 +3753,8 @@ const snapshotAt=Date.now();
 const boardIn=tokenIn===ZERO?WETH:tokenIn;
 const boardOut=tokenOut===ZERO?WETH:tokenOut;
 const [lc,le,ld]=await Promise.all([
-hasCode(SBVIEW,block),hasCode(SWAPBOL,block),
-DUTCH!==ZERO?hasCode(DUTCH,block):false
+hasCode(SBVIEW),hasCode(SWAPBOL),
+DUTCH!==ZERO?hasCode(DUTCH):false
 ]);
 if(!lc||!le){
 const rows=[];rows.unavailable=true;return rows;
@@ -3770,7 +3798,7 @@ for(const k in candCache)if(k!==key&&snapshotAt-candCache[k].at>60000)delete can
 return rows;
 }
 async function lensBookRows(my){
-const [sv,dv]=await Promise.all([hasCode(SBVIEW,L),DUTCH!==ZERO?hasCode(DUTCH,L):false]);
+const [sv,dv]=await Promise.all([hasCode(SBVIEW),DUTCH!==ZERO?hasCode(DUTCH):false]);
 if(!sv)return null;
 const specs=[...BOARDS];
 if(dv)specs.push({a:DUTCH,dutch:1});
@@ -3949,10 +3977,16 @@ leg(r.tA,r.aA,r.nA,r.sA!=null&&r.dA!=null?{sym:r.sA,dec:r.dA}:null),
 leg(r.tB,r.aB,r.nB,r.sB!=null&&r.dB!=null?{sym:r.sB,dec:r.dB}:null)
 ])));
 if(my!==bookSeq)return;
+rows.forEach((r,i)=>{const[a,b]=legs[i];
+if(!r.nA&&r.dA==null&&a.dec!=null)r.dA=a.dec;
+if(!r.nB&&r.dB==null&&b.dec!=null)r.dB=b.dec});
 bookRows=rows;bookLegs=legs;
 paintBook();
 }
-let bookPairOnly=LS.bkp!=="0",bookType="all",bookLegs=[];
+let bookPairOnly=LS.bkp!=="0",bookLegs=[];
+let bookType=/^(all|limit|dutch|bid|nft)$/.test(LS.bkt||"")?LS.bkt:"all";
+const unitPx=r=>r.aA&&r.aB&&!r.nA&&!r.nB&&!r.isNFT
+?r.aB*10n**BigInt(18+(r.dA??18))/(r.aA*10n**BigInt(r.dB??18)):null;
 const sameAsset=(a,b)=>{
 const w=x=>{x=(x||"").toLowerCase();return x===ZERO.toLowerCase()?WETH.toLowerCase():x};
 return w(a)===w(b);
@@ -3982,14 +4016,23 @@ if(!c||!box)continue;
 el.setAttribute("aria-expanded","true");
 box.innerHTML=cardHtml(c)||"No card for this order.";
 }};
+const bookOrder=rows=>{
+const idx=rows.map((r,i)=>i);
+const f=TOKENS[fromSel.value]?.addr,t=TOKENS[toSel.value]?.addr;
+if(!bookPairOnly||!f||!t)return idx;
+const k=rows.map(r=>{const d=sameAsset(r.tA,t)&&sameAsset(r.tB,f)?0:1;
+return[d,d?null:unitPx(r)]});
+const px=(a,b)=>a===null||b===null?(a===b?0:a===null?1:-1):a<b?-1:a>b?1:0;
+return idx.sort((a,b)=>k[a][0]-k[b][0]||px(k[a][1],k[b][1]));
+};
 function paintBook(){
 const rows=bookRows,legs=bookLegs;
 if(!rows.length){book.innerHTML="";syncBook(0);return}
 const wasOpen=bookOpenCards(),wasAt=book.scrollTop;
 let own="",rest="",nOwn=0,nRest=0,hidden=0;
 const now=BigInt(Math.floor(Date.now()/1e3));
-rows.forEach((r,i)=>{
-const[a,bg]=legs[i]||[];
+bookOrder(rows).forEach(i=>{
+const r=rows[i],[a,bg]=legs[i]||[];
 if(!a||!bg)return;
 const mine=r.maker.toLowerCase()===me();
 const expired=!!(r.exp&&now>r.exp);
@@ -3999,7 +4042,7 @@ const tags=(expired?'<span class="tg w" title="This order has lapsed and can no 
 +(r.dutch?'<span class="tg">Dutch</span>':"")
 +(r.floor?'<span class="tg">Bid</span>':"")
 +(r.floor&&r.isNFT&&r.anyId?'<span class="tg">any id</span>':"")
-+(r.filled!==undefined&&r.filled>0n?`<span class="tg">${(Number(r.filled)/100).toFixed(0)}% filled</span>`:"")
++(r.filled>0n?`<span class="tg">${r.filled<100n?"<1":Math.floor(Number(r.filled)/100)}% filled</span>`:"")
 +(r.cp!==ZERO?'<span class="tg">private</span>':"")
 +(!a.ok||!bg.ok?'<a class="tg w" href="'+ZLIST_URL+'" target="_blank" rel="noopener"'
 +' title="Not on the staked token list. Its symbol and decimals are read straight from the contract'
@@ -4030,7 +4073,7 @@ const act=mine?`<button data-x="c" ${dset}>${expired?"Reclaim":"Cancel"}</button
 const card=r.board.toLowerCase()!==SB1.toLowerCase();
 const row=`<div class="ow"><div class="o${card?" ins":""}"${card?` data-k="${r.board}:${r.id}" role="button" tabindex="0" aria-expanded="false" title="Show the on-chain receipt"`:""}>`
 +`<span class="l">${a.ic}${bg.ic}<span><b>${a.txt} → ${bg.txt}</b>`
-+`<i>${a.link}${tags}${when}</i></span></span>${act}</div><div class="ic"></div></div>`;
++`<i>${pxOf(r,a,bg)}${a.link}${tags}${when}</i></span></span>${act}</div><div class="ic"></div></div>`;
 if(mine){own+=row;++nOwn;return}
 if(!(bookPairOnly?rowInPair(r):true)||!rowIsType(r)){++hidden;return}
 rest+=row;++nRest;
@@ -4045,6 +4088,10 @@ bookReopen(wasOpen);
 syncBook(nOwn+nRest,rows.length);
 book.scrollTop=wasAt;
 }
+const pxOf=(r,a,bg)=>{
+const v=unitPx(r);
+return v?`<span class="px">${sigAmt(v,18,4)} ${bg.sym}/${a.sym}</span> \u00b7 `:"";
+};
 const cardCache={};
 async function loadCard(board,id){
 const k=board.toLowerCase()+":"+id;
@@ -4092,16 +4139,16 @@ return `No ${what.toLowerCase()}${where} from anyone else.`;
 };
 function bookFilters(hidden){
 const f=TOKENS[fromSel.value]?.sym||"?",t=TOKENS[toSel.value]?.sym||"?";
-const chip=(on,attr,val,label,title)=>`<button class="bkc${on?" on":""}" `
-+`data-${attr}="${val}"${title?` title="${title}"`:""}>${label}</button>`;
+const chip=(on,attr,val,label,title)=>`<button type="button" class="bkc${on?" on":""}" `
++`aria-pressed="${on?"true":"false"}" data-${attr}="${val}"${title?` title="${title}"`:""}>${label}</button>`;
 const note=[hidden?hidden+" hidden":"",bookTrunc?"scan capped":""].filter(Boolean).join(" \u00b7 ");
-return `<h6><span>Orderbook</span><span title="${bookTrunc?"More orders exist than this scan returned \u2014 the newest are shown first.":""}">${note}</span></h6>`
+return `<div class="bkh"><h6><span>Orderbook</span><span title="${bookTrunc?"More orders exist than this scan returned \u2014 the newest are shown first.":""}">${note}</span></h6>`
 +`<div class="bkf">`
 +chip(bookPairOnly,"bf","1",`${f}/${t}`,"Only orders on the pair selected above")
 +chip(!bookPairOnly,"bf","0","All pairs","Every order on every board")
 +`</div><div class="bkf">`
 +BOOK_TYPES.map(([v,l])=>chip(bookType===v,"bt",v,l)).join("")
-+`</div>`;
++`</div></div>`;
 }
 let bookShown=0;
 function syncBook(n,total){
@@ -4124,7 +4171,7 @@ e.preventDefault();inspect(row,row.dataset.k);
 book.addEventListener("click",async e=>{
 const fc=e.target.closest("[data-bf]"),tc=e.target.closest("[data-bt]");
 if(fc){bookPairOnly=fc.dataset.bf==="1";LS.bkp=bookPairOnly?"1":"0";paintBook();return}
-if(tc){bookType=tc.dataset.bt;paintBook();return}
+if(tc){bookType=tc.dataset.bt;LS.bkt=bookType;paintBook();return}
 const b=e.target.closest("button[data-i]");
 if(!b){
 const row=e.target.closest(".o.ins");
@@ -4520,6 +4567,7 @@ nftId.placeholder=isWns(TOKENS[fromSel.value]?.addr)||isWns(TOKENS[toSel.value]?
 syncOrderType();
 showFloor();
 };
+let syncStops=()=>{};
 const setTab=t=>{
 if(tab==="send")sendD=dly.value;else if(tab==="book")bookD=dly.value;
 if(t!=="swap"&&lqMode)lqSet(false);
@@ -4535,6 +4583,7 @@ tabSwap.classList.toggle("on",t==="swap");
 tabSend.classList.toggle("on",send);
 tabBook.classList.toggle("on",bk);
 for(const[el,on]of[[tabSwap,t==="swap"],[tabSend,send],[tabBook,bk]])el.setAttribute("aria-selected",on?"true":"false");
+syncStops();
 for(const el of[rcvPanel,flip])el.classList.toggle("hide",send);
 if(!bk)for(const[sel,other]of[[fromSel,toSel],[toSel,fromSel]]){
 if(!isNft(sel.value))continue;
@@ -4660,6 +4709,7 @@ if(on&&lnMode)lnSet(false);
 if(on&&wnMode)wnSet(false);
 lq.setAttribute("aria-pressed",on?"true":"false");
 lq.classList.toggle("on",on);
+document.querySelector(".card").classList.toggle("lqon",on);
 for(const el of [rate,flip,swap])
 if(el)el.classList.toggle("hide",on);
 rc.value="";rc.classList.remove("bad");rcvEl.textContent="";
@@ -4680,7 +4730,7 @@ function lqRow(o,t0,t1){
 const px=bandPrice(o.px,t0.dec,t1.dec),lo=bandPrice(o.sl,t0.dec,t1.dec),hi=bandPrice(o.sh,t0.dec,t1.dec);
 const inRange=px>=lo&&px<=hi&&o.liq>0n;
 const mine=o.shares>0n;
-const sole=mine&&o.shares===o.liq;
+const sole=mine&&o.shares+1000n>=o.liq;
 const p=`data-pool="${o.pool}"`;
 return `<div class="lqrow${inRange?"":" out"}" ${p}>`
 +`<div class="lqband"><b>${fmtPx(lo)} – ${fmtPx(hi)}</b> <span class="lqfee" title="${o.cbps>0n
@@ -4734,7 +4784,7 @@ return `<div class="lqnew" data-t0="${t0.addr}" data-t1="${t1.addr}">`
 const pxToSqrt=(px,d0,d1)=>{
 const raw=px*10**(d1-d0);
 if(!isFinite(raw)||raw<=0)return 0n;
-return BigInt(Math.round(Math.sqrt(raw)*1e9))*10n**9n;
+return BigInt(Math.round(Math.sqrt(raw)*1e18));
 };
 const lqMarket=(t0,t1,lo,hi,fee,owner)=>encAddr(t0)+encAddr(t1)+encUint(lo)+encUint(hi)
 +encUint(fee)+encAddr(ZERO)+encAddr(owner)+encUint(0n);
@@ -4858,14 +4908,8 @@ for(let i=0;i<n&&i<LQ_SCAN;i++){
 const at=k=>BigInt("0x"+h.slice(base+(i*PI_WORDS+k)*64,base+(i*PI_WORDS+k+1)*64));
 rows.push({pool:"0x"+h.slice(base+(i*PI_WORDS+PI_POOL)*64+24,base+(i*PI_WORDS+PI_POOL+1)*64),
 sl:at(PI_SL),sh:at(PI_SH),fee:at(PI_FEE),r0:at(PI_R0),r1:at(PI_R1),px:at(PI_PX),
-liq:at(PI_LIQ),cbps:0n,hook:"0x"+h.slice(base+(i*PI_WORDS+PI_HOOK)*64+24,base+(i*PI_WORDS+PI_HOOK+1)*64),
+liq:at(PI_LIQ),cbps:at(PI_CBPS)>10000n?0n:at(PI_CBPS),hook:"0x"+h.slice(base+(i*PI_WORDS+PI_HOOK)*64+24,base+(i*PI_WORDS+PI_HOOK+1)*64),
 shares:0n,mine0:0n,mine1:0n})}}
-if(rows.length){
-const cf=await mc3Deep(rows.map(r=>({to:r.pool,data:"0x"+SEL_CREATORBPS})));
-if(my!==lqSeq)return;
-rows.forEach((r,i)=>{let b=0n;try{if(cf[i])b=BigInt(cf[i])}catch{}
-r.cbps=b>10000n?0n:b;});
-}
 if(account&&rows.length){
 const bs=await mc3Deep(rows.map(r=>({to:r.pool,data:"0x"+SEL_BALANCEOF+encAddr(account)})));
 if(my!==lqSeq)return;
@@ -5166,7 +5210,7 @@ const box=e.target.closest(".lqadd"),ins=box.querySelectorAll(".lqin");
 const on=e.target.checked;
 const mir=box.dataset.mir;
 if(on&&mir&&ins[0].value.trim()&&ins[1].value.trim())ins[+mir].value="";
-if(!on)lqMirror(box,ins[0]);
+if(!on)lqMirror(box,ins[0].value.trim()||!ins[1].value.trim()?ins[0]:ins[1]);
 box.querySelector('[data-act="ac"]').textContent=on?"Zap in":"Add liquidity";
 lqPreview(box);
 });
@@ -5588,7 +5632,7 @@ cbDao="";cbAmt=0n;cbBuy=false;
 const f=TOKENS[fromSel.value],t=TOKENS[toSel.value];
 if(lnMode||lqMode||wnMode||tab!=="swap"||!f||!t){cbEl.classList.add("hide");return}
 const real=x=>x&&x.addr&&x.addr!==ZERO&&x.std!=="nft";
-const cbEth=f.addr===ZERO||(f.addr||"").toLowerCase()===WETH.toLowerCase();
+const cbEth=f.addr===ZERO;
 let hit=null,tok=null,buy=false;
 if(real(t)){const h=await cbLook(t.addr);if(my!==cbSeq)return;
 if(h.dao){hit=h;tok=t;buy=true}}
@@ -5609,7 +5653,8 @@ mc3Deep([{to:hit.shares,data:"0x"+SEL_TSUP},{to:tok.addr,data:"0x"+SEL_TSUP},
 {to:hit.dao,data:"0x"+SEL_DAOALLOW+encAddr(ZERO)+encAddr(CTAP)},
 {to:hit.dao,data:"0x"+SEL_RQABLE}])]);
 eth=BigInt(b||"0x0");
-if(r[0]==null||r[1]==null){cbEl.classList.add("hide");return}
+if(my!==cbSeq)return;
+if(r[0]==null||r[1]==null||r[2]==null||r[3]==null){cbEl.classList.add("hide");return}
 const shr=BigInt(r[0]),lot=BigInt(r[1]);
 sup=shr+lot;
 const sale=strip0x(r[2]||"");
@@ -5770,6 +5815,9 @@ const LN_MIME={"image/png":0,"image/webp":1,"image/svg+xml":2,"image/gif":3,"ima
 const MIME_NAME=["image/png","image/webp","image/svg+xml","image/gif","image/jpeg","image/avif"];
 const LN_MAX_ART=24575;
 const LN_BUDGET=8192;
+const lnCause=()=>lnKind.value==="cause";
+const lnCap=()=>lnCause()?CAU_MAX_ART:LN_MAX_ART;
+const lnBud=()=>lnCause()?CAU_MAX_ART:LN_BUDGET;
 const LN_MAX_ALLOC=2000;
 const LN_MIN_POOLED=2000000000000n;
 const LN_MIN_MCAP=1000000000000n;
@@ -5878,7 +5926,7 @@ function cauQuote(){
 lnGo.textContent=account?"Launch":"Connect Wallet";
 const t=cauTerms();
 if(!t){lnNote.textContent="";return}
-if(t.err){lnNote.textContent=t.err;lnNote.style.color="#c33";return}
+if(t.err){lnNote.textContent=t.err;lnNote.style.color="var(--w)";return}
 const per=(+formatUnits(t.price,18));
 const tenthDays=t.rate>0n
 ?Number((t.goal/10n)/t.rate)/86400
@@ -5886,11 +5934,11 @@ const tenthDays=t.rate>0n
 lnNote.textContent=`1 ETH backs ${trimNum(1/per)} units`
 +` · ${trimNum(+formatUnits(t.rate*86400n,18))} ETH a day at full funding, over `
 +lnVest.options[lnVest.selectedIndex].textContent
-+(tenthDays>0?` · at a tenth of the goal it empties in ${trimNum(tenthDays)} days`:"")
++(tenthDays>0?` · at a tenth of the goal it empties in ${trimNum(Math.round(tenthDays*10)/10)} days`:"")
 +` · backers burn back for the rest`
 +(lnArtBytes?` · logo ${(lnArtBytes.length/1024).toFixed(1)} KB`
 +(lnArtBytes.length>CAU_MAX_ART?` — over the 4 KB a cause allows, pick something simpler`:""):"");
-lnNote.style.color=lnArtBytes&&lnArtBytes.length>CAU_MAX_ART?"#c33":"";
+lnNote.style.color=lnArtBytes&&lnArtBytes.length>CAU_MAX_ART?"var(--w)":"";
 }
 function cauKind(){
 const on=lnKind.value==="cause";
@@ -5984,7 +6032,7 @@ lnNote.textContent=`1 ETH buys ${firstEth>=10?Math.round(firstEth):firstEth.toFi
 +` \u00b7 fully diluted ${trimNum(mc*Number(sup)/pooled)} ETH`:"")
 +(alBps>=1000?` \u00b7 that much can sell for most of the ether early buyers put in`:"")
 +(lnArtBytes?` \u00b7 logo ${(lnArtBytes.length/1024).toFixed(1)} KB`:"");
-lnNote.style.color=poolFrac>=10?"#c33":"";
+lnNote.style.color=poolFrac>=10?"var(--w)":"";
 }
 const trimNum=n=>n>=1000?Math.round(n).toLocaleString("en-US")
 :n>=1?n.toLocaleString("en-US",{maximumFractionDigits:4}):String(Number(n.toPrecision(4)));
@@ -6001,7 +6049,7 @@ const b=new TextEncoder().encode((await blobText(file))
 .replace(/\son[a-z-]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]*)/gi,"")
 .replace(/\s(?:[a-z]+:)?href\s*=\s*("\s*javascript:[^"]*"|'\s*javascript:[^']*'|javascript:[^\s>]*)/gi,"")
 .replace(/>\s+</g,"><").trim());
-if(b.length>LN_MAX_ART)throw Error(`That SVG is ${(b.length/1024).toFixed(1)} KB and the on-chain limit is 24 KB.`);
+if(b.length>lnCap())throw Error(`That SVG is ${(b.length/1024).toFixed(1)} KB and the on-chain limit is ${Math.round(lnCap()/1024)} KB.`);
 return{bytes:b,mime:LN_MIME["image/svg+xml"]};
 }
 const bmp=await createImageBitmap(file);
@@ -6017,10 +6065,10 @@ const blob=await new Promise(r=>cv.toBlob(r,type,q));
 if(!blob||blob.type!==type)continue;
 const bytes=await blobBytes(blob);
 if(!smallest||bytes.length<smallest.bytes.length)smallest={bytes,mime:LN_MIME[type]};
-if(bytes.length<=LN_BUDGET)return{bytes,mime:LN_MIME[type]};
+if(bytes.length<=lnBud())return{bytes,mime:LN_MIME[type]};
 }
 }
-if(smallest&&smallest.bytes.length<=LN_MAX_ART)return smallest;
+if(smallest&&smallest.bytes.length<=lnCap())return smallest;
 throw Error("That image will not compress small enough. Flat colours and simple shapes do far better than photographs.");
 }
 lnPick.onclick=()=>lnArt.click();
@@ -6178,7 +6226,7 @@ wn.classList.toggle("on",on);
 for(const el of [rate,flip,swap])if(el)el.classList.toggle("hide",on);
 for(const el of [document.querySelector(".panel"),rcvPanel])if(el)el.classList.toggle("hide",on);
 for(const el of [wnPanel,wnGo,wnRollPanel])el.classList.toggle("hide",!on);
-for(const el of [rc,rcvEl])if(el)el.classList.toggle("hide",on)};
+for(const el of [rc,rcvEl])if(el)el.classList.toggle("hide",on);document.querySelector(".card").classList.toggle("wnon",on)};
 function wnSet(on){
 if(on)cbDisarm();
 ++seq;quoting=false;
@@ -6447,7 +6495,7 @@ lnName.value="";lnSym.value="";lnSupply.value="";lnAlloc.value="";
 const topic=kecStr("Launched(address,address,address,uint256,uint256,uint256)");
 const lg=(receipt.logs||[]).find(l=>(l.address||"").toLowerCase()===PLAUNCH.toLowerCase()
 &&(l.topics||[])[0]&&l.topics[0].toLowerCase()===topic.toLowerCase());
-let token=lg?"0x"+strip0x(lg.topics[1]).slice(24):null;
+let token=lg?"0x"+strip0x(lg.topics[1]).slice(24):null;if(token&&!isAddr(token))token=null;
 if(!token&&candidate){
 try{
 const c=await rpc(C,[{to:PLAUNCH,data:"0x"+SEL_CREATOROF+encAddr(candidate)},L]);
@@ -6695,7 +6743,7 @@ let note="",flip="";
 if(chInv&&isFinite(ch)&&ch>-100){
 const other=(1/(1+ch/100)-1)*100;
 const pr=chEff&&chEff();
-const base=pr&&pr[1]?pr[1].sym:"the token";
+const base=pr&&pr[0]?pr[0].sym:"the token";
 note=` title="${safeSym(base)} is ${other>=0?"+":""}${other.toFixed(2)}% over this window. `
 +`This chart prices the pair the other way up, so its line moves the opposite way."`;
 flip=` <span class="chflip">${safeSym(base)} ${other>=0?"+":""}${other.toFixed(2)}%</span>`;
@@ -6901,8 +6949,8 @@ scEl.appendChild(go);
 };
 let lSeq=0,listReady=false;
 const lkWrote=Object.create(null);
-const lkKeep=(el,v)=>{
-if(el.value!==""&&lkWrote[el.id]!==undefined&&el.value!==lkWrote[el.id])return false;
+const lkKeep=(el,v)=>{const w=lkWrote[el.id];
+if(el.value!==""&&el.value!==w&&(w!==undefined||el.type!=="select-one"))return false;
 el.value=v;lkWrote[el.id]=v;return true;
 };
 async function applyLink(e){
@@ -6947,13 +6995,14 @@ if(fromSel.value===toSel.value){
 const alt=String(TOKENS.findIndex((x,i)=>String(i)!==fromSel.value&&(t==="book"||x.std!=="nft")));
 if(alt!=="-1"){if(oi>=0)fromSel.value=alt;else toSel.value=alt}
 }
+const rcMine=rc.value!==""&&rc.value!==lkWrote.rc;
 const wantLq=q.get("lq")==="1";
 const linkWantsCard=fi>=0||oi>=0||to||n||!isNaN(lk)||q.get("token")||q.get("out");
 if(!wantLq&&lqMode&&linkWantsCard)lqSet(false);
 if(linkWantsCard){if(lnMode)lnSet(false);if(wnMode)wnSet(false)}
 setTab(t);
 if(wantLq&&t==="swap"&&!lqMode)lqSet(true);
-if(to)lkKeep(rc,to);
+if(to&&!rcMine)lkKeep(rc,to);
 if(!isNaN(lk)){const os=[...dly.options].map(x=>+x.value).sort((a,b)=>a-b);
 const v=String(os.find(o=>o>=lk)??os[os.length-1]);
 if(t==="book")bookD=v;else if(t==="send")sendD=v;
@@ -7003,7 +7052,7 @@ const j=e.key==="ArrowRight"?(i+1)%TABS.length:e.key==="ArrowLeft"?(i+TABS.lengt
 if(j<0)return;
 e.preventDefault();TABS[j].focus();sBlip();setTab(NAMES[j]);
 });
-const syncStops=()=>TABS.forEach(el=>el.tabIndex=el.classList.contains("on")?0:-1);
+syncStops=()=>TABS.forEach(el=>el.tabIndex=el.classList.contains("on")?0:-1);
 syncStops();for(const el of TABS)el.addEventListener("click",syncStops);
 for(const el of TABS)el.addEventListener("keyup",syncStops);}
 applyLink();
@@ -7028,7 +7077,7 @@ const dsec=BigInt(dly.value||0);
 let txReq,batch=null;
 if(dsec>0n){
 const isE=token.addr===ZERO;
-if(tipCk.checked)await syncTip();
+if(tipCk.checked){await syncTip();swap.disabled=true}
 const tip=tipCk.checked?sendTipWei:0n;
 const val=isE?amount+tip:tip;
 if(isE&&val>fromBalance)throw Error("insufficient ETH for amount + keeper tip");
@@ -7233,7 +7282,7 @@ await rpc(C,[tx,L]);await checkWallet();await settle(await sendTx([tx]));
 }
 async function placeOrder(){
 const f=TOKENS[fromSel.value],t=TOKENS[toSel.value];
-swap.disabled=true;
+swap.disabled=true;++busy;
 try{
 if(f.std==="nft"||t.std==="nft"){
 if(f.std==="nft")await pushNftOrder(f,t);
@@ -7318,7 +7367,7 @@ amt.value="";outAmt.value="";floorAmt.value="";
 floorTouched=false;
 fitFont(amt);fitFont(outAmt);
 loadBook();refreshBalance();render();
-}catch(e){err(e);render()}
+}catch(e){err(e);render()}finally{--busy}
 }
 swap.onclick=async()=>{
 if(tab==="book"){if(!account)return connect();return placeOrder()}

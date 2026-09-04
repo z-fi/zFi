@@ -322,6 +322,23 @@ contract BaseTest is Test {
 
     // ══════════ hybrid split (direct + hub) ══════════
 
+    /// @dev A token-to-token pair with no direct pool leaves the split loop with
+    /// `bestTotal == 0`. That branch fell through to `buildBestSwap`, which
+    /// reverts NoRoute — the safety net inheriting the failure it exists to
+    /// absorb, though the WETH hub routes the pair fine.
+    function testHybridSplitFallsBackToTheHubInsteadOfReverting() public {
+        address cbBTC = 0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf;
+        (zQuoterBase.Quote memory best,) = quoter.getQuotes(false, AERO, cbBTC, 1e18);
+        // A live direct route means the case under test is unreachable — say
+        // so instead of quietly passing while testing nothing.
+        if (best.amountOut != 0) vm.skip(true);
+
+        (zQuoterBase.Quote[2] memory legs, bytes memory mc,) =
+            quoter.buildHybridSplit(alice, AERO, cbBTC, 1e18, 200, block.timestamp);
+        assertGt(legs[1].amountOut, 0, "hub leg should carry the trade");
+        assertGt(mc.length, 0, "should emit sendable calldata, not revert");
+    }
+
     function testHybridSelectorMatchesMainnet() public pure {
         assertEq(zQuoterBase.buildHybridSplit.selector, bytes4(0x85f86a90));
     }

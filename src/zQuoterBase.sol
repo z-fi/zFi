@@ -803,6 +803,16 @@ contract zQuoterBase {
             }
 
             if (bestTotal == 0) {
+                // No direct pool at any partial amount. The hub can still route
+                // the whole trade, so try that before `_fallbackBest`, whose
+                // `buildBestSwap` reverts NoRoute — leaving this branch to
+                // inherit the failure it exists to absorb.
+                (Quote memory hb, bytes memory hmc, uint256 hmv) =
+                    _hubOnly(to, ethIn, tokenIn, tokenOut, swapAmount, slippageBps, deadline);
+                if (hb.amountOut != 0) {
+                    legs[1] = hb;
+                    return (legs, hmc, hmv);
+                }
                 (legs[0], multicall, msgValue) = _fallbackBest(to, tokenIn, tokenOut, swapAmount, slippageBps, deadline);
                 legs[1] = Quote(AMM.UNI_V2, 0, 0, 0);
                 return (legs, multicall, msgValue);
@@ -826,6 +836,35 @@ contract zQuoterBase {
             multicall = _mc(c);
             msgValue = ethIn ? swapAmount : 0;
         }
+    }
+
+    /// @dev The whole trade through the hub, for when no direct pool exists at
+    /// any split. Empty quote back if the hub cannot route it either.
+    function _hubOnly(
+        address to,
+        bool ethIn,
+        address tokenIn,
+        address tokenOut,
+        uint256 amount,
+        uint256 bps,
+        uint256 dl
+    ) internal view returns (Quote memory hb, bytes memory mc, uint256 mv) {
+        address legTo = ethIn ? ZROUTER : to;
+        bytes memory hcd;
+        address hmid;
+        (hb, hcd, hmid) = _hubLeg(legTo, tokenIn, tokenOut, amount, bps, dl);
+        if (hb.amountOut == 0) return (hb, mc, mv);
+
+        bytes[] memory h = new bytes[](ethIn ? 4 : 2);
+        uint256 j;
+        h[j++] = hcd;
+        h[j++] = _buildSwap(legTo, false, hmid, tokenOut, 0, limit(false, hb.amountOut, bps), dl, hb);
+        if (ethIn) {
+            h[j++] = _sweepTo(tokenOut, to);
+            h[j++] = _sweepTo(address(0), to);
+        }
+        mc = _mc(h);
+        mv = ethIn ? amount : 0;
     }
 
     /// @dev The best hub route for one amount: the landing quote, hop-1 calldata,

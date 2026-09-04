@@ -163,7 +163,9 @@ test("launching a coin", async (t) => {
     p.type("lnSupply", "1000000000");
     p.type("lnMcap", "3");
     assert.match(p.text("lnNote"), /25% of all/, "the share must be stated outright");
-    assert.equal(p.$("lnNote").style.color, "rgb(204, 51, 51)", "and flagged when extreme");
+    // The warn colour is the theme token, not a literal, so dark mode gets its
+    // own red rather than the light one.
+    assert.equal(p.$("lnNote").style.color, "var(--w)", "and flagged when extreme");
     p.type("lnMcap", "30");
     assert.match(p.text("lnNote"), /3.2% of all/);
     assert.equal(p.$("lnNote").style.color, "", "a sane depth is not an error");
@@ -183,7 +185,7 @@ test("launching a coin", async (t) => {
       `25% of the pool is 20% of the supply, got ${p.text("lnNote")}`);
     // The flag is a claim about the POOL - and holding supply back makes a pool
     // easier to take, never harder - so it must survive the rescaling.
-    assert.equal(p.$("lnNote").style.color, "rgb(204, 51, 51)",
+    assert.equal(p.$("lnNote").style.color, "var(--w)",
       "an allocation must not quietly retire the thin-market warning");
     p.close();
   });

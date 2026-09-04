@@ -3,24 +3,15 @@ pragma solidity ^0.8.36;
 
 // zRouterLiteRobinhood — Uniswap V2/V3/V4 and the Deepstate CLOB on Robinhood Chain (4663).
 //
-// The mainnet zRouter also carries zAMM, Sushi, Curve and a Lido staker. None of
-// that is deployed here, so none of it is in this contract; what remains is the
-// three Uniswap venues, a taker leg into the Deepstate order book, plus the
-// venue-independent extensions — multicall,
-// transient deposit and sweep, wrap and unwrap, permit, the ownable/trust/execute
-// module, and snwap over SafeExecutor.
-//
-// Two consequences worth knowing:
-//  - `deadline == type(uint256).max` means "no deadline". On mainnet it selects
-//    Sushi; there is no Sushi here.
-//  - `deposit`, `sweep` and `ensureAllowance` drop mainnet's ERC6909 argument —
-//    no such token exists on 4663. Every other selector is unchanged, and
-//    zQuoterRobinhood builds calldata for these signatures, so the two ship as a
-//    pair.
+// Two divergences from mainnet zRouter: `deadline == type(uint256).max` means
+// "no deadline" rather than selecting Sushi, and `deposit`/`sweep`/
+// `ensureAllowance` drop the ERC6909 argument. zQuoterRobinhood builds calldata
+// for these signatures, so the two ship as a pair.
 contract zRouterLiteRobinhood {
     error BadSwap();
     error Expired();
     error Slippage();
+    error PermitFailed();
     error Unauthorized();
     error InvalidMsgVal();
     error ETHTransferFailed();
@@ -35,12 +26,9 @@ contract zRouterLiteRobinhood {
         _;
     }
 
-    /// @dev Ownership is ordinary transferrable ownership — `_owner` is storage
-    /// and `transferOwnership` moves it. Only the SEED is fixed: through a CREATE3
-    /// factory `msg.sender` is the factory's proxy and `tx.origin` is whichever key
-    /// sent the transaction, so neither is the right initial owner. Seeding from a
-    /// constant means the deploy key confers no authority and can be rotated
-    /// freely afterwards.
+    /// @dev Only the seed is constant; `_owner` is storage and transferrable.
+    /// Through CREATE3 neither `msg.sender` (the factory proxy) nor `tx.origin`
+    /// (the deploy key) is the right initial owner.
     constructor() payable {
         safeExecutor = new SafeExecutor();
         emit OwnershipTransferred(address(0), _owner = INITIAL_OWNER);
@@ -57,6 +45,9 @@ contract zRouterLiteRobinhood {
         uint256 amountLimit,
         uint256 deadline
     ) public payable checkDeadline(deadline) returns (uint256 amountIn, uint256 amountOut) {
+        // No AMM leg runs mid-fill: the ether-funding and refund paths below
+        // spend raw router balance, which belongs to the filling caller then.
+        _requireBookIdle();
         bool ethIn = tokenIn == address(0);
         bool ethOut = tokenOut == address(0);
 
@@ -89,14 +80,15 @@ contract zRouterLiteRobinhood {
                     safeTransfer(tokenIn, pool, amountIn);
                 } else if (ethIn) {
                     wrapETH(pool, amountIn);
-                    if (to != address(this)) {
-                        if (msg.value > amountIn) {
-                            _safeTransferETH(msg.sender, msg.value - amountIn);
-                        }
-                    }
                 } else {
                     safeTransferFrom(tokenIn, msg.sender, pool, amountIn);
                 }
+            }
+
+            // Refund whichever way the leg was funded, as v3 and v4 do: a
+            // credit can pay for it, leaving msg.value entirely unspent.
+            if (ethIn && to != address(this) && address(this).balance != 0) {
+                _safeTransferETH(msg.sender, address(this).balance);
             }
         }
 
@@ -126,6 +118,7 @@ contract zRouterLiteRobinhood {
         uint256 amountLimit,
         uint256 deadline
     ) public payable checkDeadline(deadline) returns (uint256 amountIn, uint256 amountOut) {
+        _requireBookIdle();
         bool ethIn = tokenIn == address(0);
         bool ethOut = tokenOut == address(0);
 
@@ -154,11 +147,8 @@ contract zRouterLiteRobinhood {
                 else require(uint256(-(zeroForOne ? a1 : a0)) >= amountLimit, Slippage());
             }
 
-            // An exact-out swap can come up short: the pool stops at the price
-            // limit or runs out of liquidity and fills only part of the request.
-            // `amountLimit` bounds the INPUT on this branch, so without this the
-            // caller pays up to their maximum and silently receives less than the
-            // amount they asked for.
+            // `amountLimit` bounds the INPUT here, so a short fill would let
+            // the caller pay their maximum and receive less than they asked.
             if (exactOut) {
                 require(uint256(-(zeroForOne ? a1 : a0)) >= swapAmount, Slippage());
             }
@@ -179,11 +169,12 @@ contract zRouterLiteRobinhood {
     }
 
     /// @dev `uniswapV3SwapCallback`. The lock refuses it outright while `execute`
-    /// has an arbitrary call outstanding; otherwise the caller must be the pool
-    /// re-derived from the callback data.
+    /// has an arbitrary call outstanding or the book holds control (a direct
+    /// pool.swap naming this router could otherwise spend its mid-fill balance);
+    /// otherwise the caller must be the pool re-derived from the callback data.
     fallback() external payable {
         assembly ("memory-safe") {
-            if gt(tload(0x00), 0) { revert(0, 0) }
+            if gt(or(tload(0x00), tload(0x01)), 0) { revert(0, 0) }
         }
         unchecked {
             int256 amount0Delta;
@@ -239,6 +230,7 @@ contract zRouterLiteRobinhood {
         uint256 amountLimit,
         uint256 deadline
     ) public payable checkDeadline(deadline) returns (uint256 amountIn, uint256 amountOut) {
+        _requireBookIdle();
         if (!exactOut && swapAmount == 0) {
             swapAmount = tokenIn == address(0) ? msg.value : _selfAmount(tokenIn);
             if (swapAmount == 0) revert BadSwap();
@@ -258,7 +250,7 @@ contract zRouterLiteRobinhood {
         require(msg.sender == V4_POOL_MANAGER, Unauthorized());
 
         assembly ("memory-safe") {
-            if gt(tload(0x00), 0) { revert(0, 0) }
+            if gt(or(tload(0x00), tload(0x01)), 0) { revert(0, 0) }
         }
 
         (
@@ -336,22 +328,14 @@ contract zRouterLiteRobinhood {
     // ** DEEPSTATE (onchain CLOB)
 
     /// @notice Take against the Deepstate order book as a router-owned taker.
-    /// @dev Deepstate is a limit book, not a curve, so this does not pretend to be
-    /// a `swap*`: the caller names the book, the packed `price || quantity` order
-    /// and a maximum input, and gets back what actually filled. Nothing rests —
-    /// a resting order would be owned by this contract and nobody could cancel it.
+    /// @dev A limit book, not a curve: the caller names the book, the packed
+    /// `price || quantity` order and a maximum input, and gets back what filled.
+    /// Nothing rests — a resting order would be owned by this contract and
+    /// nobody could cancel it. Both bounds are measured balance deltas, since
+    /// `fill` returns only a resting-order handle.
     ///
-    /// Both bounds are enforced here, on measured balance deltas, rather than
-    /// trusted from Deepstate's return value: `fill` returns only a resting-order
-    /// handle, and the book's own rounding is not something to re-derive.
-    ///
-    /// `token0`/`token1` must be sorted; Deepstate rejects them otherwise. A bid
-    /// buys token0 with token1, an ask sells token0 for token1.
-    ///
-    /// No callback lock is taken. A Deepstate pool hook could call back in, but
-    /// the V3 and V4 callbacks authenticate by `msg.sender` against the pool and
-    /// the singleton, which a hook cannot impersonate — and taking the lock here
-    /// would clear it early if `execute` were ever the outer frame.
+    /// `token0`/`token1` must be sorted. A bid buys token0 with token1, an ask
+    /// sells token0 for token1.
     function swapDeep(
         address to,
         address token0,
@@ -366,14 +350,41 @@ contract zRouterLiteRobinhood {
         (address tokenIn, address tokenOut) = isBid ? (token1, token0) : (token0, token1);
         bool ethIn = tokenIn == address(0);
 
-        if (!ethIn) {
-            if (!_useTransientBalance(address(this), tokenIn, amountInMax)) {
-                safeTransferFrom(tokenIn, msg.sender, address(this), amountInMax);
+        // Measured, not assumed: a fee-on-transfer `tokenIn` delivers less than
+        // `amountInMax`, and refunding the difference would pay it out of
+        // another leg's balance.
+        uint256 received;
+
+        // A call arriving while an outer fill holds the lock pays only for
+        // itself: the credits sitting here mid-settlement belong to the outer
+        // caller, not to whoever the book's token callbacks hand control.
+        bool nested;
+        assembly ("memory-safe") {
+            nested := gt(tload(0x01), 0)
+        }
+
+        if (ethIn) {
+            // Ether must be paid for too, or the fill spends whatever balance
+            // is lying here and the attached value is left for `sweep`.
+            if (nested || !_useTransientBalance(address(this), address(0), amountInMax)) {
+                _claimMsgValue(amountInMax);
             }
-            // Deepstate settles by pulling from the taker, so it needs an
-            // allowance. Lazy rather than owner-primed, so a book for a token
-            // nobody has approved yet still works.
+            received = amountInMax;
+        } else {
+            if (!nested && _useTransientBalance(address(this), tokenIn, amountInMax)) {
+                received = amountInMax; // already held; the credit paid for it
+            } else {
+                uint256 held = balanceOf(tokenIn);
+                safeTransferFrom(tokenIn, msg.sender, address(this), amountInMax);
+                unchecked {
+                    received = balanceOf(tokenIn) - held;
+                }
+            }
+            // Deepstate pulls from the taker, so it needs an allowance. Lazy,
+            // so a book for an unapproved token still works. Reset first, or a
+            // token refusing non-zero-to-non-zero approves bricks this book.
             if (allowance(tokenIn, address(this), DEEPSTATE) < amountInMax) {
+                safeApprove(tokenIn, DEEPSTATE, 0);
                 safeApprove(tokenIn, DEEPSTATE, type(uint256).max);
             }
         }
@@ -381,12 +392,14 @@ contract zRouterLiteRobinhood {
         uint256 inBefore = ethIn ? address(this).balance : balanceOf(tokenIn);
         uint256 outBefore = tokenOut == address(0) ? address(this).balance : balanceOf(tokenOut);
 
-        // The caller is charged a measured balance delta, so nothing may move
-        // this contract's balances while the book has control. A Deepstate pool
-        // hook could otherwise call `sweep` mid-fill and widen the delta, billing
-        // the caller for tokens it took rather than tokens the book took.
+        // Nothing may move this contract's balances while the book has control:
+        // a transfer callback during settlement could drain the router and widen
+        // the delta the caller is billed for. Depth-counted, so a nested
+        // `swapDeep` cannot clear it on its way out.
+        uint256 lock;
         assembly ("memory-safe") {
-            tstore(0x01, 1)
+            lock := tload(0x01)
+            tstore(0x01, add(lock, 1))
         }
 
         IDeepstate(DEEPSTATE)
@@ -395,7 +408,7 @@ contract zRouterLiteRobinhood {
             );
 
         assembly ("memory-safe") {
-            tstore(0x01, 0)
+            tstore(0x01, lock)
         }
 
         unchecked {
@@ -403,13 +416,17 @@ contract zRouterLiteRobinhood {
             amountOut = (tokenOut == address(0) ? address(this).balance : balanceOf(tokenOut)) - outBefore;
         }
 
-        require(amountIn <= amountInMax, Slippage());
+        // Against `received`, not `amountInMax`: a fee-on-transfer token
+        // delivers less than was pulled, the book can still draw on other
+        // router-held balance up to its allowance, and the unchecked refund
+        // below must never wrap.
+        require(amountIn <= received, Slippage());
         require(amountOut >= amountOutMin, Slippage());
 
-        // Hand back whatever the book did not take. A chained leg keeps it as a
-        // credit rather than a transfer, so the next leg can spend it.
+        // Hand back what the book did not take; a chained leg keeps it as a
+        // credit so the next leg can spend it.
         unchecked {
-            uint256 refund = amountInMax - amountIn;
+            uint256 refund = received - amountIn;
             if (refund != 0) {
                 if (to == address(this)) depositFor(tokenIn, refund, address(this));
                 else if (ethIn) _safeTransferETH(msg.sender, refund);
@@ -428,6 +445,15 @@ contract zRouterLiteRobinhood {
     // ** MULTISWAP HELPER
 
     function multicall(bytes[] calldata data) public payable returns (bytes[] memory results) {
+        // Open a fresh msg.value tally for this batch. Transient storage lives
+        // for the whole transaction, so without this a second router call in
+        // the same transaction (a batcher, a 4337 wallet) would be charged for
+        // ether the first call already claimed. Depth-counted for nesting.
+        assembly ("memory-safe") {
+            let d := tload(0x03)
+            if iszero(d) { tstore(0x02, 0) }
+            tstore(0x03, add(d, 1))
+        }
         results = new bytes[](data.length);
         for (uint256 i; i != data.length; ++i) {
             (bool ok, bytes memory result) = address(this).delegatecall(data[i]);
@@ -438,24 +464,52 @@ contract zRouterLiteRobinhood {
             }
             results[i] = result;
         }
+        assembly ("memory-safe") {
+            tstore(0x03, sub(tload(0x03), 1))
+        }
     }
 
     // ** TRANSIENT STORAGE
 
-    /// @dev Three total cases, one per funding source. Ether must actually be
-    /// attached to be credited — the mainnet router would credit a bare
-    /// `deposit(address(0), n)` with ether it never received.
+    /// @dev One case per funding source. Ether must actually be attached to be
+    /// credited; mainnet would credit a bare `deposit(address(0), n)`.
     function deposit(address token, uint256 amount) public payable {
         if (token == address(0)) {
-            require(msg.value == amount, InvalidMsgVal());
+            _claimMsgValue(amount);
         } else if (token == WETH && msg.value != 0) {
-            require(msg.value == amount, InvalidMsgVal());
+            _claimMsgValue(amount);
             _safeTransferETH(WETH, amount); // wrap
         } else {
             require(msg.value == 0, InvalidMsgVal());
             safeTransferFrom(token, msg.sender, address(this), amount);
         }
         depositFor(token, amount, address(this));
+    }
+
+    /// @dev Shut while Deepstate holds control. Every path that moves the whole
+    /// router balance to a caller-chosen address must check this.
+    function _requireBookIdle() internal view {
+        assembly ("memory-safe") {
+            if gt(tload(0x01), 0) { revert(0, 0) }
+        }
+    }
+
+    /// @dev `multicall` delegatecalls, so every leg sees the same `msg.value`.
+    /// Tally what has been claimed against it, or N legs each mint a credit for
+    /// ether that arrived once. The tally is read only inside a multicall: a
+    /// top-level entry point claims at most once against its own `msg.value`,
+    /// and reading a stale tally from an earlier call in the same transaction
+    /// would spuriously starve it.
+    function _claimMsgValue(uint256 amount) internal {
+        uint256 used;
+        assembly ("memory-safe") {
+            if gt(tload(0x03), 0) { used := tload(0x02) }
+        }
+        used += amount;
+        require(used <= msg.value, InvalidMsgVal());
+        assembly ("memory-safe") {
+            tstore(0x02, used)
+        }
     }
 
     /// @dev Keyed on (owner, token) — two words, so this stays in scratch space.
@@ -472,12 +526,9 @@ contract zRouterLiteRobinhood {
         }
     }
 
-    /// @dev What a previous leg actually credited, falling back to the raw balance
-    /// when there is no credit. `swapAmount == 0` means "spend what the last leg
-    /// produced"; reading the balance for that is wrong, because anyone can send
-    /// the router a single wei and the leg then tries to spend one wei more than
-    /// it was credited — which either pulls a second full payment from the caller
-    /// or reverts the whole chain.
+    /// @dev What the previous leg credited, falling back to the raw balance.
+    /// `swapAmount == 0` means "spend what the last leg produced" — reading the
+    /// balance instead lets anyone send one wei and break the chain.
     function _selfAmount(address token) internal view returns (uint256 amount) {
         amount = _creditOf(address(this), token);
         if (amount == 0) amount = balanceOf(token);
@@ -509,9 +560,7 @@ contract zRouterLiteRobinhood {
     receive() external payable {}
 
     function sweep(address token, uint256 amount, address to) public payable {
-        assembly ("memory-safe") {
-            if gt(tload(0x01), 0) { revert(0, 0) }
-        }
+        _requireBookIdle();
         if (token == address(0)) {
             _safeTransferETH(to, amount == 0 ? address(this).balance : amount);
         } else {
@@ -522,15 +571,16 @@ contract zRouterLiteRobinhood {
     // ** WETH HELPERS
 
     function wrap(uint256 amount) public payable {
+        _requireBookIdle();
         amount = amount == 0 ? address(this).balance : amount;
         _safeTransferETH(WETH, amount);
         depositFor(WETH, amount, address(this));
     }
 
     /// @dev Consumes the WETH credit and re-credits the ether, so a chained
-    /// WETH -> ETH leg hands the next leg something to spend. Without this the
-    /// WETH credit outlives the WETH and the ether arrives uncredited.
+    /// WETH -> ETH leg hands the next leg something to spend.
     function unwrap(uint256 amount) public payable {
+        _requireBookIdle();
         if (amount == 0) amount = _selfAmount(WETH);
         _useTransientBalance(address(this), WETH, amount);
         unwrapETH(amount);
@@ -542,8 +592,15 @@ contract zRouterLiteRobinhood {
     // Both are meant to be a `multicall` leg: sign, then permit and swap in one
     // transaction. `multicall` delegatecalls, so `msg.sender` here is the signer.
 
+    /// @dev Tolerates a burnt nonce. The signature is public in the mempool, so
+    /// anyone can submit it standalone; the permit then reverts and would take
+    /// the whole multicall with it, even though the allowance it wanted is
+    /// already in place. Only a genuinely insufficient allowance fails here.
     function permit(address token, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s) public payable {
-        IERC2612(token).permit(msg.sender, address(this), value, deadline, v, r, s);
+        try IERC2612(token).permit(msg.sender, address(this), value, deadline, v, r, s) {}
+        catch {
+            require(allowance(token, msg.sender, address(this)) >= value, PermitFailed());
+        }
     }
 
     /// @dev SignatureTransfer, not AllowanceTransfer: nothing is left approved.
@@ -668,9 +725,8 @@ contract zRouterLiteRobinhood {
         emit OwnershipTransferred(msg.sender, _owner = newOwner);
     }
 
-    /// @dev Calls out AS the router, so it is both trust-gated and wrapped in the
-    /// callback lock — otherwise the target could drive a swap naming someone
-    /// else as `payer`.
+    /// @dev Calls out AS the router, so it is trust-gated and lock-wrapped;
+    /// otherwise the target could drive a swap naming someone else as `payer`.
     function execute(address target, uint256 value, bytes calldata data) public payable returns (bytes memory result) {
         require(_isTrustedForCall[target], Unauthorized());
         assembly ("memory-safe") {
@@ -691,10 +747,8 @@ contract zRouterLiteRobinhood {
 
     // ** SNWAP - GENERIC EXECUTOR
 
-    /// @dev Permissionless, unlike `execute`: the call is made by `safeExecutor`,
-    /// which holds no approvals and no balances, so an arbitrary `executor` gains
-    /// nothing. Payment is a before/after balance delta on `recipient` — only
-    /// what lands is paid for.
+    /// @dev Permissionless, unlike `execute`: `safeExecutor` holds no approvals
+    /// and no balances. Payment is a balance delta on `recipient`.
     function snwap(
         address tokenIn,
         uint256 amountIn,
@@ -710,6 +764,8 @@ contract zRouterLiteRobinhood {
             if (amountIn != 0) {
                 safeTransferFrom(tokenIn, msg.sender, executor, amountIn);
             } else {
+                // Same primitive as `sweep`, so it answers to the same lock.
+                _requireBookIdle();
                 unchecked {
                     uint256 bal = balanceOf(tokenIn);
                     if (bal > 1) safeTransfer(tokenIn, executor, bal - 1);
@@ -744,6 +800,8 @@ contract zRouterLiteRobinhood {
             if (amountIn != 0) {
                 safeTransferFrom(tokenIn, msg.sender, executor, amountIn);
             } else {
+                // Same primitive as `sweep`, so it answers to the same lock.
+                _requireBookIdle();
                 unchecked {
                     uint256 bal = balanceOf(tokenIn);
                     if (bal > 1) safeTransfer(tokenIn, executor, bal - 1);
@@ -770,10 +828,10 @@ contract zRouterLiteRobinhood {
 
 // ** ROBINHOOD CHAIN (4663)
 //
-// Read off the chain, not copied from a docs page: WETH agrees between
-// SwapRouter02.WETH9() and UniswapV2Router02.WETH(), both init-code hashes were
-// confirmed by rebuilding a live pool address from its factory, and the
-// PoolManager is the one StateView.poolManager() returns.
+// Read off the chain, not a docs page: WETH agrees between SwapRouter02.WETH9()
+// and UniswapV2Router02.WETH(), both init-code hashes were confirmed by
+// rebuilding a live pool from its factory, and the PoolManager is the one
+// StateView.poolManager() returns.
 
 address constant WETH = 0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73;
 
@@ -973,7 +1031,12 @@ function unwrapETH(uint256 amount) {
     assembly ("memory-safe") {
         mstore(0x00, 0x2e1a7d4d)
         mstore(0x20, amount)
-        pop(call(gas(), WETH, 0, 0x1c, 0x24, codesize(), 0x00))
+        // Not `pop`: `unwrap` credits what this returns, so a swallowed
+        // failure would mint a credit against ether never received.
+        if iszero(call(gas(), WETH, 0, 0x1c, 0x24, codesize(), 0x00)) {
+            mstore(0x00, 0x90b8ec18) // `TransferFailed()`
+            revert(0x1c, 0x04)
+        }
     }
 }
 

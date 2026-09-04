@@ -7,17 +7,12 @@ import {TickMath, SwapMath, LiquidityMath, IStateViewV4, _sortTokens, _v4PoolId}
 //
 // Not a port of src/zQuoter.sol: that one is a shell over a base quoter with no
 // code on 4663, and a staticcall to a codeless address returns empty rather than
-// reverting, so a port would quote zeros instead of failing. This does its own
-// math and calls nothing it does not name.
+// reverting, so a port would quote zeros instead of failing.
 //
-// The init-code hashes below are the canonical Uniswap ones, which is the fact
-// the whole design rests on: quoter and router derive pool addresses the same
-// way, so a quote and the calldata built from it cannot name different pools.
-//
-// `AMM`, `Quote`, `getQuotes` and `buildBestSwap` keep mainnet zQuoter's shapes,
-// so front-end code moves between chains unedited. The calldata it BUILDS
-// targets zRouterLiteRobinhood, whose `deposit` and `sweep` drop mainnet's ERC6909 id —
-// the two contracts ship as a pair.
+// Quoter and router derive pool addresses the same way, so a quote and the
+// calldata built from it cannot name different pools. `AMM`, `Quote`,
+// `getQuotes` and `buildBestSwap` keep mainnet's shapes; the calldata it builds
+// targets zRouterLiteRobinhood, so the two ship as a pair.
 address constant WETH = 0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73;
 
 address constant V2_FACTORY = 0x8bcEaA40B9AcdfAedF85AdF4FF01F5Ad6517937f;
@@ -32,9 +27,8 @@ address constant V4_STATE_VIEW = 0xF3334192D15450CdD385c8B70e03f9A6bD9E673b;
 uint160 constant MIN_SQRT_RATIO_PLUS_ONE = 4295128740;
 uint160 constant MAX_SQRT_RATIO_MINUS_ONE = 1461446703485210103287273052203988822378723970341;
 
-/// @dev The canonical zRouter address, the same on every chain this family
-/// targets. `buildBestSwap` compares `to` against it to decide whether output may
-/// stay in the router for a following leg, so it has to be the address the built
+/// @dev `buildBestSwap` compares `to` against this to decide whether output may
+/// stay in the router for a following leg, so it must be the address the built
 /// calldata is actually sent to.
 address constant ZROUTER = 0x000000000000FB114709235f1ccBFfb925F600e4;
 
@@ -46,8 +40,7 @@ contract zQuoterRobinhood {
     error SlippageBpsTooHigh();
 
     /// @dev Ordinals match src/zQuoter.sol so a `source` means the same thing on
-    /// both chains. The four venues that do not exist here are never produced;
-    /// they hold UNI_V3 at 3 and UNI_V4 at 4.
+    /// both chains. The four venues absent here are never produced.
     enum AMM {
         UNI_V2,
         SUSHI,
@@ -229,9 +222,8 @@ contract zQuoterRobinhood {
         }
     }
 
-    /// @dev One hub, not mainnet's six. Every pool on this chain is paired against
-    /// WETH; a longer list would be five guaranteed misses per quote, each costing
-    /// a full twenty-venue sweep.
+    /// @dev One hub, not mainnet's six: every pool here is paired against WETH,
+    /// so a longer list is five guaranteed misses per quote.
     function _hubs() internal pure returns (address[1] memory) {
         return [WETH];
     }
@@ -413,9 +405,8 @@ contract zQuoterRobinhood {
 
     // ====================== SPLIT ROUTING ======================
 
-    /// @dev Re-price one specific venue at a partial amount. Mainnet packs this
-    /// through an assembly dispatcher because it is a shell over another quoter;
-    /// this one owns its math, so it just calls itself.
+    /// @dev Re-price one venue at a partial amount. Mainnet needs an assembly
+    /// dispatcher for this; owning the math, this just calls itself.
     function _requoteForSource(address tokenIn, address tokenOut, uint256 amount, Quote memory src)
         internal
         view
@@ -507,9 +498,8 @@ contract zQuoterRobinhood {
             uint256 fa1 = (swapAmount * pcts[bestS]) / 100;
             uint256 fa2 = swapAmount - fa1;
 
-            // A one-sided winner is not a split. Fall back so the returned metadata
-            // describes the calldata actually built, which may pick a venue that was
-            // never in the candidate pair.
+            // A one-sided winner is not a split. Fall back so the metadata
+            // describes the calldata actually built.
             if (fa1 == 0 || fa2 == 0) {
                 (legs[fa1 == 0 ? 1 : 0], multicall, msgValue) =
                     _fallbackBest(to, tokenIn, tokenOut, swapAmount, slippageBps, deadline);
@@ -547,11 +537,9 @@ contract zQuoterRobinhood {
 
     /// @notice Split one exact-in trade between the best direct venue and the best
     /// hub route. Same return shape as `buildSplitSwap`.
-    /// @dev On this chain the only hub is WETH, so this can only fire for a
-    /// token-to-token trade: an ether-in request normalizes to WETH, the hub then
-    /// equals tokenIn and is skipped, and the call falls back to the direct route.
-    /// It exists so both L2 quoters answer the same ABI, not because it will run
-    /// often here.
+    /// @dev The only hub is WETH, so this fires only for token-to-token: an
+    /// ether-in request normalizes to WETH, the hub equals tokenIn and is
+    /// skipped. It exists so both L2 quoters answer the same ABI.
     function buildHybridSplit(
         address to,
         address tokenIn,
@@ -596,6 +584,17 @@ contract zQuoterRobinhood {
             }
 
             if (bestTotal == 0) {
+                // No direct pool at any partial amount, which on this chain is
+                // the common case. The hub can still route the whole trade, so
+                // try that before `_fallbackBest`, whose `buildBestSwap` reverts
+                // NoRoute — leaving this branch to inherit the failure it exists
+                // to absorb.
+                (Quote memory hb, bytes memory hmc, uint256 hmv) =
+                    _hubOnly(to, ethIn, tokenIn, tokenOut, swapAmount, slippageBps, deadline);
+                if (hb.amountOut != 0) {
+                    legs[1] = hb;
+                    return (legs, hmc, hmv);
+                }
                 (legs[0], multicall, msgValue) = _fallbackBest(to, tokenIn, tokenOut, swapAmount, slippageBps, deadline);
                 legs[1] = Quote(AMM.UNI_V2, 0, 0, 0);
                 return (legs, multicall, msgValue);
@@ -619,6 +618,35 @@ contract zQuoterRobinhood {
             multicall = _mc(c);
             msgValue = ethIn ? swapAmount : 0;
         }
+    }
+
+    /// @dev The whole trade through the hub, for when no direct pool exists at
+    /// any split. Empty quote back if the hub cannot route it either.
+    function _hubOnly(
+        address to,
+        bool ethIn,
+        address tokenIn,
+        address tokenOut,
+        uint256 amount,
+        uint256 bps,
+        uint256 dl
+    ) internal view returns (Quote memory hb, bytes memory mc, uint256 mv) {
+        address legTo = ethIn ? ZROUTER : to;
+        bytes memory hcd;
+        address hmid;
+        (hb, hcd, hmid) = _hubLeg(legTo, tokenIn, tokenOut, amount, bps, dl);
+        if (hb.amountOut == 0) return (hb, mc, mv);
+
+        bytes[] memory h = new bytes[](ethIn ? 4 : 2);
+        uint256 j;
+        h[j++] = hcd;
+        h[j++] = _buildSwap(legTo, false, hmid, tokenOut, 0, limit(false, hb.amountOut, bps), dl, hb);
+        if (ethIn) {
+            h[j++] = _sweepTo(tokenOut, to);
+            h[j++] = _sweepTo(address(0), to);
+        }
+        mc = _mc(h);
+        mv = ethIn ? amount : 0;
     }
 
     /// @dev The best hub route for one amount: the landing quote, hop-1 calldata,
@@ -728,8 +756,12 @@ contract zQuoterRobinhood {
         );
         if (pool.code.length == 0) return (0, 0);
 
+        // Spacing comes from the pool: v3 pools are addressed by fee alone, so
+        // a table the factory outgrows would still reach a real pool and walk
+        // the wrong bitmap — uncorrectable, since this contract is immutable.
+        // v4 must keep deriving it; there spacing is part of the pool id.
         return _quoteCL(
-            Pool(false, pool, bytes32(0), _spacingFromBps(uint16(fee / 100)), fee), exactOut, zeroForOne, swapAmount
+            Pool(false, pool, bytes32(0), IV3Pool(pool).tickSpacing(), fee), exactOut, zeroForOne, swapAmount
         );
     }
 
@@ -846,9 +878,7 @@ contract zQuoterRobinhood {
                 liquidity = IStateViewV4(V4_STATE_VIEW).getLiquidity(p.id);
 
                 // protocolFee is a PACKED uint24 — low 12 bits zeroForOne, high
-                // 12 oneForZero — not a rate. Composing it the way v4-core does
-                // stays correct if 4663 ever sets a protocolFeeController; see
-                // src/zQuoterV4.sol for what the naive sum did to mainnet quotes.
+                // 12 oneForZero — not a rate. Composed as v4-core does.
                 uint24 pf = zeroForOne ? (protocolFee & 0xfff) : (protocolFee >> 12);
                 swapFee = pf == 0 ? lpFee : uint24(pf + lpFee - (uint256(pf) * uint256(lpFee)) / 1_000_000);
             } else {
@@ -890,8 +920,7 @@ contract zQuoterRobinhood {
             if (zeroForOne) {
                 (int16 wordPos, uint8 bitPos) = _position(compressed);
                 // Two terms, as Uniswap writes it: `(1 << (bitPos + 1)) - 1`
-                // wraps to 0 at bitPos 255 because bitPos is a uint8 and this
-                // block is unchecked, making the whole word read as empty.
+                // wraps to 0 at bitPos 255, reading the whole word as empty.
                 uint256 mask = ((uint256(1) << bitPos) - 1) + (uint256(1) << bitPos);
                 uint256 masked = _bitmapWord(p, wordPos) & mask;
                 initialized = masked != 0;
@@ -989,6 +1018,7 @@ interface IV2Pool {
 
 interface IV3Pool {
     function slot0() external view returns (uint160, int24, uint16, uint16, uint16, uint8, bool);
+    function tickSpacing() external view returns (int24);
     function liquidity() external view returns (uint128);
     function tickBitmap(int16) external view returns (uint256);
     function ticks(int24)

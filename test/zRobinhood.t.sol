@@ -35,6 +35,7 @@ address constant TKN = 0x01637b14B7378B99dE75A64d50656d98488D9a4d;
 // Deepstate: the onchain CLOB. token0 < token1, so a bid buys DEEP with USDG.
 address constant DEEPSTATE = 0x6cf19308C22FC82ea620Fa0B3E94948d20f27B96;
 address constant DEEP = 0x1DA24f6Bb623b9d1aFEae3F3146659A2662D6d27;
+address constant NVDA = 0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC;
 address constant USDG = 0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168;
 
 interface IDeepstateView {
@@ -96,6 +97,121 @@ interface IPermit2Domain {
 
 /// @dev A real EIP-2612 token rather than a stub: the router only forwards the
 /// signature, so a stub that skipped ecrecover would test nothing.
+/// @dev Stands in for Deepstate at its own address so the mid-fill window is
+/// reachable from a test. A real hostile book is not needed — any token with a
+/// transfer callback reaches the same window during settlement.
+contract HostileBook {
+    address immutable router;
+    address immutable token;
+    uint8 public mode; // 1 = sweep, 2 = snwap, 3 = nested swapDeep then sweep,
+    // 4 = pull the full allowance-side amount, 5 = wrap, 6 = AMM swap
+    bool entered;
+
+    constructor(address r, address t) {
+        router = r;
+        token = t;
+    }
+
+    function setMode(uint8 m) external {
+        mode = m;
+        entered = false;
+    }
+
+    struct FillParams {
+        address token0;
+        address token1;
+        uint256 epoch;
+        bytes32 order;
+        bool isBid;
+        bool noRest;
+        bool fillOrKill;
+    }
+
+    function fill(FillParams calldata p) external payable returns (bytes32) {
+        if (entered) return bytes32(0); // the nested call fills nothing
+        entered = true;
+        if (mode == 1) {
+            IZRouterDrain(router).sweep(token, 0, address(this));
+        } else if (mode == 2) {
+            IZRouterDrain(router).snwap(token, 0, address(this), token, 0, address(this), "");
+        } else if (mode == 3) {
+            // Used to clear the lock on its way out, reopening the drains.
+            IZRouterDrain(router).swapDeep(
+                address(this), p.token0, p.token1, p.epoch, p.order, p.isBid, 0, 0, type(uint256).max
+            );
+            IZRouterDrain(router).sweep(token, 0, address(this));
+        } else if (mode == 4) {
+            // Draws the full allowance-side amount even though a transfer fee
+            // shaved what actually arrived — the refund math must not wrap.
+            FeeToken(token).transferFrom(router, address(this), 1 ether);
+        } else if (mode == 5) {
+            IZRouterDrain(router).wrap(0);
+        } else if (mode == 6) {
+            IZRouterDrain(router).swapV2(address(this), false, address(0), token, 1, 0, type(uint256).max);
+        }
+        return bytes32(0);
+    }
+}
+
+interface IZRouterDrain {
+    function sweep(address, uint256, address) external payable;
+    function snwap(address, uint256, address, address, uint256, address, bytes calldata)
+        external
+        payable
+        returns (uint256);
+    function swapDeep(address, address, address, uint256, bytes32, bool, uint256, uint256, uint256)
+        external
+        payable
+        returns (uint256, uint256);
+    function wrap(uint256) external payable;
+    function swapV2(address, bool, address, address, uint256, uint256, uint256)
+        external
+        payable
+        returns (uint256, uint256);
+    function deposit(address, uint256) external payable;
+}
+
+/// @dev A batcher: two value-bearing router calls in one transaction, each with
+/// its own attached ether. The claim tally must not charge one for the other.
+contract TwoSeparateCalls {
+    function go(address r) external payable {
+        IZRouterDrain(r).deposit{value: 1 ether}(address(0), 1 ether);
+        IZRouterDrain(r).deposit{value: 1 ether}(address(0), 1 ether);
+    }
+
+    receive() external payable {}
+}
+
+/// @dev Takes 10% on every move, so what the router receives is never what it
+/// asked for. Deepstate books list arbitrary tokens; this is not hypothetical.
+contract FeeToken {
+    mapping(address => uint256) public balanceOf;
+    mapping(address => mapping(address => uint256)) public allowance;
+
+    function mint(address to, uint256 a) public { balanceOf[to] += a; }
+
+    function approve(address sp, uint256 a) public returns (bool) {
+        allowance[msg.sender][sp] = a;
+        return true;
+    }
+
+    function _move(address f, address t, uint256 a) internal {
+        balanceOf[f] -= a;
+        balanceOf[t] += a - (a / 10); // the rest is burnt
+    }
+
+    function transfer(address t, uint256 a) public returns (bool) {
+        _move(msg.sender, t, a);
+        return true;
+    }
+
+    function transferFrom(address f, address t, uint256 a) public returns (bool) {
+        if (allowance[f][msg.sender] != type(uint256).max) allowance[f][msg.sender] -= a;
+        _move(f, t, a);
+        return true;
+    }
+}
+
 contract PermitToken {
     string public constant name = "Permit Token";
     bytes32 public immutable DOMAIN_SEPARATOR;
@@ -1079,6 +1195,322 @@ contract RobinhoodTest is Test {
         assertGt(amountOut, 0, "nothing filled");
         assertEq(IERC20(USDG).balanceOf(alice), amountOut);
         assertEq(IERC20(DEEP).balanceOf(alice), sell - amountIn);
+    }
+
+    /// @dev NVDA/USDG is Deepstate's flagship market. Proves the CLOB leg works on
+    /// the pair that matters, not just DEEP/USDG. The book is one-sided at times, so
+    /// each side skips rather than fails when its root is empty.
+    function testSwapDeepNvdaBothSides() public {
+        uint256 epoch = IDeepstateView(DEEPSTATE).poolEpoch(IDeepstateView(DEEPSTATE).poolId(USDG, NVDA));
+        (bytes32 askRoot, bytes32 bidRoot) = IDeepstateView(DEEPSTATE).roots(USDG, NVDA, epoch);
+
+        // Sell NVDA into the bids: token0 = USDG, token1 = NVDA, so an ask sells token1.
+        if (bidRoot != bytes32(0)) {
+            // `quantity` in a Deepstate order is denominated in TOKEN0, which is
+            // USDG (6 decimals) here — not the token being sold. A bid buys token0
+            // and pays token1, so selling NVDA for USDG is a bid for USDG.
+            uint256 buyUsdg = 10e6; // 10 USDG of token0
+            uint256 maxNvda = 1e17; // paying at most 0.1 NVDA
+            vm.prank(DEEPSTATE);
+            IERC20(NVDA).transfer(alice, maxNvda);
+            vm.startPrank(alice);
+            IERC20(NVDA).approve(address(router), maxNvda);
+            (uint256 aIn, uint256 aOut) = router.swapDeep(
+                alice, USDG, NVDA, epoch, _order(type(int32).max, uint160(buyUsdg)), true, maxNvda, 1, block.timestamp
+            );
+            vm.stopPrank();
+            assertGt(aOut, 0, "NVDA->USDG filled nothing");
+            assertEq(IERC20(USDG).balanceOf(alice), aOut);
+            assertLe(aIn, maxNvda);
+            emit log_named_uint("paid NVDA (wei)", aIn);
+            emit log_named_uint("got USDG", aOut);
+        }
+
+        // Buy NVDA with USDG if any asks rest.
+        if (askRoot != bytes32(0)) {
+            // An ask sells token0 (USDG) for token1 (NVDA); quantity is USDG again.
+            // The ask side of this book is nearly empty, so keep it small.
+            uint256 sellUsdg = 1e6; // 1 USDG
+            uint256 maxIn = 100e6;
+            vm.prank(DEEPSTATE);
+            IERC20(USDG).transfer(alice, maxIn);
+            vm.startPrank(alice);
+            IERC20(USDG).approve(address(router), maxIn);
+            (uint256 bIn, uint256 bOut) = router.swapDeep(
+                alice, USDG, NVDA, epoch, _order(type(int32).min, uint160(sellUsdg)), false, maxIn, 1, block.timestamp
+            );
+            vm.stopPrank();
+            emit log_named_uint("spent USDG", bIn);
+            emit log_named_uint("got NVDA (wei)", bOut);
+        }
+    }
+
+    /// @dev The venue we want to be: one transaction that sells NVDA into
+    /// Deepstate's book AND into Uniswap, splitting across both. NVDA is the
+    /// only asset with real depth on each, so this is the pair that matters.
+    /// `multicall` delegatecalls, so both legs pull from the same signer under
+    /// one approval and settle to one recipient.
+    function testSplitNvdaAcrossDeepstateAndUniswap() public {
+        uint256 epoch = IDeepstateView(DEEPSTATE).poolEpoch(IDeepstateView(DEEPSTATE).poolId(USDG, NVDA));
+        (, bytes32 bidRoot) = IDeepstateView(DEEPSTATE).roots(USDG, NVDA, epoch);
+        if (bidRoot == bytes32(0)) return;
+
+        uint256 toBook = 1e17; // at most 0.1 NVDA into the book
+        uint256 toAmm = 1e17; // 0.1 NVDA into the v3 pool
+        vm.prank(DEEPSTATE);
+        IERC20(NVDA).transfer(alice, toBook + toAmm);
+
+        vm.startPrank(alice);
+        IERC20(NVDA).approve(address(router), toBook + toAmm);
+
+        bytes[] memory calls = new bytes[](2);
+        // Book leg: a bid for 10 USDG of token0, paying at most `toBook` NVDA.
+        calls[0] = abi.encodeCall(
+            router.swapDeep,
+            (alice, USDG, NVDA, epoch, _order(type(int32).max, uint160(10e6)), true, toBook, 1, block.timestamp)
+        );
+        // AMM leg: the rest through the 500 pool, out as ETH.
+        calls[1] =
+            abi.encodeCall(router.swapV3, (alice, false, 500, NVDA, address(0), toAmm, 0, block.timestamp));
+
+        uint256 ethBefore = alice.balance;
+        bytes[] memory res = router.multicall(calls);
+        vm.stopPrank();
+
+        (uint256 bookIn, uint256 bookOut) = abi.decode(res[0], (uint256, uint256));
+        (, uint256 ammOut) = abi.decode(res[1], (uint256, uint256));
+
+        assertGt(bookOut, 0, "book leg filled nothing");
+        assertGt(ammOut, 0, "amm leg filled nothing");
+        assertLe(bookIn, toBook);
+        assertEq(IERC20(USDG).balanceOf(alice), bookOut, "USDG from the book");
+        assertEq(alice.balance - ethBefore, ammOut, "ETH from the pool");
+
+        emit log_named_uint("book: NVDA in", bookIn);
+        emit log_named_uint("book: USDG out", bookOut);
+        emit log_named_uint("amm:  ETH out", ammOut);
+    }
+
+    /// @dev TKN/TKN2 has no direct pool on any venue, so every partial amount
+    /// finds nothing and the split loop leaves `bestTotal` at zero. That branch
+    /// used to fall through to `buildBestSwap`, which reverts NoRoute — so the
+    /// safety net inherited the failure it existed to absorb, even though the
+    /// WETH hub routes this pair fine.
+    function testHybridSplitFallsBackToTheHubInsteadOfReverting() public view {
+        (zQuoterRobinhood.Quote memory best,) = quoter.getQuotes(false, TKN, TKN2, 1 ether);
+        assertEq(best.amountOut, 0, "premise: no direct pool for this pair");
+
+        (zQuoterRobinhood.Quote[2] memory legs, bytes memory mc,) =
+            quoter.buildHybridSplit(alice, TKN, TKN2, 1 ether, 200, block.timestamp);
+
+        assertGt(legs[1].amountOut, 0, "hub leg should carry the trade");
+        assertGt(mc.length, 0, "should emit sendable calldata, not revert");
+    }
+
+    /// @dev The permit signature is public in the mempool. Anyone can submit it
+    /// standalone, burning the nonce; the victim's `multicall([permit, swap])`
+    /// then reverted on a permit whose allowance was already in place.
+    function testPermitLegSurvivesAFrontRunNonceBurn() public {
+        (address signer, uint256 pk) = makeAddrAndKey("frontrun");
+        PermitToken token = new PermitToken();
+        token.mint(signer, 10 ether);
+
+        uint256 deadline = block.timestamp + 1 hours;
+        bytes32 digest = keccak256(
+            abi.encodePacked(
+                "\x19\x01",
+                token.DOMAIN_SEPARATOR(),
+                keccak256(
+                    abi.encode(
+                        token.PERMIT_TYPEHASH(), signer, address(router), uint256(10 ether), uint256(0), deadline
+                    )
+                )
+            )
+        );
+        (uint8 v, bytes32 r, bytes32 sg) = vm.sign(pk, digest);
+
+        // The front-runner lifts it and lands it first.
+        vm.prank(makeAddr("thief"));
+        token.permit(signer, address(router), 10 ether, deadline, v, r, sg);
+        assertEq(token.allowance(signer, address(router)), 10 ether);
+
+        // The victim's own leg must now be a no-op, not a revert.
+        vm.prank(signer);
+        router.permit(address(token), 10 ether, deadline, v, r, sg);
+        assertEq(token.allowance(signer, address(router)), 10 ether);
+    }
+
+    /// @dev The tolerance must not swallow a permit that genuinely failed.
+    function testPermitLegStillRevertsWithoutAnAllowance() public {
+        (address signer,) = makeAddrAndKey("nopermit");
+        PermitToken token = new PermitToken();
+        vm.prank(signer);
+        vm.expectRevert(zRouterLiteRobinhood.PermitFailed.selector);
+        router.permit(address(token), 10 ether, block.timestamp + 1 hours, 27, bytes32(0), bytes32(0));
+    }
+
+    // ═══════════ the post-audit fixes, each with its own regression ═══════════
+
+    /// @dev `multicall` delegatecalls, so all three legs see the same 1 ether.
+    /// Each used to mint a full credit against ether that arrived once.
+    function testDepositCannotMintCreditFromReplayedMsgValue() public {
+        bytes[] memory calls = new bytes[](3);
+        for (uint256 i; i < 3; ++i) calls[i] = abi.encodeCall(router.deposit, (address(0), 1 ether));
+        vm.deal(alice, 5 ether);
+        vm.prank(alice);
+        vm.expectRevert();
+        router.multicall{value: 1 ether}(calls);
+    }
+
+    /// @dev The cap is on the total claimed, not on any one leg: legs summing to
+    /// the attached value must still work.
+    function testDepositLegsMaySplitTheAttachedValue() public {
+        bytes[] memory calls = new bytes[](2);
+        calls[0] = abi.encodeCall(router.deposit, (address(0), 0.5 ether));
+        calls[1] = abi.encodeCall(router.deposit, (address(0), 0.5 ether));
+        vm.deal(alice, 5 ether);
+        vm.prank(alice);
+        router.multicall{value: 1 ether}(calls);
+        assertEq(address(router).balance, 1 ether);
+    }
+
+    /// @dev The WETH withdraw was `pop`ped, so a failure was swallowed and
+    /// `unwrap` credited ether the router never received.
+    function testUnwrapRevertsWhenThereIsNoWethToBurn() public {
+        vm.prank(alice);
+        vm.expectRevert();
+        router.unwrap(1 ether);
+    }
+
+    /// @dev The refund was `amountInMax - amountIn`, but a fee-on-transfer input
+    /// delivers less than `amountInMax`. Refunding the difference paid it out of
+    /// whatever else the router was holding.
+    function testFeeOnTransferRefundComesFromWhatArrived() public {
+        FeeToken fee = new FeeToken();
+        PermitToken other = new PermitToken();
+        HostileBook book = new HostileBook(address(router), address(fee));
+        vm.etch(DEEPSTATE, address(book).code);
+        HostileBook(DEEPSTATE).setMode(0); // fills nothing; only the refund is under test
+
+        fee.mint(alice, 10 ether);
+        fee.mint(address(router), 5 ether); // another leg's funds, parked here
+        vm.startPrank(alice);
+        fee.approve(address(router), type(uint256).max);
+        router.swapDeep(
+            alice, address(fee), address(other), 0, bytes32(0), false, 1 ether, 0, block.timestamp
+        );
+        vm.stopPrank();
+
+        // 1.0 pulled, 0.9 arrived, book took none, so 0.9 goes back — not 1.0.
+        assertEq(fee.balanceOf(address(router)), 5 ether, "other funds must be untouched");
+    }
+
+    // ═══════════ the lock, actually observed set ═══════════
+
+    /// @dev Deepstate settles output to the taker BEFORE pulling the input, so
+    /// the router holds both sides mid-fill. Anything that drains it in that
+    /// window widens the measured delta and bills the caller for it.
+    function _hostile() internal returns (HostileBook book, PermitToken tkn) {
+        tkn = new PermitToken();
+        book = new HostileBook(address(router), address(tkn));
+        vm.etch(DEEPSTATE, address(book).code);
+        book = HostileBook(DEEPSTATE);
+        tkn.mint(alice, 10 ether);
+        tkn.mint(address(router), 5 ether); // another leg's funds, sitting here
+        vm.prank(alice);
+        tkn.approve(address(router), type(uint256).max);
+    }
+
+    function _fillHostile(PermitToken tkn) internal {
+        vm.prank(alice);
+        router.swapDeep(
+            alice, address(tkn), address(tkn), 0, bytes32(0), false, 1 ether, 0, block.timestamp
+        );
+    }
+
+    /// @dev Control for the three below: with no re-entry the same harness
+    /// fills cleanly and refunds. Without this, `expectRevert` would pass even
+    /// if the mock were reverting for some unrelated reason.
+    function testHostileBookHarnessFillsWhenItDoesNotReenter() public {
+        (HostileBook book, PermitToken tkn) = _hostile();
+        book.setMode(0);
+        uint256 before = tkn.balanceOf(alice);
+        _fillHostile(tkn);
+        assertEq(tkn.balanceOf(alice), before, "nothing filled, so nothing spent");
+        assertEq(tkn.balanceOf(address(router)), 5 ether, "other funds untouched");
+    }
+
+    function testSweepIsBlockedMidFill() public {
+        (HostileBook book, PermitToken tkn) = _hostile();
+        book.setMode(1);
+        vm.expectRevert();
+        _fillHostile(tkn);
+    }
+
+    function testSnwapDrainIsBlockedMidFill() public {
+        (HostileBook book, PermitToken tkn) = _hostile();
+        book.setMode(2);
+        vm.expectRevert();
+        _fillHostile(tkn);
+    }
+
+    /// @dev The lock is depth-counted. A nested `swapDeep` on an empty book
+    /// used to reset it to zero and reopen `sweep` for the rest of the fill.
+    function testNestedSwapDeepCannotClearTheLock() public {
+        (HostileBook book, PermitToken tkn) = _hostile();
+        book.setMode(3);
+        vm.expectRevert();
+        _fillHostile(tkn);
+    }
+
+    /// @dev `wrap(0)` moves the whole raw ether balance into router-owned WETH,
+    /// which `sweep` hands out next block. Empty revert data pins the failure
+    /// on `_requireBookIdle`, not on some unrelated slip in the mock.
+    function testWrapIsBlockedMidFill() public {
+        (HostileBook book, PermitToken tkn) = _hostile();
+        book.setMode(5);
+        vm.expectRevert(bytes(""));
+        _fillHostile(tkn);
+    }
+
+    /// @dev An ether-in AMM leg funds itself from the raw router balance and
+    /// refunds the remainder to its caller — mid-fill, both are the taker's.
+    function testAmmLegIsBlockedMidFill() public {
+        (HostileBook book, PermitToken tkn) = _hostile();
+        book.setMode(6);
+        vm.expectRevert(bytes(""));
+        _fillHostile(tkn);
+    }
+
+    /// @dev The book may draw its full allowance-side amount while a transfer
+    /// fee means less than that actually arrived. The refund is measured
+    /// against what arrived, so this must be a clean Slippage — the unchecked
+    /// `received - amountIn` wrapping would try to refund ~2^256 (or, chained
+    /// with `to == address(this)`, mint an unbounded transient credit).
+    function testBookOverpullOfAFeeTokenIsCleanSlippage() public {
+        FeeToken fee = new FeeToken();
+        HostileBook book = new HostileBook(address(router), address(fee));
+        vm.etch(DEEPSTATE, address(book).code);
+        HostileBook(DEEPSTATE).setMode(4);
+
+        fee.mint(alice, 10 ether);
+        fee.mint(address(router), 5 ether); // another leg's funds, parked here
+        vm.startPrank(alice);
+        fee.approve(address(router), type(uint256).max);
+        vm.expectRevert(zRouterLiteRobinhood.Slippage.selector);
+        router.swapDeep(alice, address(fee), address(fee), 0, bytes32(0), false, 1 ether, 0, block.timestamp);
+        vm.stopPrank();
+    }
+
+    /// @dev The claim tally lives in transient storage, which spans the whole
+    /// transaction. It is read only inside a multicall, so a batcher making two
+    /// separate value-bearing calls is not charged twice for one deposit.
+    function testTwoValueBearingCallsInOneTransactionBothClaim() public {
+        TwoSeparateCalls batcher = new TwoSeparateCalls();
+        vm.deal(address(batcher), 2 ether);
+        uint256 before = address(router).balance;
+        batcher.go(address(router));
+        assertEq(address(router).balance, before + 2 ether, "both deposits should land");
     }
 
     // ══════════════════ permit legs, for one-transaction UX ══════════════════
