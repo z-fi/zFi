@@ -1035,6 +1035,7 @@ const RPCS_PIN="0x8C7348D039f58C4e9cfA936EF410eec759213b12";
 const SOLVER_FILL_PIN="0x7A2f21e476cA2ADde027BC868c5a083338EEfE54";
 const SOLVER_EXEC_PIN="0x4f6633342045C80Efa6c8CAc41b9bdc6145168C4";
 const SRC_SOLVER=9;
+const SRC_DEEP=10;
 const SOLVER_DEADLINE=1500,SOLVER_STRIKES=3,SOLVER_COOL=60000;
 let solverLanes=null,solverFill=null,solverExec=null,solversJob=null;
 const _strikes=new Map();
@@ -2829,7 +2830,22 @@ if(!r)r=pc;
 if(!r&&curveOnlyOut)throw Object.assign(Error(`exact-output is unavailable for this pair — enter an amount to PAY instead`),{exactOut:1});
 if(!r)throw Error("bad quote");
 if(r.best.amountIn<=0n||r.best.amountOut<=0n||(!isIn&&r.amountLimit<r.best.amountIn))throw Error("bad quote");
-for(const c of [v4c,pc]){
+let dc=null;
+if(isIn&&CHAIN_ID===4663&&f.addr!==ZERO&&t.addr!==ZERO){
+const dq=await deepQuote(f.addr,t.addr,swapAmt,r&&r.best?r.best.amountOut:0n);
+if(my!==seq)return;
+if(dq&&dq.out>0n){
+const dMin=dq.out-(dq.out*slipBps)/10000n;
+const dTo=rcv||acct||ZERO;
+const leg="0x"+SEL_SWAPDEEP+encAddr(dTo)+encAddr(dq.t0)+encAddr(dq.t1)+encUint(dq.epoch)
++strip0x(dq.order)+encUint(dq.isBid?1:0)+encUint(swapAmt)+encUint(dMin)+encUint(deadline);
+dc={best:{source:SRC_DEEP,amountIn:dq.inUsed,amountOut:dq.out,feeBps:0n},
+callData:encCalls([leg,encSweep(f.addr,0n,dTo)]),
+fundedCallData:null,amountLimit:dMin,msgValue:0n,
+wrap:0n,outDiffers:false,poolOut:t.addr,to:null,spender:ZROUTER};
+}
+}
+for(const c of [v4c,pc,dc]){
 if(!c||c===r)continue;
 if(isIn?c.best.amountOut>r.best.amountOut:c.best.amountIn<r.best.amountIn)r=c;
 }
@@ -3205,6 +3221,62 @@ nativeCurrency:{name:"Ether",symbol:"ETH",decimals:18},rpcUrls:c.rpcs,blockExplo
 }else return;
 }
 setChain(next);showNet();location.reload();
+};
+const DEEPSTATE="0x6cf19308c22fc82ea620fa0b3e94948d20f27b96";
+const SEL_POOLID="1338aa1d",SEL_POOLEPOCH="8fa79763",SEL_SWAPDEEP="ad33b1d0";
+const OZ20="52c63247e1f47db19d5ce0460030c497f067ca4cebf71ba98eeadabe20bace00";
+const DEEP_TAKER="0x00000000000000000000000000000000deeb0000";
+const MAXU=(1n<<256n)-1n;
+const slotKey=(k,sl)=>strip0x(keccak(hexToBytes(k+sl)));
+const deepSlots={};
+const findSlot=async(tok,sel,keyw,probe)=>{
+const ck=tok+sel;
+if(deepSlots[ck]!==undefined)return deepSlots[ck];
+const cands=[OZ20,(BigInt("0x"+OZ20)+1n).toString(16).padStart(64,"0")];
+for(let i=0;i<10;i++)cands.push(encUint(i));
+for(const c of cands){
+const sl=keyw.length>64?slotKey(keyw.slice(64),slotKey(keyw.slice(0,64),c)):slotKey(keyw,c);
+try{
+const got=await rpc(C,[{to:tok,data:"0x"+sel+keyw},L,{[tok]:{stateDiff:{["0x"+sl]:"0x"+encUint(probe)}}}]);
+if(BigInt(got||0)===probe){deepSlots[ck]=c;return c}
+}catch{return null}
+}
+deepSlots[ck]=null;return null;
+};
+const deepQuote=async(fa,ta,amt,expOut)=>{
+if(CHAIN_ID!==4663||!amt||fa===ZERO||ta===ZERO)return null;
+const [t0,t1]=fa.toLowerCase()<ta.toLowerCase()?[fa,ta]:[ta,fa];
+const isBid=ta.toLowerCase()===t0.toLowerCase();
+try{
+const pid=await rpc(C,[{to:DEEPSTATE,data:"0x"+SEL_POOLID+encAddr(t0)+encAddr(t1)},L]);
+if(!pid||pid==="0x")return null;
+const ep=await rpc(C,[{to:DEEPSTATE,data:"0x"+SEL_POOLEPOCH+strip0x(pid)},L]);
+const epoch=BigInt(ep||0);
+const bs=await findSlot(fa,"70a08231",encAddr(DEEP_TAKER),0x1234567n);
+if(bs===null)return null;
+const as=await findSlot(fa,"dd62ed3e",encAddr(DEEP_TAKER)+encAddr(ZROUTER),0x7654321n);
+if(as===null)return null;
+const ov={[fa]:{stateDiff:{
+["0x"+slotKey(encAddr(DEEP_TAKER),bs)]:"0x"+encUint(amt),
+["0x"+slotKey(encAddr(ZROUTER),slotKey(encAddr(DEEP_TAKER),as))]:"0x"+encUint(MAXU)}}};
+const price=isBid?0x7fffffffn:0x80000000n;
+const seed=isBid?(expOut||0n):amt;
+if(seed<=0n)return null;
+let best=null;
+for(let q=seed*4n,n=0;n<5&&q>0n;q/=4n,n++){
+const order="0x"+encUint((price<<224n)|((q&((1n<<160n)-1n))<<64n));
+const data="0x"+SEL_SWAPDEEP+encAddr(DEEP_TAKER)+encAddr(t0)+encAddr(t1)+encUint(epoch)
++strip0x(order)+encUint(isBid?1:0)+encUint(amt)+encUint(0n)+encUint(MAXU);
+try{
+const r=await rpc(C,[{from:DEEP_TAKER,to:ZROUTER,data},L,ov]);
+const b=strip0x(r||"");
+if(b.length<128)continue;
+const ai=BigInt("0x"+b.slice(0,64)),ao=BigInt("0x"+b.slice(64,128));
+if(ao>0n&&(!best||ao>best.out))best={inUsed:ai,out:ao,t0,t1,isBid,epoch,order};
+}catch{}
+}
+return best;
+}catch{return null}
 };
 const showAddr=async()=>{const a=account,short=a.slice(0,6)+"..."+a.slice(-4);
 addr.textContent=short;addr.title=a+" - click to disconnect";addr.classList.add("on");
