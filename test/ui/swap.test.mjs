@@ -303,6 +303,26 @@ describe('quoting', () => {
     p.close();
   });
 
+  test('a decimal comma is questioned, not read as a tenfold amount', async () => {
+    // "1,5" is 1.5 in most of Europe. Stripping the comma reads it as 15 and
+    // quotes a swap ten times the intended size, which the user may then sign.
+    const p = await setup();
+    await p.typeAmount('amt', '1,5');
+    assert.match(p.text('stat'), /unclear comma/, 'the mistake is named');
+    assert.match(p.text('stat'), /1\.5/, 'and the correction is offered');
+    assert.equal(p.disabled('swap'), true);
+    assert.equal(p.chain.sent.length, 0);
+    p.close();
+  });
+
+  test('grouped thousands still parse as thousands', async () => {
+    const p = await setup();
+    await p.typeAmount('amt', '1,000');
+    assert.doesNotMatch(p.text('stat'), /comma/, 'strict grouping is not ambiguous');
+    assert.notEqual(p.value('outAmt'), '', 'and the quote proceeds');
+    p.close();
+  });
+
   test('selecting the same token on both sides is prevented in the options', async () => {
     const p = await setup();
     const from = [...p.$('fromSel').options].find(o => o.textContent === 'USDC');

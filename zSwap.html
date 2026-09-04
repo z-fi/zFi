@@ -885,7 +885,10 @@ const encBool=b=>pad32(b?"1":"0");
 const toHex=v=>"0x"+BigInt(v).toString(16);
 const parseUnits=(s,dec)=>{
 const r=s.trim();
-if(r.includes(",")&&!/^\d{1,3}(?:,\d{3})+(?:\.\d*)?$/.test(r))throw Error("ambiguous comma — use . for decimals");
+if(r.includes(",")&&!/^\d{1,3}(?:,\d{3})+(?:\.\d*)?$/.test(r))
+throw Error(r.indexOf(",")===r.lastIndexOf(",")
+?`unclear comma — for decimals write ${r.replace(",",".")}`
+:"unclear commas — use . for decimals");
 const t=r.replace(/,/g,"");
 if(!/^(?:\d+|\d*\.\d+|\d+\.)$/.test(t))throw Error("invalid amount");
 const[ip,fp=""]=t.split(".");
@@ -2636,7 +2639,7 @@ if(!inEl.value.trim())return;
 let swapAmt;
 try{swapAmt=parseUnits(inEl.value.trim(),inTok.dec)}
 catch(e){const q=inEl.value.trim();
-if(q&&!/\.$/.test(q))stat.textContent=/decimals/.test(e.message)?`${inTok.sym} has ${inTok.dec} decimals`:"Invalid amount";
+if(q&&!/\.$/.test(q))stat.textContent=/^unclear comma/.test(e.message)?e.message:/decimals/.test(e.message)?`${inTok.sym} has ${inTok.dec} decimals`:"Invalid amount";
 return}
 if(swapAmt<=0n)return;
 const rv=rc.value.trim();
@@ -4540,7 +4543,7 @@ const v=rc.value.trim();
 let amount=0n,amtErr="";
 const q=amt.value.trim();
 try{amount=parseUnits(q,f.dec)}
-catch(e){if(q&&!/\.$/.test(q))amtErr=/decimals/.test(e.message)?`${f.sym} has ${f.dec} decimals`:"Invalid amount"}
+catch(e){if(q&&!/\.$/.test(q))amtErr=/^unclear comma/.test(e.message)?e.message:/decimals/.test(e.message)?`${f.sym} has ${f.dec} decimals`:"Invalid amount"}
 if(!v){rc.classList.remove("bad");rcvEl.textContent="";stat.textContent=amtErr;render();return}
 const bad=rcErr(v);
 if(bad){rc.classList.add("bad");rcvEl.textContent="";
