@@ -275,4 +275,96 @@ contract SwapbolL2Test is Test {
         vm.expectRevert(SwapbolL2.BadVenue.selector);
         new SwapbolL2(address(board), v, address(0xBEEF), WETH);
     }
+    // ------------------------------------------------ the L2 router vocabulary
+
+    /// The AMM remainder the page hands this forwarder is whatever the L2
+    /// quoter emitted, and the L2 routers speak a different vocabulary from
+    /// mainnet's: a 3-arg sweep, a 2-arg deposit, and Aerodrome, Slipstream and
+    /// Deepstate legs. The allowlist has to admit exactly that set, and no more.
+    bytes constant BASE_LIVE_AMM =
+        hex"ac9650d80000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000104cb924a090000000000000000000000001111111111111111111111111111111111111111000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000640000000000000000000000000000000000000000000000000000000000000000000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda0291300000000000000000000000000000000000000000000000009b6e64a8ec600000000000000000000000000000000000000000000000000000000000066ddc29900000000000000000000000000000000000000000000000000000002540be3ff00000000000000000000000000000000000000000000000000000000";
+
+    function _mc(bytes[] memory c) internal pure returns (bytes memory) {
+        return abi.encodeWithSignature("multicall(bytes[])", c);
+    }
+
+    function _swapV3() internal view returns (bytes memory) {
+        return abi.encodeWithSignature(
+            "swapV3(address,bool,uint24,address,address,uint256,uint256,uint256)",
+            user, false, uint24(500), address(tin), address(tout), 1e18, 0, 0
+        );
+    }
+
+    function _leg() internal view returns (SwapbolL2.Fill[] memory f) {
+        f = new SwapbolL2.Fill[](1);
+        f[0] = SwapbolL2.Fill(0, address(board), 10e18, 20e18, true);
+    }
+
+    function _plan(bytes memory amm) internal returns (bytes memory ret) {
+        _fund(11e18);
+        (, ret) = address(fwd).call(
+            abi.encodeCall(SwapbolL2.fillPlanAndSwap, (address(tin), address(tout), user, user, 0, _leg(), 1e18, amm))
+        );
+    }
+
+    function _isBadPlan(bytes memory ret) internal pure returns (bool) {
+        return ret.length == 4 && bytes4(ret) == SwapbolL2.BadPlan.selector;
+    }
+
+    function test_AdmitsTheL2Sweep() public {
+        bytes[] memory c = new bytes[](2);
+        c[0] = _swapV3();
+        c[1] = abi.encodeWithSignature("sweep(address,uint256,address)", address(0), 0, user);
+        assertTrue(!_isBadPlan(_plan(_mc(c))), "3-arg sweep is the L2 router's");
+    }
+
+    function test_AdmitsTheL2Deposit() public {
+        bytes[] memory c = new bytes[](2);
+        c[0] = abi.encodeWithSignature("deposit(address,uint256)", address(tin), 1e18);
+        c[1] = _swapV3();
+        assertTrue(!_isBadPlan(_plan(_mc(c))), "2-arg deposit is the L2 router's");
+    }
+
+    function test_AdmitsWhatTheBaseQuoterEmits() public {
+        assertTrue(!_isBadPlan(_plan(BASE_LIVE_AMM)), "multicall([swapAeroCL]) is Base's deepest ETH/USDC route");
+    }
+
+    function test_AdmitsAerodromeAndDeepstateLegs() public {
+        bytes[] memory c = new bytes[](2);
+        c[0] = abi.encodeWithSignature(
+            "swapAero(address,bool,address,address,uint256,uint256,uint256)", user, false, address(tin), address(tout), 1e18, 0, 0
+        );
+        c[1] = abi.encodeWithSignature(
+            "swapDeep(address,address,address,uint256,bytes32,bool,uint256,uint256,uint256)",
+            user, address(tin), address(tout), 1, bytes32(0), false, 1e18, 0, 0
+        );
+        assertTrue(!_isBadPlan(_plan(_mc(c))), "Aerodrome and Deepstate legs are L2 venues");
+    }
+
+    function test_RefusesTheMainnetSweep() public {
+        bytes[] memory c = new bytes[](2);
+        c[0] = _swapV3();
+        c[1] = abi.encodeWithSignature("sweep(address,uint256,uint256,address)", address(0), 0, 0, user);
+        assertTrue(_isBadPlan(_plan(_mc(c))), "the 4-arg sweep does not exist on an L2 router");
+    }
+
+    function test_RefusesTheMainnetDeposit() public {
+        bytes[] memory c = new bytes[](2);
+        c[0] = abi.encodeWithSignature("deposit(address,uint256,uint256)", address(tin), 0, 1e18);
+        c[1] = _swapV3();
+        assertTrue(_isBadPlan(_plan(_mc(c))), "the 3-arg deposit does not exist on an L2 router");
+    }
+
+    function test_RefusesTheRouterExecutor() public {
+        bytes[] memory c = new bytes[](1);
+        c[0] = abi.encodeWithSignature("execute(address,uint256,bytes)", user, 0, "");
+        assertTrue(_isBadPlan(_plan(_mc(c))), "execute is never a route");
+    }
+
+    function test_RefusesAMainnetOnlyVenue() public {
+        bytes[] memory c = new bytes[](1);
+        c[0] = abi.encodeWithSignature("exactETHToSTETH(address)", user);
+        assertTrue(_isBadPlan(_plan(_mc(c))), "Lido is not an L2 venue");
+    }
 }
+

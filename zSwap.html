@@ -500,15 +500,15 @@ const CHAINS={
 wrapped:"0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",explorer:"https://etherscan.io",
 rpcs:["https://ethereum-rpc.publicnode.com","https://eth-mainnet.public.blastapi.io"]},
 8453:{name:"Base",short:"BASE",sweep4:false,curve:-1,fill:"0x03d95ecAF7B2Ab6027b8541b19Cb0Ce5CEd9bC74",exec:"0x1434A2579DE1009aA12b7064A161E53a5be2C030",slvId:"8453",slvSlug:"base",sources:["UniV2","Aero","zAMM","UniV3","UniV4","AeroCL","Wrap","","Precision"],v4port:"0x508ad1b0ae31FaF295c5af8C5c2bE9e33E0D19C4",v4lens:"0x0000000000000000000000000000000000000000",tokenlist:"0x0000006013dF75A31678B786061C2B54bf531524",
-wrapped:"0x4200000000000000000000000000000000000006",explorer:"https://basescan.org",
+wrapped:"0x4200000000000000000000000000000000000006",explorer:"https://basescan.org",hubs:["0x4200000000000000000000000000000000000006","0x833589fcd6edb6e08f4c7c32d4f71b54bda02913","0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf","0x50c5725949a6f0c72e6c4a641f24049a917db0cb","0x940181a94a35a4569e4529a3cdfb74e38fd98631"],
 icon:CHAIN_ICON_BASE,rpcs:["https://mainnet.base.org","https://base-rpc.publicnode.com"]},
 4663:{name:"Robinhood",short:"RH",sweep4:false,curve:5,fill:"0x03d95ecAF7B2Ab6027b8541b19Cb0Ce5CEd9bC74",exec:"0x1434A2579DE1009aA12b7064A161E53a5be2C030",slvId:"4663",slvSlug:"robinhood",sources:["UniV2","Sushi","zAMM","UniV3","UniV4","Curve","Lido","Wrap","Precision"],v4port:"0x508ad1b0ae31FaF295c5af8C5c2bE9e33E0D19C4",v4lens:"0x0000000000000000000000000000000000000000",tokenlist:"0x0000006013dF75A31678B786061C2B54bf531524",
-wrapped:"0x0bd7d308f8e1639fab988df18a8011f41eacad73",explorer:"https://robinscan.io",
+wrapped:"0x0bd7d308f8e1639fab988df18a8011f41eacad73",explorer:"https://robinscan.io",hubs:["0x0bd7d308f8e1639fab988df18a8011f41eacad73"],
 rpcs:["https://rpc.mainnet.chain.robinhood.com"]},
 };
 CHAINS[4663].icon=CHAIN_ICON_RH;
 const MB={sb:"0x000000dA7bb4B2A9E3e80e9A4D4157E26CA6189b",s1:"0x000000fF3D7A2d373615141d7489Ca66683DbecF",sw:"0x00000087A6dc5071779Ed1F8274A39230768B976",du:"0x000000a213b430D14Bae6062c176289B05e04489",ob:"0x000000e6c7a12C80525ee74e7434aAb919447D95",fl:"0x00000080198137F790DA4C52bb902cf87c276748",pr:"0x0000007Be74558A1F8c9045301c6F44C8eD0c9eB",la:"0x0000002fC8E77585A008Aa45d78A71ad36293aEe"};
-const L2B={sb:"0x0000001330435808A906432449D233d482Bc9b60",sw:"0x00000032100E634903378DAEED6bA448f35F541a",du:"0x000000fa42d555173395323b2956e9c42EFaEFf2",ob:"0x0000007a1c93d42dD739E8d6cA9Dabf330934970",fl:"0x000000AC7d32e802B003a31F790eb28Ed3294Bac",pr:"0x000000D14E24e5FC8965bcDE58f21f704C944999"};
+const L2B={sb:"0x0000001330435808A906432449D233d482Bc9b60",sw:"0x000000015d9428959A495E31A6999E1C61C64F00",du:"0x000000fa42d555173395323b2956e9c42EFaEFf2",ob:"0x0000007a1c93d42dD739E8d6cA9Dabf330934970",fl:"0x000000AC7d32e802B003a31F790eb28Ed3294Bac",pr:"0x000000D14E24e5FC8965bcDE58f21f704C944999"};
 const chainCfg=()=>CHAINS[CHAIN_ID]||CHAINS[1];
 const L1_RPCS=["https://ethereum-rpc.publicnode.com","https://eth-mainnet.public.blastapi.io"];
 let l1i=0;
@@ -576,8 +576,12 @@ CHAINS[1].tokens=TOKENS.slice();
 CHAINS[8453].tokens=[
 {sym:"ETH",addr:ZERO,dec:18,icon:ETH_ICON},
 {sym:"WETH",addr:"0x4200000000000000000000000000000000000006",dec:18,icon:ETH_ICON},
-{sym:"USDC",addr:"0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",dec:6,icon:USDC_ICON},
+{sym:"wstETH",addr:"0xc1cba3fcea344f92d9239c08c0568f6f2f0ee452",dec:18,icon:WSTETH_ICON},
+{sym:"rETH",addr:"0xb6fe221fe9eef5aba221c348ba20a1bf5e73624c",dec:18,icon:RETH_ICON},
+{sym:"cbETH",addr:"0x2ae3f1ec7f1f5012cfeab0185bfc7aa3cf0dec22",dec:18},
 {sym:"cbBTC",addr:"0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",dec:8},
+{sym:"USDC",addr:"0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",dec:6,icon:USDC_ICON},
+{sym:"USDT",addr:"0xfde4c96c8593536e31f229ea8f37b2ada2699bb2",dec:6,icon:USDT_ICON},
 {sym:"DAI",addr:"0x50c5725949a6f0c72e6c4a641f24049a917db0cb",dec:18},
 {sym:"AERO",addr:"0x940181a94a35a4569e4529a3cdfb74e38fd98631",dec:18},
 ];
@@ -587,6 +591,7 @@ CHAINS[4663].tokens=[
 {sym:"USDG",addr:"0x5fc5360d0400a0fd4f2af552add042d716f1d168",dec:6},
 {sym:"NVDA",addr:"0xd0601ce157db5bdc3162bbac2a2c8af5320d9eec",dec:18},
 {sym:"DEEP",addr:"0x1da24f6bb623b9d1afeae3f3146659a2662d6d27",dec:18},
+{sym:"MARIAN",addr:"0x01637b14b7378b99de75a64d50656d98488d9a4d",dec:18},
 ];
 const CHAIN_STORE="zswap:chain";
 function setChain(id){
@@ -800,7 +805,7 @@ tokenIn:f.addr,tokenOut:t.addr,unwrap:0n,wrap:0n,outDiffers:false};
 }
 const QPAIR=2;
 const SEL_BBS="e7798987";
-const HUBS=()=>[WETH,...NUMERAIRES,"0x2260fac5e5542a773aa44fbcfedf7c193bc2c599","0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0"];
+const HUBS=()=>chainCfg().hubs||[WETH,...NUMERAIRES,"0x2260fac5e5542a773aa44fbcfedf7c193bc2c599","0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0"];
 async function hubRoute(f,t,amt,sb,dl,to,rf,block){
 const nf=(f.addr===ZERO?WETH:f.addr).toLowerCase(),nt=(t.addr===ZERO?WETH:t.addr).toLowerCase();
 const H=HUBS().filter(h=>h.toLowerCase()!==nf&&h.toLowerCase()!==nt);
@@ -816,7 +821,7 @@ for(let i=0;i<L.length;i++){const b=r2[i]&&D(r2[i]);
 if(b&&b.best.amountOut>0n&&(!B||b.best.amountOut>B.b.best.amountOut))B={...L[i],b}}
 if(!B)return null;
 const c=[B.a.callData,B.b.callData,encSweep(B.h,0n,rf),encSweep(ZERO,0n,rf)];
-const ha=B.a.best.feeBps||0n,hb=B.b.best.feeBps||0n;
+const feeOf=q=>(q.source===3||q.source===4)&&q.feeBps||0n;const ha=feeOf(B.a.best),hb=feeOf(B.b.best);
 return{best:{source:B.b.best.source,feeBps:ha+hb-ha*hb/10000n,amountIn:amt,amountOut:B.b.best.amountOut},
 callData:encCalls(c),amountLimit:B.b.amountLimit,
 msgValue:f.addr===ZERO?amt:0n,spender:f.addr===ZERO?null:ZROUTER};
@@ -867,7 +872,7 @@ setListNote("Built-in token list \u2014 checking zList\u2026");
 try{
 const cntJob=PLAUNCH===ZERO?Promise.resolve("0x0"):rpc(C,[{to:PFACTORY,data:"0x"+SEL_BYCREATOR_N+encAddr(PLAUNCH)},L]);
 cntJob.catch(()=>{});
-const ids=await rankedIds();
+const ids=await rankedIds();let dropNote="";
 if(!ids.length)return setListSource("registry is empty");
 const raw=await cfgBatch(ids.slice(0,64).map(id=>({to:TOKENLIST,data:"0x"+SEL_JSON+encUint(id)})));
 const rows=raw.map(h=>{try{return h?decStr(h):null}catch{return null}});
@@ -884,8 +889,14 @@ if(next.some(x=>x.addr.toLowerCase()===t.a.toLowerCase()))continue;
 const sym=safeSym(t.s).slice(0,12);
 const logo=safeDataUrl(t.l);
 next.push({sym,addr:t.a.toLowerCase(),dec:t.d,std,icon:logo?`<img src="${logo}" width="20" height="20" alt="">`:genIcon(sym),
-name:String(t.n??"").slice(0,64),desc:String(t.desc??"").slice(0,240),
+name:String(t.n??"").slice(0,64),desc:[String(t.desc??"").slice(0,240),(()=>{const o=(t.e||[]).find(x=>x&&String(x.k).toLowerCase()==="origin");return o?`${String(o.v).slice(0,24)} origin`:""})()].filter(Boolean).join(" \u00b7 "),
 v4:parseV4Pools(t.e,t.a)});
+}
+if(CHAIN_ID!==1&&next.length){
+const ft=next.filter(t=>t.std==="ft");
+const dec=await mc3Deep(ft.map(t=>({to:t.addr,data:"0x313ce567"}))).catch(()=>null);
+if(dec){const bad=new Set();ft.forEach((t,i)=>{const h=strip0x(dec[i]||"");if(h.length<64||Number(BigInt("0x"+h.slice(0,64)))!==t.dec)bad.add(t.addr)});
+if(bad.size){const n=next.length;next.splice(0,n,...next.filter(t=>!bad.has(t.addr)));dropNote=`${bad.size} listing${bad.size>1?"s":""} dropped: decimals differ on chain`}}
 }
 next.sort((a,b)=>(a.std==="nft")-(b.std==="nft"));
 if(!next.some(t=>t.std==="ft"))return setListSource("registry returned nothing swappable");
@@ -944,7 +955,7 @@ const bornAt=new Set(born.map(x=>x.addr.toLowerCase()));
 TOKENS.splice(0,TOKENS.length,...next,...anchors,...born,
 ...mine.filter(t=>!bornAt.has(t.addr.toLowerCase())));
 listLive=true;
-setListNote(rankFellBack?"Ranked by listing order — conviction unavailable":"");
+setListNote([rankFellBack?"Ranked by listing order — conviction unavailable":"",dropNote].filter(Boolean).join(" \u00b7 "));
 }catch(e){setListSource("could not be reached")}
 }
 const strip0x=h=>h.startsWith("0x")?h.slice(2):h;
@@ -1249,7 +1260,7 @@ return{out:BigInt(j.dstAmount),target:j.tx.to,spender:j.tx.to,data:j.tx.data}},
 const RPC_TRIES=4;
 const nodeRead=async(method,params)=>{
 let last;
-const pin=rpcPin();
+const pin=CHAIN_ID===1?rpcPin():"";
 const tries=Math.min(rpcPool.length,RPC_TRIES);
 const p=rpcPi;
 for(let i=pin?-1:0;i<tries;i++){
@@ -2981,6 +2992,7 @@ if(p){
 const rem=isIn?p.ammIn:p.ammOut;
 if(!rem)amm=null;
 else if(!(amm&&ammFor===rem))amm=await quoteRem(rem,!isIn).catch(()=>null);
+if(amm&&!bolOk(amm.callData))amm=null;
 if(!rem||amm){
 const recipient=rcv||acct;
 const ammBudget=amm?(isIn?rem:amm.amountLimit):0n;
@@ -3134,7 +3146,7 @@ const finalOut=r.best.amountOut;
 if(isIn){outAmt.value=trimAmt(finalOut,t.dec);fitFont(outAmt)}
 else{amt.value=trimAmt(finalIn,f.dec);fitFont(amt)}
 const rx=(+formatUnits(finalOut,t.dec))/(+formatUnits(finalIn,f.dec));
-const s=r.best.source,raw=SOURCES[s]||"?";
+const s=r.best.source,raw=s===SRC_DEEP?"Deepstate":SOURCES[s]||"?";
 const src=r.best.source===SRC_SOLVER?`${r.best.lane} solver${r.best.forced?" \u00b7 pinned":""}`:hybrid?bookShare(hybrid,raw):(s===3||s===4||s===SRC_PRECISION)&&r.best.feeBps?`${raw}\u00a0${Number(r.best.feeBps)/100}%`:raw;
 rate.textContent=isFinite(rx)?`1 ${f.sym} ≈ ${rx>=1?rx.toLocaleString("en-US",{maximumFractionDigits:4}):rx.toPrecision(4)} ${t.sym} · ${src}`:"";
 rankBox.textContent="";
@@ -3267,6 +3279,7 @@ e.title="Network: "+c.name+" — click to switch";
 const switchNet=async()=>{
 const ids=Object.keys(CHAINS).map(Number);
 const next=ids[(ids.indexOf(CHAIN_ID)+1)%ids.length];
+if(!prov()){setChain(next);showNet();location.reload();return}
 try{
 await rpc("wallet_switchEthereumChain",[{chainId:"0x"+next.toString(16)}]);
 }catch(e){
@@ -3435,13 +3448,12 @@ if(!eth||wireWallet.done)return;
 wireWallet.done=true;
 wkBind(eth);
 (async()=>{
-if(sessionStorage.getItem("dc"))return;
 try{
-const accs=await rpc("eth_accounts",[]);
 const cid=await rpc(I,[]);
 wireWallet.probed=1;
 const hop=!!CHAINS[+cid]&&+cid!==CHAIN_ID;
-if(hop){setChain(+cid);showNet()}
+if(hop){setChain(+cid);showNet();loadEthUsd();burnTotal()}
+const accs=sessionStorage.getItem("dc")?[]:await rpc("eth_accounts",[]);
 if(accs[0]&&CHAINS[+cid]){account=accs[0];showAddr()}
 if(account||hop){
 const keep2=pairAddrs();
@@ -3919,6 +3931,14 @@ for(const f of fills)tail+=encUint(f.id)+encAddr(f.board)+encUint(f.pay)+encUint
 return"0x"+SEL_FILLPLAN+encAddr(tokenIn)+encAddr(tokenOut)+encAddr(recipient)+encAddr(refundTo)
 +encUint(deadline)+encUint(192)+tail;
 }
+const BOL_OK=new Set(["6e0a4f98","afeae12b","21c0dad2","ea598cb0","de0e9a3e","8b64ad55","cb924a09","ad33b1d0","dc2c256f","47e7ef24"]);
+const bolOk=cd=>{if(chainCfg().sweep4)return true;
+const walk=h=>{h=strip0x(h||"");const sel=h.slice(0,8);if(sel!==SEL_MULTICALL)return BOL_OK.has(sel);
+try{const t=h.slice(8),n=Number(BigInt("0x"+t.slice(64,128)));if(!n)return false;
+for(let i=0;i<n;i++){const off=Number(BigInt("0x"+t.slice(128+i*64,192+i*64)))*2+128;
+const len=Number(BigInt("0x"+t.slice(off,off+64)))*2;if(!walk(t.slice(off+64,off+64+len)))return false}
+return true}catch{return false}};
+return walk(cd)};
 function encFillPlanAndSwap(fills,tokenIn,tokenOut,recipient,refundTo,deadline,ammIn,ammData){
 let ft=encUint(fills.length);
 for(const f of fills)ft+=encUint(f.id)+encAddr(f.board)+encUint(f.pay)+encUint(f.get)+encBool(f.part);
@@ -7689,6 +7709,7 @@ e.preventDefault();TABS[j].focus();sBlip();setTab(NAMES[j]);
 syncStops=()=>TABS.forEach(el=>el.tabIndex=el.classList.contains("on")?0:-1);
 syncStops();for(const el of TABS)el.addEventListener("click",syncStops);
 for(const el of TABS)el.addEventListener("keyup",syncStops);}
+try{const sc=+localStorage[CHAIN_STORE];if(!prov()&&CHAINS[sc]&&!/(^#|[?&])chain=/.test(location.hash)){setChain(sc);showNet()}}catch{}
 applyLink();
 loadTokenList().then(()=>{
 listReady=true;

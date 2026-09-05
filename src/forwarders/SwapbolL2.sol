@@ -406,20 +406,15 @@ contract SwapbolL2 {
 
         if (
             selector == _selector("swapV2(address,bool,address,address,uint256,uint256,uint256)")
-                || selector == _selector("swapVZ(address,bool,uint256,address,address,uint256,uint256,uint256,uint256,uint256)")
                 || selector == _selector("swapV3(address,bool,uint24,address,address,uint256,uint256,uint256)")
                 || selector == _selector("swapV4(address,bool,uint24,int24,address,address,uint256,uint256,uint256)")
-                || selector == _selector(
-                    "swapCurve(address,bool,address[11],uint256[4][5],address[5],uint256,uint256,uint256)"
-                )
-                || selector == _selector("exactETHToSTETH(address)")
-                || selector == _selector("exactETHToWSTETH(address)")
-                || selector == _selector("ethToExactSTETH(address,uint256)")
-                || selector == _selector("ethToExactWSTETH(address,uint256)")
-                || selector == _selector("deposit(address,uint256,uint256)")
+                || selector == _selector("swapAero(address,bool,address,address,uint256,uint256,uint256)")
+                || selector == _selector("swapAeroCL(address,bool,int24,address,address,uint256,uint256,uint256)")
+                || selector == _selector("swapDeep(address,address,address,uint256,bytes32,bool,uint256,uint256,uint256)")
+                || selector == _selector("deposit(address,uint256)")
                 || selector == _selector("wrap(uint256)")
                 || selector == _selector("unwrap(uint256)")
-                || selector == _selector("sweep(address,uint256,uint256,address)")
+                || selector == _selector("sweep(address,uint256,address)")
         ) return;
 
         revert BadPlan();

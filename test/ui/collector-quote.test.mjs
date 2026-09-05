@@ -93,7 +93,8 @@ async function boot() {
   });
 
   // The page fetches over the network for prices; give it the real thing.
-  w.fetch = (...a) => fetch(...a);
+  const netErrs = [];
+  w.fetch = (...a) => fetch(...a).catch(e => { netErrs.push(e); throw e; });
 
   // Ask the page, from inside its own realm, for the bindings under test.
   // Per-name, so one binding that lives in another script block cannot hide
@@ -361,7 +362,10 @@ async function bootWith(search) {
     w.addEventListener('load', r);
     setTimeout(r, 8000);
   });
-  w.fetch = (...a) => fetch(...a);
+  // Same capture as boot(): a node that could not be reached is not a pricing
+  // regression, and the deep-link tests read this to skip rather than fail.
+  const netErrs = [];
+  w.fetch = (...a) => fetch(...a).catch(e => { netErrs.push(e); throw e; });
   // The handler defers by 50ms and the quote race runs after that; a deep link
   // that resolves its tokens but never prices anything is still broken.
   await new Promise(r => setTimeout(r, 12000));
@@ -374,18 +378,20 @@ async function bootWith(search) {
                                     route: document.getElementById('routeInfo')?.textContent ?? null };`;
   w.document.body.appendChild(s);
   const dl = w.__dl;
-  return { w, dl, close: () => { try { w.close(); } catch {} } };
+  return { w, dl, netErrs, close: () => { try { w.close(); } catch {} } };
 }
 
 test('deep link ?from=bold&to=fwc&amt=5 resolves both sides and the amount', async (t) => {
-  const { dl, close } = await bootWith('?from=bold&to=fwc&amt=5');
+  const { dl, netErrs, close } = await bootWith('?from=bold&to=fwc&amt=5');
   t.after(close);
   if (!dl) return t.skip('page did not boot');
   assert.equal(dl.to, 'FWC', `to side resolved, got ${dl.to}`);
   assert.equal(dl.from, 'BOLD', `from side resolved, got ${dl.from}`);
   assert.equal(dl.mode, 'exactIn');
   assert.equal(dl.amt, '5', 'amount applied to the input');
-  // Resolving the pair is not enough - the link has to price.
+  // Resolving the pair is not enough - the link has to price. A node that
+  // could not be reached is not a pricing regression, though.
+  if (!dl.out && netErrs.length) return t.skip(`RPC unavailable: ${netErrs[0]}`);
   assert.ok(dl.out && Number(dl.out) > 0, `no quote produced (toAmount=${dl.out}, route=${dl.route})`);
   // A venue, not THE venue. This demanded the sale, which is ETH-denominated -
   // so reaching it from BOLD costs a hop the pools do not, and the router is

@@ -111,6 +111,70 @@ describe('a wallet on mainnet', () => {
   });
 });
 
+describe('a wallet the user disconnected on purpose', () => {
+  test('still tells the page which chain it is on', async () => {
+    const chain = new MockChain({ chainId: BASE, autoConnected: true });
+    const p = await loadPage({ chain, hash: null, session: { dc: '1' } });
+    await p.waitFor(() => p.window.eval('wireWallet.probed') === 1, { label: 'chain probe' });
+    await p.settle();
+    assert.equal(p.window.eval('CHAIN_ID'), 8453, 'reads go to Base, so the page is on Base');
+    assert.equal(p.text('addr'), 'Connect', 'the account stays disconnected');
+    p.close();
+  });
+});
+
+describe('without a wallet', () => {
+  test('the network chip cycles the chain and the choice survives a reload', async () => {
+    const p = await loadPage({ walletless: true, hash: null });
+    p.click('net');
+    await p.settle();
+    assert.equal(p.reloads(), 1, 'the chip reloads onto the next chain');
+    assert.equal(p.window.localStorage.getItem('zswap:chain'), '4663', 'chains cycle in id order');
+    p.close();
+    const q = await loadPage({ walletless: true, hash: null, storage: { 'zswap:chain': '8453' } });
+    await q.settle();
+    assert.equal(q.window.eval('CHAIN_ID'), 8453, 'the stored chain is restored');
+    assert.match(q.text('net'), /BASE/);
+    q.close();
+  });
+
+  test('a pinned read node is only used on the chain it was pinned for', async () => {
+    const p = await loadPage({ walletless: true, hash: 'chain=8453&token=ETH&out=WETH&amount=1',
+      storage: { 'zswap:rpc': 'https://pinned.example' } });
+    await p.settle();
+    await p.waitFor(() => p.window.eval('CHAIN_ID') === 8453, { label: 'link chain' });
+    await p.settle();
+    assert.ok(!(p.chain.httpLog || []).some(r => /pinned\.example/.test(r.url)), 'a mainnet pin never answers a Base read');
+    p.close();
+  });
+});
+
+describe('the hybrid plan on an L2', () => {
+  test('only hands the forwarder an AMM leg it can validate', async () => {
+    const p = await onBase();
+    await p.connect({ pin: false });
+    const w = p.window;
+    const sel = w.eval('SEL_MULTICALL');
+    const swapV3 = '0xafeae12b' + '00'.repeat(32 * 8);
+    const aeroCL = '0xcb924a09' + '00'.repeat(32 * 8);
+    const mc = inner => {
+      const body = inner.slice(2);
+      const words = ['20', '01', '20', (body.length / 2).toString(16)].map(x => x.padStart(64, '0')).join('');
+      return '0x' + sel + words + body + '0'.repeat((64 - body.length % 64) % 64);
+    };
+    assert.equal(w.eval(`bolOk("${swapV3}")`), true, 'a UniV3 leg is accepted');
+    assert.equal(w.eval(`bolOk("${mc(swapV3)}")`), true, 'wrapped in a multicall too');
+    // The deployed SwapbolL2 admits the L2 router vocabulary: Aerodrome and
+    // Slipstream legs, Deepstate fills, the 3-arg sweep and the 2-arg deposit.
+    assert.equal(w.eval(`bolOk("${mc(aeroCL)}")`), true, 'a Slipstream leg is accepted by the corrected forwarder');
+    const sweep3 = '0xdc2c256f' + '00'.repeat(32 * 3);
+    assert.equal(w.eval(`bolOk("${mc(sweep3)}")`), true, 'the L2 sweep shape too');
+    assert.equal(w.eval(`bolOk("${mc('0xdeadbeef' + '00'.repeat(32))}")`), false, 'anything outside the vocabulary is still refused');
+    assert.equal(w.eval('SOURCES[SRC_DEEP]||"?"'), '?');
+    p.close();
+  });
+});
+
 describe('share links', () => {
   test('carry the chain off mainnet and omit it on mainnet', async () => {
     const p = await onBase();

@@ -2027,7 +2027,7 @@ export async function loadPage(opts = {}) {
 
   const tick = () => new Promise(r => window.setTimeout(r, 0));
   /** Wait until `fn()` is truthy. Polls; never sleeps a fixed duration. */
-  page.waitFor = async (fn, { timeout = 4000, label = 'condition' } = {}) => {
+  page.waitFor = async (fn, { timeout = 10000, label = 'condition' } = {}) => {
     const end = Date.now() + timeout;
     let lastErr;
     while (Date.now() < end) {

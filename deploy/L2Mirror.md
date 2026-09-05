@@ -36,7 +36,7 @@ original, so the mainnet contracts keep reproducing from their files:
 | L2 source | differs from | how |
 |---|---|---|
 | `src/forwarders/OrderbolL2.sol` | Orderbol | WETH is an immutable constructor argument |
-| `src/forwarders/SwapbolL2.sol` | Swapbol | WETH immutable; **no v1 board binding** — the legacy Swapboard only ever existed on mainnet, so the forwarder binds three venues and refuses the v1 fill shape |
+| `src/forwarders/SwapbolL2.sol` | Swapbol | WETH immutable; **no v1 board binding** — the legacy Swapboard only ever existed on mainnet, so the forwarder binds three venues and refuses the v1 fill shape; **admits the L2 routers' AMM vocabulary** (`swapAero`, `swapAeroCL`, `swapDeep`, `sweep(address,uint256,address)`, `deposit(address,uint256)`) instead of mainnet zRouter's |
 | `src/pools/PrecisionRouteL2.sol` | PrecisionRoute | WETH immutable, still bound once at deployment and never read from a caller |
 
 Tests: `test/OrderbolL2*.t.sol` and `test/SwapbolL2.t.sol` are the original
@@ -136,3 +136,13 @@ and `deploy 4663` resumed from where the log said it had stopped.
 | PrecisionRouteL2 | `0x000000D14E24e5FC8965bcDE58f21f704C944999` | `0x4c5c444d622c9a5bc06d279b72b66b002d84d821d6c83e4fbca18247c39cf21d` |
 
 ~31.9M gas at ~0.4 gwei plus the L1 component, ~0.014 ETH in all.
+
+## SwapbolL2 superseded once (2026-09-06)
+
+The first SwapbolL2 (`0x00000032100E634903378DAEED6bA448f35F541a`, both chains) kept
+mainnet zRouter's AMM allowlist in `_validateAmmData`, so any hybrid book+AMM plan whose
+remainder was an Aerodrome, Slipstream or Deepstate leg, or used the L2 routers' 3-arg
+`sweep` / 2-arg `deposit`, reverted `BadPlan` at preflight. It holds no funds and nothing
+points at it. The corrected build lives at `0x000000015d9428959A495E31A6999E1C61C64F00`
+on both chains (new CREATE3 salt in the manifest; `supersedes` records the old address),
+and the page's `L2B.sw` and its forwarder gate (`BOL_OK`) name the L2 vocabulary.
