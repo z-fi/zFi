@@ -46,6 +46,10 @@
     <h2>Wallet</h2>
     <div class="row" id="wallet-list"><span class="hint">Looking for wallets…</span></div>
     <div class="row"><button id="connect">Connect</button></div>
+    <div class="row" id="chain-row">
+      <button class="ghost" id="ch-8453"></button>
+      <button class="ghost" id="ch-4663"></button>
+    </div>
     <dl><dt>You</dt><dd id="p-you">—</dd><dt>Chain</dt><dd id="p-chain">—</dd></dl>
     <div class="msg" id="w-out"></div>
   </section>
@@ -77,10 +81,15 @@ const CREATEX='0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed';
 const SALT='0x1c0aa8ccd568d90d61659f060d1bfb1e6f855a2000000000000000000000f4a7';
 const GUARDED='0x439f5ea62fa520a0b7ea298ea85678ca2b3ec9eb5699691e33f68b05e58de847';
 const ADDR='0x508ad1b0ae31faf295c5af8c5c2be9e33e0d19c4';
+const ICON_BASE=`<svg viewBox="0 0 32 32" width="20" height="20" aria-hidden="true"><rect width="32" height="32" fill="#0052FF"/><path d="M16 5.4A10.6 10.6 0 0 0 5.5 14.7h13.9v2.6H5.5A10.6 10.6 0 1 0 16 5.4Z" fill="#fff" transform="rotate(180 16 16)"/></svg>`;
+const ICON_RH=`<svg viewBox="0 0 32 32" width="20" height="20" aria-hidden="true"><rect width="32" height="32" fill="#CCFF00"/><g transform="translate(4 4)" fill="#110E08"><path d="M2.84 24h.53c.096 0 .192-.048.224-.128C7.591 13.696 11.94 8.656 14.67 5.638c.112-.128.064-.225-.096-.225h-4.88a.55.55 0 0 0-.45.225L5.746 9.972c-.514.642-.642 1.236-.642 2.086v4.43c-1.14 3.194-1.862 5.361-2.392 7.32-.032.125.016.192.129.192M20.447.646c-.754-.802-4.157-.834-5.73-.224a3 3 0 0 0-.786.465 41 41 0 0 0-3.323 3.178c-.112.113-.064.225.097.225h5.409c.497 0 .786.289.786.786v6.1c0 .16.128.208.225.064l3.258-4.254c.53-.69.69-.898.835-1.861.192-1.413.08-3.58-.77-4.479m-6.982 16.18 2.231-3.676a.7.7 0 0 0 .064-.29V6.73c0-.16-.112-.225-.224-.097-3.355 3.74-5.971 7.672-8.395 12.407-.06.12.016.225.16.177l5.009-1.54c.565-.174.882-.402 1.155-.852"/></g></svg>`;
 const PM={
-'0x2105':{name:'Base',pm:'0x498581fF718922c3f8e6A244956aF099B2652b2b'},
-'0x1237':{name:'Robinhood',pm:'0x8366a39CC670B4001A1121B8F6A443A643e40951'},
+'0x2105':{id:8453,name:'Base',pm:'0x498581fF718922c3f8e6A244956aF099B2652b2b',icon:ICON_BASE,
+  rpcs:['https://mainnet.base.org'],explorer:'https://basescan.org'},
+'0x1237':{id:4663,name:'Robinhood',pm:'0x8366a39CC670B4001A1121B8F6A443A643e40951',icon:ICON_RH,
+  rpcs:['https://rpc.mainnet.chain.robinhood.com'],explorer:'https://robinscan.io'},
 };
+const byId=(n)=>PM['0x'+n.toString(16)];
 
 const $=(id)=>document.getElementById(id);
 const show=(el,t,c)=>{el.textContent=t;el.className='msg show '+(c||'')};
@@ -169,20 +178,57 @@ const tx=()=>({from:account,to:CREATEX,data:calldata(),value:'0x0'});
 $('d-code').textContent=window.V4PORTL2_INITCODE
   ?((window.V4PORTL2_INITCODE.length-2)/2)+' bytes + 32 for the manager':'MISSING';
 
+function renderChains(){
+  for(const hex of Object.keys(PM)){
+    const cfg=PM[hex], b=$('ch-'+cfg.id);
+    if(!b)continue;
+    b.innerHTML=cfg.icon+'<span>'+cfg.name+'</span>';
+    b.className=(chainHex===hex)?'':'ghost';
+    b.title=chainHex===hex?'On '+cfg.name:'Switch to '+cfg.name;
+    b.onclick=()=>pickChain(hex);
+  }
+}
+async function readChain(){
+  chainHex=await provider.request({method:'eth_chainId'});
+  const cfg=PM[chainHex];
+  $('p-chain').textContent=cfg?cfg.name+' ('+cfg.id+')'
+    :'unsupported — chain '+parseInt(chainHex,16)+', pick one above';
+  $('d-pm').textContent=cfg?cfg.pm:'—';
+  $('d-check').disabled=!cfg;
+  $('d-sim').disabled=true;$('d-send').disabled=true;
+  $('d-occ').textContent='—';
+  renderChains();
+  return cfg;
+}
+async function pickChain(hex){
+  if(!provider)return show($('w-out'),'Connect a wallet first.','bad');
+  const cfg=PM[hex];
+  try{
+    await provider.request({method:'wallet_switchEthereumChain',params:[{chainId:hex}]});
+  }catch(e){
+    if(e&&e.code===4902){
+      try{
+        await provider.request({method:'wallet_addEthereumChain',params:[{chainId:hex,chainName:cfg.name,
+          nativeCurrency:{name:'Ether',symbol:'ETH',decimals:18},rpcUrls:cfg.rpcs,blockExplorerUrls:[cfg.explorer]}]});
+      }catch(e2){return show($('w-out'),'Could not add '+cfg.name+': '+(e2.message||e2),'bad')}
+    }else if(e&&e.code===4001){
+      return show($('w-out'),'Chain switch rejected.','');
+    }else return show($('w-out'),e.message||String(e),'bad');
+  }
+  const now=await readChain();
+  show($('w-out'),now?('On '+now.name+'.'):'Wallet did not switch.',now?'ok':'bad');
+}
 async function connect(){
   try{
     const p=await getProvider();
     if(!p)return show($('w-out'),wallets.size>1?'Several wallets installed. Pick one above.'
       :'No wallet found. Over file:// serve locally: cd dapp && python3 -m http.server 8017','bad');
     account=(await p.request({method:'eth_requestAccounts'}))[0];
-    chainHex=await p.request({method:'eth_chainId'});
-    const cfg=PM[chainHex];
     $('p-you').textContent=account;
-    $('p-chain').textContent=cfg?cfg.name+' ('+parseInt(chainHex,16)+')':'unsupported ('+chainHex+')';
-    $('d-pm').textContent=cfg?cfg.pm:'— switch to Base or Robinhood';
-    $('d-check').disabled=!cfg;
-    show($('w-out'),'Connected via '+walletName(p)+'.',cfg?'ok':'bad');
-    p.on&&p.on('chainChanged',()=>location.reload());
+    const cfg=await readChain();
+    show($('w-out'),'Connected via '+walletName(p)+(cfg?' on '+cfg.name:' — pick a chain above'),cfg?'ok':'bad');
+    // The wallet can move under us; follow it instead of demanding a reload.
+    p.on&&p.on('chainChanged',()=>{readChain().catch(()=>{})});
   }catch(e){show($('w-out'),e.message||String(e),'bad')}
 }
 function walletName(p){
@@ -192,6 +238,7 @@ function walletName(p){
 }
 $('connect').onclick=connect;
 renderWallets();
+renderChains();
 
 $('d-check').onclick=async()=>{
   $('d-sim').disabled=true;$('d-send').disabled=true;
