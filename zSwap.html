@@ -483,13 +483,13 @@ let CHAIN_ID=1;
 const CHAIN_ICON_BASE=`<svg viewBox="0 0 32 32" width="20" height="20" aria-hidden="true"><rect width="32" height="32" fill="#0052FF"/><path d="M16 5.4A10.6 10.6 0 0 0 5.5 14.7h13.9v2.6H5.5A10.6 10.6 0 1 0 16 5.4Z" fill="#fff" transform="rotate(180 16 16)"/></svg>`;
 const CHAIN_ICON_RH=`<svg viewBox="0 0 32 32" width="20" height="20" aria-hidden="true"><rect width="32" height="32" fill="#CCFF00"/><g transform="translate(4 4)" fill="#110E08"><path d="M2.84 24h.53c.096 0 .192-.048.224-.128C7.591 13.696 11.94 8.656 14.67 5.638c.112-.128.064-.225-.096-.225h-4.88a.55.55 0 0 0-.45.225L5.746 9.972c-.514.642-.642 1.236-.642 2.086v4.43c-1.14 3.194-1.862 5.361-2.392 7.32-.032.125.016.192.129.192M20.447.646c-.754-.802-4.157-.834-5.73-.224a3 3 0 0 0-.786.465 41 41 0 0 0-3.323 3.178c-.112.113-.064.225.097.225h5.409c.497 0 .786.289.786.786v6.1c0 .16.128.208.225.064l3.258-4.254c.53-.69.69-.898.835-1.861.192-1.413.08-3.58-.77-4.479m-6.982 16.18 2.231-3.676a.7.7 0 0 0 .064-.29V6.73c0-.16-.112-.225-.224-.097-3.355 3.74-5.971 7.672-8.395 12.407-.06.12.016.225.16.177l5.009-1.54c.565-.174.882-.402 1.155-.852"/></g></svg>`;
 const CHAINS={
-1:{name:"Ethereum",short:"ETH",sweep4:true,v4port:"0x000000dfb53Fa7f1c486470034741d5BCBE14BE9",v4lens:"0x000000c3aE1692983941495162A4AAB40660E65F",tokenlist:"0x0000006013dF75A31678B786061C2B54bf531524",
+1:{name:"Ethereum",short:"ETH",sweep4:true,curve:5,sources:["UniV2","Sushi","zAMM","UniV3","UniV4","Curve","Lido","Wrap","Precision"],v4port:"0x000000dfb53Fa7f1c486470034741d5BCBE14BE9",v4lens:"0x000000c3aE1692983941495162A4AAB40660E65F",tokenlist:"0x0000006013dF75A31678B786061C2B54bf531524",
 wrapped:"0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",explorer:"https://etherscan.io",
 rpcs:["https://ethereum-rpc.publicnode.com","https://eth-mainnet.public.blastapi.io"]},
-8453:{name:"Base",short:"BASE",sweep4:false,v4port:"0x508ad1b0ae31FaF295c5af8C5c2bE9e33E0D19C4",v4lens:"0x0000000000000000000000000000000000000000",tokenlist:"0x0000000000000000000000000000000000000000",
+8453:{name:"Base",short:"BASE",sweep4:false,curve:-1,sources:["UniV2","Aero","zAMM","UniV3","UniV4","AeroCL","Wrap","","Precision"],v4port:"0x508ad1b0ae31FaF295c5af8C5c2bE9e33E0D19C4",v4lens:"0x0000000000000000000000000000000000000000",tokenlist:"0x0000000000000000000000000000000000000000",
 wrapped:"0x4200000000000000000000000000000000000006",explorer:"https://basescan.org",
 icon:CHAIN_ICON_BASE,rpcs:["https://mainnet.base.org","https://base-rpc.publicnode.com"]},
-4663:{name:"Robinhood",short:"RH",sweep4:false,v4port:"0x508ad1b0ae31FaF295c5af8C5c2bE9e33E0D19C4",v4lens:"0x0000000000000000000000000000000000000000",tokenlist:"0x0000000000000000000000000000000000000000",
+4663:{name:"Robinhood",short:"RH",sweep4:false,curve:5,sources:["UniV2","Sushi","zAMM","UniV3","UniV4","Curve","Lido","Wrap","Precision"],v4port:"0x508ad1b0ae31FaF295c5af8C5c2bE9e33E0D19C4",v4lens:"0x0000000000000000000000000000000000000000",tokenlist:"0x0000000000000000000000000000000000000000",
 wrapped:"0x0bd7d308f8e1639fab988df18a8011f41eacad73",explorer:"https://robinscan.io",
 rpcs:["https://rpc.mainnet.chain.robinhood.com"]},
 };
@@ -526,7 +526,7 @@ let V4LENS="0x000000c3aE1692983941495162A4AAB40660E65F";
 const SEL_V4QUOTE="d500463c",SEL_V4SWAP="48e6f730";
 const V4POOL_KEY="0x95a932c205571d4d1ca72715c642a2eca21dde79ffc28ff11509681f9383385f";
 const C="eth_call",S="eth_sendTransaction",L="latest",I="eth_chainId";
-const SOURCES=["UniV2","Sushi","zAMM","UniV3","UniV4","Curve","Lido","Wrap","Precision"];
+let SOURCES=["UniV2","Sushi","zAMM","UniV3","UniV4","Curve","Lido","Wrap","Precision"];
 const SRC_PRECISION=8;
 const ETH_ICON=`<svg width="20" height="20" viewBox="0 0 32 32"><g fill="none" fill-rule="evenodd"><circle cx="16" cy="16" r="16" fill="#627EEA"/><g fill="#FFF" fill-rule="nonzero"><path fill-opacity=".602" d="M16.498 4v8.87l7.497 3.35z"/><path d="M16.498 4L9 16.22l7.498-3.35z"/><path fill-opacity=".602" d="M16.498 21.968v6.027L24 17.616z"/><path d="M16.498 27.995v-6.028L9 17.616z"/><path fill-opacity=".2" d="M16.498 20.573l7.497-4.353-7.497-3.348z"/><path fill-opacity=".602" d="M9 16.22l7.498 4.353v-7.701z"/></g></g></svg>`;
 const USDC_ICON=`<svg width="20" height="20" viewBox="0 0 32 32"><g fill="none"><circle fill="#2775CA" cx="16" cy="16" r="16"/><g fill="#FFF"><path d="M20.022 18.124c0-2.124-1.28-2.852-3.84-3.156-1.828-.243-2.193-.728-2.193-1.578 0-.85.61-1.396 1.828-1.396 1.097 0 1.707.364 2.011 1.275a.458.458 0 00.427.303h.975a.416.416 0 00.427-.425v-.06a3.04 3.04 0 00-2.743-2.489V9.142c0-.243-.183-.425-.487-.486h-.915c-.243 0-.426.182-.487.486v1.396c-1.829.242-2.986 1.456-2.986 2.974 0 2.002 1.218 2.791 3.778 3.095 1.707.303 2.255.668 2.255 1.639 0 .97-.853 1.638-2.011 1.638-1.585 0-2.133-.667-2.316-1.578-.06-.242-.244-.364-.427-.364h-1.036a.416.416 0 00-.426.425v.06c.243 1.518 1.219 2.61 3.23 2.914v1.457c0 .242.183.425.487.485h.915c.243 0 .426-.182.487-.485V21.34c1.829-.303 3.047-1.578 3.047-3.217z"/><path d="M12.892 24.497c-4.754-1.7-7.192-6.98-5.424-11.653.914-2.55 2.925-4.491 5.424-5.402.244-.121.365-.303.365-.607v-.85c0-.242-.121-.424-.365-.485-.061 0-.183 0-.244.06a10.895 10.895 0 00-7.13 13.717c1.096 3.4 3.717 6.01 7.13 7.102.244.121.488 0 .548-.243.061-.06.061-.122.061-.243v-.85c0-.182-.182-.424-.365-.546zm6.46-18.936c-.244-.122-.488 0-.548.242-.061.061-.061.122-.061.243v.85c0 .243.182.485.365.607 4.754 1.7 7.192 6.98 5.424 11.653-.914 2.55-2.925 4.491-5.424 5.402-.244.121-.365.303-.365.607v.85c0 .242.121.424.365.485.061 0 .183 0 .244-.06a10.895 10.895 0 007.13-13.717c-1.096-3.46-3.778-6.07-7.13-7.162z"/></g></g></svg>`;
@@ -571,6 +571,7 @@ WETH=c.wrapped;
 TOKENLIST=c.tokenlist;
 V4LENS=c.v4lens||ZERO;
 V4PORT=c.v4port||ZERO;
+try{if(c.sources)SOURCES=c.sources.slice();SRC_CURVE=(c.curve===undefined?5:c.curve)}catch{}
 if(c.tokens){TOKENS=c.tokens.slice();BUILTIN=TOKENS.slice()}
 try{if(c.rpcs&&c.rpcs.length){rpcPool=[...new Set(c.rpcs)];rpcPi=0;curated=0;curatedTry=0}}catch{}
 try{localStorage[CHAIN_STORE]=String(id)}catch{}
@@ -2741,7 +2742,7 @@ const gasPriceJob=acct?rpc("eth_gasPrice",[]).then(BigInt).catch(()=>0n):Promise
 let venueLost=false;
 const v4Job=isIn?quoteV4Pools(f,t,swapAmt,quoteBlock).catch(()=>{venueLost=true;return null}):Promise.resolve(null);
 const preJob=isIn?quotePrecision(f,t,swapAmt,PROUTE,quoteBlock).catch(()=>{venueLost=true;return null}):Promise.resolve(null);
-const SRC_CURVE=5;
+let SRC_CURVE=5;
 let curveOnlyOut=false;
 const exactOutSafe=y=>{if(isIn||!y.sources||!y.sources.includes(SRC_CURVE))return true;curveOnlyOut=true;return false};
 const pick=y=>{if(!y)return;if(!exactOutSafe(y))return;const v=isIn?y.best.amountOut:y.best.amountIn;if(!v)return;
