@@ -486,15 +486,25 @@ const CHAINS={
 1:{name:"Ethereum",short:"ETH",sweep4:true,curve:5,slvId:"1",slvSlug:"ethereum",sources:["UniV2","Sushi","zAMM","UniV3","UniV4","Curve","Lido","Wrap","Precision"],v4port:"0x000000dfb53Fa7f1c486470034741d5BCBE14BE9",v4lens:"0x000000c3aE1692983941495162A4AAB40660E65F",tokenlist:"0x0000006013dF75A31678B786061C2B54bf531524",
 wrapped:"0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",explorer:"https://etherscan.io",
 rpcs:["https://ethereum-rpc.publicnode.com","https://eth-mainnet.public.blastapi.io"]},
-8453:{name:"Base",short:"BASE",sweep4:false,curve:-1,slvId:"8453",slvSlug:"base",sources:["UniV2","Aero","zAMM","UniV3","UniV4","AeroCL","Wrap","","Precision"],v4port:"0x508ad1b0ae31FaF295c5af8C5c2bE9e33E0D19C4",v4lens:"0x0000000000000000000000000000000000000000",tokenlist:"0x0000000000000000000000000000000000000000",
+8453:{name:"Base",short:"BASE",sweep4:false,curve:-1,slvId:"8453",slvSlug:"base",sources:["UniV2","Aero","zAMM","UniV3","UniV4","AeroCL","Wrap","","Precision"],v4port:"0x508ad1b0ae31FaF295c5af8C5c2bE9e33E0D19C4",v4lens:"0x0000000000000000000000000000000000000000",tokenlist:"0x0000006013dF75A31678B786061C2B54bf531524",
 wrapped:"0x4200000000000000000000000000000000000006",explorer:"https://basescan.org",
 icon:CHAIN_ICON_BASE,rpcs:["https://mainnet.base.org","https://base-rpc.publicnode.com"]},
-4663:{name:"Robinhood",short:"RH",sweep4:false,curve:5,slvId:"4663",slvSlug:"",sources:["UniV2","Sushi","zAMM","UniV3","UniV4","Curve","Lido","Wrap","Precision"],v4port:"0x508ad1b0ae31FaF295c5af8C5c2bE9e33E0D19C4",v4lens:"0x0000000000000000000000000000000000000000",tokenlist:"0x0000000000000000000000000000000000000000",
+4663:{name:"Robinhood",short:"RH",sweep4:false,curve:5,slvId:"4663",slvSlug:"",sources:["UniV2","Sushi","zAMM","UniV3","UniV4","Curve","Lido","Wrap","Precision"],v4port:"0x508ad1b0ae31FaF295c5af8C5c2bE9e33E0D19C4",v4lens:"0x0000000000000000000000000000000000000000",tokenlist:"0x0000006013dF75A31678B786061C2B54bf531524",
 wrapped:"0x0bd7d308f8e1639fab988df18a8011f41eacad73",explorer:"https://robinscan.io",
 rpcs:["https://rpc.mainnet.chain.robinhood.com"]},
 };
 CHAINS[4663].icon=CHAIN_ICON_RH;
 const chainCfg=()=>CHAINS[CHAIN_ID]||CHAINS[1];
+const L1_RPCS=["https://ethereum-rpc.publicnode.com","https://eth-mainnet.public.blastapi.io"];
+let l1i=0;
+const l1Read=async(method,params)=>{
+for(let k=0;k<L1_RPCS.length*2;k++){
+const u=L1_RPCS[l1i%L1_RPCS.length];
+try{return await httpRead(u,method,params)}catch(e){l1i++}
+}
+throw Error("no mainnet read node");
+};
+const cfgRead=(method,params)=>CHAIN_ID===1?rpc(method,params):l1Read(method,params);
 const SHARE_HOST="new.zswap.wei.limo";
 const ZERO="0x0000000000000000000000000000000000000000";
 let WETH="0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2";
@@ -811,11 +821,11 @@ let rankFellBack=false,listLive=false;
 const rankedIds=async()=>{
 rankFellBack=false;
 try{
-const ids=decUintArr(await rpc(C,[{to:ZLISTLENS,data:"0x"+SEL_RANKEDIDS},L]));
+const ids=decUintArr(await cfgRead(C,[{to:ZLISTLENS,data:"0x"+SEL_RANKEDIDS},L]));
 if(ids.length)return ids;
 }catch{}
 try{
-const ids=decUintArr(await rpc(C,[{to:TOKENLIST,data:"0x"+SEL_RANKEDIDS},L]));
+const ids=decUintArr(await cfgRead(C,[{to:TOKENLIST,data:"0x"+SEL_RANKEDIDS},L]));
 if(ids.length)rankFellBack=true;
 return ids;
 }catch{return[]}
@@ -835,7 +845,7 @@ const cntJob=rpc(C,[{to:PFACTORY,data:"0x"+SEL_BYCREATOR_N+encAddr(PLAUNCH)},L])
 cntJob.catch(()=>{});
 const ids=await rankedIds();
 if(!ids.length)return setListSource("registry is empty");
-const raw=await mc3Deep(ids.slice(0,64).map(id=>({to:TOKENLIST,data:"0x"+SEL_JSON+encUint(id)})));
+const raw=await cfgBatch(ids.slice(0,64).map(id=>({to:TOKENLIST,data:"0x"+SEL_JSON+encUint(id)})));
 const rows=raw.map(h=>{try{return h?decStr(h):null}catch{return null}});
 const next=[];
 for(const row of rows){
@@ -1083,7 +1093,7 @@ const exec="0x"+strip0x(ex||"0x").slice(24);
 if(!isAddr(exec)){solversJob=null;return}
 if(exec.toLowerCase()!==SOLVER_EXEC_PIN.toLowerCase()){solverLanes=[];return}
 solverExec=SOLVER_EXEC_PIN;
-const raw=await nodeRead("eth_call",[{to:list,data:"0x"+SEL_SLIST},L]);
+const raw=await cfgRead("eth_call",[{to:list,data:"0x"+SEL_SLIST},L]);
 solverLanes=decSolvers(raw).filter(x=>x.enabled
 &&x.adapter.toLowerCase()===SOLVER_FILL_PIN.toLowerCase()
 &&/^https:\/\/\S+$/.test(x.endpoint)
@@ -1483,6 +1493,12 @@ const mc3Clamp=n=>Number.isFinite(n)&&n>=2&&n<=MC3_MAX?Math.floor(n):MC3_COLD;
 let mc3Cap=mc3Clamp(Number(LS["zswap:mc3"]));
 let mc3Won=0;
 const mc3Save=()=>{try{LS["zswap:mc3"]=String(mc3Cap)}catch{}};
+const cfgBatch=async(cs,tag)=>{
+if(CHAIN_ID===1)return mc3Deep(cs,tag);
+if(!cs.length)return[];
+try{return decAgg3(await l1Read("eth_call",[{to:MC3,data:encAgg3(cs)},tag||L]))}
+catch{return cs.map(()=>null)}
+};
 const mc3Split=(cs,n)=>{const o=[];for(let i=0;i<cs.length;i+=n)o.push(cs.slice(i,i+n));return o};
 const MC3_LANES=12;
 let mc3Live=0;
@@ -3620,7 +3636,7 @@ const want=[...new Set(addrs.map(a=>a.toLowerCase()))]
 .filter(a=>a!==ZERO&&!known(a)&&logoCache[a]===undefined);
 if(!want.length)return;
 let raw=[];
-if(TOKENLIST!==ZERO)raw=await mc3Deep(want.map(a=>({to:TOKENLIST,data:"0x"+SEL_LOGOOF+encAddr(a)}))).catch(()=>[]);
+if(TOKENLIST!==ZERO)raw=await cfgBatch(want.map(a=>({to:TOKENLIST,data:"0x"+SEL_LOGOOF+encAddr(a)}))).catch(()=>[]);
 want.forEach((a,i)=>{let u="";try{if(raw[i])u=safeDataUrl(decodeString(raw[i]))}catch{}logoCache[a]=u});
 capObj(logoCache,LOGO_MAX);
 const self=want.filter(a=>!logoCache[a]);
