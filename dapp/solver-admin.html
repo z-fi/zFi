@@ -72,7 +72,7 @@
     </tr></thead><tbody id="rows"><tr><td colspan="6" class="hint">Connect, then Load list.</td></tr></tbody></table>
     <p class="hint"><b>Probing needs a normal origin.</b> Wallet calls work anywhere, but plain
        outbound requests are blocked when this page is sandboxed — serve it with
-       <code>cd dapp &amp;&amp; python3 -m http.server 8017</code> and open it from localhost.
+       <code>cd dapp &amp;&amp; python3 -m http.server 8080</code> and open it from localhost.
        Load the list, then <b>Test all on Base</b>. Each row is probed with the
        same request shape zSwap uses, against its own endpoint — and this page runs from the
        origin your keyed gateways accept, so it can test what an outside caller cannot.
@@ -256,7 +256,7 @@ async function connect(){
   try{
     const p=await getProvider();
     if(!p)return show($('w-out'),wallets.size>1?'Several wallets installed. Pick one above.'
-      :'No wallet found. Over file:// serve locally: cd dapp && python3 -m http.server 8017','bad');
+      :'No wallet found. Over file:// serve locally: cd dapp && python3 -m http.server 8080','bad');
     account=(await p.request({method:'eth_requestAccounts'}))[0];
     await ensureMainnet(p);
     $('p-you').textContent=account;
@@ -329,8 +329,8 @@ async function testAll(chainId){
       'This page cannot reach the solver APIs, so nothing can be probed here.\n\n'
       +'Wallet calls work because they go through the extension; plain requests do not.\n'
       +'Serve the page from a normal origin instead:\n\n'
-      +'  cd dapp && python3 -m http.server 8017\n'
-      +'  http://localhost:8017/solver-admin.html\n\n'
+      +'  cd dapp && python3 -m http.server 8080\n'
+      +'  http://localhost:8080/solver-admin.html\n\n'
       +'Public APIs will answer there. The keyed gateways allow only the dapp origin,\n'
       +'so 0x, 1inch, Enso and OKX may still refuse until this runs from that host.','warn');
   }
