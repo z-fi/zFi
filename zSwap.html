@@ -483,13 +483,13 @@ let CHAIN_ID=1;
 const CHAIN_ICON_BASE=`<svg viewBox="0 0 32 32" width="20" height="20" aria-hidden="true"><rect width="32" height="32" fill="#0052FF"/><path d="M16 5.4A10.6 10.6 0 0 0 5.5 14.7h13.9v2.6H5.5A10.6 10.6 0 1 0 16 5.4Z" fill="#fff" transform="rotate(180 16 16)"/></svg>`;
 const CHAIN_ICON_RH=`<svg viewBox="0 0 32 32" width="20" height="20" aria-hidden="true"><rect width="32" height="32" fill="#CCFF00"/><g transform="translate(4 4)" fill="#110E08"><path d="M2.84 24h.53c.096 0 .192-.048.224-.128C7.591 13.696 11.94 8.656 14.67 5.638c.112-.128.064-.225-.096-.225h-4.88a.55.55 0 0 0-.45.225L5.746 9.972c-.514.642-.642 1.236-.642 2.086v4.43c-1.14 3.194-1.862 5.361-2.392 7.32-.032.125.016.192.129.192M20.447.646c-.754-.802-4.157-.834-5.73-.224a3 3 0 0 0-.786.465 41 41 0 0 0-3.323 3.178c-.112.113-.064.225.097.225h5.409c.497 0 .786.289.786.786v6.1c0 .16.128.208.225.064l3.258-4.254c.53-.69.69-.898.835-1.861.192-1.413.08-3.58-.77-4.479m-6.982 16.18 2.231-3.676a.7.7 0 0 0 .064-.29V6.73c0-.16-.112-.225-.224-.097-3.355 3.74-5.971 7.672-8.395 12.407-.06.12.016.225.16.177l5.009-1.54c.565-.174.882-.402 1.155-.852"/></g></svg>`;
 const CHAINS={
-1:{name:"Ethereum",short:"ETH",sweep4:true,curve:5,slvId:"1",slvSlug:"ethereum",sources:["UniV2","Sushi","zAMM","UniV3","UniV4","Curve","Lido","Wrap","Precision"],v4port:"0x000000dfb53Fa7f1c486470034741d5BCBE14BE9",v4lens:"0x000000c3aE1692983941495162A4AAB40660E65F",tokenlist:"0x0000006013dF75A31678B786061C2B54bf531524",
+1:{name:"Ethereum",short:"ETH",sweep4:true,curve:5,fill:"0x7A2f21e476cA2ADde027BC868c5a083338EEfE54",exec:"0x4f6633342045C80Efa6c8CAc41b9bdc6145168C4",slvId:"1",slvSlug:"ethereum",sources:["UniV2","Sushi","zAMM","UniV3","UniV4","Curve","Lido","Wrap","Precision"],v4port:"0x000000dfb53Fa7f1c486470034741d5BCBE14BE9",v4lens:"0x000000c3aE1692983941495162A4AAB40660E65F",tokenlist:"0x0000006013dF75A31678B786061C2B54bf531524",
 wrapped:"0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",explorer:"https://etherscan.io",
 rpcs:["https://ethereum-rpc.publicnode.com","https://eth-mainnet.public.blastapi.io"]},
-8453:{name:"Base",short:"BASE",sweep4:false,curve:-1,slvId:"8453",slvSlug:"base",sources:["UniV2","Aero","zAMM","UniV3","UniV4","AeroCL","Wrap","","Precision"],v4port:"0x508ad1b0ae31FaF295c5af8C5c2bE9e33E0D19C4",v4lens:"0x0000000000000000000000000000000000000000",tokenlist:"0x0000006013dF75A31678B786061C2B54bf531524",
+8453:{name:"Base",short:"BASE",sweep4:false,curve:-1,fill:"0x03d95ecAF7B2Ab6027b8541b19Cb0Ce5CEd9bC74",exec:"0x1434A2579DE1009aA12b7064A161E53a5be2C030",slvId:"8453",slvSlug:"base",sources:["UniV2","Aero","zAMM","UniV3","UniV4","AeroCL","Wrap","","Precision"],v4port:"0x508ad1b0ae31FaF295c5af8C5c2bE9e33E0D19C4",v4lens:"0x0000000000000000000000000000000000000000",tokenlist:"0x0000006013dF75A31678B786061C2B54bf531524",
 wrapped:"0x4200000000000000000000000000000000000006",explorer:"https://basescan.org",
 icon:CHAIN_ICON_BASE,rpcs:["https://mainnet.base.org","https://base-rpc.publicnode.com"]},
-4663:{name:"Robinhood",short:"RH",sweep4:false,curve:5,slvId:"4663",slvSlug:"",sources:["UniV2","Sushi","zAMM","UniV3","UniV4","Curve","Lido","Wrap","Precision"],v4port:"0x508ad1b0ae31FaF295c5af8C5c2bE9e33E0D19C4",v4lens:"0x0000000000000000000000000000000000000000",tokenlist:"0x0000006013dF75A31678B786061C2B54bf531524",
+4663:{name:"Robinhood",short:"RH",sweep4:false,curve:5,fill:"0x03d95ecAF7B2Ab6027b8541b19Cb0Ce5CEd9bC74",exec:"0x1434A2579DE1009aA12b7064A161E53a5be2C030",slvId:"4663",slvSlug:"",sources:["UniV2","Sushi","zAMM","UniV3","UniV4","Curve","Lido","Wrap","Precision"],v4port:"0x508ad1b0ae31FaF295c5af8C5c2bE9e33E0D19C4",v4lens:"0x0000000000000000000000000000000000000000",tokenlist:"0x0000006013dF75A31678B786061C2B54bf531524",
 wrapped:"0x0bd7d308f8e1639fab988df18a8011f41eacad73",explorer:"https://robinscan.io",
 rpcs:["https://rpc.mainnet.chain.robinhood.com"]},
 };
@@ -581,6 +581,7 @@ WETH=c.wrapped;
 TOKENLIST=c.tokenlist;
 V4LENS=c.v4lens||ZERO;
 V4PORT=c.v4port||ZERO;
+try{SOLVER_FILL_PIN=c.fill||ZERO;SOLVER_EXEC_PIN=c.exec||ZERO}catch{}
 try{if(c.sources)SOURCES=c.sources.slice();SRC_CURVE=(c.curve===undefined?5:c.curve)}catch{}
 if(c.tokens){TOKENS=c.tokens.slice();BUILTIN=TOKENS.slice()}
 try{if(c.rpcs&&c.rpcs.length){rpcPool=[...new Set(c.rpcs)];rpcPi=0;curated=0;curatedTry=0}}catch{}
@@ -1045,8 +1046,9 @@ const bmin=(a,b)=>a<b?a:b,bmax=(a,b)=>a>b?a:b;
 const SEL_SLIST="e3b06401",SEL_EXEC="495c73b0",SEL_FILL="0a1b4c9f";
 const SOLVERS_PIN="0x1Dfbb2f41B596F72187370469074C46de60dA2e3";
 const RPCS_PIN="0x8C7348D039f58C4e9cfA936EF410eec759213b12";
-const SOLVER_FILL_PIN="0x7A2f21e476cA2ADde027BC868c5a083338EEfE54";
-const SOLVER_EXEC_PIN="0x4f6633342045C80Efa6c8CAc41b9bdc6145168C4";
+let SOLVER_FILL_PIN="0x7A2f21e476cA2ADde027BC868c5a083338EEfE54";
+const SOLVER_ROW_TAG="0x7A2f21e476cA2ADde027BC868c5a083338EEfE54";
+let SOLVER_EXEC_PIN="0x4f6633342045C80Efa6c8CAc41b9bdc6145168C4";
 const SRC_SOLVER=9;
 const SRC_DEEP=10;
 const SOLVER_DEADLINE=1500,SOLVER_STRIKES=3,SOLVER_COOL=60000;
@@ -1095,7 +1097,7 @@ if(exec.toLowerCase()!==SOLVER_EXEC_PIN.toLowerCase()){solverLanes=[];return}
 solverExec=SOLVER_EXEC_PIN;
 const raw=await cfgRead("eth_call",[{to:list,data:"0x"+SEL_SLIST},L]);
 solverLanes=decSolvers(raw).filter(x=>x.enabled
-&&x.adapter.toLowerCase()===SOLVER_FILL_PIN.toLowerCase()
+&&x.adapter.toLowerCase()===SOLVER_ROW_TAG.toLowerCase()
 &&/^https:\/\/\S+$/.test(x.endpoint)
 &&SOLVER_SHAPES[x.name]
 &&x.chains.includes(CHAIN_ID)
