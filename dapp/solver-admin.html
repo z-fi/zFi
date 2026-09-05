@@ -59,6 +59,7 @@
       <button id="connect">Connect</button>
       <button id="load" class="ghost" disabled>Load list</button>
       <button id="test8453" class="ghost" disabled>Test all on Base</button>
+      <button id="test4663" class="ghost" disabled>Test all on Robinhood</button>
     </div>
     <dl><dt>You</dt><dd id="p-you">—</dd><dt>Owner</dt><dd id="p-owner">—</dd></dl>
     <div class="msg" id="w-out"></div>
@@ -104,9 +105,16 @@ const SEL_SOLVERS='e3b06401', SEL_SETEP='8c0381cd', SEL_ADD='b4671e31', SEL_OWNE
 
 // Checksummed on purpose: Bebop rejects any address that is not, tokens
 // included, and every other API accepts either form.
-const PROBE_CHAINS={8453:{id:"8453",slug:"base",
+const PROBE_CHAINS={
+8453:{id:"8453",slug:"base",
   weth:"0x4200000000000000000000000000000000000006",
-  usdc:"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"}};
+  usdc:"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"},
+// No aggregator indexes 4663 yet. The button exists so the answer can be
+// rechecked without changing anything — a path-style API has no slug to use
+// here, and will decline for that reason rather than for want of liquidity.
+4663:{id:"4663",slug:"",
+  weth:"0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+  usdc:"0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168"}};
 const AMT="100000000000000000";
 // Bebop rejects a lowercase taker outright ("addresses not checksummed"), and a
 // wallet hands its account back lowercase. The taker only shapes the quote, not
@@ -254,7 +262,7 @@ async function connect(){
     $('p-you').textContent=account;
     const o='0x'+(await call(LIST,'0x'+SEL_OWNER)).slice(26);
     $('p-owner').textContent=o+(o.toLowerCase()===account.toLowerCase()?'  \u2713 you':'  \u2717 not you');
-    $('load').disabled=false;$('test8453').disabled=false;
+    $('load').disabled=false;$('test8453').disabled=false;$('test4663').disabled=false;
     show($('w-out'),'Connected via '+walletName(p)+'.',o.toLowerCase()===account.toLowerCase()?'ok':'bad');
   }catch(e){show($('w-out'),e.message||String(e),'bad')}
 }
@@ -264,6 +272,7 @@ function walletName(p){
   return 'injected wallet';
 }
 $('test8453').onclick=()=>testAll(8453);
+$('test4663').onclick=()=>testAll(4663);
 $('connect').onclick=connect;
 renderWallets();
 
