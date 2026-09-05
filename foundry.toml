@@ -287,6 +287,13 @@ max_optimizer_runs = 200
 paths = "src/pools/PrecisionRoute.sol"
 max_optimizer_runs = 200
 
+# The L2 variant of the route, pinned for the same reason as its original: it
+# imports the factory, so without an entry it would inherit whichever unit it
+# lands in, and its CREATE3 payload is recorded against one exact build.
+[[profile.default.compilation_restrictions]]
+paths = "src/pools/PrecisionRouteL2.sol"
+max_optimizer_runs = 200
+
 [[profile.default.compilation_restrictions]]
 paths = "src/pools/PrecisionZap.sol"
 max_optimizer_runs = 200
