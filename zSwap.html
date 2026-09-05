@@ -372,7 +372,7 @@ background:var(--e);margin:.5em auto .1em}
 <label class="dly" title="Split the deposit into equal notes that can be spent one at a time. A withdrawal or exit always spends a whole note, so several small notes are what makes a partial spend possible later.">Notes<select id="pvSplit"><option value="1">1</option><option value="2">2</option><option value="4">4</option></select></label>
 <label class="dly">Arrives on<select id="pvChain"><option value="8453">Base</option><option value="4663">Robinhood</option><option value="1">Ethereum (withdraw)</option></select></label>
 <label class="dly" title="The address credited on the chain chosen above. Leave blank for this wallet. On Robinhood the unused gas budget refunds here too, so a contract wallet gets its refund at an aliased address.">Recipient<input id="pvTo" placeholder="0x… on that chain, defaults to you" autocomplete="off" spellcheck="false"></label>
-<label class="dly" title="Relayed: the relay proves and settles the exit, paying its own gas out of a flat fee, so this wallet never signs the exit. Yourself: the relay only proves; you send one atomic transaction that exits and bridges, fee-free, but from this wallet.">Exit<select id="pvPath"><option value="relay">Relayed, for a fee</option><option value="self">Yourself, one tx</option></select></label>
+<label class="dly" title="Through the relay: it proves and settles, paying its own gas; an exit costs a flat fee and this wallet never signs it. From this wallet: the relay only proves and you send the settle yourself, fee-free, but from this wallet. Applies to deposits, exits and payments.">Settle<select id="pvPath"><option value="relay">Through the relay</option><option value="self">From this wallet</option></select></label>
 <small id="pvKey" role="status"></small>
 <div id="pvList"></div>
 <small id="pvNote" role="status" aria-live="polite"></small>
@@ -6615,7 +6615,8 @@ const cpVerifySigma=(cx,cy,v,Rh,zh,ctx)=>{const x=BigInt(cx),y=BigInt(cy);if(!cp
 const R=pfromx(BigInt("0x"+strip0x(Rh).slice(2)),strip0x(Rh).slice(0,2)==="03");if(!R||!/^0x0[23][0-9a-fA-F]{64}$/.test(Rh))return false;
 const Cc=[x,y,1n],e=fmod(big(hexToBytes(keccak(cpCat(cpU8("tacit-open-sigma-v1"),beN(v,8),b32(ctx),hexToBytes(pcomp(Cc)),hexToBytes(pcomp(R)))))),FN);
 const X=padd(Cc,pneg(pmul(cpH,BigInt(v))));return pcomp(pmul(GP,BigInt(zh)))===pcomp(padd(R,pmul(X,e)))};
-const cpSettleData=(pv,pr)=>{const a=encBytes(pv),b=encBytes(pr);return"0x"+SEL_CPSETTLE+pad32("60")+encUint(96+a.length/2)+encUint(96+(a.length+b.length)/2)+a+b+pad32("0")};
+const cpSettleData=(pv,pr,ms=[])=>{const a=encBytes(pv),b=encBytes(pr),t=ms.map(encBytes);let off=ms.length*32,hd=encUint(ms.length);for(const x of t){hd+=encUint(off);off+=x.length/2}
+return"0x"+SEL_CPSETTLE+pad32("60")+encUint(96+a.length/2)+encUint(96+(a.length+b.length)/2)+a+b+hd+t.join("")};
 const cpSaveNotes=()=>{try{LS[CP_NOTES+cpFp]=JSON.stringify(cpNotes)}catch{}};
 const cpLoadNotes=()=>{try{const a=JSON.parse(LS[CP_NOTES+cpFp]||"[]");return Array.isArray(a)?a.filter(n=>Number.isInteger(n.i)&&/^\d+$/.test(n.v||"")):[]}catch{return[]}};
 const cpKeyFor=a=>{try{return LS[CP_KEY+a.toLowerCase()]}catch{return""}};
@@ -6699,8 +6700,13 @@ const tgt=n.ex||n,st=await relayFetch("/confidential/status?id="+encodeURICompon
 if(st.txHash)tgt.jtx=st.txHash;if(st.error)tgt.jerr=String(st.error).slice(0,120);
 const pr=st.proof||st.proofBytes;if(st.status==="proven"&&/^0x[0-9a-fA-F]+$/.test(st.publicValues||"")&&/^0x[0-9a-fA-F]+$/.test(pr||"")){tgt.pv=st.publicValues;tgt.pr=pr}
 cpSaveNotes()};
-const cpSettleWrap=async n=>{const r=await relayFetch("/confidential/submit",{type:"wrap",op:n.op,memos:[n.memo],mode:"settle"});
-if(!r.jobId)throw Error("The relay did not take the deposit.");n.job=r.jobId;n.js=r.status||"pending";n.rb=cpRelayBase();cpSaveNotes()};
+const cpSettleWrap=async n=>{const self=pvPath.value==="self",r=await relayFetch("/confidential/submit",{type:"wrap",op:n.op,memos:[n.memo],mode:self?"prove":"settle"});
+if(!r.jobId)throw Error("The relay did not take the deposit.");n.job=r.jobId;n.js=r.status||"pending";n.rb=cpRelayBase();n.self=self?1:0;delete n.stx;cpSaveNotes()};
+const cpSelfWrap=async n=>{if(!(n.pv&&n.pr))throw Error("The proof is not ready yet.");
+const req={from:account,to:CP_POOL,value:"0x0",data:cpSettleData(n.pv,n.pr,[n.memo]),gas:toHex(700000)};
+await rpc(C,[req,L]);
+n.stx=await sendTx([req]);cpSaveNotes();cpPaint();
+await settle(n.stx);n.js="settled";cpSaveNotes();stat.textContent=n.p?"Paid and settled.":"Settled into the pool."};
 const cpAmount=parts=>{const wei=parseUnits(pvAmt.value||"",18);
 if(wei<=0n)throw Error("How much ether?");
 if(wei%(CP_SCALE*BigInt(parts)))throw Error(parts>1?"That amount does not split evenly into "+parts+" notes.":"The pool keeps eight decimals — round the amount.");
@@ -6835,15 +6841,15 @@ if(!on){pvList.innerHTML="";return}
 const rows=cpNotes.map((n,j)=>{const{s,k}=cpStatus(n),x=n.ex,ch=x?CHAINS[x.ch].name:"",B=(a,l)=>`<button type="button" class="fclink" data-a="${a}" data-j="${j}">${l}</button>`;
 const paid=n.inv&&!!cpPool&&cpPool.wraps.some(w=>w[0]===k.dep);
 const act=s==="ready"?B("exit","exit")
-:s==="pending"?(n.job?(n.js==="failed"?"relay failed"+B("settle","retry"):"settling…"):n.inv&&!paid?"awaiting payment":B("settle","settle"))
+:s==="pending"?(n.job?(n.js==="failed"?"relay failed"+B("settle","retry"):n.self?(n.stx?"sent…":n.pv?B("wrapsend","settle"):"proving…"):"settling…"):n.inv&&!paid?"awaiting payment":B("settle","settle"))
 :s==="exiting"?(!x.job||x.js==="failed"?"relay failed"+B("exit","retry")
 :x.self?(x.ptx?"sent…":x.pv?B("send","send"):"proving…"):"relaying…")
 :s==="funded"?B("activate","activate")
 :s==="expired"?B("reclaim","reclaim")
 :s==="bridged"||s==="withdrawn"?`<a href="${CHAINS[x.ch].explorer}/address/${x.to}" target="_blank" rel="noreferrer">on ${ch}</a>`
-:s==="paying"?(n.job?"settling…":B("settle","settle")):s==="payfailed"?"relay failed"+B("settle","retry")
+:s==="paying"?(n.job?(n.self?(n.stx?"sent…":n.pv?B("wrapsend","settle"):"proving…"):"settling…"):B("settle","settle")):s==="payfailed"?"relay failed"+B("settle","retry")
 :s==="paid"?`<a href="${CHAINS[1].explorer}/tx/${n.tx}" target="_blank" rel="noreferrer">paid</a>`:s;
-return`<div class="cpr"><span><b>${cpFmt(n.v)} ETH</b> ${n.p?"paid":n.inv?"request #"+n.i:"#"+n.i}${x&&s!=="bridged"&&s!=="withdrawn"?" → "+ch:""}</span><span>${act}</span></div>`}).join("");
+return`<div class="cpr"><span><b>${cpFmt(n.v)} ETH</b> ${n.p?"paid":n.inv?"request #"+n.i:"#"+n.i}${x&&s!=="bridged"&&s!=="withdrawn"?" → "+ch:""}</span><span>${act}${x&&x.rk?B("rescue","rescue key"):""}</span></div>`}).join("");
 pvList.innerHTML=rows||`<div class="cpr"><span>No deposits yet.</span></div>`};
 const pvPaint=()=>{const on=pvMode;
 pv.setAttribute("aria-pressed",on?"true":"false");
@@ -6898,6 +6904,8 @@ if(a==="pay")return pvRun(cpPay,"Checking the request…");
 if(a==="recover")return pvRun(async()=>{const f=await cpRecover();stat.textContent=f?"Recovered "+f+" deposit"+(f>1?"s":"")+".":"Nothing new on chain for this key."},"Scanning the pool…");
 if(!n)return;
 if(a==="settle")return pvRun(()=>cpSettleWrap(n),"Asking the relay…");
+if(a==="wrapsend")return pvRun(()=>cpSelfWrap(n),"Settling…");
+if(a==="rescue"){const r=cpRescue(n.i);prompt("Rescue key for "+r.addr+". A reclaim of this exit pays that address on Ethereum; import the key into any wallet to spend it.",r.key);return}
 if(a==="exit")return pvRun(()=>cpExit(n),"Building the exit…");
 if(a==="send")return pvRun(()=>cpSelfSend(n),"Sending the exit…");
 if(a==="activate")return pvRun(()=>cpActivate(n),"Activating…");

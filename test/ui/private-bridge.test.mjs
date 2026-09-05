@@ -18,7 +18,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { AbiCoder, keccak256, getBytes, concat, toUtf8Bytes } from 'ethers';
+import { AbiCoder, keccak256, getBytes, concat, toUtf8Bytes, sha256, computeAddress } from 'ethers';
 import { A, MockChain, loadPage, closeAllPages, selectorOf } from './harness.mjs';
 
 after(closeAllPages);
@@ -702,6 +702,64 @@ describe('choosing a relay', () => {
     p.queuePrompt('http://not-secure');
     p.click(p.$('pvKey').querySelector('button[data-a="relay"]'));
     assert.match(p.text('stat'), /https URL/);
+    p.close();
+  });
+});
+
+describe('settling from this wallet', () => {
+  test('a deposit can have the relay prove only, and the wallet sends pool.settle with the memo', async () => {
+    const p = await open();
+    await unlock(p);
+    p.select('pvPath', 'self');
+    await deposit(p);
+    const post = p.window.__relayPosts[0];
+    assert.equal(post.type, 'wrap');
+    assert.equal(post.mode, 'prove');
+    const memo = post.memos[0];
+    const pv = '0x' + '12'.repeat(200), pr = '0x' + 'ab'.repeat(260);
+    p.chain.relay.status = { status: 'proven', publicValues: pv, proof: pr };
+    poke(p);
+    await p.waitFor(() => p.$('pvList').querySelector('button[data-a="wrapsend"]'), { label: 'the settle button', timeout: 20000 });
+    p.click(p.$('pvList').querySelector('button[data-a="wrapsend"]'));
+    await p.waitFor(() => p.chain.sentTo(POOL).length === 1, { label: 'settle to be sent', timeout: 15000 });
+    const tx = p.chain.sentTo(POOL)[0];
+    assert.equal(tx.data, '0x717fd7f2' + coder.encode(['bytes', 'bytes', 'bytes[]'], [pv, pr, [memo]]).slice(2), 'pool.settle(pv, proof, [memo])');
+    assert.equal(BigInt(tx.gas), 700000n);
+    await p.waitFor(() => /Settled into the pool/.test(p.text('stat')), { timeout: 15000 });
+    p.close();
+  });
+});
+
+describe('the rescue key', () => {
+  test('a recipient with contract code gets a derived rescue address, and the key is shown on demand', async () => {
+    const p = await open();
+    p.chain.code.set(A.OTHER.toLowerCase(), '0x6000');
+    await unlock(p);
+    await deposit(p);
+    settleDeposit(p);
+    poke(p);
+    await p.waitFor(() => /exit/.test(p.text('pvList')), SLOW);
+    // The rescue address is a key derived from the note key and the index, exactly as the page does it:
+    // sha256("zswap-exit-rescue-v1" ‖ key ‖ index_be8) mod n.
+    const key = p.window.localStorage['zswap:cpk:' + A.ACCOUNT.toLowerCase()];
+    const N = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n;
+    const be8 = (n) => '0x' + BigInt(n).toString(16).padStart(16, '0');
+    const priv = (BigInt(sha256(concat([toUtf8Bytes('zswap-exit-rescue-v1'), key, be8(0)]))) % N) || 1n;
+    const rescuePriv = '0x' + priv.toString(16).padStart(64, '0');
+    const rescue = computeAddress(rescuePriv).toLowerCase();
+    const net = NET * 10n ** 10n;
+    const recipe = { ...baseRecipe(net), finalRecipient: rescue };
+    recipe.calls[0].data = '0x9a2ac6d5' + coder.encode(['address', 'uint32', 'bytes'], [A.OTHER, 200000, '0x']).slice(2);
+    p.chain.escrow = escrowOf(recipe);
+    p.type('pvTo', A.OTHER);
+    p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
+    await p.waitFor(() => p.window.__relayPosts.length === 2, SLOW);
+    assert.equal(p.window.__relayPosts[1].op.recipient, p.chain.escrow, 'the recipe with the rescue recipient is what was proven');
+    await p.waitFor(() => p.$('pvList').querySelector('button[data-a="rescue"]'), { label: 'the rescue key button' });
+    p.click(p.$('pvList').querySelector('button[data-a="rescue"]'));
+    const shown = p.window.__promptDefaults[p.window.__promptDefaults.length - 1];
+    assert.equal(shown, rescuePriv, 'the offered key is the derived one');
+    assert.match(p.asked.prompt[p.asked.prompt.length - 1], new RegExp(rescue, 'i'), 'and the prompt names its address');
     p.close();
   });
 });

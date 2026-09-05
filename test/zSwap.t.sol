@@ -7,8 +7,8 @@ import {zSwap} from "../src/zSwap.sol";
 contract zSwapDeployTest is Test {
     // keccak256 and length of zSwap.html. To recompute after editing the dapp:
     //   node -e "const e=require('ethers'),fs=require('fs');const h=fs.readFileSync('zSwap.html');console.log(e.keccak256(h),h.length)"
-    bytes32 constant EXPECTED_HASH = 0x4988ce89585227af90affef2679526966dc27531ed8f24ef0bf2088d5a92ed75;
-    uint256 constant EXPECTED_LEN = 436521;
+    bytes32 constant EXPECTED_HASH = 0x7ca9082cd18da6ed908df4ba0da00e4d9ffe8748594cff60256981ab948bbb94;
+    uint256 constant EXPECTED_LEN = 437544;
 
     /// @dev Deploys `data` as a contract whose runtime bytecode IS that data,
     /// mirroring how the chunks are deployed on-chain (PUSH2 len, DUP1,
@@ -21,7 +21,7 @@ contract zSwapDeployTest is Test {
         require(p != address(0), "chunk deploy failed");
     }
 
-    uint256 constant CHUNKS = 18;
+    uint256 constant CHUNKS = 19;
 
     /// The count lives in this constant, in zSwap's constructor arity, in the
     /// `lt(i, N)` bound inside `_html`'s assembly, in six build scripts and in
@@ -102,7 +102,7 @@ contract zSwapDeployTest is Test {
             z.DATA1(), z.DATA2(), z.DATA3(), z.DATA4(), z.DATA5(), z.DATA6(),
             z.DATA7(), z.DATA8(), z.DATA9(), z.DATA10(), z.DATA11(), z.DATA12(),
             z.DATA13(),
-            z.DATA14(), z.DATA15(), z.DATA16(), z.DATA17(), z.DATA18()
+            z.DATA14(), z.DATA15(), z.DATA16(), z.DATA17(), z.DATA18(), z.DATA19()
         ];
         bytes memory all;
         for (uint256 i; i != CHUNKS; ++i) {

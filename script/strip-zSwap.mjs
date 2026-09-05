@@ -28,7 +28,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SRC = path.join(ROOT, "zSwap.html");
 const OUT = path.join(ROOT, "out", "zSwap.min.html");
-const EIP170 = 24576, CHUNKS = 18;
+const EIP170 = 24576, CHUNKS = 19;
 
 /**
  * A `/` is a regex only where an expression may START.

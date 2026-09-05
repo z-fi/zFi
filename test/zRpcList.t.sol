@@ -40,7 +40,7 @@ contract zRpcListTest is Test {
     }
 
     function _newZSwap() internal returns (zSwap) {
-        address[18] memory p;
+        address[19] memory p;
         for (uint256 k; k < 17; ++k) {
             p[k] = _writeChunk(bytes.concat(bytes32(uint256(k))));
         }
