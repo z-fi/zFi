@@ -345,7 +345,7 @@ async function testAll(chainId){
     try{out=await fn(ui.inp.value.trim().split('#')[0],C,PROBE_TAKER)}catch{out=null}
     if(out&&out>0n){
       ui.st.textContent='answered '+out.toString();
-      proven[r.i]=chainId; ok++;
+      (proven[r.i]=proven[r.i]||new Set()).add(chainId); ok++;
       const cur=chainsOf(ui.inp.value.trim());
       if(!cur.includes(chainId)){
         ui.inp.value=ui.inp.value.trim().split('#')[0]+'#c='+cur.concat(chainId).join(',');
@@ -353,7 +353,11 @@ async function testAll(chainId){
       }
       ui.btn.disabled=false;
     }else{
-      ui.st.textContent='no answer'; ui.btn.disabled=true; bad++;
+      ui.st.textContent='no answer on '+nameChain(chainId);
+      const want=chainsOf(ui.inp.value.trim()).filter(x=>x!==1);
+      const held=proven[r.i];
+      ui.btn.disabled=!(want.length&&held&&want.every(x=>held.has(x)));
+      bad++;
     }
   }
   try{
@@ -376,8 +380,8 @@ async function applyRow(r,ep,tr){
   if(!/^https:\/\/\S+$/.test(ep))return show($('t-out'),'Endpoint must be an https URL.','bad');
   const want=chainsOf(ep).filter(c=>c!==1);
   for(const c of want){
-    if(proven[r.i]!==c)return show($('t-out'),
-      'Row '+r.i+' claims '+nameChain(c)+' but has not answered there in this session. Run the probe first.','bad');
+    if(!(proven[r.i]&&proven[r.i].has(c)))return show($('t-out'),
+      'Row '+r.i+' claims '+nameChain(c)+' but has not answered there in this session. Run that chain\'s probe first.','bad');
   }
   const tx={from:account,to:LIST,data:setEpData(r.i,ep,r.adapter),value:'0x0'};
   show($('t-out'),'Simulating row '+r.i+'…');
@@ -410,7 +414,7 @@ function buildPlan(){
     const ep=ui.inp.value.trim();
     if(ep===r.endpoint)continue;                     // unchanged
     const want=chainsOf(ep).filter(c=>c!==1);
-    if(want.some(c=>proven[r.i]!==c))continue;       // never answered there
+    if(want.some(c=>!(proven[r.i]&&proven[r.i].has(c))))continue;  // not answered there
     plan.push({label:'setEndpoint #'+r.i+' — '+r.name,
       detail:ep, to:LIST, data:setEpData(r.i,ep,r.adapter)});
   }
