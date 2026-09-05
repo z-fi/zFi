@@ -41,7 +41,7 @@ contract zSwapNextDeployTest is Test {
     address constant TIP = 0xe686952842627A2cf81DF42CCaD54ef98046DB8D;
     address constant DAO = 0x5E58BA0e06ED0F5558f83bE732a4b899a674053E;
 
-    uint256 constant CHUNKS = 16;
+    uint256 constant CHUNKS = 18;
 
     function setUp() public {
         vm.createSelectFork(vm.envOr("ETH_RPC_URL", string("https://ethereum.publicnode.com")));

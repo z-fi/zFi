@@ -21,10 +21,13 @@
  * floors: a price of zero mints the entire ceiling to whoever calls first, for
  * nothing.
  */
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { loadPage, MockChain, A } from './harness.mjs';
+import { loadPage, MockChain, A, closeAllPages } from './harness.mjs';
+
+// jsdom windows keep timers alive; without this the file passes and never exits.
+after(closeAllPages);
 
 const SUMMONER = '0x00000000004473e1f31c8266612e7fd5504e6f2a';
 const OFFERING = '0x000000a4ad929c9e108ad2b1d2fbede0c2ae57e1';
@@ -371,5 +374,53 @@ test('launching a cause', async (t) => {
     p.click('lnGo');
     await p.settle();
     assert.equal(p.chain.sent.length, 0, 'launched a cause that closes before anyone can back it');
+  });
+
+  /**
+   * A cause's logo budget is a QUARTER of a coin's, and the compressor is
+   * shared. Targeting the coin's 8 KB meant the ladder stopped at the first
+   * rung under 8 KB and handed back a file `cauQuote` then refused - with no
+   * way, from the panel, to ask for a smaller one. The dead end was invisible
+   * because it needs the cause kind AND a logo, and nothing exercised both.
+   *
+   * Driven through the SVG path: it is the one format that needs no canvas,
+   * which jsdom does not implement.
+   */
+  const svgOf = bytes => {
+    const head = '<svg xmlns="http://www.w3.org/2000/svg"><title>';
+    const tail = '</title><circle r="4"/></svg>';
+    return head + 'x'.repeat(bytes - head.length - tail.length) + tail;
+  };
+  const upload = async (p, svg) => {
+    const file = new p.window.File([svg], 'logo.svg', { type: 'image/svg+xml' });
+    Object.defineProperty(p.$('lnArt'), 'files', { value: [file], configurable: true });
+    p.$('lnArt').dispatchEvent(new p.window.Event('change'));
+    // `settle` does not cover this: the change handler is async, and the note
+    // still reads "reading…" when it returns.
+    await p.waitFor(() => p.text('lnArtNote') !== 'reading\u2026',
+      { label: 'the logo to be accepted or refused' });
+    await p.settle();
+  };
+
+  await t.test('holds a cause logo to the 4 KB a cause can actually store', async () => {
+    const p = await openLauncher('cause');
+    await upload(p, svgOf(6000));
+    assert.equal(p.text('lnArtNote'), 'none', 'accepted a logo the cause cannot store');
+    assert.match(p.text('stat'), /4 KB/, `should name the cause limit, said: ${p.text('stat')}`);
+    p.close();
+  });
+
+  await t.test('still takes a logo that fits a cause', async () => {
+    const p = await openLauncher('cause');
+    await upload(p, svgOf(2000));
+    assert.match(p.text('lnArtNote'), /KB/, 'refused a logo well inside the cause budget');
+    p.close();
+  });
+
+  await t.test('leaves the coin budget alone - the same file is fine for a coin', async () => {
+    const p = await openLauncher('coin');
+    await upload(p, svgOf(6000));
+    assert.match(p.text('lnArtNote'), /KB/, 'a coin may store up to 24 KB');
+    p.close();
   });
 });

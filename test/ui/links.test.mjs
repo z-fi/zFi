@@ -313,6 +313,32 @@ describe('navigating between links', () => {
   });
 
   /**
+   * Setting another window's location.hash is ordinary cross-origin navigation,
+   * so a page that opened this one can push a fresh link at it long after the
+   * user has started typing. A link may fill what is empty and re-fill what a
+   * link filled; it never replaces what the user typed themself. The tab still
+   * follows the link, which is how we know it arrived at all.
+   */
+  test('a later link never overwrites a recipient or amount the user typed', async () => {
+    const p = await open('token=ETH&out=USDC&amount=1');
+    p.type('amt', '5');
+    p.type('rc', 'alice.wei');
+    p.window.location.hash = 'token=ETH&out=USDC&amount=9&to=' + A.OTHER;
+    await p.settle();
+    assert.equal(p.value('amt'), '5', 'the typed amount survives a pushed link');
+    assert.equal(p.value('rc'), 'alice.wei', 'the typed recipient survives a pushed link');
+
+    // Moving the user to another tab clears the recipient, as any tab change
+    // does - but the link does not get to fill the space it just emptied.
+    p.window.location.hash = 'tab=send&token=ETH&amount=1&to=' + A.OTHER;
+    await p.waitFor(() => tabOf(p) === 'Send', { label: 'pushed link applied' });
+    await p.settle();
+    assert.equal(p.value('amt'), '5', 'the typed amount survives a tab-changing link');
+    assert.equal(p.value('rc'), '', 'a tab-changing link may clear the recipient but never replace it');
+    p.close();
+  });
+
+  /**
    * Back off a link lands on a bare `#`, which used to hit `applyLink`'s empty
    * early return and change nothing - so the amount and recipient a link had
    * filled in stayed on screen with nothing in the URL accounting for them.

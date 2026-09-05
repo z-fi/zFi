@@ -40,7 +40,7 @@ export const A = {
   USDC: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
   USDT: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
   WBTC: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599',
-  ZQUOTER: '0xc7a03f9ed2be5feea18ce93e12f4f05c98287c16',
+  ZQUOTER: '0x000000bd2db80567c23e353ca95a251c573cbf9b',
   ZROUTER: '0x000000000000FB114709235f1ccBFfb925F600e4',
   PERMIT2: '0x000000000022D473030F116dDEE9F6B43aC78BA3',
   MC3: '0xcA11bde05977b3631167028862bE2a173976CA11',
@@ -418,6 +418,19 @@ export class MockChain {
     this.commitBlocked = false;    // make the commitments() read fail
     this.garbleNextTxHash = false; // a wallet that answers a send with nonsense
     this.nextOrderId = 0;          // Swapboard's counter, via nextOrderId()
+    // Raw logs eth_getLogs answers, filtered by address and topic0. The
+    // private bridge rebuilds the confidential pool's leaf tree from these.
+    this.logs = [];
+    this.estimateGas = 0x5208n;    // what eth_estimateGas answers
+    // personal_sign: what the wallet answers, and what it was asked to sign.
+    // Deterministic on purpose - the private bridge derives its note key from
+    // this, so a fixed signature is what makes its calldata pinnable.
+    this.personalSig = '0x' + '33'.repeat(64) + '1b';
+    this.personalSigned = [];
+    // Other chains the page reads over plain HTTP, keyed by a URL fragment:
+    // the fetch mock routes a JSON-RPC POST whose URL contains the key to that
+    // MockChain instead of this one.
+    this.remotes = {};
     this.nextBoardId = 0;          // Dutchboard/Floorboard's counter, via nextId()
     this.answers = new Map();      // `${to}:${selector}` -> returndata, for read-only contracts
     this.inFlight = 0;
@@ -694,6 +707,20 @@ export class MockChain {
       case 'eth_gasPrice': return '0x' + this.gasPrice.toString(16);
       case 'eth_getBalance': return '0x' + this.balanceOf(A.ZERO, params[0]).toString(16);
       case 'eth_getCode': return this.code.get((params[0] || '').toLowerCase()) ?? '0x';
+      case 'eth_getLogs': {
+        const f = params[0] || {};
+        const addr = (f.address || '').toLowerCase();
+        const t0 = f.topics && f.topics[0];
+        const want = t0 ? (Array.isArray(t0) ? t0 : [t0]).map(t => t.toLowerCase()) : null;
+        return this.logs.filter(l => (!addr || (l.address || '').toLowerCase() === addr)
+          && (!want || want.includes((l.topics[0] || '').toLowerCase())));
+      }
+      case 'eth_estimateGas': return '0x' + BigInt(this.estimateGas).toString(16);
+      case 'personal_sign': {
+        if (this.rejectNext) { const e = this.rejectNext; this.rejectNext = null; throw e; }
+        this.personalSigned.push({ message: params[0], account: params[1] });
+        return this.personalSig;
+      }
       case 'eth_call': return this.ethCall(params[0], params[1]);
       case 'eth_sendTransaction': {
         if (this.rejectNext) { const e = this.rejectNext; this.rejectNext = null; throw e; }
@@ -950,7 +977,8 @@ export class MockChain {
       return coder.encode([POOL_INFO], [rows.map(r => [
         r.pool, A.ZERO, A.ZERO, BigInt(r.sqrtLow), BigInt(r.sqrtHigh), BigInt(r.fee),
         BigInt(r.reserve0), BigInt(r.reserve1), BigInt(r.sqrtNow), BigInt(r.liquidity),
-        r.hook, A.ZERO, 0n, 0n, r.hook === A.ZERO ? 1n : 0n, 0n, 0n, 0n, 0n,
+        r.hook, A.ZERO, BigInt(r.creatorFeeBps ?? 0n), 0n,
+        r.hook === A.ZERO ? 1n : 0n, 0n, 0n, 0n, 0n,
       ])]);
     }
     // PrecisionPoolFactory.isPool — the trust anchor the liquidity write paths
@@ -1808,7 +1836,9 @@ export async function loadPage(opts = {}) {
           throw new Error('connection refused');
         }
         let result, error = null;
-        try { result = await chain.request({ method: body.method, params: body.params || [] }); }
+        const remote = Object.entries(chain.remotes || {}).find(([frag]) => String(url).includes(frag));
+        const target = remote ? remote[1] : chain;
+        try { result = await target.request({ method: body.method, params: body.params || [] }); }
         catch (e) { error = { code: e && e.code !== undefined ? e.code : -32000, message: e.message || 'failed' }; }
         return {
           ok: true, status: 200,
@@ -2076,8 +2106,13 @@ export function assertAddressesMatchPage(assert) {
     PFACTORY: 'PFACTORY', PLQLENS: 'PLQLENS', PROUTE: 'PROUTE',
     TOKENLIST: 'TOKENLIST', ZLISTLENS: 'ZLISTLENS',
   };
+  // The book, the route and the launcher are per-chain: the page keeps their
+  // mainnet addresses in the `MB` table and rebinds the names in setChain.
+  const MB = { SB2: 'sb', SB1: 's1', SWAPBOL: 'sw', DUTCH: 'du', ORDERBOL: 'ob', FLOOR: 'fl', PROUTE: 'pr' };
   for (const [key, name] of Object.entries(pinned)) {
-    const m = html.match(new RegExp(`const ${name}="(0x[0-9a-fA-F]{40})"`));
+    const m = MB[name]
+      ? html.match(new RegExp(`const MB=\\{[^;]*\\b${MB[name]}:"(0x[0-9a-fA-F]{40})"`))
+      : html.match(new RegExp(`(?:const|let) ${name}="(0x[0-9a-fA-F]{40})"`));
     assert.ok(m, `page still declares ${name}`);
     assert.equal(m[1].toLowerCase(), A[key].toLowerCase(), `${name} fixture matches the page`);
   }

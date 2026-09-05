@@ -27,7 +27,7 @@ import { JsonRpcProvider, Wallet, formatEther } from 'ethers';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.join(HERE, '..');
 const OUT = path.join(ROOT_DIR, 'out');
-const CHUNKS = 16;
+const CHUNKS = 18;
 
 const argv = process.argv.slice(2);
 const DRY = argv.includes('--dry-run');

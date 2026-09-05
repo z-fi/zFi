@@ -29,15 +29,15 @@ display:block;opacity:.85;transition:opacity .15s}
 left:calc(.9em + env(safe-area-inset-left,0px));
 bottom:calc(.9em + env(safe-area-inset-bottom,0px));
 width:clamp(1.15em,3.2vw,1.6em);height:auto}
-.meta{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto auto auto auto;align-items:center;gap:.3em;font-size:.85em;color:var(--n);margin-bottom:.75em}
+.meta{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto auto auto auto auto auto;align-items:center;gap:.3em;font-size:.85em;color:var(--n);margin-bottom:.75em}
 #slipL{display:inline-flex;align-items:baseline;gap:.15em;font-size:.72em;color:var(--m);
 letter-spacing:.04em;white-space:nowrap;margin-right:.15em}
 .meta input{width:3em;font-size:.9em;padding:.15em .1em;border:0;border-bottom:1px solid var(--e2);transition:border-color .15s;background:transparent;text-align:right;outline:0;color:var(--f);-moz-appearance:textfield}
 .meta input::-webkit-outer-spin-button,.meta input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 #slip{font-size:1.2em;width:2.4em;font-weight:600;font-variant-numeric:tabular-nums}
-#th,#lk,#lq,#ln,#wn{display:inline-flex;align-items:center;justify-content:center;border:0;background:transparent;cursor:pointer;color:var(--m);opacity:.8;width:1.8em;height:1.8em;line-height:1;transition:color .15s,opacity .15s,background .15s}
-#th:hover,#lk:hover,#lq:hover,#ln:hover,#wn:hover,#lq.on,#ln.on,#wn.on{opacity:1}#wn{opacity:.55}
-#th:hover,#lk:hover,#lq:hover,#ln:hover,#wn:hover{color:var(--f)}
+#th,#lk,#lq,#ln,#wn,#pv{display:inline-flex;align-items:center;justify-content:center;border:0;background:transparent;cursor:pointer;color:var(--m);opacity:.8;width:1.8em;height:1.8em;line-height:1;transition:color .15s,opacity .15s,background .15s}
+#th:hover,#lk:hover,#lq:hover,#ln:hover,#wn:hover,#pv:hover,#lq.on,#ln.on,#wn.on,#pv.on{opacity:1}#wn{opacity:.55}
+#th:hover,#lk:hover,#lq:hover,#ln:hover,#wn:hover,#pv:hover{color:var(--f)}
 .meta input:hover{border-bottom-color:var(--m)}
 .meta input:focus{border-bottom-color:currentcolor}
 .panel{background:transparent;border:1px solid var(--e);padding:.95em .9em;margin:0;transition:border-color .15s}
@@ -60,7 +60,8 @@ svg{vertical-align:middle;flex-shrink:0}
 .primary:hover:not(:disabled){background:var(--fh)}
 .primary:disabled{border-color:var(--e);color:var(--dm);cursor:not-allowed}
 .rcpt{width:100%;box-sizing:border-box;margin-top:-1px;padding:.66em .85em;border:1px solid var(--e);background:transparent;transition:border-color .15s;color:var(--f);font-size:.75em;outline:0;font-family:inherit}
-#lq.on,#ln.on,#wn.on{background:var(--k);color:var(--kf)}
+#lq.on,#ln.on,#wn.on,#pv.on{background:var(--k);color:var(--kf)}
+.cpr{display:flex;justify-content:space-between;align-items:center;gap:.5em;font-size:.75em;color:var(--n);padding:.6em .8em;border:1px solid var(--e);margin-top:-1px}.cpr b{font-weight:600;color:var(--f)}.cpr a{color:var(--m)}#pvList{margin-top:.6em}#pvKey{display:block;margin-top:.6em;color:var(--m)}
 .lqrow{padding:.62em .7em;border:1px solid var(--e);margin:-1px 0 0}
 .lqrow.out{opacity:.55}
 .lqband{display:flex;align-items:center;gap:.4em;font-size:.82em}
@@ -178,7 +179,7 @@ vertical-align:.1em;line-height:1;text-decoration:none;margin-left:.5em}
 .lqon>*{order:2}
 .lqon>.meta,.lqon>.tabs,.lqon>.panel,.lqon>.flip,.lqon>#rcvPanel{order:0}
 .lqon>#rc,.lqon>#rcvEl{order:1}
-.lnon>.tabs .on,.wnon>.tabs .on{color:var(--m);font-weight:600;box-shadow:none}.lnon #chTog,.lnon #chBox,.lnon #bkTog,.lnon #book,.lnon #pos{display:none!important}
+.lnon>.tabs .on,.wnon>.tabs .on,.pvon>.tabs .on{color:var(--m);font-weight:600;box-shadow:none}.lnon #chTog,.lnon #chBox,.lnon #bkTog,.lnon #book,.lnon #pos,.pvon #chTog,.pvon #chBox,.pvon #bkTog,.pvon #book,.pvon #pos{display:none!important}
 .docs{margin-top:.5em}
 .docs details{border-top:1px solid var(--e)}
 .docs details:last-child{border-bottom:1px solid var(--e)}
@@ -228,7 +229,7 @@ margin-top:.55em;padding-top:.55em;border-top:1px solid var(--e);color:var(--f)}
 #bal:empty,#bal1:empty,#rate:empty{display:none}
 #bal a,#bal1 a{color:var(--f);cursor:pointer;text-decoration:underline;font-weight:600}
 .meta input.warn{color:var(--w);border-bottom-color:var(--w)}
-#th:focus-visible,#lk:focus-visible,#lq:focus-visible,#ln:focus-visible,#wn:focus-visible{background:var(--p);color:var(--f)}
+#th:focus-visible,#lk:focus-visible,#lq:focus-visible,#ln:focus-visible,#wn:focus-visible,#pv:focus-visible{background:var(--p);color:var(--f)}
 .chtog{width:100%;margin-top:.5em;padding:.75em .1em;border:0;border-top:1px solid var(--e);background:transparent;color:var(--m);cursor:pointer;font:inherit;font-size:.7em;font-weight:400;text-transform:uppercase;letter-spacing:.08em;transition:color .15s,background .15s}
 .chtog:hover{color:var(--f)}
 .chtog span{display:inline-block;transition:transform .2s}
@@ -305,7 +306,7 @@ display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hi
 body:has(.tkp:not(.hide))::before{content:"";position:fixed;inset:0;z-index:39;pointer-events:none;background:#0006}
 @media(max-width:30em){#slipL span{display:none}}
 @media(pointer:coarse){
-#th,#lk,#lq,#ln,#wn{width:36px;height:36px}
+#th,#lk,#lq,#ln,#wn,#pv{width:36px;height:36px}
 #sd{width:44px;height:44px;top:.35em;right:.35em}
 #addr{padding:.55em 0;margin:-.55em 0}
 .tkb{padding:.7em 0 .7em .5em;margin:-.7em 0}
@@ -331,13 +332,13 @@ background:var(--e);margin:.5em auto .1em}
 .invq{padding:10px 11px;margin:-10px -6px;opacity:1}
 .invm,.invsh{padding:10px 3px;margin:-10px -1px}}
 @media(pointer:coarse) and (max-width:24em){
-.meta{gap:.12em}#th,#lk,#lq,#ln,#wn{width:32px;height:32px}#slip{width:2em}}</style>
+.meta{gap:.12em}#th,#lk,#lq,#ln,#wn,#pv{width:32px;height:32px}#slip{width:2em}}</style>
 <script>const H=document.documentElement;let LS;try{LS=localStorage}catch{LS={}}if(LS.t?LS.t=='d':matchMedia('(prefers-color-scheme:dark)').matches)H.className='d'</script>
 <button id="sd" title="Sound" aria-label="Toggle sound"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5v5h3.5L12 18V6L7.5 9.5H4z"/><path id="sdw" d="M15.5 9a4 4 0 0 1 0 6"/><path id="sdx" d="M16 9.5l4 4m0-4l-4 4"/></svg></button>
 <a id="logoLink" href="https://zfi.wei.is/dao/#/dao/1/0x5E58BA0e06ED0F5558f83bE732a4b899a674053E" target="_blank" rel="noopener" aria-label="The DAO that governs this page" title="zFi DAO — the governance that owns this page's lineage"><svg id="logo" viewBox="0 0 400 400" aria-hidden="true"><clipPath id="lgf"><rect width="400" height="400"/></clipPath><g clip-path="url(#lgf)"><rect width="400" height="400"/><path d="M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z"/></g></svg></a>
 <svg id="fish" viewBox="0 0 24 14" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" aria-hidden="true"><path d="M2 12.2C7 .8 18 1.8 22 7"/><path d="M2 1.8C7 13.2 18 12.2 22 7"/></svg>
 <div class="card">
-<div class="meta"><span id="net" role="button" tabindex="0" title="Network"></span><span id="addr" role="button" tabindex="0" title="Connect a wallet">Connect</span><label id="slipL" title="Slippage"><span>Slippage </span><input id="slip" type="number" value="0.5" min="0.01" max="10" step="0.1">%</label><button id="lq" title="Liquidity for this pair" aria-label="Toggle liquidity mode" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.2c3.6 4 6 7.2 6 10.1a6 6 0 0 1-12 0c0-2.9 2.4-6.1 6-10.1z"/></svg></button><button id="ln" title="Launch a coin" aria-label="Toggle launch mode" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/></svg></button><button id="wn" title="Claim a .wei name" aria-label="Toggle names mode" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" fill-rule="evenodd" shape-rendering="crispEdges" aria-hidden="true"><path d="M3 1h1v1H3zM5 2h1v1H5zM10 2h1v1h-1zM12 1h1v1h-1zM4 4h8v1H4zM3 5h10v1H3zM2 6h12v3H2zM3 9h10v1H3zM4 10h8v1H4zM5 11h2v1H5zM9 11h2v1H9zM2 12h3v1H2zM7 12h2v1H7zM11 12h3v1h-3zM1 13h2v1H1zM13 13h2v1h-2zM3 6h3v2H3zM10 6h3v2h-3z"/></svg></button><button id="lk" title="Copy shareable link" aria-label="Copy shareable link"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5.5 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v.5"/></svg></button><button id="th" title="Toggle theme" aria-label="Toggle theme"></button></div>
+<div class="meta"><span id="net" role="button" tabindex="0" title="Network"></span><span id="addr" role="button" tabindex="0" title="Connect a wallet">Connect</span><label id="slipL" title="Slippage"><span>Slippage </span><input id="slip" type="number" value="0.5" min="0.01" max="10" step="0.1">%</label><button id="lq" title="Liquidity for this pair" aria-label="Toggle liquidity mode" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.2c3.6 4 6 7.2 6 10.1a6 6 0 0 1-12 0c0-2.9 2.4-6.1 6-10.1z"/></svg></button><button id="ln" title="Launch a coin" aria-label="Toggle launch mode" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/></svg></button><button id="wn" title="Claim a .wei name" aria-label="Toggle names mode" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" fill-rule="evenodd" shape-rendering="crispEdges" aria-hidden="true"><path d="M3 1h1v1H3zM5 2h1v1H5zM10 2h1v1h-1zM12 1h1v1h-1zM4 4h8v1H4zM3 5h10v1H3zM2 6h12v3H2zM3 9h10v1H3zM4 10h8v1H4zM5 11h2v1H5zM9 11h2v1H9zM2 12h3v1H2zM7 12h2v1H7zM11 12h3v1h-3zM1 13h2v1H1zM13 13h2v1h-2zM3 6h3v2H3zM10 6h3v2h-3z"/></svg></button><button id="pv" title="Bridge privately to Base or Robinhood" aria-label="Toggle private bridge mode" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg></button><button id="lk" title="Copy shareable link" aria-label="Copy shareable link"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5.5 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v.5"/></svg></button><button id="th" title="Toggle theme" aria-label="Toggle theme"></button></div>
 <div class="tabs" role="tablist"><button id="tabSwap" class="on" role="tab" aria-selected="true">Swap</button><button id="tabSend" role="tab" aria-selected="false">Send</button><button id="tabBook" role="tab" aria-selected="false">Orders</button></div>
 <div class="panel"><div class="hdr"><small id="payL">You pay</small><span class="pill"><span id="fromIcon"></span><select id="fromSel" aria-labelledby="payL"></select><button type="button" class="tkb" id="fromPick" aria-haspopup="listbox" aria-expanded="false"><span class="tkbs"></span><span class="tkbc">▾</span></button></span></div><div class="row" id="amtRow"><input id="amt" type="text" inputmode="decimal" placeholder="0.0" aria-label="Amount to pay" autocomplete="off" spellcheck="false"></div><small id="bal"></small></div>
 <button id="flip" class="flip" title="Flip tokens" aria-label="Flip tokens"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14m-5-5 5 5 5-5"/></svg></button>
@@ -365,6 +366,16 @@ background:var(--e);margin:.5em auto .1em}
 <label class="dly" id="wnKindL">Ending<select id="wnTld"><option value="wei">.wei</option><option value="id">.id.wei — free</option></select></label>
 <small id="wnNote" role="status" aria-live="polite"></small>
 </div>
+<div id="pvPanel" class="hide">
+<div class="hdr lnhdr"><small>Private bridge</small><small id="pvSub">Ethereum → an L2, through the shielded pool</small></div>
+<label class="dly" title="Deposited into the confidential pool on Ethereum as a shielded note. Exit it later to an L2 address that nothing on-chain ties to this wallet. The amount, the L2 recipient and the timing of the exit are public; what is hidden is which deposit it came from, so the privacy is only as good as the number of other deposits in the pool.">Amount<span class="lnu"><input id="pvAmt" inputmode="decimal" placeholder="0.01" autocomplete="off" spellcheck="false"><i>ETH</i></span></label>
+<label class="dly">Arrives on<select id="pvChain"><option value="8453">Base</option><option value="4663">Robinhood</option></select></label>
+<label class="dly" title="The address credited on the L2. Leave blank for this wallet. On Robinhood the unused gas budget refunds here too, so a contract wallet gets its refund at an aliased address.">Recipient<input id="pvTo" placeholder="0x… on the L2, defaults to you" autocomplete="off" spellcheck="false"></label>
+<label class="dly" title="Relayed: the relay proves and settles the exit, paying its own gas out of a flat fee, so this wallet never signs the exit. Yourself: the relay only proves; you send one atomic transaction that exits and bridges, fee-free, but from this wallet.">Exit<select id="pvPath"><option value="relay">Relayed, for a fee</option><option value="self">Yourself, one tx</option></select></label>
+<small id="pvKey" role="status"></small>
+<div id="pvList"></div>
+<small id="pvNote" role="status" aria-live="polite"></small>
+</div>
 <input id="rc" class="rcpt" placeholder="Recipient (optional) — 0x or .eth/.(g)wei" spellcheck="false" autocomplete="off">
 <small id="rcvEl"></small>
 <small id="fcEl" class="hide" role="status" aria-live="polite"></small>
@@ -372,6 +383,7 @@ background:var(--e);margin:.5em auto .1em}
 <small id="lnNote" class="hide" role="status" aria-live="polite"></small>
 <button id="lnGo" class="primary hide">Launch</button>
 <button id="wnGo" class="primary hide">Register</button>
+<button id="pvGo" class="primary hide">Deposit</button>
 <div id="wnRollPanel" class="hide"><div class="lngap">roll.wei</div><small id="wnRollEl" role="status" aria-live="polite"></small><button id="wnEnter" class="wnbtn hide">Enter the roll</button></div>
 <label class="dly hide" id="kindL">Order type<select id="kind"><option value="fixed">Fixed limit</option><option value="dutch">Dutch decay</option><option value="floor">Climbing bid</option></select></label>
 <label class="dly hide" id="dlyL">SLOW<select id="dly"><option value="0">Instant</option><option value="600">10 minutes</option><option value="3600">1 hour</option><option value="86400">1 day</option><option value="259200">3 days</option><option value="604800">7 days</option></select></label>
@@ -483,7 +495,7 @@ let CHAIN_ID=1;
 const CHAIN_ICON_BASE=`<svg viewBox="0 0 32 32" width="20" height="20" aria-hidden="true"><rect width="32" height="32" fill="#0052FF"/><path d="M16 5.4A10.6 10.6 0 0 0 5.5 14.7h13.9v2.6H5.5A10.6 10.6 0 1 0 16 5.4Z" fill="#fff" transform="rotate(180 16 16)"/></svg>`;
 const CHAIN_ICON_RH=`<svg viewBox="0 0 32 32" width="20" height="20" aria-hidden="true"><rect width="32" height="32" fill="#CCFF00"/><g transform="translate(4 4)" fill="#110E08"><path d="M2.84 24h.53c.096 0 .192-.048.224-.128C7.591 13.696 11.94 8.656 14.67 5.638c.112-.128.064-.225-.096-.225h-4.88a.55.55 0 0 0-.45.225L5.746 9.972c-.514.642-.642 1.236-.642 2.086v4.43c-1.14 3.194-1.862 5.361-2.392 7.32-.032.125.016.192.129.192M20.447.646c-.754-.802-4.157-.834-5.73-.224a3 3 0 0 0-.786.465 41 41 0 0 0-3.323 3.178c-.112.113-.064.225.097.225h5.409c.497 0 .786.289.786.786v6.1c0 .16.128.208.225.064l3.258-4.254c.53-.69.69-.898.835-1.861.192-1.413.08-3.58-.77-4.479m-6.982 16.18 2.231-3.676a.7.7 0 0 0 .064-.29V6.73c0-.16-.112-.225-.224-.097-3.355 3.74-5.971 7.672-8.395 12.407-.06.12.016.225.16.177l5.009-1.54c.565-.174.882-.402 1.155-.852"/></g></svg>`;
 const CHAINS={
-1:{name:"Ethereum",short:"ETH",sweep4:true,curve:5,fill:"0x7A2f21e476cA2ADde027BC868c5a083338EEfE54",exec:"0x4f6633342045C80Efa6c8CAc41b9bdc6145168C4",slvId:"1",slvSlug:"ethereum",sources:["UniV2","Sushi","zAMM","UniV3","UniV4","Curve","Lido","Wrap","Precision"],v4port:"0x000000dfb53Fa7f1c486470034741d5BCBE14BE9",v4lens:"0x000000c3aE1692983941495162A4AAB40660E65F",tokenlist:"0x0000006013dF75A31678B786061C2B54bf531524",
+1:{name:"Ethereum",short:"ETH",slow:true,sweep4:true,curve:5,fill:"0x7A2f21e476cA2ADde027BC868c5a083338EEfE54",exec:"0x4f6633342045C80Efa6c8CAc41b9bdc6145168C4",slvId:"1",slvSlug:"ethereum",sources:["UniV2","Sushi","zAMM","UniV3","UniV4","Curve","Lido","Wrap","Precision"],v4port:"0x000000dfb53Fa7f1c486470034741d5BCBE14BE9",v4lens:"0x000000c3aE1692983941495162A4AAB40660E65F",tokenlist:"0x0000006013dF75A31678B786061C2B54bf531524",
 wrapped:"0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",explorer:"https://etherscan.io",
 rpcs:["https://ethereum-rpc.publicnode.com","https://eth-mainnet.public.blastapi.io"]},
 8453:{name:"Base",short:"BASE",sweep4:false,curve:-1,fill:"0x03d95ecAF7B2Ab6027b8541b19Cb0Ce5CEd9bC74",exec:"0x1434A2579DE1009aA12b7064A161E53a5be2C030",slvId:"8453",slvSlug:"base",sources:["UniV2","Aero","zAMM","UniV3","UniV4","AeroCL","Wrap","","Precision"],v4port:"0x508ad1b0ae31FaF295c5af8C5c2bE9e33E0D19C4",v4lens:"0x0000000000000000000000000000000000000000",tokenlist:"0x0000006013dF75A31678B786061C2B54bf531524",
@@ -494,6 +506,8 @@ wrapped:"0x0bd7d308f8e1639fab988df18a8011f41eacad73",explorer:"https://robinscan
 rpcs:["https://rpc.mainnet.chain.robinhood.com"]},
 };
 CHAINS[4663].icon=CHAIN_ICON_RH;
+const MB={sb:"0x000000dA7bb4B2A9E3e80e9A4D4157E26CA6189b",s1:"0x000000fF3D7A2d373615141d7489Ca66683DbecF",sw:"0x00000087A6dc5071779Ed1F8274A39230768B976",du:"0x000000a213b430D14Bae6062c176289B05e04489",ob:"0x000000e6c7a12C80525ee74e7434aAb919447D95",fl:"0x00000080198137F790DA4C52bb902cf87c276748",pr:"0x0000007Be74558A1F8c9045301c6F44C8eD0c9eB",la:"0x0000002fC8E77585A008Aa45d78A71ad36293aEe"};
+const L2B={sb:"0x0000001330435808A906432449D233d482Bc9b60",sw:"0x00000032100E634903378DAEED6bA448f35F541a",du:"0x000000fa42d555173395323b2956e9c42EFaEFf2",ob:"0x0000007a1c93d42dD739E8d6cA9Dabf330934970",fl:"0x000000AC7d32e802B003a31F790eb28Ed3294Bac",pr:"0x000000D14E24e5FC8965bcDE58f21f704C944999"};
 const chainCfg=()=>CHAINS[CHAIN_ID]||CHAINS[1];
 const L1_RPCS=["https://ethereum-rpc.publicnode.com","https://eth-mainnet.public.blastapi.io"];
 let l1i=0;
@@ -538,6 +552,7 @@ const V4POOL_KEY="0x95a932c205571d4d1ca72715c642a2eca21dde79ffc28ff11509681f9383
 const C="eth_call",S="eth_sendTransaction",L="latest",I="eth_chainId";
 let SOURCES=["UniV2","Sushi","zAMM","UniV3","UniV4","Curve","Lido","Wrap","Precision"];
 const SRC_PRECISION=8;
+let SRC_CURVE=5;
 const ETH_ICON=`<svg width="20" height="20" viewBox="0 0 32 32"><g fill="none" fill-rule="evenodd"><circle cx="16" cy="16" r="16" fill="#627EEA"/><g fill="#FFF" fill-rule="nonzero"><path fill-opacity=".602" d="M16.498 4v8.87l7.497 3.35z"/><path d="M16.498 4L9 16.22l7.498-3.35z"/><path fill-opacity=".602" d="M16.498 21.968v6.027L24 17.616z"/><path d="M16.498 27.995v-6.028L9 17.616z"/><path fill-opacity=".2" d="M16.498 20.573l7.497-4.353-7.497-3.348z"/><path fill-opacity=".602" d="M9 16.22l7.498 4.353v-7.701z"/></g></g></svg>`;
 const USDC_ICON=`<svg width="20" height="20" viewBox="0 0 32 32"><g fill="none"><circle fill="#2775CA" cx="16" cy="16" r="16"/><g fill="#FFF"><path d="M20.022 18.124c0-2.124-1.28-2.852-3.84-3.156-1.828-.243-2.193-.728-2.193-1.578 0-.85.61-1.396 1.828-1.396 1.097 0 1.707.364 2.011 1.275a.458.458 0 00.427.303h.975a.416.416 0 00.427-.425v-.06a3.04 3.04 0 00-2.743-2.489V9.142c0-.243-.183-.425-.487-.486h-.915c-.243 0-.426.182-.487.486v1.396c-1.829.242-2.986 1.456-2.986 2.974 0 2.002 1.218 2.791 3.778 3.095 1.707.303 2.255.668 2.255 1.639 0 .97-.853 1.638-2.011 1.638-1.585 0-2.133-.667-2.316-1.578-.06-.242-.244-.364-.427-.364h-1.036a.416.416 0 00-.426.425v.06c.243 1.518 1.219 2.61 3.23 2.914v1.457c0 .242.183.425.487.485h.915c.243 0 .426-.182.487-.485V21.34c1.829-.303 3.047-1.578 3.047-3.217z"/><path d="M12.892 24.497c-4.754-1.7-7.192-6.98-5.424-11.653.914-2.55 2.925-4.491 5.424-5.402.244-.121.365-.303.365-.607v-.85c0-.242-.121-.424-.365-.485-.061 0-.183 0-.244.06a10.895 10.895 0 00-7.13 13.717c1.096 3.4 3.717 6.01 7.13 7.102.244.121.488 0 .548-.243.061-.06.061-.122.061-.243v-.85c0-.182-.182-.424-.365-.546zm6.46-18.936c-.244-.122-.488 0-.548.242-.061.061-.061.122-.061.243v.85c0 .243.182.485.365.607 4.754 1.7 7.192 6.98 5.424 11.653-.914 2.55-2.925 4.491-5.424 5.402-.244.121-.365.303-.365.607v.85c0 .242.121.424.365.485.061 0 .183 0 .244-.06a10.895 10.895 0 007.13-13.717c-1.096-3.46-3.778-6.07-7.13-7.162z"/></g></g></svg>`;
 const USDT_ICON=`<svg width="20" height="20" viewBox="0 0 32 32"><g fill="none" fill-rule="evenodd"><circle cx="16" cy="16" r="16" fill="#26A17B"/><path fill="#FFF" d="M17.922 17.383v-.002c-.11.008-.677.042-1.942.042-1.01 0-1.721-.03-1.971-.042v.003c-3.888-.171-6.79-.848-6.79-1.658 0-.809 2.902-1.486 6.79-1.66v2.644c.254.018.982.061 1.988.061 1.207 0 1.812-.05 1.925-.06v-2.643c3.88.173 6.775.85 6.775 1.658 0 .81-2.895 1.485-6.775 1.657m0-3.59v-2.366h5.414V7.819H8.595v3.608h5.414v2.365c-4.4.202-7.709 1.074-7.709 2.118 0 1.044 3.309 1.915 7.709 2.118v7.582h3.913v-7.584c4.393-.202 7.694-1.073 7.694-2.116 0-1.043-3.301-1.914-7.694-2.117"/></g></svg>`;
@@ -556,6 +571,7 @@ let TOKENS=[
 {sym:"BOLD",  addr:"0x6440f144b7e50d6a8439336510312d2f54beb01d",dec:18,icon:BOLD_ICON},
 ];
 let BUILTIN=TOKENS.slice();
+CHAINS[1].tokens=TOKENS.slice();
 CHAINS[8453].tokens=[
 {sym:"ETH",addr:ZERO,dec:18,icon:ETH_ICON},
 {sym:"WETH",addr:"0x4200000000000000000000000000000000000006",dec:18,icon:ETH_ICON},
@@ -576,16 +592,21 @@ function setChain(id){
 id=+id;
 const c=CHAINS[id];
 if(!c)return false;
+if(id===CHAIN_ID)return true;
 CHAIN_ID=id;
 WETH=c.wrapped;
 TOKENLIST=c.tokenlist;
 V4LENS=c.v4lens||ZERO;
 V4PORT=c.v4port||ZERO;
+const b=id===1?MB:L2B;
+SB2=b.sb||ZERO;SB1=b.s1||ZERO;SWAPBOL=b.sw||ZERO;DUTCH=b.du||ZERO;ORDERBOL=b.ob||ZERO;FLOOR=b.fl||ZERO;PROUTE=b.pr||ZERO;PLAUNCH=b.la||ZERO;
+floorReady=null;listLive=false;listJob=null;
 try{SOLVER_FILL_PIN=c.fill||ZERO;SOLVER_EXEC_PIN=c.exec||ZERO}catch{}
 try{if(c.sources)SOURCES=c.sources.slice();SRC_CURVE=(c.curve===undefined?5:c.curve)}catch{}
-if(c.tokens){TOKENS=c.tokens.slice();BUILTIN=TOKENS.slice()}
+if(c.tokens){TOKENS=c.tokens.slice();BUILTIN=TOKENS.slice();restoreCustom()}
 try{if(c.rpcs&&c.rpcs.length){rpcPool=[...new Set(c.rpcs)];rpcPi=0;curated=0;curatedTry=0}}catch{}
 try{localStorage[CHAIN_STORE]=String(id)}catch{}
+try{chainUi()}catch{}
 return true;
 }
 function parseV4Pools(extras,tokenAddr){
@@ -625,7 +646,7 @@ return out;
 }
 const encPoolKey=p=>encAddr(p.c0)+encAddr(p.c1)+encUint(p.fee)+encUint(p.ts)+encAddr(p.hooks);
 const SEL_QUOTE_BEST="2adaa389",SEL_EFFFEE="ef66de32";
-const PROUTE="0x0000007Be74558A1F8c9045301c6F44C8eD0c9eB";
+let PROUTE=MB.pr;
 const SEL_PROUTE="5d6498e1",SEL_PCHECKPOINT="0b7c6c6c";
 const SEL_PROUTEWETH="78fd78b0";
 const SEL_ZAPIN="c98c2c0b";
@@ -643,7 +664,7 @@ const LQ_SCAN=128;
 const LQ_SHOW=24;
 const isEthLike=a=>a===ZERO||a.toLowerCase()===WETH.toLowerCase();
 async function quotePrecision(f,t,amountIn,sender,block){
-if(PPLENS===ZERO||amountIn<=0n)return null;
+if(PPLENS===ZERO||PROUTE===ZERO||amountIn<=0n)return null;
 const nat=a=>a.toLowerCase()===WETH.toLowerCase()?ZERO:a;
 const vars=[];
 const addVar=(a,b)=>{
@@ -835,14 +856,15 @@ const KEEP="zswap:deep";
 const stickyPools=()=>{try{
 return JSON.parse(LS[KEEP]||"[]").filter(x=>/^0x[0-9a-f]{40}$/i.test(x)).slice(0,LAUNCH_SHOW);
 }catch{return[]}};
-let listJob=null;
-const loadTokenList=()=>listJob||(listJob=loadTokenListRun()
-.finally(()=>{if(!listLive)listJob=null}));
+let listJob=null,listGen=0;
+const loadTokenList=()=>{if(listJob)return listJob;const g=++listGen;
+return listJob=loadTokenListRun().finally(()=>{if(!listLive&&g===listGen)listJob=null})};
 async function loadTokenListRun(){
+const cid=CHAIN_ID;
 if(TOKENLIST===ZERO)return setListSource("registry address not set");
 setListNote("Built-in token list \u2014 checking zList\u2026");
 try{
-const cntJob=rpc(C,[{to:PFACTORY,data:"0x"+SEL_BYCREATOR_N+encAddr(PLAUNCH)},L]);
+const cntJob=PLAUNCH===ZERO?Promise.resolve("0x0"):rpc(C,[{to:PFACTORY,data:"0x"+SEL_BYCREATOR_N+encAddr(PLAUNCH)},L]);
 cntJob.catch(()=>{});
 const ids=await rankedIds();
 if(!ids.length)return setListSource("registry is empty");
@@ -915,6 +937,7 @@ LAUNCHED.push({addr:a,sym,pool:pools[pi]||""});
 });
 }
 }catch{}
+if(cid!==CHAIN_ID)return;
 const anchors=BUILTIN.filter(b=>(b.addr===ZERO||b.addr===WETH)&&!next.some(x=>x.addr===b.addr));
 const bornAt=new Set(born.map(x=>x.addr.toLowerCase()));
 TOKENS.splice(0,TOKENS.length,...next,...anchors,...born,
@@ -1020,7 +1043,7 @@ catch{throw Object.assign(Error("could not reach the read node"),{retry:1})}
 if(!r.ok)throw Object.assign(Error("a read node answered "+r.status),{retry:1});
 let j;try{j=await r.json()}catch{throw Object.assign(Error("a read node sent an unreadable answer"),{retry:1})}
 if(j&&j.error){const c=j.error.code;
-throw Object.assign(Error(j.error.message||"the read node refused"),{code:c,
+throw Object.assign(Error(j.error.message||"the read node refused"),{code:c,data:j.error.data,
 retry:c==null||c===-32005||c===-32603||c===-32004||c===-32002||c===-32001||c===429})}
 return j?j.result:null;
 }finally{clearTimeout(kill)}};
@@ -1041,7 +1064,7 @@ curated=1;
 }catch{}
 finally{curating=0}};
 const OX_ETH="0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
-const OKX_APPROVE="0x40aA958dd87FC8305b97f2BA922CDdCa374bcD7f";
+const OKX_APPROVE={1:"0x40aA958dd87FC8305b97f2BA922CDdCa374bcD7f",8453:"0x57df6092665eb6058DE53939612413ff4B09114E"};
 const bmin=(a,b)=>a<b?a:b,bmax=(a,b)=>a>b?a:b;
 const SEL_SLIST="e3b06401",SEL_EXEC="495c73b0",SEL_FILL="0a1b4c9f";
 const SOLVERS_PIN="0x1Dfbb2f41B596F72187370469074C46de60dA2e3";
@@ -1197,8 +1220,11 @@ slippagePercent:(Number(slip)/100).toString(),userWalletAddress:solverExec,swapM
 const j=await laneGet("OKX",`${ep}/dex/aggregator/swap?${q}`,ms);
 const d=j&&j.code==="0"&&j.data&&j.data[0];
 if(!d||!d.tx||!d.tx.to||!d.routerResult||!d.routerResult.toTokenAmount)return null;
-return{out:BigInt(d.routerResult.toTokenAmount),target:d.tx.to,
-spender:f===ZERO?null:OKX_APPROVE,data:d.tx.data}},
+let sp=f===ZERO?d.tx.to:OKX_APPROVE[CHAIN_ID];
+if(!sp){const a=await laneGet("OKX",`${ep}/dex/aggregator/approve-transaction?${new URLSearchParams({chainIndex:chainCfg().slvId,tokenContractAddress:f,approveAmount:amt.toString()})}`,ms);
+const x=a&&a.code==="0"&&a.data&&a.data[0]&&a.data[0].dexContractAddress;if(isAddr(x))sp=OKX_APPROVE[CHAIN_ID]=x}
+if(!sp)return null;
+return{out:BigInt(d.routerResult.toTokenAmount),target:d.tx.to,spender:sp,data:d.tx.data}},
 "Bebop":async(ep,f,t,amt,slip,ms)=>{
 if(f===ZERO||t===ZERO)return null;
 const q=new URLSearchParams({sell_tokens:f,buy_tokens:t,sell_amounts:amt.toString(),
@@ -1268,7 +1294,7 @@ await new Promise(res=>setTimeout(res,wait));
 }
 throw Error("tx not mined in time");
 };
-const checkWallet=async()=>{if(!account)throw Error("Connect a wallet first.");const[c,a]=await Promise.all([rpc(I,[]),rpc("eth_accounts",[])]);if(+c!==1||a[0]?.toLowerCase()!==account.toLowerCase())throw Error("wallet changed")};
+const checkWallet=async()=>{if(!account)throw Error("Connect a wallet first.");const[c,a]=await Promise.all([rpc(I,[]),rpc("eth_accounts",[])]);if(+c!==CHAIN_ID)throw Error("Switch your wallet to "+chainCfg().name);if(a[0]?.toLowerCase()!==account.toLowerCase())throw Error("wallet changed")};
 const hexToBytes=h=>{const s=strip0x(h);const o=new Uint8Array(s.length/2);for(let i=0;i<o.length;i++)o[i]=parseInt(s.slice(i*2,i*2+2),16);return o};
 const KRC=[1n,0x8082n,0x800000000000808an,0x8000000080008000n,0x808bn,0x80000001n,0x8000000080008081n,0x8000000000008009n,0x8an,0x88n,0x80008009n,0x8000000an,0x8000808bn,0x800000000000008bn,0x8000000000008089n,0x8000000000008003n,0x8000000000008002n,0x8000000000000080n,0x800an,0x800000008000000an,0x8000000080008081n,0x8000000000008080n,0x80000001n,0x8000000080008008n];
 const KR=[0,1,62,28,27,36,44,6,55,20,3,10,43,25,39,41,45,15,21,8,18,2,61,56,14];
@@ -1301,9 +1327,9 @@ const a="0x"+s.slice(24).toLowerCase();
 return /^0x0{40}$/.test(a)?"":a};
 const nameOk=n=>/^[a-z0-9.-]+$/.test(n)
 &&n.split(".").every(l=>l.length>0&&l.length<64&&l[0]!=="-"&&l[l.length-1]!=="-");
-const nsFwd=async(reg,n)=>{const id=await rpc(C,[{to:reg,data:"0x"+SEL_CID+encStr(n)},L]);
+const nsFwd=async(reg,n)=>{const id=await cfgRead(C,[{to:reg,data:"0x"+SEL_CID+encStr(n)},L]);
 if(strip0x(id||"").length!==64)return"";
-return retAddr(await rpc(C,[{to:reg,data:"0x"+SEL_RES+strip0x(id)},L]))};
+return retAddr(await cfgRead(C,[{to:reg,data:"0x"+SEL_RES+strip0x(id)},L]))};
 const dnsEnc=n=>{let h="";
 for(const l of n.split(".")){const b=new TextEncoder().encode(l);
 h+=b.length.toString(16).padStart(2,"0");
@@ -1322,19 +1348,19 @@ return "0x"+h.slice(off+64,off+64+len)};
 const ensFind=async n=>{const parts=n.split("."),
 nodes=parts.map((_,i)=>namehash(parts.slice(i).join(".")));
 const rs=await Promise.all(nodes.map(nd=>
-rpc(C,[{to:ENSREG,data:"0x"+SEL_RSLV+pad32(nd)},L]).catch(()=>null)));
+cfgRead(C,[{to:ENSREG,data:"0x"+SEL_RSLV+pad32(nd)},L]).catch(()=>null)));
 for(let i=0;i<nodes.length;i++){const r=retAddr(rs[i]);
 if(r)return{r,nd:nodes[i],exact:i===0}}
 return null};
 const ensWild=async r=>{
-try{const s=await rpc(C,[{to:r,data:supports(SEL_ERESOLVE)},L]);
+try{const s=await cfgRead(C,[{to:r,data:supports(SEL_ERESOLVE)},L]);
 return strip0x(s||"").length===64&&BigInt(s)===1n}catch{return false}};
 const ensFwd=async n=>{const f=await ensFind(n);
 if(!f)return"";
 const inner="0x"+SEL_EADDR+pad32(f.nd);
-if(f.exact)return retAddr(await rpc(C,[{to:f.r,data:inner},L]));
+if(f.exact)return retAddr(await cfgRead(C,[{to:f.r,data:inner},L]));
 if(!await ensWild(f.r))return"";
-try{return retAddr(decBytes(await rpc(C,[{to:f.r,
+try{return retAddr(decBytes(await cfgRead(C,[{to:f.r,
 data:"0x"+SEL_ERESOLVE+encResolve(dnsEnc(n),inner)},L])))}
 catch(e){
 if(/556f1830/i.test((e&&e.data?JSON.stringify(e.data):"")+((e&&e.message)||"")))
@@ -1343,7 +1369,7 @@ return"";
 }};
 const ensRevName=async(nd,r)=>{
 if(!r)return"";
-try{return decodeString(await rpc(C,[{to:r,data:"0x"+SEL_ENAME+pad32(nd)},L])).trim()}catch{return""}};
+try{return decodeString(await cfgRead(C,[{to:r,data:"0x"+SEL_ENAME+pad32(nd)},L])).trim()}catch{return""}};
 const nameFwd=n=>/\.gwei$/i.test(n)?nsFwd(GNS,n):/\.wei$/i.test(n)?nsFwd(WNS,n):/\.eth$/i.test(n)?ensFwd(n):Promise.resolve("");
 const FWD_TTL=30000;
 const fwdCache=new Map();
@@ -1359,7 +1385,7 @@ const [w,g,er]=await Promise.all([
 {to:WNS,data:"0x"+SEL_REV+encAddr(a)},
 {to:GNS,data:"0x"+SEL_REV+encAddr(a)},
 {to:ENSREG,data:"0x"+SEL_RSLV+pad32(nd)}]
-.map(c=>rpc(C,[c,L]).catch(()=>null)));
+.map(c=>cfgRead(C,[c,L]).catch(()=>null)));
 const str=h=>{try{return h?decodeString(h).trim():""}catch{return""}};
 const agrees=async n=>{
 if(!n||!nameOk(n.toLowerCase()))return"";
@@ -1409,7 +1435,7 @@ const sig=strip0x(await rpc("eth_signTypedData_v4",[owner,JSON.stringify(td)]));
 if(sig.length!==130)throw Error("bad signature");
 let v=parseInt(sig.slice(128,130),16);if(v<27)v+=27;
 return"0x"+SEL_RPERMIT+encAddr(tok)+encUint(value)+encUint(deadline)+encUint(v)+sig.slice(0,64)+sig.slice(64,128)};
-const P2DOM={name:"Permit2",chainId:CHAIN_ID,verifyingContract:PERMIT2};
+const P2DOM=()=>({name:"Permit2",chainId:CHAIN_ID,verifyingContract:PERMIT2});
 const p2Ready=async(tok,owner)=>{
 try{return BigInt(await rpc(C,[{to:tok,data:"0x"+SEL_ALLOWANCE+encAddr(owner)+encAddr(PERMIT2)},L]))}catch{return 0n}};
 const signPermit2=async(tok,owner,amount,deadline)=>{
@@ -1419,7 +1445,7 @@ const td={types:{EIP712Domain:[{name:"name",type:"string"},{name:"chainId",type:
 TokenPermissions:[{name:"token",type:"address"},{name:"amount",type:"uint256"}],
 PermitTransferFrom:[{name:"permitted",type:"TokenPermissions"},{name:"spender",type:"address"},
 {name:"nonce",type:"uint256"},{name:"deadline",type:"uint256"}]},
-primaryType:"PermitTransferFrom",domain:P2DOM,
+primaryType:"PermitTransferFrom",domain:P2DOM(),
 message:{permitted:{token:tok,amount:amount.toString()},spender:ZROUTER,
 nonce:nonce.toString(),deadline:deadline.toString()}};
 const sig=strip0x(await rpc("eth_signTypedData_v4",[owner,JSON.stringify(td)]));
@@ -1460,11 +1486,11 @@ for(let i=0;i<600;i++){
 try{const st=await rpc("wallet_getCallsStatus",[id]);
 const rs=(st&&st.receipts)||[];
 if(rs.some(r=>r&&r.status==="0x0"))throw Error("batch reverted");
-const last=rs.length>=calls.length?rs[rs.length-1]:null,x=last&&(last.transactionHash||last.hash);
+const q=String(st&&st.status),done=q==="200"||/CONFIRMED|SUCCESS/i.test(q);
+const last=rs.length&&(done||rs.length>=calls.length)?rs[rs.length-1]:null,x=last&&(last.transactionHash||last.hash);
 if(x)return x;
-const q=String(st&&st.status);
 if(q==="400"||q==="500"||/fail|revert|reject/i.test(q))throw Error("batch failed");
-if(q==="200"||/CONFIRMED|SUCCESS/i.test(q))throw Error("batch confirmed on chain, but the wallet returned no receipt — check your wallet's activity before retrying");
+if(done)throw Error("batch confirmed on chain, but the wallet returned no receipt — check your wallet's activity before retrying");
 }catch(e){if(/^batch /.test(e.message))throw e}
 await new Promise(r=>setTimeout(r,1000))}
 throw Error("batch timed out")};
@@ -1565,14 +1591,14 @@ return u.length<=32768&&/^(?:https:\/\/|data:image\/[a-z.+-]+;base64,)[^\s<>"'`\
 const safeDataUrl=u=>{u=String(u??"").trim();
 return u.length<=32768&&/^data:image\/[a-z.+-]+;base64,[A-Za-z0-9+/=]+$/i.test(u)?u:""};
 const genIcon=sym=>`<svg width="20" height="20" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#999"/><text x="16" y="21" text-anchor="middle" fill="#fff" font-size="13" font-weight="600" font-family="system-ui">${(safeSym(sym)[0]||"?").toUpperCase()}</text></svg>`;
-const STORE="zswap:custom";
+const STORE=()=>CHAIN_ID===1?"zswap:custom":"zswap:custom:"+CHAIN_ID;
 function keepToken(t){
 if(!t||!t.addr)return;
 const a=t.addr.toLowerCase();
-try{const arr=JSON.parse(localStorage.getItem(STORE)||"[]")
+try{const arr=JSON.parse(localStorage.getItem(STORE())||"[]")
 .filter(x=>String(x?.addr||"").toLowerCase()!==a);
 arr.push({sym:t.sym,addr:a,dec:t.dec,std:t.std,cause:t.cause?1:0});
-localStorage.setItem(STORE,JSON.stringify(arr))}catch{}
+localStorage.setItem(STORE(),JSON.stringify(arr))}catch{}
 }
 const SEL_SUPPORTS="01ffc9a7",IFACE_721="80ac58cd",IFACE_1155="d9b67a26";
 const supports=id=>"0x"+SEL_SUPPORTS+id.padEnd(64,"0");
@@ -1607,7 +1633,7 @@ icon:selfArt?`<img width="20" height="20" style="border-radius:50%;object-fit:co
 if(keep)keepToken(TOKENS[TOKENS.length-1]);
 return TOKENS.length-1;
 }
-try{for(const t of JSON.parse(localStorage.getItem(STORE)||"[]")){
+function restoreCustom(){try{for(const t of JSON.parse(localStorage.getItem(STORE())||"[]")){
 const addr=(t?.addr||"").toLowerCase();
 const dec=+t?.dec;
 if(/^0x[0-9a-f]{40}$/.test(addr)&&Number.isInteger(dec)&&dec>=0&&dec<=36&&!TOKENS.some(x=>x.addr.toLowerCase()===addr)){
@@ -1615,7 +1641,8 @@ const sym=String(t.sym||"?").replace(/[<>&"'`]/g,"").replace(/[\u0000-\u001f\u00
 TOKENS.push({sym,addr,dec,std:t.std==="nft"?"nft":"ft",cust:1,icon:genIcon(sym),
 ...(t.cause?{cause:1}:{})});
 }
-}}catch{}
+}}catch{}}
+restoreCustom();
 const QUOTE_TTL=45000;
 let account=null,connecting=false,last=null,fromBalance=0n,mode="in",bSeq=0,tab="swap",sendReady=null,sSeq=0,sendD="0",bookD="86400";
 let quoting=false;
@@ -2603,7 +2630,8 @@ if(lnMode)lnKindQuote();
 }finally{connecting=false;swap.disabled=false;
 lnGo.disabled=false;lnGo.textContent=account?"Launch":"Connect Wallet";
 wnGo.disabled=false;
-if(wnMode){wnPaint();wnQuote();wnRoll()}else wnGo.textContent="Register";render()}
+if(wnMode){wnPaint();wnQuote();wnRoll()}else wnGo.textContent="Register";
+if(pvMode)pvWake();render()}
 }
 const lqReserveGas=()=>lqList.querySelector(".lqnew")?LQ_CREATE_GAS+300000n:400000n;
 const lqFillMax=(tok,max)=>{
@@ -2687,7 +2715,7 @@ if(!/^0x[0-9a-f]{64}$/i.test(tx))throw Error("bad tx");
 stat.innerHTML=txLink(tx,"Sent");
 try{await waitTx(tx)}catch(e){sFail();throw e}
 stat.innerHTML=txLink(tx,"Done");if(!quiet)sGot()};
-const txLink=(h,label)=>`${label} <a href="https://etherscan.io/tx/${h}" target="_blank" rel="noreferrer">${h.slice(0,10)}…${h.slice(-6)}</a>`;
+const txLink=(h,label)=>`${label} <a href="${chainCfg().explorer}/tx/${h}" target="_blank" rel="noreferrer">${h.slice(0,10)}…${h.slice(-6)}</a>`;
 let autoQ=0,rankOpen=false;
 async function update(auto){
 if(!auto)autoQ=0;
@@ -2696,7 +2724,7 @@ fcSync();
 cbSync();
 const my=++seq;
 quoting=false;
-if(wnMode||lnMode)return;
+if(wnMode||lnMode||pvMode)return;
 if(lqMode)return loadLq();
 if(tab==="book")return render();
 if(tab==="send")return updateSend();
@@ -2767,7 +2795,6 @@ const gasPriceJob=acct?rpc("eth_gasPrice",[]).then(BigInt).catch(()=>0n):Promise
 let venueLost=false;
 const v4Job=isIn?quoteV4Pools(f,t,swapAmt,quoteBlock).catch(()=>{venueLost=true;return null}):Promise.resolve(null);
 const preJob=isIn?quotePrecision(f,t,swapAmt,PROUTE,quoteBlock).catch(()=>{venueLost=true;return null}):Promise.resolve(null);
-let SRC_CURVE=5;
 let curveOnlyOut=false;
 const exactOutSafe=y=>{if(isIn||!y.sources||!y.sources.includes(SRC_CURVE))return true;curveOnlyOut=true;return false};
 const pick=y=>{if(!y)return;if(!exactOutSafe(y))return;const v=isIn?y.best.amountOut:y.best.amountIn;if(!v)return;
@@ -3411,13 +3438,16 @@ if(sessionStorage.getItem("dc"))return;
 try{
 const accs=await rpc("eth_accounts",[]);
 const cid=await rpc(I,[]);
-if(accs[0]&&CHAINS[+cid]){setChain(+cid);
-account=accs[0];
-showAddr();
+wireWallet.probed=1;
+const hop=!!CHAINS[+cid]&&+cid!==CHAIN_ID;
+if(hop){setChain(+cid);showNet()}
+if(accs[0]&&CHAINS[+cid]){account=accs[0];showAddr()}
+if(account||hop){
 const keep2=pairAddrs();
 await loadTokenList();
 adoptList(keep2);
-refreshBalance();update();loadPos();syncChart();
+if(hop&&location.hash.length>1)applyLink();
+refreshBalance();update();if(account)loadPos();syncChart();
 }
 }catch{}
 })();
@@ -3459,13 +3489,13 @@ if(!PROV&&LS[WK]&&LS[WK]!=="wc")wkRestore().then(wkGo,wkGo);else wkGo();
 setTimeout(burnTotal,0);
 setTimeout(loadEthUsd,0);
 const SEL_TRANSFER="a9059cbb";
-const SB2="0x000000dA7bb4B2A9E3e80e9A4D4157E26CA6189b";
-const SB1="0x000000fF3D7A2d373615141d7489Ca66683DbecF";
+let SB2=MB.sb;
+let SB1=MB.s1;
 const SBVIEW="0x000000E0b25449F32f7D9259aC449bA88E78dFCE";
-const SWAPBOL="0x00000087A6dc5071779Ed1F8274A39230768B976";
-const DUTCH="0x000000a213b430D14Bae6062c176289B05e04489";
-const ORDERBOL="0x000000e6c7a12C80525ee74e7434aAb919447D95";
-const FLOOR="0x00000080198137F790DA4C52bb902cf87c276748";
+let SWAPBOL=MB.sw;
+let DUTCH=MB.du;
+let ORDERBOL=MB.ob;
+let FLOOR=MB.fl;
 const FLOORVIEW="0x0000004E376e9dB5D9EC28E6711E1a64997C6ba7";
 const SEL_NEXTID="2a58b330",SEL_NEXTID2="61b8ce8c",SEL_GETORDERS="03652027",SEL_CANCELORD="514fcac7",SEL_EXPIRED="d6c3de07",
 SEL_WITHDRAW="ef3d3521",SEL_REPLACE="84343d3a";
@@ -3574,7 +3604,7 @@ if(at(iA+1)>row.aA||at(iB+1)>row.aB)throw Error("order changed — refresh and r
 if(pay!==undefined&&at(iB+1)<pay)throw Error("order partly taken — refresh and retry");
 }
 const SEL_ORDER_FIXED="bcdb7936",SEL_ORDER_DUTCH="bbd94e1a",SEL_CHECKPOINT="a972985e";
-const BOARDS=[{a:SB2,v2:1},{a:SB1,v2:0}];
+const BOARDS=()=>[{a:SB2,v2:1},{a:SB1,v2:0}].filter(b=>b.a!==ZERO);
 const WORDS=b=>b?11:6;
 let bookSeq=0,bookRows=[],candCache={},bkOpen=LS.bk!=="0",bookTrunc=false;
 let busy=0;
@@ -3612,7 +3642,7 @@ throw Error(`Not enough ${m.sym} to fill: it costs ${trimAmt(need,m.dec)} `
 };
 const known=a=>TOKENS.find(t=>t.addr.toLowerCase()===a.toLowerCase());
 const sm=i=>i.replace('width="20" height="20"','width="15" height="15"');
-const escan=(a,id)=>!isAddr(a)?"":`<a href="https://etherscan.io/${id!=null?`nft/${a}/${id}`:`token/${a}`}" target="_blank" rel="noreferrer">${a.slice(0,6)}…${a.slice(-4)} ↗</a>`;
+const escan=(a,id)=>!isAddr(a)?"":`<a href="${chainCfg().explorer}/${id!=null?`nft/${a}/${id}`:`token/${a}`}" target="_blank" rel="noreferrer">${a.slice(0,6)}…${a.slice(-4)} ↗</a>`;
 const SEL_CONTRACTURI="e8a3d485";
 const okDataImg=u=>typeof u==="string"&&u.length<=60000
 &&/^data:image\/[a-z.+-]{2,20};base64,[A-Za-z0-9+/=]+$/i.test(u);
@@ -3933,7 +3963,7 @@ DUTCH!==ZERO?hasCode(DUTCH):false
 if(!lc||!le){
 const rows=[];rows.unavailable=true;return rows;
 }
-const specs=[...BOARDS];
+const specs=[...BOARDS()];
 if(ld){
 specs.push({a:DUTCH,dutch:1,ti:tokenIn});
 if(tokenIn===ZERO)specs.push({a:DUTCH,dutch:1,ti:WETH});
@@ -3974,7 +4004,7 @@ return rows;
 async function lensBookRows(my){
 const [sv,dv]=await Promise.all([hasCode(SBVIEW),DUTCH!==ZERO?hasCode(DUTCH):false]);
 if(!sv)return null;
-const specs=[...BOARDS];
+const specs=[...BOARDS()];
 if(dv)specs.push({a:DUTCH,dutch:1});
 const pages=await Promise.all(specs.map(async b=>{
 let cursor=0n,out=[],turns=0;
@@ -4058,7 +4088,7 @@ const loadBook=()=>loadBookRun().catch(()=>{});
 async function loadBookRun(){
 const my=++bookSeq;
 if(tab!=="book"){book.innerHTML="";bookRows=[];syncBook(0);return}
-const live=(await Promise.all(BOARDS.map(b=>
+const live=(await Promise.all(BOARDS().map(b=>
 rpc("eth_getCode",[b.a,L]).then(c=>(c||"").length>4?b:null,()=>null)))).filter(Boolean);
 if(my!==bookSeq)return;
 if(!live.length){
@@ -4742,14 +4772,30 @@ syncOrderType();
 showFloor();
 };
 let syncStops=()=>{};
+function chainUi(){
+lq.classList.toggle("hide",tab!=="swap"||PROUTE===ZERO);
+ln.classList.toggle("hide",tab!=="swap"||PLAUNCH===ZERO);
+wn.classList.toggle("hide",tab!=="swap"||CHAIN_ID!==1);
+pv.classList.toggle("hide",tab!=="swap"||CHAIN_ID!==1);
+tabBook.classList.toggle("hide",SB2===ZERO);
+if(lqMode&&PROUTE===ZERO)lqSet(false);
+if(lnMode&&PLAUNCH===ZERO)lnSet(false);
+if(wnMode&&CHAIN_ID!==1)wnSet(false);
+if(pvMode&&CHAIN_ID!==1)pvSet(false);
+if(tab==="book"&&SB2===ZERO)setTab("swap");
+}
 const setTab=t=>{
+if(t==="book"&&SB2===ZERO)t="swap";
 if(tab==="send")sendD=dly.value;else if(tab==="book")bookD=dly.value;
 if(t!=="swap"&&lqMode)lqSet(false);
 if(t!=="swap"&&lnMode)lnSet(false);
 if(t!=="swap"&&wnMode)wnSet(false);
-lq.classList.toggle("hide",t!=="swap");
-ln.classList.toggle("hide",t!=="swap");
-wn.classList.toggle("hide",t!=="swap");
+if(t!=="swap"&&pvMode)pvSet(false);
+lq.classList.toggle("hide",t!=="swap"||PROUTE===ZERO);
+ln.classList.toggle("hide",t!=="swap"||PLAUNCH===ZERO);
+wn.classList.toggle("hide",t!=="swap"||CHAIN_ID!==1);
+pv.classList.toggle("hide",t!=="swap"||CHAIN_ID!==1);
+tabBook.classList.toggle("hide",SB2===ZERO);
 if(t!==tab){rc.value="";rc.classList.remove("bad");rcvEl.textContent=""}
 tab=t;last=null;sendReady=null;stat.textContent="";posShown=POSPAGE;
 const send=t==="send",bk=t==="book";
@@ -4758,7 +4804,7 @@ tabSend.classList.toggle("on",send);
 tabBook.classList.toggle("on",bk);
 for(const[el,on]of[[tabSwap,t==="swap"],[tabSend,send],[tabBook,bk]])el.setAttribute("aria-selected",on?"true":"false");
 syncStops();
-for(const el of[rcvPanel,flip])el.classList.toggle("hide",send);
+rcvPanel.classList.toggle("hide",send);flip.classList.toggle("hide",send||lqMode);
 if(!bk)for(const[sel,other]of[[fromSel,toSel],[toSel,fromSel]]){
 if(!isNft(sel.value))continue;
 const alt=TOKENS.findIndex((t,i)=>t.std!=="nft"&&String(i)!==other.value);
@@ -4771,21 +4817,22 @@ if(alt>=0)toSel.value=String(alt);
 syncDisabled();
 syncNftUI();
 slipL.classList.toggle("hide",t!=="swap");
-dlyL.classList.toggle("hide",t==="swap");
+dlyL.classList.toggle("hide",t==="swap"||(send&&!chainCfg().slow));
 kindL.classList.toggle("hide",!bk);
 ethModeL.classList.toggle("hide",!bk);
 dlyL.firstChild.nodeValue=bk?"Expires":"Time lock";
 dly.options[0].textContent=bk?"Never":"Instant";
 if(send)dly.value=sendD;else if(bk)dly.value=bookD;
-payL.textContent=send?"Amount":bk?"You sell":"You pay";
-rcvHdr.textContent=bk&&kind.value==="dutch"?"Start ask total":bk?"You want":"You receive";
+payL.textContent=send?"Amount":bk?"You sell":lqMode?"Liquidity for":"You pay";
+rcvHdr.textContent=bk&&kind.value==="dutch"?"Start ask total":bk?"You want":lqMode?"and":"You receive";
 rc.placeholder=send?"Recipient \u2014 0x or .eth/.(g)wei"
 :bk?"Private to (optional) \u2014 0x or .eth/.(g)wei"
-:"Recipient (optional) \u2014 0x or .eth/.(g)wei";
+:lqMode?"LP shares to (optional) \u2014 0x or .eth/.(g)wei":"Recipient (optional) \u2014 0x or .eth/.(g)wei";
 syncOrderType();syncChart();syncTip();
 loadPos();loadBook();
 outAmt.value="";mode="in";
 if(wnMode)wnPaint();
+if(pvMode)pvPaint();
 update();
 };
 dly.onchange=()=>{if(tab==="book")bookD=dly.value;else sendD=dly.value;syncTip();render()};
@@ -4843,6 +4890,7 @@ if(Date.now()>=last.exp-5000&&autoQ++<AUTO_Q_MAX)update(1);
 document.addEventListener("visibilitychange",()=>{
 if(document.hidden)return;
 if(wnMode){wnSync();wnRoll()}
+if(pvMode)pvRefresh();
 if(!account||busy)return;
 autoQ=0;
 refreshBalance();loadPos();
@@ -4876,11 +4924,13 @@ const show=!lqMode||!!lqList.querySelector(".lqnew");
 for(const el of [amtRow,outRow])if(el)el.classList.toggle("hide",!show);
 };
 function lqSet(on){
+if(on&&PROUTE===ZERO)return;
 if(on)cbDisarm();
 ++seq;quoting=false;
 lqMode=on;
 if(on&&lnMode)lnSet(false);
 if(on&&wnMode)wnSet(false);
+if(on&&pvMode)pvSet(false);
 lq.setAttribute("aria-pressed",on?"true":"false");
 lq.classList.toggle("on",on);
 document.querySelector(".card").classList.toggle("lqon",on);
@@ -5600,7 +5650,7 @@ footDoc.textContent=on?"hide":"how it works";
 if(on)docPanel.scrollIntoView({behavior:"smooth",block:"nearest"});
 };
 lq.onclick=()=>{sBlip();lqSet(!lqMode)};
-const PLAUNCH="0x0000002fC8E77585A008Aa45d78A71ad36293aEe";
+let PLAUNCH=MB.la;
 const SEL_LAUNCH="6a648dc6";
 const SEL_LAUNCHART="72cf7bd8";
 const SEL_CREATOROF="dea5c2e0";
@@ -5614,7 +5664,7 @@ const c=JSON.parse(sessionStorage.getItem("ethusd")||"null");
 if(c&&Date.now()-c.t<300000){ethUsd=c.v;return}
 }catch{}
 try{
-const r=await rpc(C,[{to:ETHUSD_FEED,data:"0xfeaf968c"},L]);
+const r=await cfgRead(C,[{to:ETHUSD_FEED,data:"0xfeaf968c"},L]);
 const h=strip0x(r||"");
 if(h.length<5*64)return;
 const answer=BigInt("0x"+h.slice(64,128)),updated=Number(BigInt("0x"+h.slice(192,256)));
@@ -5640,7 +5690,7 @@ const c=JSON.parse(sessionStorage.getItem("burn")||"null");
 if(c&&Date.now()-c.t<BURN_TTL)return void showBurn(BigInt(c.v));
 }catch{}
 try{
-const r=await rpc(C,[{to:BETH,data:"0x70a08231"+encAddr(TITHE_RECORD)},L]);
+const r=await cfgRead(C,[{to:BETH,data:"0x70a08231"+encAddr(TITHE_RECORD)},L]);
 const v=BigInt(r||"0x0");
 if(v<=0n)return;
 try{sessionStorage.setItem("burn",JSON.stringify({t:Date.now(),v:v.toString()}))}catch{}
@@ -5669,18 +5719,18 @@ return px>0n?px*amount/(10n**18n):0n;
 }
 const SEL_POOLOF="988b1fa7",SEL_OWED0="56ea33ee",SEL_OWED1="3ad57b72",SEL_COLLECT="a480ca79";
 const SEL_COLLECTMANY="c296057e";
-let fcMineToks=[],fcSeq=0;
+let fcMineToks=[],fcSeq=0,fcMineSeq=0;
 async function fcMine(){
-const my=++fcSeq;
+const my=++fcMineSeq;
 fcMineToks=[];
-if(!account||!LAUNCHED.length)return fcSync();
+if(!account||!LAUNCHED.length||PLAUNCH===ZERO)return fcSync();
 try{
 const reqs=[];
 for(const x of LAUNCHED)reqs.push(
 {to:PLAUNCH,data:"0x"+SEL_CREATOROF+encAddr(x.addr)},
 {to:x.pool,data:"0x"+SEL_OWED0});
 const res=await mc3Deep(reqs);
-if(my!==fcSeq)return;
+if(my!==fcMineSeq)return;
 const acct=account.toLowerCase();
 let total=0n;const mine=[];
 for(let i=0;i<LAUNCHED.length;i++){
@@ -5699,9 +5749,9 @@ fcEl.innerHTML=(mine.length===1?`${safeSym(mine[0].sym)} \u00b7 `:`${mine.length
 +`<button type="button" id="fcGo" class="fclink">${mine.length===1?"Collect":"Collect all"}</button>`;
 fcEl.title="Trading fees your launched coins have earned and nobody has swept yet. "
 +"The ether comes to you; the token side is burned, which raises the floor for your holders.";
-fcEl.classList.remove("hide");
+fcEl.classList.toggle("hide",lnMode||lqMode||wnMode||pvMode||tab!=="swap");
 fcGo.onclick=fcCollectMine;
-}catch{if(my===fcSeq)fcSync()}
+}catch{if(my===fcMineSeq)fcSync()}
 }
 async function fcCollectMine(){
 if(!fcMineToks.length)return;
@@ -5727,7 +5777,7 @@ const my=++fcSeq;
 const t=TOKENS[toSel.value],f=TOKENS[fromSel.value];
 const cand=[t,f].find(x=>x&&x.addr&&x.addr!==ZERO&&x.std!=="nft");
 fcTok="";fcOwed=0n;
-if(lnMode||lqMode||wnMode||tab!=="swap"){fcEl.classList.add("hide");return}
+if(lnMode||lqMode||wnMode||pvMode||tab!=="swap"||PLAUNCH===ZERO){fcEl.classList.add("hide");return}
 if(fcMineToks.length){fcEl.classList.remove("hide");return}
 if(!cand){fcEl.classList.add("hide");return}
 try{
@@ -5804,7 +5854,7 @@ async function cbSync(){
 const my=++cbSeq;
 cbDao="";cbAmt=0n;cbBuy=false;
 const f=TOKENS[fromSel.value],t=TOKENS[toSel.value];
-if(lnMode||lqMode||wnMode||tab!=="swap"||!f||!t){cbEl.classList.add("hide");return}
+if(lnMode||lqMode||wnMode||pvMode||tab!=="swap"||!f||!t){cbEl.classList.add("hide");return}
 const real=x=>x&&x.addr&&x.addr!==ZERO&&x.std!=="nft";
 const cbEth=f.addr===ZERO;
 let hit=null,tok=null,buy=false;
@@ -6161,17 +6211,19 @@ if(isAddr(said||"")&&said.toLowerCase()!==loot.toLowerCase())loot=said;
 }catch{}
 try{const ix=await addCustomToken(loot);TOKENS[ix].cause=1;rebuild()}catch{}
 stat.innerHTML=`${safeSym(sym)} is raising at `
-+`<a href="https://etherscan.io/token/${loot}" target="_blank" rel="noreferrer">${short(loot)}</a>`
++`<a href="${chainCfg().explorer}/token/${loot}" target="_blank" rel="noreferrer">${short(loot)}</a>`
 +` · ${trimNum(+formatUnits(t.goal,18))} ETH over ${trimNum(Number(t.secs)/86400)} days`
 +` · backers can burn back for whatever you have not drawn`;
 }
 let lnMode=false,lnArtBytes=null,lnArtMime=0;
 function lnSet(on){
+if(on&&PLAUNCH===ZERO)return;
 if(on)cbDisarm();
 ++seq;quoting=false;
 lnMode=on;
 if(on&&lqMode)lqSet(false);
 if(on&&wnMode)wnSet(false);
+if(on&&pvMode)pvSet(false);
 ln.setAttribute("aria-pressed",on?"true":"false");
 ln.classList.toggle("on",on);
 for(const el of [rate,flip,swap])if(el)el.classList.toggle("hide",on);
@@ -6402,11 +6454,13 @@ for(const el of [document.querySelector(".panel"),rcvPanel])if(el)el.classList.t
 for(const el of [wnPanel,wnGo,wnRollPanel])el.classList.toggle("hide",!on);
 for(const el of [rc,rcvEl])if(el)el.classList.toggle("hide",on);document.querySelector(".card").classList.toggle("wnon",on)};
 function wnSet(on){
+if(on&&CHAIN_ID!==1)return;
 if(on)cbDisarm();
 ++seq;quoting=false;
 wnMode=on;
 if(on&&lqMode)lqSet(false);
 if(on&&lnMode)lnSet(false);
+if(on&&pvMode)pvSet(false);
 wnPaint();
 stat.textContent="";
 clearInterval(wnTimer);
@@ -6429,6 +6483,353 @@ sd.title=snd?"Sound on — click to mute":"Sound off — click to unmute"};
 sd.onclick=()=>{snd=!snd;try{LS.snd=snd?"1":"0"}catch{}syncSnd();if(snd)sBlip()};
 syncSnd();
 wn.onclick=()=>{sBlip();wnSet(!wnMode)};
+const cpHex=b=>{let s="";for(const x of b)s+=x.toString(16).padStart(2,"0");return s},cpU8=s=>new TextEncoder().encode(s);
+const CP_POOL="0x0000000000047DD77CeCEfE5Dc015EB7bFa9C677",CP_ROUTER="0x000000004c5BF191225F9049b385d6F3820E09BC",
+CP_ETH="0x3cba71e1114af183cdeacc6b8457a474d17529fd28704480ca799d0d03126f34",CP_SCALE=10000000000n,CP_BLOCK=25892003,
+CP_RELAY="https://api.tacit.finance",CP_LOGS=["https://mainnet.gateway.tenderly.co","https://eth.drpc.org"],
+CP_NI="0x00000000000000000000000000000000000000C8",CP_KEY="zswap:cpk:",CP_NOTES="zswap:cpn:",CP_CACHE="zswap:cppool";
+const CP_L2={8453:{bridge:"0x3154Cf16ccdb4C6d922629664174b904d80F2C35",peer:"0x4200000000000000000000000000000000000010",gas:800000n},
+4663:{inbox:"0x1A07cc4BD17E0118BdB54D70990D2158AbAD7a2D",peer:"0xDf8755334ce7A73cCF6b581C02eA649AE3E864b3",gas:1000000n}};
+const SEL_CPESCROW="2bf0cda2",SEL_CPACT="1699fd5b",SEL_CPRECL="02edf635",SEL_CPEXIT="acad0634",SEL_CPWRAP="859a9cee",
+SEL_CPDEP="7da9874f",SEL_CPDEPTO="9a2ac6d5",SEL_CPRETRY="679b6ded",SEL_CPSUBFEE="a66b327d",SEL_CPESTRT="c3dc5879",
+SEL_CPIMPL="93228617",SEL_CPNEXT="0be4f422",SEL_CPASSET="9fda5b66",SEL_CPOTHER="7f46ddb2",SEL_CPBRIDGE="e78cea92";
+const CP_T_LEAVES="0x7783fb256f5b4e1d4d8b79583488756286326ae15d9997d4098ce5432ed2708b",
+CP_T_SPENT="0x576d91547505afce99e7ebe2baf1a0948b5915598105a55f40ba72fea86e875e",
+CP_T_WRAP="0xf5d1711d21af6f42622ab6237626933cefc42cc9f0663d81b7c4c7bc5ce99e44";
+const CP_MSG="zSwap private bridge\n\nSign to derive the key that owns your shielded deposits. This costs nothing and moves nothing.\n\nAccount: ";
+const S2K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+const sha2=m=>{const l=m.length,n=((l+9+63)>>6)<<6,b=new Uint8Array(n);b.set(m);b[l]=128;
+const dv=new DataView(b.buffer);dv.setUint32(n-4,(l*8)>>>0);dv.setUint32(n-8,Math.floor(l/536870912));
+const h=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19],w=new Uint32Array(64),rr=(x,k)=>(x>>>k)|(x<<(32-k));
+for(let o=0;o<n;o+=64){for(let i=0;i<16;i++)w[i]=dv.getUint32(o+i*4);
+for(let i=16;i<64;i++){const p=w[i-15],q=w[i-2];w[i]=w[i-16]+(rr(p,7)^rr(p,18)^(p>>>3))+w[i-7]+(rr(q,17)^rr(q,19)^(q>>>10))}
+let[a0,a1,a2,a3,a4,a5,a6,a7]=h;
+for(let i=0;i<64;i++){const t1=(a7+(rr(a4,6)^rr(a4,11)^rr(a4,25))+((a4&a5)^(~a4&a6))+S2K[i]+w[i])>>>0,t2=((rr(a0,2)^rr(a0,13)^rr(a0,22))+((a0&a1)^(a0&a2)^(a1&a2)))>>>0;
+a7=a6;a6=a5;a5=a4;a4=(a3+t1)>>>0;a3=a2;a2=a1;a1=a0;a0=(t1+t2)>>>0}
+h[0]=(h[0]+a0)>>>0;h[1]=(h[1]+a1)>>>0;h[2]=(h[2]+a2)>>>0;h[3]=(h[3]+a3)>>>0;h[4]=(h[4]+a4)>>>0;h[5]=(h[5]+a5)>>>0;h[6]=(h[6]+a6)>>>0;h[7]=(h[7]+a7)>>>0}
+const o=new Uint8Array(32);for(let i=0;i<8;i++){o[i*4]=h[i]>>>24;o[i*4+1]=(h[i]>>>16)&255;o[i*4+2]=(h[i]>>>8)&255;o[i*4+3]=h[i]&255}return o};
+const FP=0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2fn,FN=0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n;
+const GP=[0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798n,0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8n,1n],PZ=[0n,1n,0n];
+const fmod=(a,m)=>{a%=m;return a<0n?a+m:a};
+const fpow=(b,e,m)=>{let r=1n;b=fmod(b,m);for(;e>0n;e>>=1n){if(e&1n)r=r*b%m;b=b*b%m}return r};
+const pdbl=([x,y,z])=>{if(!z||!y)return PZ;const ys=y*y%FP,s=4n*x*ys%FP,m=3n*x*x%FP,x3=fmod(m*m-2n*s,FP);
+return[x3,fmod(m*(s-x3)-8n*ys*ys,FP),2n*y*z%FP]};
+const padd=(P,Q)=>{if(!P[2])return Q;if(!Q[2])return P;
+const[x1,y1,z1]=P,[x2,y2,z2]=Q,z1s=z1*z1%FP,z2s=z2*z2%FP,u1=x1*z2s%FP,u2=x2*z1s%FP,s1=y1*z2s%FP*z2%FP,s2=y2*z1s%FP*z1%FP;
+if(u1===u2)return s1===s2?pdbl(P):PZ;
+const h=fmod(u2-u1,FP),r=fmod(s2-s1,FP),h2=h*h%FP,h3=h2*h%FP,v=u1*h2%FP,x3=fmod(r*r-h3-2n*v,FP);
+return[x3,fmod(r*(v-x3)-s1*h3,FP),h*z1%FP*z2%FP]};
+const pmul=(P,k)=>{let R=PZ,Q=P;for(k=fmod(k,FN);k>0n;k>>=1n){if(k&1n)R=padd(R,Q);Q=pdbl(Q)}return R};
+const paff=([x,y,z])=>{if(!z)return[0n,0n];const zi=fpow(z,FP-2n,FP),z2=zi*zi%FP;return[x*z2%FP,y*z2%FP*zi%FP]};
+const pcomp=P=>{const[x,y]=paff(P);return(y&1n?"03":"02")+x.toString(16).padStart(64,"0")};
+const pfromx=(x,odd)=>{if(x>=FP)return null;const y2=(x*x%FP*x+7n)%FP,y=fpow(y2,(FP+1n)/4n,FP);
+return y*y%FP===y2?[x,Number(y&1n)!==(odd?1:0)?FP-y:y,1n]:null};
+const cpCat=(...a)=>{const o=new Uint8Array(a.reduce((n,x)=>n+x.length,0));let p=0;for(const x of a){o.set(x,p);p+=x.length}return o};
+const b32=v=>hexToBytes(typeof v==="bigint"?v.toString(16).padStart(64,"0"):strip0x(String(v)).padStart(64,"0"));
+const beN=(n,len)=>{const o=new Uint8Array(len);let v=BigInt(n);for(let i=len-1;i>=0;i--){o[i]=Number(v&255n);v>>=8n}return o};
+const big=b=>BigInt("0x"+cpHex(b));
+const cpH=(()=>{const s=sha2(cpU8("tacit-generator-H-v1"));for(let c=0;c<256;c++){const P=pfromx(big(sha2(cpCat(s,[c]))),0);if(P)return P}})();
+const cpCommit=(v,r)=>padd(pmul(cpH,BigInt(v)),pmul(GP,BigInt(r)));
+const cpXY=P=>{const[x,y]=paff(P);return{cx:"0x"+x.toString(16).padStart(64,"0"),cy:"0x"+y.toString(16).padStart(64,"0")}};
+const cpDerive=(seed,i)=>{const base=cpCat(b32(seed),cpU8("tacit-evm-cnote-v1"),b32(CP_ETH),beN(i,8));
+return{secret:"0x"+cpHex(sha2(cpCat(base,[0]))),blinding:fmod(big(sha2(cpCat(base,[1]))),FN)||1n}};
+const cpOwner=nk=>keccak(cpCat(b32(nk),cpU8("tacit-native-owner-v1")));
+const cpLeaf=(cx,cy,o)=>keccak(cpCat(b32(CP_ETH),b32(cx),b32(cy),b32(o)));
+const cpDepCommit=(cx,cy,o)=>keccak(cpCat(b32(cx),b32(cy),b32(o)));
+const cpDepId=(v,c)=>keccak(cpCat(b32(CP_ETH),beN(v,32),b32(c)));
+const cpNu=(nk,leaf)=>keccak(cpCat(b32(nk),b32(leaf),cpU8("tacit-native-nullifier-v1")));
+const cpBinding=()=>keccak(hexToBytes(pad32("1")+strip0x(CP_POOL).toLowerCase()));
+const cpCtx=(tag,cb,a,b,notes,amts)=>keccak(cpCat(cpU8(tag),b32(cb),b32(a),b32(b),...notes.flatMap(n=>n.map(b32)),...amts.map(x=>beN(x,8))));
+const cpNonce=(r,ctx,role)=>fmod(big(hexToBytes(keccak(cpCat(cpU8("tacit-open-nonce-v1"),b32(fmod(BigInt(r),FN)),b32(ctx),cpU8(role))))),FN)||1n;
+const cpSigma=(v,r,ctx,k)=>{const rs=fmod(BigInt(r),FN),ks=fmod(BigInt(k),FN),Cc=cpCommit(v,rs),R=pmul(GP,ks);
+const e=fmod(big(hexToBytes(keccak(cpCat(cpU8("tacit-open-sigma-v1"),beN(v,8),b32(ctx),hexToBytes(pcomp(Cc)),hexToBytes(pcomp(R)))))),FN);
+return{R:"0x"+pcomp(R),z:"0x"+fmod(ks+e*rs,FN).toString(16).padStart(64,"0")}};
+const cpSeal=(pub,n,e)=>{const P=pfromx(BigInt("0x"+pub.slice(2)),pub.slice(0,2)==="03");
+const ss=sha2(hexToBytes(pcomp(pmul(P,e)))),plain=cpCat(beN(n.value,8),b32(n.blinding),b32(n.secret),b32(CP_ETH),b32(n.owner)),o=new Uint8Array(plain.length);
+for(let i=0;i<plain.length;i+=32){const k=sha2(cpCat(ss,[i/32]));for(let j=0;j<32&&i+j<plain.length;j++)o[i+j]=plain[i+j]^k[j]}
+return"0x"+pcomp(pmul(GP,e))+cpHex(o)};
+const cpZeros=(()=>{const z=[new Uint8Array(32)];for(let i=1;i<32;i++)z.push(hexToBytes(keccak(cpCat(z[i-1],z[i-1]))));return z})();
+const cpTree=(leaves,idx)=>{let lv=leaves.map(hexToBytes);const path=[];
+for(let i=0;i<32;i++){const sib=(idx>>>i)^1;path.push("0x"+cpHex(sib<lv.length?lv[sib]:cpZeros[i]));const nx=[];
+for(let k=0;k*2<lv.length;k++)nx.push(hexToBytes(keccak(cpCat(lv[2*k],2*k+1<lv.length?lv[2*k+1]:cpZeros[i]))));
+lv=nx.length?nx:[cpZeros[i+1]||cpZeros[0]]}
+return{root:"0x"+cpHex(lv[0]),path}};
+const cpRandom=()=>{for(let t=0;t<32;t++){const b=new Uint8Array(32);crypto.getRandomValues(b);const s=big(b);if(s&&s<FN)return s}throw Error("no randomness")};
+const cpEncCall=c=>encAddr(c.target)+encUint(c.value)+encAddr(c.token)+encUint(c.amount)+encBool(c.push)+pad32("c0")+encBytes(c.data||"0x");
+const cpEncRecipe=r=>{const calls=r.calls.map(cpEncCall);let off=calls.length*32,head=encUint(calls.length);
+for(const c of calls){head+=encUint(off);off+=c.length/2}
+const ca=head+calls.join(""),sw=encUint(r.sweepTokens.length)+r.sweepTokens.map(encAddr).join(""),mo=encUint(r.minOuts.length)+r.minOuts.map(encUint).join("");
+return pad32(r.exitedAsset)+encAddr(r.feeAsset)+encAddr(r.finalRecipient)+encUint(r.deadline)+encUint(r.nonce)
++encUint(256)+encUint(256+ca.length/2)+encUint(256+(ca.length+sw.length)/2)+ca+sw+mo};
+const cpEscrow=(impl,r)=>{const salt=keccak(hexToBytes(pad32("20")+cpEncRecipe(r)));
+const ih=keccak(hexToBytes("602d5f8160095f39f35f5f365f5f37365f73"+strip0x(impl).toLowerCase()+"5af43d5f5f3e6029573d5ffd5b3d5ff3"));
+return"0x"+strip0x(keccak(hexToBytes("ff"+strip0x(CP_ROUTER)+strip0x(salt)+strip0x(ih)))).slice(24)};
+const cpActData=r=>"0x"+SEL_CPACT+pad32("20")+cpEncRecipe(r);
+const cpReclData=r=>{const b=cpEncRecipe(r);return"0x"+SEL_CPRECL+pad32("40")+encUint(64+b.length/2)+b+pad32("0")};
+const cpExitData=(pv,pr,r)=>{const a=encBytes(pv),b=encBytes(pr),c=pad32("0"),d=cpEncRecipe(r);
+return"0x"+SEL_CPEXIT+pad32("80")+encUint(128+a.length/2)+encUint(128+(a.length+b.length)/2)+encUint(128+(a.length+b.length+c.length)/2)+a+b+c+d};
+const cpRecipe=x=>{const l2=CP_L2[x.ch],r={exitedAsset:CP_ETH,feeAsset:ZERO,finalRecipient:x.fin,deadline:BigInt(x.dl),nonce:BigInt(x.nonce),
+sweepTokens:[ZERO],minOuts:[0n]};
+r.calls=[x.ch===8453?{target:l2.bridge,value:BigInt(x.wei),token:ZERO,amount:0n,push:false,
+data:"0x"+SEL_CPDEPTO+encAddr(x.to)+encUint(200000)+pad32("60")+pad32("0")}
+:{target:l2.inbox,value:BigInt(x.wei),token:ZERO,amount:0n,push:false,
+data:"0x"+SEL_CPRETRY+encAddr(x.to)+encUint(x.l2v)+encUint(x.sc)+encAddr(x.to)+encAddr(x.to)+encUint(x.gl)+encUint(x.mf)+pad32("100")+pad32("0")}];
+return r};
+const relayFetch=async(path,body)=>{const ac=new AbortController(),k=setTimeout(()=>ac.abort(),20000);
+try{const r=await fetch(CP_RELAY+path,body?{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body),signal:ac.signal}:{signal:ac.signal});
+let j=null;try{j=await r.json()}catch{}
+if(r.status===404&&!body)return{status:"unknown"};
+if(!r.ok)throw Error((j&&j.error)||"The relay answered "+r.status+".");
+return j||{}}
+catch(e){if(e&&e.name==="AbortError")throw Error("The relay did not answer.");
+if(e instanceof TypeError)throw Error("The relay could not be reached from this page.");throw e}
+finally{clearTimeout(k)}};
+let cpSeed="",cpFp="",cpPub="",cpNotes=[],cpPool=null,cpSyncAt=0,cpBusy=0,pvMode=false,pvTimer=0,pvTick=0;
+const cpNoteOf=n=>{const{secret,blinding}=cpDerive(cpSeed,n.i),owner=cpOwner(secret),{cx,cy}=cpXY(cpCommit(n.v,blinding)),leaf=cpLeaf(cx,cy,owner);
+return{secret,blinding,owner,cx,cy,leaf,nu:cpNu(secret,leaf),value:BigInt(n.v)}};
+const cpSaveNotes=()=>{try{LS[CP_NOTES+cpFp]=JSON.stringify(cpNotes)}catch{}};
+const cpLoadNotes=()=>{try{const a=JSON.parse(LS[CP_NOTES+cpFp]||"[]");return Array.isArray(a)?a.filter(n=>Number.isInteger(n.i)&&/^\d+$/.test(n.v||"")):[]}catch{return[]}};
+const cpKeyFor=a=>{try{return LS[CP_KEY+a.toLowerCase()]}catch{return""}};
+const cpUse=s=>{cpSeed=s;cpFp=cpHex(sha2(cpU8("zswap-cp-v1:"+s))).slice(0,16);cpPub=pcomp(pmul(GP,BigInt(s)));cpNotes=cpLoadNotes()};
+const cpUnlock=async()=>{let s=cpKeyFor(account);
+if(!/^0x[0-9a-f]{64}$/i.test(s||"")){
+const sig=await rpc("personal_sign",["0x"+cpHex(cpU8(CP_MSG+account.toLowerCase()+"\nVersion: 1")),account]);
+if(!/^0x[0-9a-fA-F]{130}$/.test(sig||""))throw Error("The wallet returned an unusable signature.");
+s="0x"+(fmod(BigInt(keccak(hexToBytes(sig))),FN)||1n).toString(16).padStart(64,"0");
+try{LS[CP_KEY+account.toLowerCase()]=s}catch{}}
+cpUse(s)};
+const cpRescue=i=>{const k=fmod(big(sha2(cpCat(cpU8("zswap-exit-rescue-v1"),b32(cpSeed),beN(i,8)))),FN)||1n,[x,y]=paff(pmul(GP,k));
+return{key:"0x"+k.toString(16).padStart(64,"0"),addr:"0x"+strip0x(keccak(cpCat(beN(x,32),beN(y,32)))).slice(24)}};
+const cpLogsOk=r=>Array.isArray(r)&&r.every(l=>l&&Array.isArray(l.topics)&&l.topics.every(t=>/^0x[0-9a-f]{64}$/i.test(t))
+&&/^0x([0-9a-f]{2})*$/i.test(l.data||"0x")&&/^0x[0-9a-f]+$/i.test(l.blockNumber||"")&&/^0x[0-9a-f]+$/i.test(l.logIndex||""));
+const cpGetLogs=async(from,to,depth)=>{
+const f={address:CP_POOL,fromBlock:toHex(from),toBlock:toHex(to),topics:[[CP_T_LEAVES,CP_T_SPENT,CP_T_WRAP]]};
+try{const r=await cfgRead("eth_getLogs",[f]);if(cpLogsOk(r))return r}catch{}
+for(const u of CP_LOGS){try{const r=await httpRead(u,"eth_getLogs",[f]);if(cpLogsOk(r))return r}catch{}}
+if(to-from<2000||depth>12)throw Error("No node would serve the pool's history.");
+const m=from+((to-from)>>1);return(await cpGetLogs(from,m,depth+1)).concat(await cpGetLogs(m+1,to,depth+1))};
+const cpWord=(d,i)=>d.slice(i*64,i*64+64);
+const cpArr=(d,off)=>{const n=Number(BigInt("0x"+cpWord(d,off)||"0x0")),o=[];for(let i=0;i<n;i++)o.push("0x"+cpWord(d,off+1+i));return o};
+const cpSync=async(force)=>{
+if(!force&&cpPool&&Date.now()-cpSyncAt<60000)return cpPool;
+let c=cpPool;if(!c)try{c=JSON.parse(LS[CP_CACHE]||"null")}catch{}
+if(!c||!Array.isArray(c.leaves)||!Array.isArray(c.spent)||!Array.isArray(c.wraps)||!(c.to>=CP_BLOCK))c={to:CP_BLOCK-1,leaves:[],spent:[],wraps:[]};
+const cached=c.to>=CP_BLOCK;
+const head=parseInt(await cfgRead("eth_blockNumber",[]),16);
+if(head>c.to){const logs=await cpGetLogs(c.to+1,head,0);
+logs.sort((a,b)=>(parseInt(a.blockNumber,16)-parseInt(b.blockNumber,16))||(parseInt(a.logIndex,16)-parseInt(b.logIndex,16)));
+for(const l of logs){const t=l.topics[0].toLowerCase(),d=strip0x(l.data||"");
+if(t===CP_T_LEAVES&&l.topics[1]){const first=Number(BigInt(l.topics[1])),off=Number(BigInt("0x"+cpWord(d,0)))/32;
+cpArr(d,off).forEach((x,i)=>{c.leaves[first+i]=x})}
+else if(t===CP_T_SPENT)c.spent.push(...cpArr(d,Number(BigInt("0x"+cpWord(d,0)))/32));
+else if(t===CP_T_WRAP&&l.topics[1])c.wraps.push([l.topics[1].toLowerCase(),"0x"+cpWord(d,0)])}
+c.to=head}
+const next=Number(BigInt(await cfgRead(C,[{to:CP_POOL,data:"0x"+SEL_CPNEXT},L])||"0x0"));
+if(c.leaves.length<next||c.leaves.slice(0,next).some(x=>!x)){
+if(cached){cpPool=null;try{delete LS[CP_CACHE]}catch{}return cpSync(true)}
+throw Error("The pool's history came back incomplete.")}
+cpPool=c;cpSyncAt=Date.now();try{LS[CP_CACHE]=JSON.stringify(c)}catch{}return c};
+const cpLadder=v=>{let x=BigInt(v);if(x<=0n)return 0n;const d=x.toString().length;if(d<=2)return x;const s=10n**BigInt(d-2);return(x+s-1n)/s*s};
+const cpFee=async v=>{const gp=BigInt(await cfgRead("eth_gasPrice",[])||"0x0");
+let fee=cpLadder((450000n*gp+40000000000000n)*135n/100n/CP_SCALE);if(fee>v)fee=v;return fee};
+const cpPins=async ch=>{
+const impl=retAddr(await cfgRead(C,[{to:CP_ROUTER,data:"0x"+SEL_CPIMPL},L]));
+if(!impl||impl===ZERO)throw Error("The router did not answer.");
+const a=strip0x(await cfgRead(C,[{to:CP_POOL,data:"0x"+SEL_CPASSET+pad32(CP_ETH)},L])||"");
+if(BigInt("0x"+(cpWord(a,0)||"0"))!==1n||BigInt("0x"+(cpWord(a,1)||"0"))!==0n)throw Error("Native ETH is not registered in the pool.");
+const l2=CP_L2[ch];
+const peer=retAddr(await cfgRead(C,[{to:l2.bridge||l2.inbox,data:"0x"+(l2.bridge?SEL_CPOTHER:SEL_CPBRIDGE)},L]));
+if(peer!==l2.peer.toLowerCase())throw Error("The "+CHAINS[ch].name+" bridge did not answer as expected — refusing to continue.");
+if(ch===4663){const id=await httpRead(CHAINS[4663].rpcs[0],I,[]);if(parseInt(id,16)!==4663)throw Error("The Robinhood node answered for another chain.")}
+return impl};
+const cpRhGas=async to=>{const rh=CHAINS[4663].rpcs[0],data="0x"+SEL_CPESTRT+encAddr(CP_ROUTER)+encUint(10n**18n+1n)+encAddr(to)+encUint(1)+encAddr(to)+encAddr(to)+pad32("e0")+pad32("0");
+const est=BigInt(await httpRead(rh,"eth_estimateGas",[{to:CP_NI,data}])||"0x0");
+const l1=BigInt(await cfgRead("eth_gasPrice",[])||"0x0");
+const sc=BigInt(await cfgRead(C,[{to:CP_L2[4663].inbox,data:"0x"+SEL_CPSUBFEE+pad32("0")+encUint(l1*2n)},L])||"0x0");
+const l2=BigInt(await httpRead(rh,"eth_gasPrice",[])||"0x0");
+if(!est||!sc||!l2)throw Error("Robinhood gas could not be quoted.");
+return{gl:est*3n/2n,sc,mf:l2*2n}};
+const cpDry=async(x,r,esc)=>{const data=cpActData(r),req={to:CP_ROUTER,data,gas:toHex(CP_L2[x.ch].gas)},ov={[esc]:{balance:toHex(BigInt(x.wei))}};
+const tries=[()=>cfgRead(C,[req,L,ov]),...CP_LOGS.map(u=>()=>httpRead(u,C,[req,L,ov]))];let last="";
+for(const t of tries){try{if(strip0x(await t()||"")==="")return"";last=""}catch(e){const m=String(e&&e.message||"");if(/revert|execution|out of gas|BadTarget|Expired/i.test(m))throw Error("The bridge call would fail: "+m.slice(0,80));last=m}}
+return"Could not dry-run the bridge call ("+(last||"no node")+")."};
+const cpEnsureBalance=async(esc,need)=>BigInt(await cfgRead("eth_getBalance",[esc,L])||"0x0")>=need;
+const cpStatus=n=>{const k=cpNoteOf(n),c=cpPool;
+const li=c?c.leaves.indexOf(k.leaf):-1,spent=!!c&&c.spent.includes(k.nu);
+const x=n.ex,dl=x?Number(x.dl):0,now=Math.floor(Date.now()/1000);
+if(x&&(x.atx||x.ptx||x.rtx))return{k,li,s:x.rtx?"reclaimed":"bridged"};
+if(x&&spent)return{k,li,s:now>dl?"expired":"funded"};
+if(x)return{k,li,s:"exiting"};
+if(spent)return{k,li,s:"spent"};
+if(li>=0)return{k,li,s:"ready"};
+return{k,li,s:"pending"}};
+const cpRelayPoll=async n=>{const job=n.ex?n.ex.job:n.job;if(!job)return;
+const st=await relayFetch("/confidential/status?id="+encodeURIComponent(job));
+const tgt=n.ex||n;tgt.js=st.status||"unknown";
+if(st.txHash)tgt.jtx=st.txHash;if(st.error)tgt.jerr=String(st.error).slice(0,120);
+const pr=st.proof||st.proofBytes;if(st.status==="proven"&&/^0x[0-9a-fA-F]+$/.test(st.publicValues||"")&&/^0x[0-9a-fA-F]+$/.test(pr||"")){tgt.pv=st.publicValues;tgt.pr=pr}
+cpSaveNotes()};
+const cpSettleWrap=async n=>{const r=await relayFetch("/confidential/submit",{type:"wrap",op:n.op,memos:[n.memo],mode:"settle"});
+if(!r.jobId)throw Error("The relay did not take the deposit.");n.job=r.jobId;n.js=r.status||"pending";cpSaveNotes()};
+const cpDeposit=async()=>{
+const wei=parseUnits(pvAmt.value||"",18);
+if(wei<=0n)throw Error("How much ether?");
+if(wei%CP_SCALE)throw Error("The pool keeps eight decimals — round the amount.");
+const v=wei/CP_SCALE;if(v>=1n<<64n)throw Error("Too large for one note.");
+if(wei>fromBalance)throw Error("Not enough ETH.");
+let i=cpNotes.reduce((m,n)=>Math.max(m,n.i+1),0),k;
+for(let t=0;;i++){k=cpNoteOf({i,v:String(v)});
+const st=await cfgRead(C,[{to:CP_POOL,data:"0x"+SEL_CPDEP+pad32(cpDepId(v,cpDepCommit(k.cx,k.cy,k.owner)))},L]);
+if(BigInt(st||"0x0")===0n)break;if(++t>20)throw Error("Could not find a fresh note slot.")}
+const cb=cpBinding(),commit=cpDepCommit(k.cx,k.cy,k.owner),dep=cpDepId(v,commit);
+const ctx=cpCtx("tacit-wrap-intent-v1",cb,CP_ETH,dep,[[k.cx,k.cy,k.owner]],[v]),sig=cpSigma(v,k.blinding,ctx,cpNonce(k.blinding,ctx,"wrap"));
+const n={i,v:String(v),at:Math.floor(Date.now()/1000),memo:cpSeal(cpPub,k,cpRandom()),
+op:{chainBinding:cb,asset:CP_ETH,value:String(v),cx:k.cx,cy:k.cy,owner:k.owner,sigR:sig.R,sigZ:sig.z}};
+const req={from:account,to:CP_ROUTER,value:toHex(wei),data:"0x"+SEL_CPWRAP+pad32(commit)};
+await rpc(C,[req,L]);
+n.tx=await sendTx([req]);cpNotes.push(n);cpSaveNotes();cpPaint();
+await settle(n.tx,true);
+stat.textContent="Deposited. Asking the relay to settle it…";
+await cpSettleWrap(n);pvAmt.value="";refreshBalance();
+stat.textContent="Deposited. The relay is settling it into the pool.";sGot()};
+const cpExit=async n=>{
+const ch=+pvChain.value,to=pvTo.value.trim()||account,self=pvPath.value==="self",k=cpNoteOf(n);
+if(n.ex&&n.ex.job&&n.ex.js!=="failed")throw Error("This note is already exiting.");
+if(!isAddr(to))throw Error("The recipient must be a 0x address on "+CHAINS[ch].name+".");
+if(!CP_L2[ch])throw Error("Unknown chain.");
+const c=await cpSync(true),li=c.leaves.indexOf(k.leaf);
+if(li<0)throw Error("This deposit has not settled into the pool yet.");
+if(c.spent.includes(k.nu))throw Error("This note is already spent.");
+if(c.leaves.length<20)pvNote.textContent="The pool holds only "+c.leaves.length+" notes, so an exit today is easy to link. Treat it as a test, not as privacy.";
+const impl=await cpPins(ch);
+const fee=self?0n:await cpFee(k.value);
+if(!self&&fee>=k.value)throw Error("This note is too small to relay — submit it yourself instead.");
+if(!self&&fee*10000n/k.value>300n)throw Error("The relay fee would be "+(Number(fee*10000n/k.value)/100).toFixed(1)+"% of this note — wait for cheaper gas, or submit it yourself.");
+const net=k.value-fee,wei=net*CP_SCALE;
+const code=await cfgRead("eth_getCode",[to,L]);
+const x={ch,to,dl:String((Math.floor(Date.now()/86400000)+3)*86400),nonce:big(sha2(cpU8("zswap-exit-nonce-v1:"+cpFp+":"+n.i))).toString(),
+fee:String(fee),wei:String(wei),self,fin:to};
+if(strip0x(code||"")!==""){x.fin=cpRescue(n.i).addr;x.rk=1;
+if(ch===4663)pvNote.textContent="That recipient has contract code on Ethereum, so Robinhood will refund unused gas to an aliased address rather than to it."}
+if(ch===4663){const g=await cpRhGas(to);x.gl=String(g.gl);x.sc=String(g.sc);x.mf=String(g.mf);
+const over=g.sc+g.gl*g.mf;if(over>=wei)throw Error("The note would be eaten by Robinhood's gas budget.");x.l2v=String(wei-over)}
+const r=cpRecipe(x),esc=cpEscrow(impl,r);
+const onchain=retAddr(await cfgRead(C,[{to:CP_ROUTER,data:"0x"+SEL_CPESCROW+pad32("20")+cpEncRecipe(r)},L]));
+if(onchain!==esc)throw Error("Escrow address mismatch — refusing to build a proof.");
+x.esc=esc;
+const warn=await cpDry(x,r,esc);
+const{root,path}=cpTree(c.leaves,li);
+const dlu=String(Math.ceil((Math.floor(Date.now()/1000)+3600)/600)*600),cb=cpBinding();
+const ctx=cpCtx("tacit-unwrap-intent-v1",cb,CP_ETH,pad32(strip0x(esc)),[[k.cx,k.cy,k.owner]],[k.value,fee,BigInt(dlu)]);
+const sig=cpSigma(k.value,k.blinding,ctx,cpNonce(k.blinding,ctx,"unwrap"));
+const op={chainBinding:cb,spendRoot:root,asset:CP_ETH,cx:k.cx,cy:k.cy,owner:k.owner,leafIndex:li,path,nk:k.secret,secret:k.secret,
+value:String(k.value),recipient:esc,fee:String(fee),deadline:dlu,sigR:sig.R,sigZ:sig.z};
+n.ex=x;cpSaveNotes();cpPaint();
+const r2=await relayFetch("/confidential/submit",{type:"unwrap",op,memos:[],mode:self?"prove":"settle"});
+if(!r2.jobId)throw Error("The relay did not take the exit.");
+x.job=r2.jobId;x.js=r2.status||"pending";cpSaveNotes();
+stat.textContent=(self?"Proving. The wallet will ask you to send the exit when the proof is ready.":"The relay is settling the exit. Activate it once it lands.")+(warn?" "+warn:"");
+if(self)await cpSelfSend(n)};
+const cpSelfSend=async n=>{const x=n.ex;
+for(let t=0;t<180&&!(x.pv&&x.pr);t++){await new Promise(r=>setTimeout(r,5000));await cpRelayPoll(n);
+if(x.js==="failed")throw Error("The prover failed: "+(x.jerr||"unknown"));
+if(x.js==="settled")return cpPaint()}
+if(!(x.pv&&x.pr))throw Error("The proof is taking a while — it keeps proving; come back and press Send.");
+await checkWallet();
+const req={from:account,to:CP_ROUTER,value:"0x0",data:cpExitData(x.pv,x.pr,cpRecipe(x)),gas:toHex(2000000)};
+await rpc(C,[req,L]);
+x.ptx=await sendTx([req]);cpSaveNotes();cpPaint();
+await settle(x.ptx);stat.textContent="Bridged. It lands on "+CHAINS[x.ch].name+" in a few minutes."};
+const cpActivate=async n=>{const x=n.ex,r=cpRecipe(x),now=Math.floor(Date.now()/1000);
+if(now>Number(x.dl))throw Error("The exit expired — reclaim it instead.");
+if(!await cpEnsureBalance(x.esc,BigInt(x.wei)))throw Error("The escrow is not funded yet — the relay has not settled.");
+const req={from:account,to:CP_ROUTER,value:"0x0",data:cpActData(r),gas:toHex(CP_L2[x.ch].gas)};
+await rpc(C,[req,L]);
+x.atx=await sendTx([req]);cpSaveNotes();cpPaint();
+await settle(x.atx);stat.textContent="Bridged. It lands on "+CHAINS[x.ch].name+" in a few minutes."};
+const cpReclaim=async n=>{const x=n.ex,r=cpRecipe(x);
+if(Math.floor(Date.now()/1000)<=Number(x.dl))throw Error("Reclaim opens after "+new Date(Number(x.dl)*1000).toLocaleString()+".");
+const req={from:account,to:CP_ROUTER,value:"0x0",data:cpReclData(r),gas:toHex(400000)};
+await rpc(C,[req,L]);
+x.rtx=await sendTx([req]);cpSaveNotes();cpPaint();
+await settle(x.rtx);stat.textContent="Returned to "+x.fin+" on Ethereum."};
+const cpRecover=async()=>{const c=await cpSync(true);let found=0;
+for(const[id,amt]of c.wraps){const wei=BigInt(amt);if(wei%CP_SCALE)continue;const v=wei/CP_SCALE;
+if(cpNotes.some(n=>BigInt(n.v)===v&&cpDepId(v,cpDepCommit(...(k=>[k.cx,k.cy,k.owner])(cpNoteOf(n))))===id))continue;
+for(let i=0;i<64;i++){const k=cpNoteOf({i,v:String(v)});
+if(cpDepId(v,cpDepCommit(k.cx,k.cy,k.owner))===id){if(!cpNotes.some(n=>n.i===i))cpNotes.push({i,v:String(v),at:0,rec:1});found++;break}}}
+cpNotes.sort((a,b)=>a.i-b.i);cpSaveNotes();return found};
+const cpFmt=v=>trimAmt(BigInt(v)*CP_SCALE,18);
+const cpPaint=()=>{if(!pvMode)return;
+const on=!!cpSeed;
+pvKey.innerHTML=!account?"Connect a wallet to begin.":!on?"Sign once to unlock the key that owns your deposits.":
+`Key unlocked <button type="button" class="fclink" data-a="backup">backup</button><button type="button" class="fclink" data-a="import">import</button><button type="button" class="fclink" data-a="recover">recover</button><button type="button" class="fclink" data-a="export">export</button>`;
+pvGo.textContent=!account?"Connect Wallet":!on?"Unlock key":"Deposit";
+pvGo.disabled=!!cpBusy;
+if(!on){pvList.innerHTML="";return}
+const rows=cpNotes.map(n=>{const{s}=cpStatus(n),x=n.ex,ch=x?CHAINS[x.ch].name:"";
+const act=s==="ready"?`<button type="button" class="fclink" data-a="exit" data-i="${n.i}">exit</button>`
+:s==="pending"?(n.job?(n.js==="failed"?`relay failed<button type="button" class="fclink" data-a="settle" data-i="${n.i}">retry</button>`:"settling…")
+:`<button type="button" class="fclink" data-a="settle" data-i="${n.i}">settle</button>`)
+:s==="exiting"?(!x.job||x.js==="failed"?`relay failed<button type="button" class="fclink" data-a="exit" data-i="${n.i}">retry</button>`
+:x.self?(x.pv?`<button type="button" class="fclink" data-a="send" data-i="${n.i}">send</button>`:"proving…"):"relaying…")
+:s==="funded"?`<button type="button" class="fclink" data-a="activate" data-i="${n.i}">activate</button>`
+:s==="expired"?`<button type="button" class="fclink" data-a="reclaim" data-i="${n.i}">reclaim</button>`
+:s==="bridged"?`<a href="${CHAINS[x.ch].explorer}/address/${x.to}" target="_blank" rel="noreferrer">on ${ch}</a>`:s;
+return`<div class="cpr"><span><b>${cpFmt(n.v)} ETH</b> #${n.i}${x&&s!=="bridged"?" → "+ch:""}</span><span>${act}</span></div>`}).join("");
+pvList.innerHTML=rows||`<div class="cpr"><span>No deposits yet.</span></div>`};
+const pvPaint=()=>{const on=pvMode;
+pv.setAttribute("aria-pressed",on?"true":"false");
+pv.classList.toggle("on",on);
+for(const el of [rate,flip,swap])if(el)el.classList.toggle("hide",on);
+for(const el of [document.querySelector(".panel"),rcvPanel])if(el)el.classList.toggle("hide",on);
+for(const el of [pvPanel,pvGo])el.classList.toggle("hide",!on);
+for(const el of [rc,rcvEl])if(el)el.classList.toggle("hide",on);document.querySelector(".card").classList.toggle("pvon",on)};
+function pvSet(on){
+if(on)cbDisarm();
+++seq;quoting=false;
+pvMode=on;
+if(on&&lqMode)lqSet(false);
+if(on&&lnMode)lnSet(false);
+if(on&&wnMode)wnSet(false);
+pvPaint();
+stat.textContent="";pvNote.textContent="";
+clearInterval(pvTimer);
+if(on){pvTimer=setInterval(()=>{if(document.hidden||!pvMode)return;pvRefresh()},8000);pvWake()}
+fcSync();}
+const pvWake=()=>{if(!account){cpSeed="";cpNotes=[]}else if(!cpSeed){const s=cpKeyFor(account);if(/^0x[0-9a-f]{64}$/i.test(s||""))cpUse(s)}
+if(account)pvTo.placeholder=account;cpPaint();pvRefresh()};
+const pvRefresh=async()=>{if(!cpSeed||cpBusy)return;const my=++pvTick;
+try{await cpSync(cpNotes.some(n=>/pending|exiting/.test(cpStatus(n).s)));
+for(const n of cpNotes){const t=n.ex||n;if(t.job&&!["settled","failed","proven"].includes(t.js||""))await cpRelayPoll(n)}
+if(my===pvTick&&pvMode)cpPaint()}catch(e){try{if(my===pvTick&&pvMode)pvNote.textContent=explain(e)}catch{}}};
+const pvRun=async(fn,label)=>{if(cpBusy)return;cpBusy=1;pvGo.disabled=true;stat.textContent=label||"";
+try{await checkWallet();await fn();cpSyncAt=0}catch(e){err(e)}
+cpBusy=0;cpSaveNotes();cpPaint();pvRefresh()};
+pvGo.onclick=async()=>{
+if(pvGo.disabled)return;
+if(!account)return void connect();
+if(!cpSeed)return pvRun(cpUnlock,"Check your wallet for the message to sign.");
+pvRun(cpDeposit,"Building the deposit…")};
+pvList.onclick=pvKey.onclick=e=>{const b=e.target.closest("button[data-a]");if(!b)return;sBlip();
+const a=b.dataset.a,n=cpNotes.find(x=>x.i===+b.dataset.i);
+if(a==="backup"){prompt("Your private-bridge key. Anyone holding it can spend your deposits.",cpSeed);return}
+if(a==="import"){const s=(prompt("Paste a private-bridge key (0x + 64 hex), or an exported note list.")||"").trim();
+if(/^\[/.test(s)){let arr;try{arr=JSON.parse(s)}catch{}
+if(!Array.isArray(arr))return void(stat.textContent="That is not a note list.");
+let add=0;for(const r of arr)if(r&&Number.isInteger(r.i)&&/^\d+$/.test(r.v||"")&&!cpNotes.some(n=>n.i===r.i)){cpNotes.push(r);add++}
+cpNotes.sort((a,b)=>a.i-b.i);cpSaveNotes();cpPaint();pvRefresh();stat.textContent=add?"Imported "+add+" note"+(add>1?"s":"")+".":"Nothing new in that list.";return}
+if(!/^0x[0-9a-fA-F]{64}$/.test(s))return void(stat.textContent="That is not a key.");
+try{LS[CP_KEY+account.toLowerCase()]=s.toLowerCase()}catch{}cpUse(s.toLowerCase());cpPaint();pvRefresh();return}
+if(a==="export"){prompt("Your note records — keep them with the key. Exit recipes cannot be rebuilt without them.",JSON.stringify(cpNotes));return}
+if(a==="recover")return pvRun(async()=>{const f=await cpRecover();stat.textContent=f?"Recovered "+f+" deposit"+(f>1?"s":"")+".":"Nothing new on chain for this key."},"Scanning the pool…");
+if(!n)return;
+if(a==="settle")return pvRun(()=>cpSettleWrap(n),"Asking the relay…");
+if(a==="exit")return pvRun(()=>cpExit(n),"Building the exit…");
+if(a==="send")return pvRun(()=>cpSelfSend(n),"Sending the exit…");
+if(a==="activate")return pvRun(()=>cpActivate(n),"Activating…");
+if(a==="reclaim")return pvRun(()=>cpReclaim(n),"Reclaiming…")};
+pv.onclick=()=>{sBlip();pvSet(!pvMode)};
 let invOff=null;
 const invIcons=()=>{const o=[],seen=new Set();
 for(const t of TOKENS){const k=(t.sym||"").toLowerCase();
@@ -6692,7 +7093,7 @@ update();
 }catch{}
 }
 stat.innerHTML=token?`${safeSym(sym)} is live at `
-+`<a href="https://etherscan.io/token/${token}" target="_blank" rel="noreferrer">${short(token)}</a>`
++`<a href="${chainCfg().explorer}/token/${token}" target="_blank" rel="noreferrer">${short(token)}</a>`
 +` \u00b7 0.4% of each trade goes to you \u2014 collect it from the coin panel`
 :`${safeSym(sym)} is live \u00b7 0.4% of each trade goes to you`;
 lnArtBytes=null;lnArtNote.textContent="none";lnArtNote.classList.remove("set");
@@ -7100,7 +7501,7 @@ scEl.textContent="Reading "+n+"\u2026";
 let owner="",rec="";
 try{
 const id=namehash(n);
-const[o,t]=await mc3([{to:WNS,data:"0x"+SC_OWNER+pad32(id)},
+const[o,t]=await cfgBatch([{to:WNS,data:"0x"+SC_OWNER+pad32(id)},
 {to:WNS,data:"0x"+SC_TEXT+pad32(id)+encUint(64)+strTail("score")}]);
 if(my!==scSeq)return;
 const a="0x"+strip0x(o||"").slice(24);
@@ -7142,6 +7543,11 @@ last=null;
 try{update()}catch{}
 }
 return;}
+const wantChain=+q.get("chain")||0;
+if(CHAINS[wantChain]&&wantChain!==CHAIN_ID){
+if(prov()){if(wireWallet.probed)stat.textContent=`This link is for ${CHAINS[wantChain].name} \u2014 switch your wallet there to use it.`;return}
+setChain(wantChain);showNet();await loadTokenList();if(my!==lSeq)return;
+}
 const at=a=>a?TOKENS.findIndex(t=>t.addr.toLowerCase()===a):-1;
 const tok=async v=>{if(!v)return "";const x=v.trim().toLowerCase();
 if(!/^0x[0-9a-f]{40}$/.test(x))return symAddr(x);
@@ -7173,7 +7579,7 @@ const rcMine=rc.value!==""&&rc.value!==lkWrote.rc;
 const wantLq=q.get("lq")==="1";
 const linkWantsCard=fi>=0||oi>=0||to||n||!isNaN(lk)||q.get("token")||q.get("out");
 if(!wantLq&&lqMode&&linkWantsCard)lqSet(false);
-if(linkWantsCard){if(lnMode)lnSet(false);if(wnMode)wnSet(false)}
+if(linkWantsCard){if(lnMode)lnSet(false);if(wnMode)wnSet(false);if(pvMode)pvSet(false)}
 setTab(t);
 if(wantLq&&t==="swap"&&!lqMode)lqSet(true);
 if(to&&!rcMine)lkKeep(rc,to);
@@ -7200,6 +7606,7 @@ const tname=t=>t.cust||t.launched||/\s/.test(t.sym)||!symAddr(t.sym.toLowerCase(
 lk.onclick=async()=>{
 const f=TOKENS[fromSel.value],t=TOKENS[toSel.value],p=new URLSearchParams();
 p.set("token",tname(f));
+if(CHAIN_ID!==1)p.set("chain",String(CHAIN_ID));
 const rcv=rc.value.trim();if(rcv)p.set("to",rcv);
 if(tab==="send"){
 p.set("tab","send");
@@ -7247,7 +7654,7 @@ const fresh=await rcvOf(rc.value.trim(),true);
 if(fresh.toLowerCase()!==to.toLowerCase())throw Error("recipient changed \u2014 check and retry");
 if(amount>fromBalance)throw Error("insufficient balance");
 await checkWallet();
-const dsec=BigInt(dly.value||0);
+const dsec=chainCfg().slow?BigInt(dly.value||0):0n;
 let txReq,batch=null;
 if(dsec>0n){
 const isE=token.addr===ZERO;

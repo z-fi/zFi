@@ -33,7 +33,7 @@ const salt = si > -1 ? args[si + 1] : '0x' + '00'.repeat(32);
 // The wrapper's arity. The slice divisor and the loop bound must both come
 // from here: they were 14 and 15 respectively, so the verification could
 // never pass for any correctly built chunk set.
-const CHUNKS = 16;
+const CHUNKS = 18;
 const chunks = args.filter((a, i) => a.startsWith('0x') && a.length === 42 && (si < 0 || i !== si + 1));
 
 if (chunks.length !== CHUNKS) {
@@ -82,7 +82,7 @@ const creation = art.bytecode.object.startsWith('0x') ? art.bytecode.object : '0
 // previous MUST be the version executing the deploy: deployNext staticcalls
 // PREVIOUS() on the result and reverts NotASuccessor unless it equals itself.
 const ctorArgs = AbiCoder.defaultAbiCoder().encode(
-  ['address', 'address', 'address[16]'], [DAO, TIP, chunks.map(getAddress)]);
+  ['address', 'address', 'address[18]'], [DAO, TIP, chunks.map(getAddress)]);
 const initcode = concat([creation, ctorArgs]);
 
 const predicted = '0x' + keccak256(concat(['0xff', TIP, salt, keccak256(initcode)])).slice(-40);

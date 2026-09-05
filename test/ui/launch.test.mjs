@@ -1,6 +1,9 @@
-import test from "node:test";
+import test, { after } from 'node:test';
 import assert from "node:assert/strict";
-import {loadPage, MockChain, A} from "./harness.mjs";
+import {loadPage, MockChain, A, closeAllPages } from "./harness.mjs";
+
+// jsdom windows keep timers alive; without this the file passes and never exits.
+after(closeAllPages);
 import {Interface} from "ethers";
 import {readFile} from "node:fs/promises";
 

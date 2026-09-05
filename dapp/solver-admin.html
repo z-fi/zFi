@@ -252,6 +252,13 @@ async function ensureMainnet(p){
   const c=await p.request({method:'eth_chainId'});
   if(c!==MAINNET)await p.request({method:'wallet_switchEthereumChain',params:[{chainId:MAINNET}]});
 }
+// The list lives on mainnet only. A wallet that another tab moved to Base or
+// Robinhood would eth_call a codeless address (which answers 0x, not a revert)
+// and then send a no-op transaction there, so every write re-checks first.
+async function requireMainnet(){
+  const c=await provider.request({method:'eth_chainId'});
+  if(c!==MAINNET)throw Error('Wallet is on chain '+parseInt(c,16)+', not Ethereum mainnet. Switch back and retry.');
+}
 async function connect(){
   try{
     const p=await getProvider();
@@ -259,6 +266,7 @@ async function connect(){
       :'No wallet found. Over file:// serve locally: cd dapp && python3 -m http.server 8080','bad');
     account=(await p.request({method:'eth_requestAccounts'}))[0];
     await ensureMainnet(p);
+    p.on?.('chainChanged',c=>{if(c!==MAINNET)show($('w-out'),'Wallet moved to chain '+parseInt(c,16)+'. Writes are refused until it is back on Ethereum.','bad')});
     $('p-you').textContent=account;
     const o='0x'+(await call(LIST,'0x'+SEL_OWNER)).slice(26);
     $('p-owner').textContent=o+(o.toLowerCase()===account.toLowerCase()?'  \u2713 you':'  \u2717 not you');
@@ -384,6 +392,7 @@ async function applyRow(r,ep,tr){
       'Row '+r.i+' claims '+nameChain(c)+' but has not answered there in this session. Run that chain\'s probe first.','bad');
   }
   const tx={from:account,to:LIST,data:setEpData(r.i,ep,r.adapter),value:'0x0'};
+  try{await requireMainnet()}catch(e){return show($('t-out'),e.message,'bad')}
   show($('t-out'),'Simulating row '+r.i+'…');
   try{
     await provider.request({method:'eth_call',params:[tx,'latest']});
@@ -446,6 +455,7 @@ async function sendOne(i,btn){
   const p=plan[i];
   const tx={from:account,to:p.to,data:p.data,value:'0x0'};
   if(btn)btn.disabled=true;
+  try{await requireMainnet()}catch(e){if(btn)btn.disabled=false;show($('p-out'),e.message,'bad');return false}
   show($('p-out'),'Simulating: '+p.label+'…');
   try{ await provider.request({method:'eth_call',params:[tx,'latest']}); }
   catch(e){

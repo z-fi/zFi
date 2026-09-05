@@ -34,7 +34,7 @@ const ETH = 10n ** 18n;
 // this suite with it rather than leaving it asserting against a stale one.
 const PAGE = readFileSync(new URL('../../zSwap.html', import.meta.url), 'utf8');
 const pin = (name) => {
-  const m = PAGE.match(new RegExp(`const ${name}="(0x[0-9a-fA-F]{40})"`));
+  const m = PAGE.match(new RegExp(`(?:const|let) ${name}="(0x[0-9a-fA-F]{40})"`));
   if (!m) throw new Error(`${name} is not pinned in zSwap.html - has it been renamed?`);
   return m[1].toLowerCase();
 };

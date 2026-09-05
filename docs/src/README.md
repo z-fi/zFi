@@ -9,15 +9,15 @@ the first onchain superdapp
 
 [zSwap.sol](src/zSwap.sol) is a swap dapp whose entire UI — [zSwap.html](zSwap.html) — is designed to live on Ethereum mainnet as contract code. No IPFS pin, no gateway server, no frontend build pipeline. As long as Ethereum produces blocks, the dapp resolves byte-identical forever.
 
-Deployment flow: deploy the SIXTEEN generated chunk contracts (`out/zSwap.chunk1..16.creation.txt`), then deploy `zSwap(dao, previous, chunk1, ..., chunk16)` with those addresses. The count is not decorative - the constructor reverts `InvalidData` unless all sixteen are present, non-empty and distinct, and `script/check-zSwap.mjs` fails the build if the source and the Solidity disagree about it. Record the final wrapper address here after deployment.
+Deployment flow: deploy the EIGHTEEN generated chunk contracts (`out/zSwap.chunk1..18.creation.txt`), then deploy `zSwap(dao, previous, chunk1, ..., chunk18)` with those addresses. The count is not decorative - the constructor reverts `InvalidData` unless all eighteen are present, non-empty and distinct, and `script/check-zSwap.mjs` fails the build if the source and the Solidity disagree about it. Record the final wrapper address here after deployment.
 
 `html()` is IMMUTABLE, so a page fix is never an update in place: it is a new set of chunks and a new wrapper, deployed by the DAO through `deployNext`, with the naming layer repointed at it. That is the whole design - an address whose bytes cannot move under an auditor or a bookmark - and it means an edit to `zSwap.html` is not live until that has happened.
 
 ### The permanent-HTML pattern
 
-The HTML payload is installed as the **runtime bytecode of sixteen data contracts** created before the wrapper. The wrapper keeps sixteen `immutable` pointers (`DATA1`…`DATA16`). At read time, `html()` copies all sixteen chunks back with `EXTCODECOPY` into one ABI-encoded `string` return — any RPC client decodes it directly.
+The HTML payload is installed as the **runtime bytecode of eighteen data contracts** created before the wrapper. The wrapper keeps eighteen `immutable` pointers (`DATA1`…`DATA18`). At read time, `html()` copies all eighteen chunks back with `EXTCODECOPY` into one ABI-encoded `string` return — any RPC client decodes it directly.
 
-- **Why multiple data contracts?** EIP-170 caps deployed code at 24,576 bytes. Splitting the page makes that limit apply per chunk instead of to the full dapp. The current payload is 391,597 bytes across 16 data contracts (24,475 / 24,475 / 24,475 / 24,475 / 24,475 / 24,475 / 24,475 / 24,475 / 24,475 / 24,475 / 24,475 / 24,475 / 24,475 / 24,475 / 24,475 / 24,472 bytes), with 1,619 bytes of 16-chunk headroom.
+- **Why multiple data contracts?** EIP-170 caps deployed code at 24,576 bytes. Splitting the page makes that limit apply per chunk instead of to the full dapp. The current payload is 428,032 bytes across 18 data contracts (23,780 / 23,780 / 23,780 / 23,780 / 23,780 / 23,780 / 23,780 / 23,780 / 23,780 / 23,780 / 23,780 / 23,780 / 23,780 / 23,780 / 23,780 / 23,780 / 23,780 / 23,772 bytes), with 14,336 bytes of 18-chunk headroom.
 - **Why runtime bytecode instead of `SSTORE`?** Code is cheaper to deploy than equivalent storage, and `EXTCODECOPY` reads the blob directly. Storage-backed HTML would pay 20k gas per 32-byte word at write time and multiple SLOADs on read.
 - **Why immutable?** Each chunk is deployed with a minimal data-contract init stub (`PUSH2 <len> DUP1 PUSH1 0x0A PUSH0 CODECOPY PUSH0 RETURN | <payload>`). The wrapper constructor rejects missing or duplicated chunks, then stores the addresses immutably. Nothing in the wrapper can mutate the response, which is why the dapp ships `Cache-Control: public, max-age=31536000, immutable`.
 
@@ -81,7 +81,7 @@ node script/build-zSwap-chunks.mjs
 forge test --match-path test/zSwap.t.sol
 ```
 
-`build-zSwap.mjs` refreshes the size natspec in `zSwap.sol`, the payload sentence in both READMEs, and the length + keccak pins in `test/zSwap.t.sol`; the page itself is no longer copied into the contract, because that copy could only ever drift and did. `build-zSwap-chunks.mjs` writes `out/zSwap.chunk1.creation.txt` through `out/zSwap.chunk16.creation.txt`; deploy those creation payloads first, then deploy `zSwap` with the resulting chunk addresses as constructor args.
+`build-zSwap.mjs` refreshes the size natspec in `zSwap.sol`, the payload sentence in both READMEs, and the length + keccak pins in `test/zSwap.t.sol`; the page itself is no longer copied into the contract, because that copy could only ever drift and did. `build-zSwap-chunks.mjs` writes `out/zSwap.chunk1.creation.txt` through `out/zSwap.chunk18.creation.txt`; deploy those creation payloads first, then deploy `zSwap` with the resulting chunk addresses as constructor args.
 
 Compiler pin: Foundry uses Solidity `0.8.36` with `via_ir = true` and optimizer runs `9_999_999`. The zQuoter extraction script also uses `0.8.36`, but keeps the low-runs/yul-disabled recipe needed to stay under EIP-170.
 

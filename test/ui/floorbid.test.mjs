@@ -236,7 +236,9 @@ describe('routing a swap into a bid', () => {
     });
     await quoteEthToUsdc(p, '5');
     const rate = p.text('rate');
-    assert.match(rate, /Orderbook \+ AMM/, `expected a split route, got: ${rate}`);
+    // 2 of the 5 ETH go to the bid, so the label must name the share, not just
+    // the fact that a book was involved.
+    assert.match(rate, /Orderbook 40% \+ \S/, `expected a split route, got: ${rate}`);
     p.close();
   });
 });

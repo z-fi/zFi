@@ -19,7 +19,7 @@ import {zSwap} from "../src/zSwap.sol";
 ///         the DAO's business, but whether the thing at that address could
 ///         execute the call at all is ours.
 contract zSwapRootDeployTest is Test {
-    uint256 constant CHUNKS = 16;
+    uint256 constant CHUNKS = 18;
 
     /// The DAO this deployment will name. Moloch proxy, ZORG-share governed.
     address constant DAO = 0x5E58BA0e06ED0F5558f83bE732a4b899a674053E;

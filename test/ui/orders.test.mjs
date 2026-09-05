@@ -1015,6 +1015,35 @@ describe('the orderbook list', () => {
     p.close();
   });
 
+  test('every fungible row carries its own unit price', async () => {
+    // A row reads "3000 USDC -> 1 WETH". That is the SIZE of the order, and two
+    // rows of different sizes cannot be compared by eye at all - which is the
+    // one thing a book is for. The price is what the reader is actually after.
+    const p = await setup(c => { c.recent = [order({ id: 7 })]; });
+    await p.waitFor(() => p.$('book').querySelector('.px'), { label: 'a priced row' });
+    assert.equal(p.$('book').querySelector('.px').textContent, '0.0003333 WETH/USDC',
+      '1 WETH for 3000 USDC is a third of a milli-ether each');
+    p.close();
+  });
+
+  test('rows on the selected pair are ordered by price, best first', async () => {
+    // Seeded worst-first on purpose: discovery order is newest-first, which is
+    // not an order anyone wants to read a book in.
+    const p = await setup(c => {
+      c.recent = [
+        order({ id: 1, aB: 2n * ETH }),   // 0.000666 each - worst
+        order({ id: 2, aB: ETH }),        // 0.000333
+        order({ id: 3, aB: ETH / 2n }),   // 0.000166 - best
+      ];
+    });
+    await p.waitFor(() => p.$('book').querySelectorAll('.px').length === 3, { label: 'three rows' });
+    const px = [...p.$('book').querySelectorAll('.px')].map(e => e.textContent);
+    assert.deepEqual(px,
+      ['0.0001666 WETH/USDC', '0.0003333 WETH/USDC', '0.0006666 WETH/USDC'],
+      'cheapest per USDC first');
+    p.close();
+  });
+
   test('an empty book renders nothing at all', async () => {
     const p = await setup();
     await p.settle();

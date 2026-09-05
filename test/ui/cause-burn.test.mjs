@@ -20,9 +20,12 @@
  *     that either reverts or burns loot for nothing, and it is invisible to
  *     any test that only reads the rendered line.
  */
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
-import { loadPage, MockChain, A } from './harness.mjs';
+import { loadPage, MockChain, A, closeAllPages } from './harness.mjs';
+
+// jsdom windows keep timers alive; without this the file passes and never exits.
+after(closeAllPages);
 
 const DAO = '0x00000000000000000000000000000000cafe0001';
 const LOOT = '0x00000000000000000000000000000000cafe0002';

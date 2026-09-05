@@ -46,7 +46,7 @@ const patchLens = (() => {
 
 // sqrt(price) * 1e18, the pool's own units, for a pair of 18/6-decimal tokens.
 // price is USDC per ETH, so the decimal bias is 10^(6-18).
-const sq = px => BigInt(Math.round(Math.sqrt(px * 10 ** -12) * 1e9)) * 10n ** 9n;
+const sq = px => BigInt(Math.round(Math.sqrt(px * 10 ** -12) * 1e18));
 
 async function setup({ band = { low: sq(1000), high: sq(5000) }, deployed = false, supply = 0n } = {}) {
   const chain = new MockChain();

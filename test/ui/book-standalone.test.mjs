@@ -48,7 +48,7 @@ describe('the book competes against a standalone venue', () => {
   test('control: with an aggregator route, a better book wins', async () => {
     const p = await setup({ book: [ask(1n, 1n * ETH, 3200n * USDC)] });
     await p.typeAmount('amt', '1');
-    assert.match(p.text('rate'), /Orderbook \+ AMM/,
+    assert.match(p.text('rate'), /\u00b7 Orderbook \u00b7/,
       `the book beats 3000, got ${p.text('rate')}`);
     p.close();
   });
@@ -105,7 +105,7 @@ describe('the book competes against a standalone venue', () => {
     p.pickToken('toSel', 'USDC');
     await p.typeAmount('amt', '1');
 
-    assert.match(p.text('rate'), /Orderbook \+ AMM/,
+    assert.match(p.text('rate'), /\u00b7 Orderbook \u00b7/,
       `the book pays 3200 against V4's 3100, got ${p.text('rate')}`);
     await p.click('swap');
     await p.settle();

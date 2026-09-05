@@ -38,7 +38,7 @@ const FIXTURES = path.join(ROOT, 'test', 'fixtures', 'quoter.json');
 const TAPE_FIXTURES = path.join(ROOT, 'test', 'fixtures', 'tape.json');
 
 const EIP170 = 24576;
-const CHUNKS = 16;
+const CHUNKS = 18;
 
 const html = fs.readFileSync(HTML_PATH, 'utf8');
 const bytes = Buffer.byteLength(html, 'utf8');
@@ -318,12 +318,17 @@ const HELPERS = [
   'encFillPlan', 'encFillPlanAndSwap', 'encSnwap', 'encSweep',
   'encPermit2Hybrid', 'impactBps', 'safeSym', 'safeUrl', 'safeDataUrl', 'genIcon',
   'wcToWallet', 'wcNode', 'wcHost',
+  // the private bridge: curve, note, tree and recipe primitives, pinned to
+  // Tacit's reference implementation through test/fixtures/confidential.json
+  'sha2', 'pmul', 'pcomp', 'cpDerive', 'cpOwner', 'cpCommit', 'cpXY', 'cpLeaf', 'cpDepCommit', 'cpDepId',
+  'cpBinding', 'cpCtx', 'cpNonce', 'cpSigma', 'cpSeal', 'cpTree', 'cpNu', 'cpLadder', 'cpRecipe', 'cpEscrow',
+  'cpEncRecipe', 'cpActData', 'cpReclData', 'cpExitData', 'cpRescue', 'cpUse',
 ];
 // Exported for the same reason as HELPERS, but they are namespaces rather than
 // functions: the hand-rolled WalletConnect crypto and the QR encoder. These
 // ship on chain and can never be patched, so the vectors below run against the
 // PAGE'S copy, not against a scratch one that merely resembles it.
-const NAMESPACES = ['WCU', 'QR8'];
+const NAMESPACES = ['WCU', 'QR8', 'cpH', 'GP'];
 
 function stub() {
   const target = function () {};
@@ -470,7 +475,7 @@ if (exported) {
   // in the same paragraphs whose sizes it had just updated. Somebody following
   // it would deploy the wrong number of contracts.
   check('the deploy runbook agrees about the chunk count', () => {
-    const WORDS = { 6: 'six', 12: 'twelve', 13: 'thirteen', 14: 'fourteen', 15: 'fifteen' };
+    const WORDS = { 6: 'six', 12: 'twelve', 13: 'thirteen', 14: 'fourteen', 15: 'fifteen', 16: 'sixteen', 17: 'seventeen', 18: 'eighteen' };
     const want = WORDS[CHUNKS];
     const bad = [];
     for (const f of ['README.md', 'docs/src/README.md']) {
@@ -541,8 +546,8 @@ if (exported) {
     // Every control in the meta row, not just the mode toggles: the sound
     // button fell through the SAME way the names tile did, because it is a
     // second ID list and nothing checks a new id is in it.
-    const toggles = ['lq', 'ln', 'wn'];
-    const metaCtl = ['th', 'lk', 'lq', 'ln', 'wn'];
+    const toggles = ['lq', 'ln', 'wn', 'pv'];
+    const metaCtl = ['th', 'lk', 'lq', 'ln', 'wn', 'pv'];
     const css = [...html.matchAll(/<style>([\s\S]*?)<\/style>/g)].map(m => m[1]).join('\n');
     if (!css) throw Error('found no stylesheet in the page');
     // `#lq` must end the identifier here: `#lqPxRow` is a different element,
@@ -572,9 +577,12 @@ if (exported) {
     // and has been failing ever since - which is worse than no check, because a
     // permanently red check is one nobody reads. What actually matters is that
     // no FOURTH caller appears and that the lanes never carry a signature.
+    // Four since the private bridge: `relayFetch` talks to the confidential
+    // pool's prove/settle relay. It carries a witness, never a signature, and
+    // it is pinned to one host, so it is held to the same rule as the lanes.
     const hits = [...html.matchAll(/\bfetch\s*\(/g)].length;
-    if (hits !== 3) throw Error(`expected exactly three fetch( - httpRead, laneGet, lanePost - found ${hits}`);
-    for (const owner of ['const lanePost=async(name,url,body,ms)=>{', 'const laneGet=async(name,url,ms)=>{']) {
+    if (hits !== 4) throw Error(`expected exactly four fetch( - httpRead, laneGet, lanePost, relayFetch - found ${hits}`);
+    for (const owner of ['const lanePost=async(name,url,body,ms)=>{', 'const laneGet=async(name,url,ms)=>{', 'const relayFetch=async(path,body)=>{']) {
       const at = html.indexOf(owner);
       if (at < 0) throw Error(`the solver lane transport ${owner.slice(6, 13)} has moved or been renamed`);
       const body = html.slice(at, at + 700);
@@ -593,11 +601,13 @@ if (exported) {
     // walletless path, never a fallback appended to someone's provider.
     const guard = html.match(/const isSign=m=>m===S\|\|m\.indexOf\("wallet_"\)===0\|\|m==="eth_requestAccounts"\|\|m==="eth_accounts"\|\|WC_SIGN\.indexOf\(m\)>=0;/);
     if (!guard) throw Error('the signing/account-method guard is missing from the read wiring');
-    if (!/return e\?e\.request\(\{method,params\}\)\s*\r?\n?:isSign\(method\)\?Promise\.reject\(/.test(html))
+    if (!/(?:return|const p=)e\?e\.request\(\{method,params\}\)\s*\r?\n?:isSign\(method\)\?Promise\.reject\(/.test(html))
       throw Error('rpc() must answer provider reads with the provider alone - no pool fallback for connected users');
     if (/nodeRead\("eth_send|nodeRead\(S\b/.test(html))
       throw Error('nodeRead is called with a signing method directly');
-    return 'one fetch, inside httpRead; pool is walletless-only and refuses signing and accounts';
+    if (!/const relayFetch=async\(path,body\)=>\{[\s\S]{0,160}?fetch\(CP_RELAY\+path,/.test(html))
+      throw Error('relayFetch must address the pinned relay host and nothing else');
+    return 'four fetches, each named; pool is walletless-only and refuses signing and accounts';
   });
 
   check('WalletConnect protocol tags match the spec', () => {
@@ -663,6 +673,59 @@ if (exported) {
     const h = nodecrypto.createHash('sha256').update(flat).digest('hex');
     if (h !== '380ce9a4bf0815c44838b42bc69c815e5e49b33110beb99e918acb19d38c5566') throw Error(`QR modules changed: ${h}`);
     return `49x49, mask ${q.mask}`;
+  });
+
+  // The private bridge re-derives everything Tacit's dapp derives - the NUMS
+  // generator, the note, its leaf, the opening proofs, the memo, the Merkle
+  // path and the recipe escrow - in the page's own arithmetic. Any one of
+  // them drifting is a deposit the relay cannot settle or, worse, a proof paid
+  // to an escrow nobody can reach. The fixture was produced by Tacit's own
+  // modules (scratch: gen-vectors.mjs against /Users/z/tacit), not by the page.
+  check('private bridge matches the confidential pool reference vectors', () => {
+    const F = JSON.parse(fs.readFileSync(path.join(ROOT, 'test', 'fixtures', 'confidential.json'), 'utf8'));
+    const X = exported;
+    const low = v => String(v).toLowerCase();
+    const { cx: hx, cy: hy } = X.cpXY(X.cpH);
+    eq(low(hx), low(F.H.x), 'H.x'); eq(low(hy), low(F.H.y), 'H.y');
+    eq('0x' + X.pcomp(X.pmul(X.GP, BigInt(F.seed))), F.pub, 'owner pubkey');
+    const d = X.cpDerive(F.seed, F.index);
+    eq(d.secret, F.note.secret, 'note secret');
+    eq('0x' + d.blinding.toString(16).padStart(64, '0'), F.note.blinding, 'note blinding');
+    const owner = X.cpOwner(d.secret); eq(owner, F.note.owner, 'owner');
+    const v = BigInt(F.note.value), { cx, cy } = X.cpXY(X.cpCommit(v, d.blinding));
+    eq(cx, F.note.cx, 'cx'); eq(cy, F.note.cy, 'cy');
+    const leaf = X.cpLeaf(cx, cy, owner); eq(leaf, F.leaf, 'leaf');
+    const commit = X.cpDepCommit(cx, cy, owner); eq(commit, F.commit, 'deposit commit');
+    const dep = X.cpDepId(v, commit); eq(dep, F.depositId, 'deposit id');
+    const cb = X.cpBinding(); eq(cb, F.wrapOp.chainBinding, 'chain binding');
+    const wctx = X.cpCtx('tacit-wrap-intent-v1', cb, F.ethAssetId, dep, [[cx, cy, owner]], [v]);
+    const ws = X.cpSigma(v, d.blinding, wctx, X.cpNonce(d.blinding, wctx, 'wrap'));
+    eq(ws.R, F.wrapOp.sigR, 'wrap sigma R'); eq(ws.z, F.wrapOp.sigZ, 'wrap sigma z');
+    eq(X.cpSeal(F.pub.slice(2), { value: v, blinding: d.blinding, secret: d.secret, owner }, BigInt(F.eph)), F.memo, 'memo');
+    const t = X.cpTree([leaf, F.otherLeaf], 0);
+    eq(t.root, F.root, 'tree root'); eq(JSON.stringify(t.path), JSON.stringify(F.path), 'merkle path');
+    eq(X.cpNu(d.secret, leaf), F.nullifier, 'nullifier');
+    eq(X.cpLadder((450000n * BigInt(F.gasPriceWei) + 40000000000000n) * 135n / 100n / 10000000000n), F.fee, 'relay fee');
+    const bx = { ch: 8453, to: F.account, fin: F.account, dl: F.deadline, nonce: F.nonce, wei: F.netWei };
+    const br = X.cpRecipe(bx);
+    eq(X.cpEscrow(F.executorImpl, br), F.base.escrow, 'Base escrow');
+    eq(X.cpActData(br), F.base.activate, 'Base activateExit');
+    eq(X.cpReclData(br), F.base.reclaim, 'Base reclaimExit');
+    eq(X.cpExitData('0x1234', '0xabcdef', br), F.base.exitAndExecute, 'Base exitAndExecute');
+    const R = F.robinhood;
+    const rr = X.cpRecipe({ ch: 4663, to: F.account, fin: F.account, dl: F.deadline, nonce: F.nonce,
+      wei: R.recipe.calls[0].value, l2v: R.l2CallValue, sc: R.maxSubmissionCost, gl: R.gasLimit, mf: R.maxFeePerGas });
+    eq(X.cpEscrow(F.executorImpl, rr), R.escrow, 'Robinhood escrow');
+    eq(X.cpActData(rr), R.activate, 'Robinhood activateExit');
+    const u = F.unwrapRelay, esc = '0x' + F.base.escrow.slice(2).padStart(64, '0');
+    const uctx = X.cpCtx('tacit-unwrap-intent-v1', cb, F.ethAssetId, esc, [[cx, cy, owner]], [v, BigInt(u.fee), BigInt(u.deadline)]);
+    const us = X.cpSigma(v, d.blinding, uctx, X.cpNonce(d.blinding, uctx, 'unwrap'));
+    eq(us.R, u.sigR, 'unwrap sigma R'); eq(us.z, u.sigZ, 'unwrap sigma z');
+    const s0 = F.unwrapSelf;
+    const sctx = X.cpCtx('tacit-unwrap-intent-v1', cb, F.ethAssetId, esc, [[cx, cy, owner]], [v, 0n, BigInt(s0.deadline)]);
+    const ss = X.cpSigma(v, d.blinding, sctx, X.cpNonce(d.blinding, sctx, 'unwrap'));
+    eq(ss.R, s0.sigR, 'self-settle sigma R'); eq(ss.z, s0.sigZ, 'self-settle sigma z');
+    return 'generator, note, memo, tree, both recipes and both openings agree with the reference';
   });
 
   check('keccak matches known vectors', () => {

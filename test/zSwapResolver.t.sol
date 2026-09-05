@@ -17,7 +17,7 @@ contract zSwapResolverTest is Test {
     address dao = 0x5E58BA0e06ED0F5558f83bE732a4b899a674053E;
     address stranger = makeAddr("stranger");
 
-    uint256 constant CHUNKS = 16;
+    uint256 constant CHUNKS = 18;
     address[CHUNKS] chunks;
 
     zSwapResolver resolver;

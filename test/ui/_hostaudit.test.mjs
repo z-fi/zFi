@@ -7,7 +7,7 @@ after(closeAllPages);
 const coder = AbiCoder.defaultAbiCoder();
 const ETH = 10n ** 18n;
 const PAGE = readFileSync(new URL('../../zSwap.html', import.meta.url), 'utf8');
-const pin = n => PAGE.match(new RegExp(`const ${n}="(0x[0-9a-fA-F]{40})"`))[1].toLowerCase();
+const pin = n => PAGE.match(new RegExp(`(?:const|let) ${n}="(0x[0-9a-fA-F]{40})"`))[1].toLowerCase();
 const FILL = pin('SOLVER_FILL_PIN'), EXEC = pin('SOLVER_EXEC_PIN');
 const SELF = '0x' + 'ab'.repeat(20), LIST = '0x' + 'cd'.repeat(20), RPCS = '0x' + 'ef'.repeat(20);
 const LANE_T = ['tuple(string,string,address,uint16,bool)[]'];
