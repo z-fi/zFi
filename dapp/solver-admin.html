@@ -102,10 +102,16 @@ const FILL='0x7A2f21e476cA2ADde027BC868c5a083338EEfE54';
 const MAINNET='0x1';
 const SEL_SOLVERS='e3b06401', SEL_SETEP='8c0381cd', SEL_ADD='b4671e31', SEL_OWNER='8da5cb5b';
 
+// Checksummed on purpose: Bebop rejects any address that is not, tokens
+// included, and every other API accepts either form.
 const PROBE_CHAINS={8453:{id:"8453",slug:"base",
   weth:"0x4200000000000000000000000000000000000006",
-  usdc:"0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"}};
+  usdc:"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"}};
 const AMT="100000000000000000";
+// Bebop rejects a lowercase taker outright ("addresses not checksummed"), and a
+// wallet hands its account back lowercase. The taker only shapes the quote, not
+// whether the endpoint serves the chain, so probes use a fixed checksummed one.
+const PROBE_TAKER="0x1C0Aa8cCD568d90d61659F060D1bFb1e6f855A20";
 const jget=async(u)=>{const c=new AbortController(),k=setTimeout(()=>c.abort(),12000);
   try{const r=await fetch(u,{signal:c.signal});if(!r.ok)return null;return await r.json()}
   catch{return null}finally{clearTimeout(k)}};
@@ -327,7 +333,7 @@ async function testAll(chainId){
     if(!fn){ui.st.textContent='no probe';skip++;continue}
     ui.st.textContent='testing…';
     let out=null;
-    try{out=await fn(ui.inp.value.trim().split('#')[0],C,me)}catch{out=null}
+    try{out=await fn(ui.inp.value.trim().split('#')[0],C,PROBE_TAKER)}catch{out=null}
     if(out&&out>0n){
       ui.st.textContent='answered '+out.toString();
       proven[r.i]=chainId; ok++;
@@ -342,7 +348,7 @@ async function testAll(chainId){
     }
   }
   try{
-    const bb=await PROBES['Bebop']('https://api.bebop.xyz/router/base/v1',C,me);
+    const bb=await PROBES['Bebop']('https://api.bebop.xyz/router/base/v1',C,PROBE_TAKER);
     if(bb&&bb>0n){proven.bebopBase=true; ok++;}
   }catch{}
   $('plan').disabled=false;
