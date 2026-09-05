@@ -1,0 +1,266 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Solver Fill Deployer</title>
+<style>
+  :root { color-scheme: light dark; --bg:#0b0d10; --fg:#e6e8eb; --mut:#8b949e; --line:#232a31;
+          --ok:#3fb950; --bad:#f85149; --warn:#d29922; --acc:#58a6ff; }
+  @media (prefers-color-scheme: light) {
+    :root { --bg:#fff; --fg:#14171a; --mut:#57606a; --line:#d8dee4; --ok:#1a7f37; --bad:#cf222e; --warn:#9a6700; --acc:#0969da; }
+  }
+  * { box-sizing:border-box }
+  body { margin:0; background:var(--bg); color:var(--fg); padding:28px 18px; display:flex; justify-content:center;
+         font:14px/1.55 ui-sans-serif,-apple-system,system-ui,sans-serif }
+  main { width:100%; max-width:700px }
+  h1 { font-size:17px; margin:0 0 2px }
+  .sub { color:var(--mut); margin:0 0 22px }
+  section { border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-bottom:14px }
+  h2 { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--mut); margin:0 0 10px; font-weight:600 }
+  dl { display:grid; grid-template-columns:auto 1fr; gap:5px 14px; margin:0 }
+  dt { color:var(--mut) }
+  dd { margin:0; font-family:ui-monospace,Menlo,monospace; font-size:12.5px; word-break:break-all }
+  button { font:inherit; font-weight:600; padding:9px 15px; border-radius:8px; border:1px solid var(--line);
+           background:var(--acc); color:#fff; cursor:pointer }
+  button.ghost { background:transparent; color:var(--fg) }
+  button:disabled { opacity:.45; cursor:not-allowed }
+  .row { display:flex; gap:9px; align-items:center; flex-wrap:wrap }
+  .msg { margin-top:11px; padding:9px 11px; border-radius:8px; border:1px solid var(--line); display:none;
+         font-family:ui-monospace,Menlo,monospace; font-size:12px; word-break:break-all; white-space:pre-wrap }
+  .msg.show { display:block }
+  .ok { color:var(--ok); border-color:var(--ok) }
+  .bad { color:var(--bad); border-color:var(--bad) }
+  .warn { color:var(--warn); border-color:var(--warn) }
+  .hint { color:var(--mut); font-size:12.5px; margin-top:9px }
+  a { color:var(--acc) }
+  ul { margin:8px 0 0; padding-left:18px; color:var(--mut); font-size:12.5px }
+  li { margin:3px 0 }
+</style>
+
+<main>
+  <h1>Deploy zSolverFill</h1>
+  <p class="sub">The contract that settles a solver's route. zSwap refuses to offer solver
+     lanes on any chain where this has no code, which is why the flags you set on the list
+     are dormant everywhere but mainnet. No constructor arguments: it deploys its own
+     executor, which takes this contract as FILL.</p>
+
+  <section>
+    <h2>Wallet</h2>
+    <div class="row" id="wallet-list"><span class="hint">Looking for wallets…</span></div>
+    <div class="row"><button id="connect">Connect</button></div>
+    <div class="row" id="chain-row">
+      <button class="ghost" id="ch-8453"></button>
+      <button class="ghost" id="ch-4663"></button>
+    </div>
+    <dl><dt>You</dt><dd id="p-you">—</dd><dt>Chain</dt><dd id="p-chain">—</dd></dl>
+    <div class="msg" id="w-out"></div>
+  </section>
+
+  <section>
+    <h2>Deploy</h2>
+    <div class="row">
+      <button id="d-check" class="ghost" disabled>Check</button>
+      <button id="d-sim" class="ghost" disabled>Simulate</button>
+      <button id="d-send" disabled>Deploy</button>
+    </div>
+    <dl>
+      <dt>Fill deploys to</dt><dd>0x03d95ecAF7B2Ab6027b8541b19Cb0Ce5CEd9bC74</dd>
+      <dt>Exec follows at</dt><dd>0x1434A2579DE1009aA12b7064A161E53a5be2C030</dd>
+      <dt>Fill occupied</dt><dd id="d-occ">—</dd>
+      <dt>Exec occupied</dt><dd id="d-occ2">—</dd>
+      <dt>Salt deployer</dt><dd id="d-dep">—</dd>
+      <dt>Creation code</dt><dd id="d-code">—</dd>
+    </dl>
+    <p class="hint">The executor's address is not chosen — it is whatever the fill contract
+       creates at its first nonce, which is the same on every chain because the fill itself
+       lands at one address. Both are checked before the button opens.</p>
+    <div class="msg" id="d-out"></div>
+  </section>
+</main>
+
+<script src="./zsolverfill-initcode.js"></script>
+<script>
+const CREATEX='0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed';
+const SALT='0x1c0aa8ccd568d90d61659f060d1bfb1e6f855a200000000000000000000051f0';
+const GUARDED='0x04c65a0aac4b34258211b2540ca9a61eb02967ca51c1cf242b579aee7f0563cd';
+const FILL_ADDR='0x03d95ecaf7b2ab6027b8541b19cb0ce5ced9bc74';
+const EXEC_ADDR='0x1434a2579de1009aa12b7064a161e53a5be2c030';
+const CHAINS={
+'0x2105':{id:8453,name:'Base',rpcs:['https://mainnet.base.org'],explorer:'https://basescan.org'},
+'0x1237':{id:4663,name:'Robinhood',rpcs:['https://rpc.mainnet.chain.robinhood.com'],explorer:'https://robinscan.io'},
+};
+
+const $=(id)=>document.getElementById(id);
+const show=(el,t,c)=>{el.textContent=t;el.className='msg show '+(c||'')};
+let provider=null,account=null,chainHex=null;
+
+// Every installed wallet announces itself under EIP-6963. Taking the first to
+// answer picks whichever extension won the race — usually not the one you meant
+// — and `window.ethereum` is worse, since the last extension to load overwrites
+// it. So collect them all and let the choice be explicit.
+const wallets = new Map(); // rdns -> { info, provider }
+let chosen = null;
+
+window.addEventListener('eip6963:announceProvider', (e) => {
+  wallets.set(e.detail.info.rdns, e.detail);
+  renderWallets();
+});
+function scan() { window.dispatchEvent(new Event('eip6963:requestProvider')); }
+scan();
+// Extensions inject asynchronously, so keep asking for a moment.
+for (const ms of [50, 150, 400, 900, 1800]) setTimeout(scan, ms);
+
+function legacy() {
+  // Pre-6963 wallets, and the array some multi-wallet setups expose.
+  const out = [];
+  const eth = window.ethereum;
+  if (!eth) return out;
+  const list = Array.isArray(eth.providers) ? eth.providers : [eth];
+  for (const p of list) {
+    const name = p.isMetaMask ? 'MetaMask' : p.isRabby ? 'Rabby'
+      : p.isCoinbaseWallet ? 'Coinbase Wallet' : p.isBraveWallet ? 'Brave' : 'Injected wallet';
+    out.push({ info: { name, rdns: 'legacy:' + name }, provider: p });
+  }
+  return out;
+}
+
+function renderWallets() {
+  const box = $('wallet-list');
+  const seen = new Map(wallets);
+  for (const w of legacy()) if (![...seen.values()].some((x) => x.provider === w.provider)) seen.set(w.info.rdns, w);
+
+  box.textContent = '';
+  if (!seen.size) {
+    const s = document.createElement('span');
+    s.className = 'hint';
+    s.textContent = 'No wallet detected yet.';
+    box.appendChild(s);
+    return;
+  }
+  for (const w of seen.values()) {
+    const b = document.createElement('button');
+    b.className = chosen === w.provider ? '' : 'ghost';
+    b.textContent = w.info.name;
+    b.onclick = () => { chosen = provider = w.provider; renderWallets(); connect(); };
+    box.appendChild(b);
+  }
+}
+
+async function getProvider() {
+  if (chosen) return chosen;
+  for (let i = 0; i < 20; i++) {
+    if (wallets.size === 1) return (provider = [...wallets.values()][0].provider);
+    if (wallets.size > 1) return null; // ambiguous: make the user pick
+    const l = legacy();
+    if (l.length === 1) return (provider = l[0].provider);
+    scan();
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  return null;
+}
+
+const codeAt=(a)=>provider.request({method:'eth_getCode',params:[a,'latest']});
+function calldata(){
+  const code=window.ZSOLVERFILL_INITCODE.replace(/^0x/,'');
+  const len=(code.length/2).toString(16).padStart(64,'0');
+  const body=code+'0'.repeat((64-(code.length%64))%64);
+  return '0x9c36a286'+SALT.replace(/^0x/,'')+(64).toString(16).padStart(64,'0')+len+body;
+}
+const tx=()=>({from:account,to:CREATEX,data:calldata(),value:'0x0'});
+
+$('d-code').textContent=window.ZSOLVERFILL_INITCODE
+  ?((window.ZSOLVERFILL_INITCODE.length-2)/2)+' bytes':'MISSING';
+
+function renderChains(){
+  for(const hex in CHAINS){
+    const c=CHAINS[hex], b=$('ch-'+c.id);
+    if(!b)continue;
+    b.textContent=c.name;
+    b.className=(chainHex===hex)?'':'ghost';
+    b.onclick=()=>pickChain(hex);
+  }
+}
+async function readChain(){
+  chainHex=await provider.request({method:'eth_chainId'});
+  const c=CHAINS[chainHex];
+  $('p-chain').textContent=c?c.name+' ('+c.id+')':'unsupported — pick one above';
+  $('d-check').disabled=!c; $('d-sim').disabled=true; $('d-send').disabled=true;
+  $('d-occ').textContent='—'; $('d-occ2').textContent='—';
+  renderChains();
+  return c;
+}
+async function pickChain(hex){
+  if(!provider)return show($('w-out'),'Connect a wallet first.','bad');
+  const c=CHAINS[hex];
+  try{ await provider.request({method:'wallet_switchEthereumChain',params:[{chainId:hex}]}); }
+  catch(e){
+    if(e&&e.code===4902){
+      try{ await provider.request({method:'wallet_addEthereumChain',params:[{chainId:hex,chainName:c.name,
+        nativeCurrency:{name:'Ether',symbol:'ETH',decimals:18},rpcUrls:c.rpcs,blockExplorerUrls:[c.explorer]}]}); }
+      catch(e2){ return show($('w-out'),'Could not add '+c.name,'bad') }
+    } else if(e&&e.code===4001) return show($('w-out'),'Chain switch rejected.','');
+    else return show($('w-out'),e.message||String(e),'bad');
+  }
+  const now=await readChain();
+  show($('w-out'),now?('On '+now.name+'.'):'Wallet did not switch.',now?'ok':'bad');
+}
+async function connect(){
+  try{
+    const p=await getProvider();
+    if(!p)return show($('w-out'),wallets.size>1?'Several wallets installed. Pick one above.'
+      :'No wallet found. Serve locally: cd dapp && python3 -m http.server 8080','bad');
+    account=(await p.request({method:'eth_requestAccounts'}))[0];
+    $('p-you').textContent=account;
+    const c=await readChain();
+    show($('w-out'),'Connected via '+walletName(p)+(c?' on '+c.name:' — pick a chain'),c?'ok':'bad');
+    p.on&&p.on('chainChanged',()=>{readChain().catch(()=>{})});
+  }catch(e){show($('w-out'),e.message||String(e),'bad')}
+}
+function walletName(p){
+  for(const w of wallets.values())if(w.provider===p)return w.info.name;
+  for(const w of legacy())if(w.provider===p)return w.info.name;
+  return 'injected wallet';
+}
+$('connect').onclick=connect;
+renderWallets(); renderChains();
+
+$('d-check').onclick=async()=>{
+  $('d-sim').disabled=true;$('d-send').disabled=true;
+  const fail=[];
+  try{
+    const got=await provider.request({method:'eth_call',params:[{to:CREATEX,data:'0x6cec2536'+GUARDED.replace(/^0x/,'')},'latest']});
+    const a=('0x'+got.slice(26)).toLowerCase();
+    if(a!==FILL_ADDR)fail.push('CreateX derives '+a+', not the expected fill address.');
+    const fc=await codeAt(FILL_ADDR), ec=await codeAt(EXEC_ADDR);
+    const fo=fc&&fc!=='0x', eo=ec&&ec!=='0x';
+    $('d-occ').textContent=fo?'YES — already deployed':'no';
+    $('d-occ2').textContent=eo?'YES — already deployed':'no';
+    if(fo)fail.push('Fill address already has code on this chain.');
+    if(eo)fail.push('Exec address already has code — the fill would collide with it.');
+    const sd='0x'+SALT.replace(/^0x/,'').slice(0,40);
+    $('d-dep').textContent=sd+(account&&account.toLowerCase()===sd?'  \u2713 connected':'  \u2717 connect this account');
+    if(!account||account.toLowerCase()!==sd)fail.push('Salt is permissioned to '+sd+'.');
+    if(!window.ZSOLVERFILL_INITCODE)fail.push('Creation code did not load.');
+    if(fail.length)return show($('d-out'),'BLOCKED:\n- '+fail.join('\n- '),'bad');
+    $('d-sim').disabled=false;$('d-send').disabled=false;
+    show($('d-out'),'All checks passed. Both addresses free.','ok');
+  }catch(e){show($('d-out'),'Check failed: '+(e.message||e),'bad')}
+};
+$('d-sim').onclick=async()=>{
+  show($('d-out'),'Simulating…');
+  try{
+    const r=await provider.request({method:'eth_call',params:[tx(),'latest']});
+    const g=await provider.request({method:'eth_estimateGas',params:[tx()]});
+    show($('d-out'),'Simulation OK.\ndeployed -> 0x'+(r||'').slice(26)+'\nestimated gas: '+BigInt(g).toString(),'ok');
+  }catch(e){
+    const d=(e&&e.data&&(e.data.data||e.data))||'';
+    show($('d-out'),'Would revert:\n'+(e.message||e)+(d?'\n'+d:''),'bad');
+  }
+};
+$('d-send').onclick=async()=>{
+  show($('d-out'),'Confirm in your wallet…');
+  try{
+    const h=await provider.request({method:'eth_sendTransaction',params:[tx()]});
+    show($('d-out'),'Sent: '+h+'\nfill -> '+FILL_ADDR+'\nexec -> '+EXEC_ADDR,'ok');
+  }catch(e){show($('d-out'),e.message||String(e),'bad')}
+};
+</script>
