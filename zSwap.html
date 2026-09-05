@@ -483,13 +483,13 @@ let CHAIN_ID=1;
 const CHAIN_ICON_BASE=`<svg viewBox="0 0 32 32" width="20" height="20" aria-hidden="true"><rect width="32" height="32" fill="#0052FF"/><path d="M16 5.4A10.6 10.6 0 0 0 5.5 14.7h13.9v2.6H5.5A10.6 10.6 0 1 0 16 5.4Z" fill="#fff" transform="rotate(180 16 16)"/></svg>`;
 const CHAIN_ICON_RH=`<svg viewBox="0 0 32 32" width="20" height="20" aria-hidden="true"><rect width="32" height="32" fill="#CCFF00"/><g transform="translate(4 4)" fill="#110E08"><path d="M2.84 24h.53c.096 0 .192-.048.224-.128C7.591 13.696 11.94 8.656 14.67 5.638c.112-.128.064-.225-.096-.225h-4.88a.55.55 0 0 0-.45.225L5.746 9.972c-.514.642-.642 1.236-.642 2.086v4.43c-1.14 3.194-1.862 5.361-2.392 7.32-.032.125.016.192.129.192M20.447.646c-.754-.802-4.157-.834-5.73-.224a3 3 0 0 0-.786.465 41 41 0 0 0-3.323 3.178c-.112.113-.064.225.097.225h5.409c.497 0 .786.289.786.786v6.1c0 .16.128.208.225.064l3.258-4.254c.53-.69.69-.898.835-1.861.192-1.413.08-3.58-.77-4.479m-6.982 16.18 2.231-3.676a.7.7 0 0 0 .064-.29V6.73c0-.16-.112-.225-.224-.097-3.355 3.74-5.971 7.672-8.395 12.407-.06.12.016.225.16.177l5.009-1.54c.565-.174.882-.402 1.155-.852"/></g></svg>`;
 const CHAINS={
-1:{name:"Ethereum",short:"ETH",sweep4:true,curve:5,sources:["UniV2","Sushi","zAMM","UniV3","UniV4","Curve","Lido","Wrap","Precision"],v4port:"0x000000dfb53Fa7f1c486470034741d5BCBE14BE9",v4lens:"0x000000c3aE1692983941495162A4AAB40660E65F",tokenlist:"0x0000006013dF75A31678B786061C2B54bf531524",
+1:{name:"Ethereum",short:"ETH",sweep4:true,curve:5,slvId:"1",slvSlug:"ethereum",sources:["UniV2","Sushi","zAMM","UniV3","UniV4","Curve","Lido","Wrap","Precision"],v4port:"0x000000dfb53Fa7f1c486470034741d5BCBE14BE9",v4lens:"0x000000c3aE1692983941495162A4AAB40660E65F",tokenlist:"0x0000006013dF75A31678B786061C2B54bf531524",
 wrapped:"0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",explorer:"https://etherscan.io",
 rpcs:["https://ethereum-rpc.publicnode.com","https://eth-mainnet.public.blastapi.io"]},
-8453:{name:"Base",short:"BASE",sweep4:false,curve:-1,sources:["UniV2","Aero","zAMM","UniV3","UniV4","AeroCL","Wrap","","Precision"],v4port:"0x508ad1b0ae31FaF295c5af8C5c2bE9e33E0D19C4",v4lens:"0x0000000000000000000000000000000000000000",tokenlist:"0x0000000000000000000000000000000000000000",
+8453:{name:"Base",short:"BASE",sweep4:false,curve:-1,slvId:"8453",slvSlug:"base",sources:["UniV2","Aero","zAMM","UniV3","UniV4","AeroCL","Wrap","","Precision"],v4port:"0x508ad1b0ae31FaF295c5af8C5c2bE9e33E0D19C4",v4lens:"0x0000000000000000000000000000000000000000",tokenlist:"0x0000000000000000000000000000000000000000",
 wrapped:"0x4200000000000000000000000000000000000006",explorer:"https://basescan.org",
 icon:CHAIN_ICON_BASE,rpcs:["https://mainnet.base.org","https://base-rpc.publicnode.com"]},
-4663:{name:"Robinhood",short:"RH",sweep4:false,curve:5,sources:["UniV2","Sushi","zAMM","UniV3","UniV4","Curve","Lido","Wrap","Precision"],v4port:"0x508ad1b0ae31FaF295c5af8C5c2bE9e33E0D19C4",v4lens:"0x0000000000000000000000000000000000000000",tokenlist:"0x0000000000000000000000000000000000000000",
+4663:{name:"Robinhood",short:"RH",sweep4:false,curve:5,slvId:"4663",slvSlug:"",sources:["UniV2","Sushi","zAMM","UniV3","UniV4","Curve","Lido","Wrap","Precision"],v4port:"0x508ad1b0ae31FaF295c5af8C5c2bE9e33E0D19C4",v4lens:"0x0000000000000000000000000000000000000000",tokenlist:"0x0000000000000000000000000000000000000000",
 wrapped:"0x0bd7d308f8e1639fab988df18a8011f41eacad73",explorer:"https://robinscan.io",
 rpcs:["https://rpc.mainnet.chain.robinhood.com"]},
 };
@@ -1063,7 +1063,12 @@ const nameOff=W(t)/32,epOff=W(t+1)/32;
 if(!Number.isInteger(nameOff)||!Number.isInteger(epOff))return[];
 const name=str(t+nameOff),endpoint=str(t+epOff);
 if(name===null||endpoint===null)return[];
-out.push({name,endpoint,
+const hash=endpoint.indexOf("#");
+const flag=hash<0?"":endpoint.slice(hash+1);
+const url=hash<0?endpoint:endpoint.slice(0,hash);
+const m=/(?:^|;)c=([0-9,]+)/.exec(flag);
+const chains=m?m[1].split(",").map(Number).filter(Boolean):[1];
+out.push({name,endpoint:url,chains,
 adapter:"0x"+b.slice((t+2)*64+24,(t+3)*64),
 handicapBps:BigInt(W(t+3)),
 enabled:W(t+4)===1});
@@ -1082,7 +1087,9 @@ const raw=await nodeRead("eth_call",[{to:list,data:"0x"+SEL_SLIST},L]);
 solverLanes=decSolvers(raw).filter(x=>x.enabled
 &&x.adapter.toLowerCase()===SOLVER_FILL_PIN.toLowerCase()
 &&/^https:\/\/\S+$/.test(x.endpoint)
-&&SOLVER_SHAPES[x.name]);
+&&SOLVER_SHAPES[x.name]
+&&x.chains.includes(CHAIN_ID)
+&&chainCfg().slvId);
 }catch{solversJob=null}
 })());
 const lanePost=async(name,url,body,ms)=>{
@@ -1114,7 +1121,7 @@ if(!r.ok)return null;return await r.json()}
 catch(e){laneThrew(name,e);return null}finally{clearTimeout(k)}};
 const SOLVER_SHAPES_OUT={
 "0x":async(ep,f,t,amt,slip,ms)=>{
-const q=new URLSearchParams({chainId:"1",sellToken:f===ZERO?OX_ETH:f,buyToken:t===ZERO?OX_ETH:t,
+const q=new URLSearchParams({chainId:chainCfg().slvId,sellToken:f===ZERO?OX_ETH:f,buyToken:t===ZERO?OX_ETH:t,
 buyAmount:amt.toString(),taker:solverExec,slippageBps:String(slip)});
 const j=await laneGet("0x",`${ep}/swap/allowance-holder/quote?${q}`,ms);
 if(!j||!j.transaction||!j.estimatedNetSellAmount)return null;
@@ -1124,10 +1131,10 @@ target:j.transaction.to,spender:j.allowanceTarget||j.transaction.to,data:j.trans
 "ParaSwap":async(ep,f,t,amt,slip,ms,fd,td)=>{
 const q=new URLSearchParams({srcToken:f===ZERO?OX_ETH:f,destToken:t===ZERO?OX_ETH:t,
 amount:amt.toString(),srcDecimals:String(fd??18),destDecimals:String(td??18),
-side:"BUY",network:"1",version:"6.2"});
+side:"BUY",network:chainCfg().slvId,version:"6.2"});
 const pr=await laneGet("ParaSwap",`${ep}/prices?${q}`,ms);
 const route=pr&&pr.priceRoute;if(!route||!route.srcAmount)return null;
-const j=await lanePost("ParaSwap",`${ep}/transactions/1?ignoreChecks=true`,{
+const j=await lanePost("ParaSwap",`${ep}/transactions/${chainCfg().slvId}?ignoreChecks=true`,{
 srcToken:f===ZERO?OX_ETH:f,destToken:t===ZERO?OX_ETH:t,
 srcDecimals:route.srcDecimals,destDecimals:route.destDecimals,
 priceRoute:route,userAddress:solverExec,slippage:Number(slip)},ms);
@@ -1137,7 +1144,7 @@ target:j.to,spender:route.tokenTransferProxy||j.to,data:j.data}},
 };
 const SOLVER_SHAPES={
 "0x":async(ep,f,t,amt,slip,ms)=>{
-const q=new URLSearchParams({chainId:"1",sellToken:f===ZERO?OX_ETH:f,buyToken:t===ZERO?OX_ETH:t,
+const q=new URLSearchParams({chainId:chainCfg().slvId,sellToken:f===ZERO?OX_ETH:f,buyToken:t===ZERO?OX_ETH:t,
 sellAmount:amt.toString(),taker:solverExec,slippageBps:String(slip)});
 const j=await laneGet("0x",`${ep}/swap/allowance-holder/quote?${q}`,ms);
 if(!j||!j.transaction||!j.buyAmount)return null;
@@ -1146,10 +1153,10 @@ spender:j.allowanceTarget||j.transaction.to,data:j.transaction.data}},
 "ParaSwap":async(ep,f,t,amt,slip,ms,fd,td)=>{
 const q=new URLSearchParams({srcToken:f===ZERO?OX_ETH:f,destToken:t===ZERO?OX_ETH:t,
 amount:amt.toString(),srcDecimals:String(fd??18),destDecimals:String(td??18),
-side:"SELL",network:"1",version:"6.2"});
+side:"SELL",network:chainCfg().slvId,version:"6.2"});
 const pr=await laneGet("ParaSwap",`${ep}/prices?${q}`,ms);
 const route=pr&&pr.priceRoute;if(!route||!route.destAmount)return null;
-const j=await lanePost("ParaSwap",`${ep}/transactions/1?ignoreChecks=true`,{
+const j=await lanePost("ParaSwap",`${ep}/transactions/${chainCfg().slvId}?ignoreChecks=true`,{
 srcToken:f===ZERO?OX_ETH:f,destToken:t===ZERO?OX_ETH:t,
 srcDecimals:route.srcDecimals,destDecimals:route.destDecimals,
 priceRoute:route,userAddress:solverExec,slippage:Number(slip)},ms);
@@ -1158,21 +1165,21 @@ return{out:bmin(BigInt(route.destAmount),BigInt(route.destAmountAfterFee||route.
 target:j.to,spender:route.tokenTransferProxy||j.to,data:j.data}},
 "KyberSwap":async(ep,f,t,amt,slip,ms)=>{
 const q=new URLSearchParams({tokenIn:f===ZERO?OX_ETH:f,tokenOut:t===ZERO?OX_ETH:t,amountIn:amt.toString()});
-const pr=await laneGet("KyberSwap",`${ep}/ethereum/api/v1/routes?${q}`,ms);
+const pr=await laneGet("KyberSwap",`${ep}/${chainCfg().slvSlug}/api/v1/routes?${q}`,ms);
 const rs=pr&&pr.data&&pr.data.routeSummary;if(!rs||!rs.amountOut)return null;
-const j=await lanePost("KyberSwap",`${ep}/ethereum/api/v1/route/build`,
+const j=await lanePost("KyberSwap",`${ep}/${chainCfg().slvSlug}/api/v1/route/build`,
 {routeSummary:rs,sender:solverExec,recipient:solverExec,slippageTolerance:Number(slip)},ms);
 const d=j&&j.data;if(!d||!d.data||!d.routerAddress)return null;
 return{out:BigInt(rs.amountOut),target:d.routerAddress,spender:d.routerAddress,data:d.data}},
 "Enso":async(ep,f,t,amt,slip,ms)=>{
-const q=new URLSearchParams({chainId:"1",fromAddress:solverExec,receiver:solverExec,
+const q=new URLSearchParams({chainId:chainCfg().slvId,fromAddress:solverExec,receiver:solverExec,
 tokenIn:f===ZERO?OX_ETH:f,tokenOut:t===ZERO?OX_ETH:t,amountIn:amt.toString(),
 slippage:String(slip),routingStrategy:"router"});
 const j=await laneGet("Enso",`${ep}?${q}`,ms);
 if(!j||!j.amountOut||!j.tx||!j.tx.to)return null;
 return{out:BigInt(j.amountOut),target:j.tx.to,spender:j.tx.to,data:j.tx.data}},
 "OKX":async(ep,f,t,amt,slip,ms)=>{
-const q=new URLSearchParams({chainIndex:"1",fromTokenAddress:f===ZERO?OX_ETH:f,
+const q=new URLSearchParams({chainIndex:chainCfg().slvId,fromTokenAddress:f===ZERO?OX_ETH:f,
 toTokenAddress:t===ZERO?OX_ETH:t,amount:amt.toString(),
 slippagePercent:(Number(slip)/100).toString(),userWalletAddress:solverExec,swapMode:"exactIn"});
 const j=await laneGet("OKX",`${ep}/dex/aggregator/swap?${q}`,ms);
@@ -1196,7 +1203,7 @@ return{out:BigInt(info.amount),target:qq.tx.to,spender:bebSp,data:qq.tx.data}},
 "1inch":async(ep,f,t,amt,slip,ms)=>{
 const q=new URLSearchParams({src:f===ZERO?OX_ETH:f,dst:t===ZERO?OX_ETH:t,amount:amt.toString(),
 from:solverExec,origin:solverExec,slippage:String(Number(slip)/100),disableEstimate:"true"});
-const j=await laneGet("1inch",`${ep}/swap/v6.0/1/swap?${q}`,ms);
+const j=await laneGet("1inch",`${ep}/swap/v6.0/${chainCfg().slvId}/swap?${q}`,ms);
 if(!j||!j.tx||!j.dstAmount)return null;
 return{out:BigInt(j.dstAmount),target:j.tx.to,spender:j.tx.to,data:j.tx.data}},
 };
