@@ -120,21 +120,19 @@ deployment, so the replay set cost ~0.008 ETH.
 
 ## Robinhood Chain (4663) — CREATE3 set
 
-Same salts, same addresses, Robinhood's WETH `0x0Bd7…AD73`.
+Same salts, same addresses, Robinhood's WETH `0x0Bd7…AD73`, live 2026-09-06.
+Every immutable was read back and matched. The deployer ran dry after
+Dutchboard on the first pass; 0.01 ETH was bridged from its mainnet balance
+through the chain's Inbox (`0x1A07cc4B…`, `depositEth()`, credited in ~8 min)
+and `deploy 4663` resumed from where the log said it had stopped.
 
 | contract | address | tx (4663) |
 |---|---|---|
 | Swapboard | `0x0000001330435808A906432449D233d482Bc9b60` | `0x2440663e4e29ba9368098a7b73d5e947363b5ddab2a52a691e3d4c6bf6236604` |
 | Dutchboard | `0x000000fa42d555173395323b2956e9c42EFaEFf2` | `0x775b00245a20a19123f5c5e997b56e0e0d0766c5d1d9cbc85b1c3276d2ccdb32` |
-| Floorboard | `0x000000AC7d32e802B003a31F790eb28Ed3294Bac` | **not yet deployed** |
-| OrderbolL2 | `0x0000007a1c93d42dD739E8d6cA9Dabf330934970` | **not yet deployed** |
-| SwapbolL2 | `0x00000032100E634903378DAEED6bA448f35F541a` | **not yet deployed** |
-| PrecisionRouteL2 | `0x000000D14E24e5FC8965bcDE58f21f704C944999` | **not yet deployed** |
+| Floorboard | `0x000000AC7d32e802B003a31F790eb28Ed3294Bac` | `0x143e8b976384dd0643f69cd25e7ac636c18ffc9d184de9ab004418c5fcd97ee3` |
+| OrderbolL2 | `0x0000007a1c93d42dD739E8d6cA9Dabf330934970` | `0x4618f3fabdf273853a4ad80d2e828675f18e4cba54835135ec724ddd7fdb5234` |
+| SwapbolL2 | `0x00000032100E634903378DAEED6bA448f35F541a` | `0xc40a00ca361488161d32d74ccf26d1a1ebfb0b72fba66945fd320cfbc298c7e2` |
+| PrecisionRouteL2 | `0x000000D14E24e5FC8965bcDE58f21f704C944999` | `0x4c5c444d622c9a5bc06d279b72b66b002d84d821d6c83e4fbca18247c39cf21d` |
 
-Floorboard, OrderbolL2, SwapbolL2 and PrecisionRouteL2 are **not yet on 4663**:
-the deployer ran dry after Dutchboard (0.005 ETH left against ~15M gas at
-0.4–0.8 gwei). Fund `0x68575B073DE49a94e3E3ACf6F3A0d6E3b66267C7` with about
-0.015 ETH on 4663 and re-run `node script/l2-mirror.mjs deploy 4663`; it skips
-what is live and deploys the rest in dependency order at the addresses the
-page already carries. Until then the page's book on Robinhood resolves the
-boards, but `floorRoutable()` is false there and neither forwarder has code.
+~31.9M gas at ~0.4 gwei plus the L1 component, ~0.014 ETH in all.
