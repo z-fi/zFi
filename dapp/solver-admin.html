@@ -1,0 +1,294 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Solver List Admin</title>
+<style>
+  :root { color-scheme: light dark; --bg:#0b0d10; --fg:#e6e8eb; --mut:#8b949e; --line:#232a31;
+          --ok:#3fb950; --bad:#f85149; --warn:#d29922; --acc:#58a6ff; }
+  @media (prefers-color-scheme: light) {
+    :root { --bg:#fff; --fg:#14171a; --mut:#57606a; --line:#d8dee4; --ok:#1a7f37; --bad:#cf222e; --warn:#9a6700; --acc:#0969da; }
+  }
+  * { box-sizing:border-box }
+  body { margin:0; background:var(--bg); color:var(--fg); padding:28px 18px; display:flex; justify-content:center;
+         font:14px/1.55 ui-sans-serif,-apple-system,system-ui,sans-serif }
+  main { width:100%; max-width:700px }
+  h1 { font-size:17px; margin:0 0 2px }
+  .sub { color:var(--mut); margin:0 0 22px }
+  section { border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-bottom:14px }
+  h2 { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--mut); margin:0 0 10px; font-weight:600 }
+  dl { display:grid; grid-template-columns:auto 1fr; gap:5px 14px; margin:0 }
+  dt { color:var(--mut) }
+  dd { margin:0; font-family:ui-monospace,Menlo,monospace; font-size:12.5px; word-break:break-all }
+  button { font:inherit; font-weight:600; padding:9px 15px; border-radius:8px; border:1px solid var(--line);
+           background:var(--acc); color:#fff; cursor:pointer }
+  button.ghost { background:transparent; color:var(--fg) }
+  button:disabled { opacity:.45; cursor:not-allowed }
+  .row { display:flex; gap:9px; align-items:center; flex-wrap:wrap }
+  .msg { margin-top:11px; padding:9px 11px; border-radius:8px; border:1px solid var(--line); display:none;
+         font-family:ui-monospace,Menlo,monospace; font-size:12px; word-break:break-all; white-space:pre-wrap }
+  .msg.show { display:block }
+  .ok { color:var(--ok); border-color:var(--ok) }
+  .bad { color:var(--bad); border-color:var(--bad) }
+  .warn { color:var(--warn); border-color:var(--warn) }
+  .hint { color:var(--mut); font-size:12.5px; margin-top:9px }
+  a { color:var(--acc) }
+  ul { margin:8px 0 0; padding-left:18px; color:var(--mut); font-size:12.5px }
+  li { margin:3px 0 }
+</style>
+<style>
+  table { width:100%; border-collapse:collapse; font-size:12.5px }
+  th,td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:top }
+  th { color:var(--mut); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.05em }
+  input.ep { width:100%; font-family:ui-monospace,Menlo,monospace; font-size:11.5px; padding:5px 7px;
+            background:transparent; color:var(--fg); border:1px solid var(--line); border-radius:6px }
+  td.name { font-weight:600; white-space:nowrap }
+  .chip { font-family:ui-monospace,Menlo,monospace; font-size:11px; color:var(--mut) }
+</style>
+
+<main>
+  <h1>Solver list — chain coverage</h1>
+  <p class="sub">The list lives at <code>0x1Dfbb2f41B596F72187370469074C46de60dA2e3</code> on mainnet and
+     you own it. zSwap reads which chains a solver covers from a fragment on the stored
+     URL — <code>#c=1,8453</code>. A fragment is never sent to a server, so the gateway
+     never sees it and an entry without one still means mainnet only.</p>
+
+  <section>
+    <h2>Wallet</h2>
+    <div class="row" id="wallet-list"><span class="hint">Looking for wallets…</span></div>
+    <div class="row">
+      <button id="connect">Connect</button>
+      <button id="load" class="ghost" disabled>Load list</button>
+    </div>
+    <dl><dt>You</dt><dd id="p-you">—</dd><dt>Owner</dt><dd id="p-owner">—</dd></dl>
+    <div class="msg" id="w-out"></div>
+  </section>
+
+  <section>
+    <h2>Entries</h2>
+    <table id="tbl"><thead><tr>
+      <th>#</th><th>Solver</th><th>Endpoint (append #c=… to flag chains)</th><th>Covers</th><th></th>
+    </tr></thead><tbody id="rows"><tr><td colspan="5" class="hint">Connect, then Load list.</td></tr></tbody></table>
+    <p class="hint">Verified from here: <b>ParaSwap</b>, <b>KyberSwap</b> and <b>Bebop</b> answer on Base.
+       The keyed gateways refuse requests that are not the dapp, so 0x / 1inch / Enso / OKX
+       could not be checked from outside — flag those only once you have seen them answer.
+       Nothing answers on Robinhood (4663) yet.</p>
+    <div class="msg" id="t-out"></div>
+  </section>
+
+  <section>
+    <h2>Add a row</h2>
+    <p class="hint">Bebop carries the chain in the stored path, so it needs one row per chain
+       rather than a flag. The list is ordered but not keyed, so a second Bebop row is fine.</p>
+    <div class="row">
+      <button id="a-bebop" class="ghost" disabled>Stage Bebop / Base</button>
+      <button id="a-sim" class="ghost" disabled>Simulate</button>
+      <button id="a-send" disabled>Add</button>
+    </div>
+    <dl><dt>Name</dt><dd id="a-name">—</dd><dt>Endpoint</dt><dd id="a-ep">—</dd></dl>
+    <div class="msg" id="a-out"></div>
+  </section>
+</main>
+
+<script>
+const LIST='0x1Dfbb2f41B596F72187370469074C46de60dA2e3';
+const FILL='0x7A2f21e476cA2ADde027BC868c5a083338EEfE54';
+const MAINNET='0x1';
+const SEL_SOLVERS='e3b06401', SEL_SETEP='8c0381cd', SEL_ADD='b4671e31', SEL_OWNER='8da5cb5b';
+
+const $=(id)=>document.getElementById(id);
+const show=(el,t,c)=>{el.textContent=t;el.className='msg show '+(c||'')};
+let provider=null,account=null,rows=[],staged=null;
+
+// Every installed wallet announces itself under EIP-6963. Taking the first to
+// answer picks whichever extension won the race — usually not the one you meant
+// — and `window.ethereum` is worse, since the last extension to load overwrites
+// it. So collect them all and let the choice be explicit.
+const wallets = new Map(); // rdns -> { info, provider }
+let chosen = null;
+
+window.addEventListener('eip6963:announceProvider', (e) => {
+  wallets.set(e.detail.info.rdns, e.detail);
+  renderWallets();
+});
+function scan() { window.dispatchEvent(new Event('eip6963:requestProvider')); }
+scan();
+// Extensions inject asynchronously, so keep asking for a moment.
+for (const ms of [50, 150, 400, 900, 1800]) setTimeout(scan, ms);
+
+function legacy() {
+  // Pre-6963 wallets, and the array some multi-wallet setups expose.
+  const out = [];
+  const eth = window.ethereum;
+  if (!eth) return out;
+  const list = Array.isArray(eth.providers) ? eth.providers : [eth];
+  for (const p of list) {
+    const name = p.isMetaMask ? 'MetaMask' : p.isRabby ? 'Rabby'
+      : p.isCoinbaseWallet ? 'Coinbase Wallet' : p.isBraveWallet ? 'Brave' : 'Injected wallet';
+    out.push({ info: { name, rdns: 'legacy:' + name }, provider: p });
+  }
+  return out;
+}
+
+function renderWallets() {
+  const box = $('wallet-list');
+  const seen = new Map(wallets);
+  for (const w of legacy()) if (![...seen.values()].some((x) => x.provider === w.provider)) seen.set(w.info.rdns, w);
+
+  box.textContent = '';
+  if (!seen.size) {
+    const s = document.createElement('span');
+    s.className = 'hint';
+    s.textContent = 'No wallet detected yet.';
+    box.appendChild(s);
+    return;
+  }
+  for (const w of seen.values()) {
+    const b = document.createElement('button');
+    b.className = chosen === w.provider ? '' : 'ghost';
+    b.textContent = w.info.name;
+    b.onclick = () => { chosen = provider = w.provider; renderWallets(); connect(); };
+    box.appendChild(b);
+  }
+}
+
+async function getProvider() {
+  if (chosen) return chosen;
+  for (let i = 0; i < 20; i++) {
+    if (wallets.size === 1) return (provider = [...wallets.values()][0].provider);
+    if (wallets.size > 1) return null; // ambiguous: make the user pick
+    const l = legacy();
+    if (l.length === 1) return (provider = l[0].provider);
+    scan();
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  return null;
+}
+
+const call=(to,data)=>provider.request({method:'eth_call',params:[{to,data},'latest']});
+const w=(n)=>BigInt(n).toString(16).padStart(64,'0');
+const addrW=(a)=>a.replace(/^0x/,'').toLowerCase().padStart(64,'0');
+const strW=(v)=>{const h=Array.from(new TextEncoder().encode(v)).map(b=>b.toString(16).padStart(2,'0')).join('');
+  return w(v.length)+h.padEnd(Math.ceil(h.length/64)*64,'0')};
+
+function decode(hex){
+  const b=hex.replace(/^0x/,'');
+  const W=(i)=>parseInt(b.slice(i*64,i*64+64),16);
+  const str=(x)=>{const n=W(x);let o='';const base=(x+1)*64;
+    for(let j=0;j<n;j++)o+=String.fromCharCode(parseInt(b.slice(base+j*2,base+j*2+2),16));return o};
+  const head=W(0)/32, n=W(head), out=[];
+  for(let k=0;k<n;k++){
+    const t=head+1+W(head+1+k)/32;
+    out.push({i:k,name:str(t+W(t)/32),endpoint:str(t+W(t+1)/32),
+      adapter:'0x'+b.slice((t+2)*64+24,(t+3)*64),
+      handicap:W(t+3),enabled:W(t+4)===1});
+  }
+  return out;
+}
+const chainsOf=(ep)=>{const h=ep.indexOf('#');if(h<0)return[1];
+  const m=/(?:^|;)c=([0-9,]+)/.exec(ep.slice(h+1));
+  return m?m[1].split(',').map(Number).filter(Boolean):[1]};
+const nameChain=(id)=>({1:'Ethereum',8453:'Base',4663:'Robinhood'})[id]||String(id);
+
+async function ensureMainnet(p){
+  const c=await p.request({method:'eth_chainId'});
+  if(c!==MAINNET)await p.request({method:'wallet_switchEthereumChain',params:[{chainId:MAINNET}]});
+}
+async function connect(){
+  try{
+    const p=await getProvider();
+    if(!p)return show($('w-out'),wallets.size>1?'Several wallets installed. Pick one above.'
+      :'No wallet found. Over file:// serve locally: cd dapp && python3 -m http.server 8017','bad');
+    account=(await p.request({method:'eth_requestAccounts'}))[0];
+    await ensureMainnet(p);
+    $('p-you').textContent=account;
+    const o='0x'+(await call(LIST,'0x'+SEL_OWNER)).slice(26);
+    $('p-owner').textContent=o+(o.toLowerCase()===account.toLowerCase()?'  \u2713 you':'  \u2717 not you');
+    $('load').disabled=false;$('a-bebop').disabled=false;
+    show($('w-out'),'Connected via '+walletName(p)+'.',o.toLowerCase()===account.toLowerCase()?'ok':'bad');
+  }catch(e){show($('w-out'),e.message||String(e),'bad')}
+}
+function walletName(p){
+  for(const x of wallets.values())if(x.provider===p)return x.info.name;
+  for(const x of legacy())if(x.provider===p)return x.info.name;
+  return 'injected wallet';
+}
+$('connect').onclick=connect;
+renderWallets();
+
+$('load').onclick=async()=>{
+  show($('t-out'),'Reading…');
+  try{
+    rows=decode(await call(LIST,'0x'+SEL_SOLVERS));
+    render();
+    show($('t-out'),rows.length+' entries.','ok');
+  }catch(e){show($('t-out'),'Read failed: '+(e.message||e),'bad')}
+};
+
+function render(){
+  const tb=$('rows'); tb.textContent='';
+  for(const r of rows){
+    const tr=document.createElement('tr');
+    const chains=chainsOf(r.endpoint).map(nameChain).join(', ');
+    tr.innerHTML='<td>'+r.i+'</td><td class="name">'+r.name+(r.enabled?'':' <span class="chip">(off)</span>')+
+      '</td><td><input class="ep" value="'+r.endpoint.replace(/"/g,'&quot;')+'"></td>'+
+      '<td class="chip">'+chains+'</td><td></td>';
+    const inp=tr.querySelector('input');
+    const btn=document.createElement('button');
+    btn.className='ghost'; btn.textContent='Apply';
+    btn.onclick=()=>applyRow(r,inp.value.trim(),tr);
+    inp.oninput=()=>{tr.children[3].textContent=chainsOf(inp.value.trim()).map(nameChain).join(', ')};
+    tr.children[4].appendChild(btn);
+    tb.appendChild(tr);
+  }
+}
+
+const setEpData=(i,ep,adapter)=>'0x'+SEL_SETEP+w(i)+w(96)+addrW(adapter)+strW(ep);
+
+async function applyRow(r,ep,tr){
+  if(!/^https:\/\/\S+$/.test(ep))return show($('t-out'),'Endpoint must be an https URL.','bad');
+  const tx={from:account,to:LIST,data:setEpData(r.i,ep,r.adapter),value:'0x0'};
+  show($('t-out'),'Simulating row '+r.i+'…');
+  try{
+    await provider.request({method:'eth_call',params:[tx,'latest']});
+  }catch(e){
+    const d=(e&&e.data&&(e.data.data||e.data))||'';
+    return show($('t-out'),'Row '+r.i+' would revert:\n'+(e.message||e)+(d?'\n'+d:''),'bad');
+  }
+  try{
+    const h=await provider.request({method:'eth_sendTransaction',params:[tx]});
+    show($('t-out'),'Row '+r.i+' ('+r.name+') sent: '+h,'ok');
+  }catch(e){show($('t-out'),e.message||String(e),'bad')}
+}
+
+$('a-bebop').onclick=()=>{
+  staged={name:'Bebop',endpoint:'https://api.bebop.xyz/router/base/v1#c=8453',
+    adapter:FILL,handicap:50,enabled:true};
+  $('a-name').textContent=staged.name;
+  $('a-ep').textContent=staged.endpoint;
+  $('a-sim').disabled=false;$('a-send').disabled=false;
+  show($('a-out'),'Staged. Simulate before sending.','');
+};
+const addData=()=>{
+  const nameOff=160, epOff=160+32+Math.ceil(staged.name.length/32)*32;
+  const tuple=w(nameOff)+w(epOff)+addrW(staged.adapter)+w(staged.handicap)+w(1)
+    +strW(staged.name)+strW(staged.endpoint);
+  return '0x'+SEL_ADD+w(32)+tuple;
+};
+const addTx=()=>({from:account,to:LIST,data:addData(),value:'0x0'});
+$('a-sim').onclick=async()=>{
+  show($('a-out'),'Simulating…');
+  try{ await provider.request({method:'eth_call',params:[addTx(),'latest']});
+    const g=await provider.request({method:'eth_estimateGas',params:[addTx()]});
+    show($('a-out'),'Simulation OK. Estimated gas: '+BigInt(g).toString(),'ok');
+  }catch(e){
+    const d=(e&&e.data&&(e.data.data||e.data))||'';
+    show($('a-out'),'Would revert:\n'+(e.message||e)+(d?'\n'+d:''),'bad');
+  }
+};
+$('a-send').onclick=async()=>{
+  show($('a-out'),'Confirm in your wallet…');
+  try{ const h=await provider.request({method:'eth_sendTransaction',params:[addTx()]});
+    show($('a-out'),'Sent: '+h,'ok');
+  }catch(e){show($('a-out'),e.message||String(e),'bad')}
+};
+</script>
