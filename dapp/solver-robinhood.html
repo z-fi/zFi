@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Solvers on Robinhood</title>
+<style>
+  :root{color-scheme:light dark;--n:#777;--ok:#1a7f37;--bad:#b42318;--warn:#9a6700;--bd:#8884}
+  body{font:15px/1.45 system-ui,sans-serif;max-width:56em;margin:2em auto;padding:0 1em}
+  h1{font-size:1.4em;margin:0 0 .2em} h2{font-size:1.05em;margin:1.6em 0 .4em}
+  p,li{max-width:60em} .hint{color:var(--n);font-size:.9em}
+  code{font-family:ui-monospace,Menlo,monospace;font-size:.92em;word-break:break-all}
+  button{font:inherit;padding:.5em 1em;border-radius:.5em;border:1px solid var(--bd);background:#3b82f6;color:#fff;cursor:pointer}
+  button.ghost{background:transparent;color:inherit} button:disabled{opacity:.45;cursor:not-allowed}
+  table{border-collapse:collapse;width:100%;margin:.5em 0} td,th{text-align:left;padding:.35em .5em;border-bottom:1px solid var(--bd);vertical-align:top}
+  th{font-weight:600;color:var(--n);font-size:.85em}
+  .msg{display:none;white-space:pre-wrap;padding:.6em .8em;border-radius:.5em;border:1px solid var(--bd);margin:.6em 0}
+  .msg.show{display:block} .ok{border-color:var(--ok)} .bad{border-color:var(--bad)} .warn{border-color:var(--warn)}
+  .step{border:1px solid var(--bd);border-radius:.7em;padding:.9em 1.1em;margin:.9em 0}
+  .step h2{margin-top:0} .row{display:flex;gap:.6em;flex-wrap:wrap;align-items:center}
+  .st{white-space:nowrap} .yes{color:var(--ok)} .no{color:var(--bad)}
+  .diff code{display:block;padding:.3em .5em;border-radius:.4em;background:#8881}
+  .diff .old{opacity:.7;text-decoration:line-through} .diff .new{border:1px solid var(--ok)}
+</style>
+</head>
+<body>
+<h1>Solvers on Robinhood</h1>
+<p>One job: tell the zSwap solver registry that <b>KyberSwap answers on Robinhood Chain</b>,
+so the page asks it there. The registry lives on Ethereum mainnet at
+<code>0x1Dfbb2f41B596F72187370469074C46de60dA2e3</code>; only its owner can write it.
+The page proves the lane answers before it lets you send, the same way
+<a href="./solver-admin.html">solver-admin</a> does, and then re-reads the chain to confirm.</p>
+<p class="hint">Serve this from the origin the keyed gateways trust:
+<code>cd dapp &amp;&amp; python3 -m http.server 8080</code> → <code>http://localhost:8080/solver-robinhood.html</code>.
+KyberSwap and ParaSwap are public and answer from anywhere; 0x, 1inch, Enso and OKX go through
+the gateway and only answer from that origin.</p>
+
+<div class="step">
+  <h2>1 · Connect the registry owner</h2>
+  <div class="row"><span id="wallet-list"></span><button id="connect">Connect</button></div>
+  <table><tr><th>you</th><td><code id="p-you">—</code></td></tr>
+         <tr><th>owner</th><td><code id="p-owner">—</code></td></tr></table>
+  <div class="msg" id="w-out"></div>
+</div>
+
+<div class="step">
+  <h2>2 · What the registry says today</h2>
+  <table id="lanes"><thead><tr><th>#</th><th>lane</th><th>chains</th><th>Base</th><th>Robinhood</th></tr></thead>
+  <tbody><tr><td colspan="5" class="hint">Connect to read.</td></tr></tbody></table>
+  <div class="msg" id="r-out"></div>
+</div>
+
+<div class="step">
+  <h2>3 · The change</h2>
+  <div class="diff">
+    <div class="hint">KyberSwap row, endpoint today</div><code id="c-old">—</code>
+    <div class="hint" style="margin-top:.4em">endpoint after</div><code id="c-new">—</code>
+  </div>
+  <p class="hint" id="c-why">The page asks a lane on a chain only when the endpoint's <code>#c=</code> list names it.
+  Robinhood is 4663. Nothing else about the row changes: same adapter, same handicap, still enabled.</p>
+  <div class="row"><button id="apply" disabled>Send the update</button><span class="hint" id="apply-why">connect first</span></div>
+  <div class="msg" id="a-out"></div>
+</div>
+
+<script>
+const LIST='0x1Dfbb2f41B596F72187370469074C46de60dA2e3';
+const MAINNET='0x1';
+const SEL_SOLVERS='e3b06401', SEL_SETEP='8c0381cd', SEL_OWNER='8da5cb5b';
+const TARGET_NAME='KyberSwap';
+const ADD_CHAIN=4663;
+const AMT="100000000000000000";
+// Checksummed: Bebop rejects anything else and every other API accepts either.
+const PROBE_TAKER="0x1C0Aa8cCD568d90d61659F060D1bFb1e6f855A20";
+const CH={
+8453:{id:"8453",slug:"base",weth:"0x4200000000000000000000000000000000000006",usdc:"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",dec:6},
+// KyberSwap serves Robinhood Chain under this slug; the stable here is USDG.
+4663:{id:"4663",slug:"robinhood",weth:"0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",usdc:"0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168",dec:6}};
+const jget=async(u)=>{const c=new AbortController(),k=setTimeout(()=>c.abort(),12000);
+  try{const r=await fetch(u,{signal:c.signal});if(!r.ok)return null;return await r.json()}
+  catch{return null}finally{clearTimeout(k)}};
+// Same request shapes zSwap.html uses, so "answered" here means "will answer there".
+const PROBES={
+"0x":async(ep,C,me)=>{const j=await jget(`${ep}/swap/allowance-holder/quote?chainId=${C.id}`
+  +`&sellToken=${C.weth}&buyToken=${C.usdc}&sellAmount=${AMT}&taker=${me}&slippageBps=50`);
+  return j&&j.buyAmount?BigInt(j.buyAmount):null},
+"OKX":async(ep,C,me)=>{const j=await jget(`${ep}/dex/aggregator/swap?chainIndex=${C.id}`
+  +`&fromTokenAddress=${C.weth}&toTokenAddress=${C.usdc}&amount=${AMT}`
+  +`&slippagePercent=0.005&userWalletAddress=${me}&swapMode=exactIn`);
+  const d=j&&j.code==="0"&&j.data&&j.data[0];
+  return d&&d.routerResult?BigInt(d.routerResult.toTokenAmount):null},
+"Enso":async(ep,C,me)=>{const j=await jget(`${ep}?chainId=${C.id}&fromAddress=${me}&receiver=${me}`
+  +`&tokenIn=${C.weth}&tokenOut=${C.usdc}&amountIn=${AMT}&slippage=50&routingStrategy=router`);
+  return j&&j.amountOut?BigInt(j.amountOut):null},
+"ParaSwap":async(ep,C)=>{const j=await jget(`${ep}/prices?srcToken=${C.weth}&destToken=${C.usdc}`
+  +`&amount=${AMT}&srcDecimals=18&destDecimals=${C.dec}&side=SELL&network=${C.id}&version=6.2`);
+  return j&&j.priceRoute?BigInt(j.priceRoute.destAmount):null},
+"1inch":async(ep,C,me)=>{const j=await jget(`${ep}/swap/v6.0/${C.id}/swap?src=${C.weth}&dst=${C.usdc}`
+  +`&amount=${AMT}&from=${me}&origin=${me}&slippage=0.5&disableEstimate=true`);
+  return j&&j.dstAmount?BigInt(j.dstAmount):null},
+"KyberSwap":async(ep,C)=>{if(!C.slug)return null;
+  const j=await jget(`${ep}/${C.slug}/api/v1/routes?tokenIn=${C.weth}&tokenOut=${C.usdc}&amountIn=${AMT}`);
+  const rs=j&&j.data&&j.data.routeSummary;return rs&&rs.amountOut?BigInt(rs.amountOut):null},
+"Bebop":async(ep,C,me)=>{const j=await jget(`${ep}/quote?sell_tokens=${C.weth}&buy_tokens=${C.usdc}`
+  +`&sell_amounts=${AMT}&taker_address=${me}&gasless=false&approval_type=Standard`);
+  const rs=j&&j.routes;if(!rs||!rs.length)return null;
+  const r=rs.find(x=>x.type===j.bestPrice)||rs[0];const q=r&&r.quote;const b=q&&(q.buyTokens||q.buy_tokens);
+  if(!b)return null;const k=Object.keys(b)[0];return k?BigInt(b[k].amount||b[k].amountOut||0):null},
+};
+
+const $=(id)=>document.getElementById(id);
+const show=(el,t,c)=>{el.textContent=t;el.className='msg show '+(c||'')};
+let provider=null,account=null,owner=null,rows=[],target=null,newEp=null,proven={8453:false,4663:false},sent=null;
+
+// EIP-6963: collect every wallet and let the choice be explicit.
+const wallets=new Map();let chosen=null;
+window.addEventListener('eip6963:announceProvider',(e)=>{wallets.set(e.detail.info.rdns,e.detail);renderWallets()});
+function scan(){window.dispatchEvent(new Event('eip6963:requestProvider'))}
+scan();for(const ms of [50,150,400,900,1800])setTimeout(scan,ms);
+function legacy(){const out=[];const eth=window.ethereum;if(!eth)return out;
+  const list=Array.isArray(eth.providers)?eth.providers:[eth];
+  for(const p of list){const name=p.isMetaMask?'MetaMask':p.isRabby?'Rabby':p.isCoinbaseWallet?'Coinbase Wallet':p.isBraveWallet?'Brave':'Injected wallet';
+    out.push({info:{name,rdns:'legacy:'+name},provider:p})}
+  return out}
+function renderWallets(){const box=$('wallet-list');const seen=new Map(wallets);
+  for(const w of legacy())if(![...seen.values()].some(x=>x.provider===w.provider))seen.set(w.info.rdns,w);
+  box.textContent='';
+  if(!seen.size){const s=document.createElement('span');s.className='hint';s.textContent='No wallet detected yet.';box.appendChild(s);return}
+  for(const w of seen.values()){const b=document.createElement('button');b.className=chosen===w.provider?'':'ghost';
+    b.textContent=w.info.name;b.onclick=()=>{chosen=provider=w.provider;renderWallets();connect()};box.appendChild(b)}}
+async function getProvider(){if(chosen)return chosen;
+  for(let i=0;i<20;i++){if(wallets.size===1)return(provider=[...wallets.values()][0].provider);
+    if(wallets.size>1)return null;const l=legacy();if(l.length===1)return(provider=l[0].provider);
+    scan();await new Promise(r=>setTimeout(r,100))}
+  return null}
+
+const call=(to,data)=>provider.request({method:'eth_call',params:[{to,data},'latest']});
+const w=(n)=>BigInt(n).toString(16).padStart(64,'0');
+const addrW=(a)=>a.replace(/^0x/,'').toLowerCase().padStart(64,'0');
+const strW=(v)=>{const bytes=new TextEncoder().encode(v);const h=Array.from(bytes).map(b=>b.toString(16).padStart(2,'0')).join('');
+  return w(bytes.length)+h.padEnd(Math.ceil(h.length/64)*64,'0')};
+const setEpData=(i,ep,adapter)=>'0x'+SEL_SETEP+w(i)+w(96)+addrW(adapter)+strW(ep);
+function decode(hex){const b=hex.replace(/^0x/,'');const W=(i)=>parseInt(b.slice(i*64,i*64+64),16);
+  const str=(x)=>{const n=W(x);let o='';const base=(x+1)*64;for(let j=0;j<n;j++)o+=String.fromCharCode(parseInt(b.slice(base+j*2,base+j*2+2),16));return o};
+  const head=W(0)/32,n=W(head),out=[];
+  for(let k=0;k<n;k++){const t=head+1+W(head+1+k)/32;
+    out.push({i:k,name:str(t+W(t)/32),endpoint:str(t+W(t+1)/32),adapter:'0x'+b.slice((t+2)*64+24,(t+3)*64),handicap:W(t+3),enabled:W(t+4)===1})}
+  return out}
+const chainsOf=(ep)=>{const h=ep.indexOf('#');if(h<0)return[1];const m=/(?:^|;)c=([0-9,]+)/.exec(ep.slice(h+1));
+  return m?m[1].split(',').map(Number).filter(Boolean):[1]};
+const nameChain=(id)=>({1:'Ethereum',8453:'Base',4663:'Robinhood'})[id]||String(id);
+const withChain=(ep,id)=>{const cur=chainsOf(ep);if(cur.includes(id))return ep;return ep.split('#')[0]+'#c='+cur.concat(id).join(',')};
+
+async function ensureMainnet(p){const c=await p.request({method:'eth_chainId'});
+  if(c!==MAINNET)await p.request({method:'wallet_switchEthereumChain',params:[{chainId:MAINNET}]})}
+async function requireMainnet(){const c=await provider.request({method:'eth_chainId'});
+  if(c!==MAINNET)throw Error('Wallet is on chain '+parseInt(c,16)+', not Ethereum mainnet. Switch back and retry.')}
+
+async function connect(){
+  try{
+    const p=await getProvider();
+    if(!p)return show($('w-out'),wallets.size>1?'Several wallets installed. Pick one above.':'No wallet found. Serve this page from localhost:8080 and open it in the browser that holds the wallet.','bad');
+    account=(await p.request({method:'eth_requestAccounts'}))[0];
+    await ensureMainnet(p);
+    p.on?.('chainChanged',c=>{if(c!==MAINNET)show($('w-out'),'Wallet moved to chain '+parseInt(c,16)+'. The send is refused until it is back on Ethereum.','bad')});
+    p.on?.('accountsChanged',()=>location.reload());
+    $('p-you').textContent=account;
+    owner='0x'+(await call(LIST,'0x'+SEL_OWNER)).slice(26);
+    const isOwner=owner.toLowerCase()===account.toLowerCase();
+    $('p-owner').textContent=owner+(isOwner?'  ✓ you':'  ✗ not you');
+    show($('w-out'),isOwner?'Connected as the registry owner.':'Connected, but this wallet cannot write the registry. Switch to '+owner+'.',isOwner?'ok':'bad');
+    await load();
+  }catch(e){show($('w-out'),e.message||String(e),'bad')}
+}
+
+async function load(){
+  show($('r-out'),'Reading the registry and asking every lane about Base and Robinhood…');
+  rows=decode(await call(LIST,'0x'+SEL_SOLVERS));
+  target=rows.find(r=>r.name===TARGET_NAME);
+  const tb=$('lanes').querySelector('tbody');tb.textContent='';
+  const cells={};
+  for(const r of rows){
+    const tr=document.createElement('tr');
+    const flagged=chainsOf(r.endpoint);
+    tr.innerHTML='<td>'+r.i+'</td><td>'+r.name+(r.enabled?'':' (off)')+(r===target?' <b>← this one</b>':'')+'</td>'
+      +'<td class="hint">'+flagged.map(nameChain).join(', ')+'</td><td class="st">…</td><td class="st">…</td>';
+    tb.appendChild(tr);cells[r.i]=[tr.children[3],tr.children[4]];
+  }
+  if(!target){show($('r-out'),'No row named '+TARGET_NAME+' — nothing to do.','bad');return}
+  newEp=withChain(target.endpoint,ADD_CHAIN);
+  $('c-old').textContent=target.endpoint;
+  $('c-new').textContent=newEp;
+  if(newEp===target.endpoint){$('c-why').textContent='The registry already lists Robinhood for KyberSwap. Nothing to send.';}
+  // Probe every row on both chains, in parallel; the answer is what the row is worth.
+  await Promise.all(rows.map(async r=>{
+    const fn=PROBES[r.name];const base=r.endpoint.split('#')[0];
+    for(const [k,id] of [[0,8453],[1,4663]]){
+      const cell=cells[r.i][k];
+      if(!fn){cell.textContent='no probe';continue}
+      let out=null;try{out=await fn(base,CH[id],PROBE_TAKER)}catch{out=null}
+      const flagged=chainsOf(r.endpoint).includes(id);
+      if(out&&out>0n){cell.innerHTML='<span class="yes">answered</span>'+(flagged?'':' <span class="hint">(not flagged)</span>');if(r===target)proven[id]=true}
+      else cell.innerHTML='<span class="no">no answer</span>'+(flagged?' <span class="hint">(flagged!)</span>':'');
+    }
+  }));
+  gate();
+}
+
+function gate(){
+  const isOwner=owner&&account&&owner.toLowerCase()===account.toLowerCase();
+  const already=target&&newEp===target.endpoint;
+  const why=!target?'no KyberSwap row':already?'already flagged — nothing to send'
+    :!isOwner?'connect the owner wallet ('+owner+')'
+    :!proven[4663]?'KyberSwap did not answer on Robinhood, so the flag would be a lie'
+    :!proven[8453]?'KyberSwap did not answer on Base; the row keeps that flag, so it must still hold'
+    :sent?'sent':'ready';
+  $('apply').disabled=why!=='ready';
+  $('apply-why').textContent=why;
+  if(target)show($('r-out'),'KyberSwap: Base '+(proven[8453]?'answered':'no answer')+', Robinhood '+(proven[4663]?'answered':'no answer')+'.',proven[4663]?'ok':'warn');
+}
+
+$('apply').onclick=async()=>{
+  const tx={from:account,to:LIST,data:setEpData(target.i,newEp,target.adapter),value:'0x0'};
+  $('apply').disabled=true;
+  try{await requireMainnet()}catch(e){$('apply').disabled=false;return show($('a-out'),e.message,'bad')}
+  show($('a-out'),'Simulating setEndpoint(#'+target.i+') from '+account+'…');
+  try{await provider.request({method:'eth_call',params:[tx,'latest']})}
+  catch(e){const d=(e&&e.data&&(e.data.data||e.data))||'';$('apply').disabled=false;
+    return show($('a-out'),'It would revert:\n'+(e.message||e)+(d?'\n'+d:''),'bad')}
+  let h;
+  try{h=await provider.request({method:'eth_sendTransaction',params:[tx]})}
+  catch(e){$('apply').disabled=false;return show($('a-out'),e.message||String(e),'bad')}
+  sent=h;
+  show($('a-out'),'Sent: '+h+'\nhttps://etherscan.io/tx/'+h+'\n\nWaiting for it to mine…','ok');
+  for(let i=0;i<120;i++){
+    await new Promise(r=>setTimeout(r,5000));
+    let rc=null;try{rc=await provider.request({method:'eth_getTransactionReceipt',params:[h]})}catch{}
+    if(!rc)continue;
+    if(rc.status!=='0x1')return show($('a-out'),'Mined but reverted: '+h,'bad');
+    const after=decode(await call(LIST,'0x'+SEL_SOLVERS)).find(r=>r.name===TARGET_NAME);
+    const ok=after&&chainsOf(after.endpoint).includes(ADD_CHAIN);
+    return show($('a-out'),(ok?'Done. The registry now lists Robinhood for KyberSwap:\n':'Mined, but the registry does not show the flag yet:\n')
+      +(after?after.endpoint:'(row missing)')+'\n\nzSwap reads this list on every load, so the next quote on Robinhood asks KyberSwap too.',ok?'ok':'warn');
+  }
+  show($('a-out'),'Still pending after ten minutes: '+h+'. Check it on Etherscan.','warn');
+};
+$('connect').onclick=connect;
+renderWallets();
+</script>
+</body>
+</html>
