@@ -58,6 +58,7 @@
     <div class="row">
       <button id="connect">Connect</button>
       <button id="load" class="ghost" disabled>Load list</button>
+      <button id="test8453" class="ghost" disabled>Test all on Base</button>
     </div>
     <dl><dt>You</dt><dd id="p-you">—</dd><dt>Owner</dt><dd id="p-owner">—</dd></dl>
     <div class="msg" id="w-out"></div>
@@ -66,12 +67,13 @@
   <section>
     <h2>Entries</h2>
     <table id="tbl"><thead><tr>
-      <th>#</th><th>Solver</th><th>Endpoint (append #c=… to flag chains)</th><th>Covers</th><th></th>
-    </tr></thead><tbody id="rows"><tr><td colspan="5" class="hint">Connect, then Load list.</td></tr></tbody></table>
-    <p class="hint">Verified from here: <b>ParaSwap</b>, <b>KyberSwap</b> and <b>Bebop</b> answer on Base.
-       The keyed gateways refuse requests that are not the dapp, so 0x / 1inch / Enso / OKX
-       could not be checked from outside — flag those only once you have seen them answer.
-       Nothing answers on Robinhood (4663) yet.</p>
+      <th>#</th><th>Solver</th><th>Endpoint</th><th>Covers</th><th>Probe</th><th></th>
+    </tr></thead><tbody id="rows"><tr><td colspan="6" class="hint">Connect, then Load list.</td></tr></tbody></table>
+    <p class="hint">Load the list, then <b>Test all on Base</b>. Each row is probed with the
+       same request shape zSwap uses, against its own endpoint — and this page runs from the
+       origin your keyed gateways accept, so it can test what an outside caller cannot.
+       A row that answers gets its flag filled in and its Apply button enabled; a row that
+       does not stays exactly as it is. Nothing claims a chain it has not answered on.</p>
     <div class="msg" id="t-out"></div>
   </section>
 
@@ -95,6 +97,44 @@ const FILL='0x7A2f21e476cA2ADde027BC868c5a083338EEfE54';
 const MAINNET='0x1';
 const SEL_SOLVERS='e3b06401', SEL_SETEP='8c0381cd', SEL_ADD='b4671e31', SEL_OWNER='8da5cb5b';
 
+const PROBE_CHAINS={8453:{id:"8453",slug:"base",
+  weth:"0x4200000000000000000000000000000000000006",
+  usdc:"0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"}};
+const AMT="100000000000000000";
+const jget=async(u)=>{const c=new AbortController(),k=setTimeout(()=>c.abort(),12000);
+  try{const r=await fetch(u,{signal:c.signal});if(!r.ok)return null;return await r.json()}
+  catch{return null}finally{clearTimeout(k)}};
+const PROBES={
+"0x":async(ep,C,me)=>{const j=await jget(`${ep}/swap/allowance-holder/quote?chainId=${C.id}`
+  +`&sellToken=${C.weth}&buyToken=${C.usdc}&sellAmount=${AMT}&taker=${me}&slippageBps=50`);
+  return j&&j.buyAmount?BigInt(j.buyAmount):null},
+"OKX":async(ep,C,me)=>{const j=await jget(`${ep}/dex/aggregator/swap?chainIndex=${C.id}`
+  +`&fromTokenAddress=${C.weth}&toTokenAddress=${C.usdc}&amount=${AMT}`
+  +`&slippagePercent=0.005&userWalletAddress=${me}&swapMode=exactIn`);
+  const d=j&&j.code==="0"&&j.data&&j.data[0];
+  return d&&d.routerResult?BigInt(d.routerResult.toTokenAmount):null},
+"Enso":async(ep,C,me)=>{const j=await jget(`${ep}?chainId=${C.id}&fromAddress=${me}&receiver=${me}`
+  +`&tokenIn=${C.weth}&tokenOut=${C.usdc}&amountIn=${AMT}&slippage=50&routingStrategy=router`);
+  return j&&j.amountOut?BigInt(j.amountOut):null},
+"ParaSwap":async(ep,C)=>{const j=await jget(`${ep}/prices?srcToken=${C.weth}&destToken=${C.usdc}`
+  +`&amount=${AMT}&srcDecimals=18&destDecimals=6&side=SELL&network=${C.id}&version=6.2`);
+  return j&&j.priceRoute?BigInt(j.priceRoute.destAmount):null},
+"1inch":async(ep,C,me)=>{const j=await jget(`${ep}/swap/v6.0/${C.id}/swap?src=${C.weth}&dst=${C.usdc}`
+  +`&amount=${AMT}&from=${me}&origin=${me}&slippage=0.5&disableEstimate=true`);
+  return j&&j.dstAmount?BigInt(j.dstAmount):null},
+"KyberSwap":async(ep,C)=>{const j=await jget(`${ep}/${C.slug}/api/v1/routes?tokenIn=${C.weth}`
+  +`&tokenOut=${C.usdc}&amountIn=${AMT}`);
+  const rs=j&&j.data&&j.data.routeSummary;return rs&&rs.amountOut?BigInt(rs.amountOut):null},
+"Bebop":async(ep,C,me)=>{const j=await jget(`${ep.replace("/ethereum/","/"+C.slug+"/")}/quote?`
+  +`sell_tokens=${C.weth}&buy_tokens=${C.usdc}&sell_amounts=${AMT}&taker_address=${me}`
+  +`&gasless=false&approval_type=Standard`);
+  const rs=j&&j.routes;if(!rs||!rs.length)return null;
+  const r=rs.find(x=>x.type===j.bestPrice)||rs[0];
+  const q=r&&r.quote;const b=q&&(q.buyTokens||q.buy_tokens);
+  if(!b)return null;const k=Object.keys(b)[0];
+  return k?BigInt(b[k].amount||b[k].amountOut||0):null},
+};
+const proven={};
 const $=(id)=>document.getElementById(id);
 const show=(el,t,c)=>{el.textContent=t;el.className='msg show '+(c||'')};
 let provider=null,account=null,rows=[],staged=null;
@@ -203,7 +243,7 @@ async function connect(){
     $('p-you').textContent=account;
     const o='0x'+(await call(LIST,'0x'+SEL_OWNER)).slice(26);
     $('p-owner').textContent=o+(o.toLowerCase()===account.toLowerCase()?'  \u2713 you':'  \u2717 not you');
-    $('load').disabled=false;$('a-bebop').disabled=false;
+    $('load').disabled=false;$('a-bebop').disabled=false;$('test8453').disabled=false;
     show($('w-out'),'Connected via '+walletName(p)+'.',o.toLowerCase()===account.toLowerCase()?'ok':'bad');
   }catch(e){show($('w-out'),e.message||String(e),'bad')}
 }
@@ -212,6 +252,7 @@ function walletName(p){
   for(const x of legacy())if(x.provider===p)return x.info.name;
   return 'injected wallet';
 }
+$('test8453').onclick=()=>testAll(8453);
 $('connect').onclick=connect;
 renderWallets();
 
@@ -231,21 +272,65 @@ function render(){
     const chains=chainsOf(r.endpoint).map(nameChain).join(', ');
     tr.innerHTML='<td>'+r.i+'</td><td class="name">'+r.name+(r.enabled?'':' <span class="chip">(off)</span>')+
       '</td><td><input class="ep" value="'+r.endpoint.replace(/"/g,'&quot;')+'"></td>'+
-      '<td class="chip">'+chains+'</td><td></td>';
+      '<td class="chip">'+chains+'</td><td class="chip st">not tested</td><td></td>';
     const inp=tr.querySelector('input');
+    const st=tr.querySelector('.st');
     const btn=document.createElement('button');
-    btn.className='ghost'; btn.textContent='Apply';
+    btn.className='ghost'; btn.textContent='Apply'; btn.disabled=true;
     btn.onclick=()=>applyRow(r,inp.value.trim(),tr);
     inp.oninput=()=>{tr.children[3].textContent=chainsOf(inp.value.trim()).map(nameChain).join(', ')};
-    tr.children[4].appendChild(btn);
+    tr.children[5].appendChild(btn);
     tb.appendChild(tr);
+    r._ui={inp,st,btn};
   }
+}
+
+// A row is only flaggable once its own endpoint has answered on the chain in
+// question, using the same request shape zSwap will use. The page runs from the
+// gateway's allowed origin, which is why it can test what an outside caller cannot.
+async function testAll(chainId){
+  const C=PROBE_CHAINS[chainId];
+  const me=account||'0x0000000000000000000000000000000000000001';
+  show($('t-out'),'Testing '+rows.length+' endpoints on '+nameChain(chainId)+'…');
+  let ok=0,bad=0,skip=0;
+  for(const r of rows){
+    const ui=r._ui; if(!ui)continue;
+    const fn=PROBES[r.name];
+    if(!fn){ui.st.textContent='no probe';skip++;continue}
+    ui.st.textContent='testing…';
+    let out=null;
+    try{out=await fn(ui.inp.value.trim().split('#')[0],C,me)}catch{out=null}
+    if(out&&out>0n){
+      ui.st.textContent='answered '+out.toString();
+      proven[r.i]=chainId; ok++;
+      const cur=chainsOf(ui.inp.value.trim());
+      if(!cur.includes(chainId)){
+        ui.inp.value=ui.inp.value.trim().split('#')[0]+'#c='+cur.concat(chainId).join(',');
+        tbRefresh(r);
+      }
+      ui.btn.disabled=false;
+    }else{
+      ui.st.textContent='no answer'; ui.btn.disabled=true; bad++;
+    }
+  }
+  show($('t-out'),ok+' answered, '+bad+' did not, '+skip+' had no probe.\n'
+    +'Apply is enabled only on the rows that answered — the rest stay as they are.',
+    ok?'ok':'warn');
+}
+function tbRefresh(r){
+  const tr=r._ui.inp.closest('tr');
+  tr.children[3].textContent=chainsOf(r._ui.inp.value.trim()).map(nameChain).join(', ');
 }
 
 const setEpData=(i,ep,adapter)=>'0x'+SEL_SETEP+w(i)+w(96)+addrW(adapter)+strW(ep);
 
 async function applyRow(r,ep,tr){
   if(!/^https:\/\/\S+$/.test(ep))return show($('t-out'),'Endpoint must be an https URL.','bad');
+  const want=chainsOf(ep).filter(c=>c!==1);
+  for(const c of want){
+    if(proven[r.i]!==c)return show($('t-out'),
+      'Row '+r.i+' claims '+nameChain(c)+' but has not answered there in this session. Run the probe first.','bad');
+  }
   const tx={from:account,to:LIST,data:setEpData(r.i,ep,r.adapter),value:'0x0'};
   show($('t-out'),'Simulating row '+r.i+'…');
   try{
