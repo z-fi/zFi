@@ -136,7 +136,7 @@ const PROBES={
 "KyberSwap":async(ep,C)=>{const j=await jget(`${ep}/${C.slug}/api/v1/routes?tokenIn=${C.weth}`
   +`&tokenOut=${C.usdc}&amountIn=${AMT}`);
   const rs=j&&j.data&&j.data.routeSummary;return rs&&rs.amountOut?BigInt(rs.amountOut):null},
-"Bebop":async(ep,C,me)=>{const j=await jget(`${ep.replace("/ethereum/","/"+C.slug+"/")}/quote?`
+"Bebop":async(ep,C,me)=>{const j=await jget(`${ep}/quote?`
   +`sell_tokens=${C.weth}&buy_tokens=${C.usdc}&sell_amounts=${AMT}&taker_address=${me}`
   +`&gasless=false&approval_type=Standard`);
   const rs=j&&j.routes;if(!rs||!rs.length)return null;
