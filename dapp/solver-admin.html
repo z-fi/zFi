@@ -78,17 +78,19 @@
   </section>
 
   <section>
-    <h2>Add a row</h2>
-    <p class="hint">Bebop carries the chain in the stored path, so it needs one row per chain
-       rather than a flag. The list is ordered but not keyed, so a second Bebop row is fine.</p>
+    <h2>Recommended transactions</h2>
+    <p class="hint">Built from what actually answered. Nothing appears here that has not
+       been probed, and each one is simulated before it can be sent. They are independent —
+       send them in any order, or stop after any one.</p>
     <div class="row">
-      <button id="a-bebop" class="ghost" disabled>Stage Bebop / Base</button>
-      <button id="a-sim" class="ghost" disabled>Simulate</button>
-      <button id="a-send" disabled>Add</button>
+      <button id="plan" class="ghost" disabled>Build plan</button>
+      <button id="runall" disabled>Send all</button>
     </div>
-    <dl><dt>Name</dt><dd id="a-name">—</dd><dt>Endpoint</dt><dd id="a-ep">—</dd></dl>
-    <div class="msg" id="a-out"></div>
+    <table id="ptbl"><thead><tr><th>#</th><th>Transaction</th><th>Detail</th><th></th></tr></thead>
+      <tbody id="prows"><tr><td colspan="4" class="hint">Test on Base first, then build the plan.</td></tr></tbody></table>
+    <div class="msg" id="p-out"></div>
   </section>
+
 </main>
 
 <script>
@@ -243,7 +245,7 @@ async function connect(){
     $('p-you').textContent=account;
     const o='0x'+(await call(LIST,'0x'+SEL_OWNER)).slice(26);
     $('p-owner').textContent=o+(o.toLowerCase()===account.toLowerCase()?'  \u2713 you':'  \u2717 not you');
-    $('load').disabled=false;$('a-bebop').disabled=false;$('test8453').disabled=false;
+    $('load').disabled=false;$('test8453').disabled=false;
     show($('w-out'),'Connected via '+walletName(p)+'.',o.toLowerCase()===account.toLowerCase()?'ok':'bad');
   }catch(e){show($('w-out'),e.message||String(e),'bad')}
 }
@@ -313,6 +315,11 @@ async function testAll(chainId){
       ui.st.textContent='no answer'; ui.btn.disabled=true; bad++;
     }
   }
+  try{
+    const bb=await PROBES['Bebop']('https://api.bebop.xyz/router/base/v1',C,me);
+    if(bb&&bb>0n){proven.bebopBase=true; ok++;}
+  }catch{}
+  $('plan').disabled=false;
   show($('t-out'),ok+' answered, '+bad+' did not, '+skip+' had no probe.\n'
     +'Apply is enabled only on the rows that answered — the rest stay as they are.',
     ok?'ok':'warn');
@@ -345,35 +352,76 @@ async function applyRow(r,ep,tr){
   }catch(e){show($('t-out'),e.message||String(e),'bad')}
 }
 
-$('a-bebop').onclick=()=>{
-  staged={name:'Bebop',endpoint:'https://api.bebop.xyz/router/base/v1#c=8453',
-    adapter:FILL,handicap:50,enabled:true};
-  $('a-name').textContent=staged.name;
-  $('a-ep').textContent=staged.endpoint;
-  $('a-sim').disabled=false;$('a-send').disabled=false;
-  show($('a-out'),'Staged. Simulate before sending.','');
-};
-const addData=()=>{
-  const nameOff=160, epOff=160+32+Math.ceil(staged.name.length/32)*32;
-  const tuple=w(nameOff)+w(epOff)+addrW(staged.adapter)+w(staged.handicap)+w(1)
-    +strW(staged.name)+strW(staged.endpoint);
+const BEBOP_BASE={name:'Bebop',endpoint:'https://api.bebop.xyz/router/base/v1#c=8453',
+  adapter:FILL,handicap:50,enabled:true};
+
+const addDataFor=(e)=>{
+  const nameOff=160, epOff=160+32+Math.ceil(e.name.length/32)*32;
+  const tuple=w(nameOff)+w(epOff)+addrW(e.adapter)+w(e.handicap)+w(1)+strW(e.name)+strW(e.endpoint);
   return '0x'+SEL_ADD+w(32)+tuple;
 };
-const addTx=()=>({from:account,to:LIST,data:addData(),value:'0x0'});
-$('a-sim').onclick=async()=>{
-  show($('a-out'),'Simulating…');
-  try{ await provider.request({method:'eth_call',params:[addTx(),'latest']});
-    const g=await provider.request({method:'eth_estimateGas',params:[addTx()]});
-    show($('a-out'),'Simulation OK. Estimated gas: '+BigInt(g).toString(),'ok');
-  }catch(e){
-    const d=(e&&e.data&&(e.data.data||e.data))||'';
-    show($('a-out'),'Would revert:\n'+(e.message||e)+(d?'\n'+d:''),'bad');
+
+let plan=[];
+function buildPlan(){
+  plan=[];
+  for(const r of rows){
+    const ui=r._ui; if(!ui)continue;
+    const ep=ui.inp.value.trim();
+    if(ep===r.endpoint)continue;                     // unchanged
+    const want=chainsOf(ep).filter(c=>c!==1);
+    if(want.some(c=>proven[r.i]!==c))continue;       // never answered there
+    plan.push({label:'setEndpoint #'+r.i+' — '+r.name,
+      detail:ep, to:LIST, data:setEpData(r.i,ep,r.adapter)});
   }
-};
-$('a-send').onclick=async()=>{
-  show($('a-out'),'Confirm in your wallet…');
-  try{ const h=await provider.request({method:'eth_sendTransaction',params:[addTx()]});
-    show($('a-out'),'Sent: '+h,'ok');
-  }catch(e){show($('a-out'),e.message||String(e),'bad')}
+  const already=rows.some(r=>r.name==='Bebop'&&r.endpoint.indexOf('/base/')>=0);
+  if(!already&&proven.bebopBase){
+    plan.push({label:'add — Bebop / Base', detail:BEBOP_BASE.endpoint,
+      to:LIST, data:addDataFor(BEBOP_BASE)});
+  }
+  renderPlan();
+  show($('p-out'), plan.length?(plan.length+' transaction(s). Each simulates before it sends.')
+    :'Nothing to do — no row changed, or nothing answered on Base yet.', plan.length?'ok':'warn');
+  $('runall').disabled=!plan.length;
+}
+function renderPlan(){
+  const tb=$('prows'); tb.textContent='';
+  if(!plan.length){tb.innerHTML='<tr><td colspan="4" class="hint">Nothing staged.</td></tr>';return}
+  plan.forEach((p,i)=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML='<td>'+(i+1)+'</td><td class="name">'+p.label+'</td>'
+      +'<td class="chip">'+p.detail+'</td><td></td>';
+    const b=document.createElement('button');
+    b.className='ghost'; b.textContent='Send';
+    b.onclick=()=>sendOne(i,b);
+    tr.children[3].appendChild(b);
+    tb.appendChild(tr);
+  });
+}
+async function sendOne(i,btn){
+  const p=plan[i];
+  const tx={from:account,to:p.to,data:p.data,value:'0x0'};
+  if(btn)btn.disabled=true;
+  show($('p-out'),'Simulating: '+p.label+'…');
+  try{ await provider.request({method:'eth_call',params:[tx,'latest']}); }
+  catch(e){
+    const d=(e&&e.data&&(e.data.data||e.data))||'';
+    if(btn)btn.disabled=false;
+    show($('p-out'),p.label+' would revert:\n'+(e.message||e)+(d?'\n'+d:''),'bad');
+    return false;
+  }
+  try{
+    const h=await provider.request({method:'eth_sendTransaction',params:[tx]});
+    show($('p-out'),p.label+' sent: '+h,'ok');
+    if(btn)btn.textContent='sent';
+    return true;
+  }catch(e){ if(btn)btn.disabled=false; show($('p-out'),e.message||String(e),'bad'); return false }
+}
+$('plan').onclick=buildPlan;
+$('runall').onclick=async()=>{
+  for(let i=0;i<plan.length;i++){
+    const ok=await sendOne(i,null);
+    if(!ok){show($('p-out'),'Stopped at step '+(i+1)+'. Earlier steps already sent stand.','bad');return}
+  }
+  show($('p-out'),'All '+plan.length+' sent.','ok');
 };
 </script>
