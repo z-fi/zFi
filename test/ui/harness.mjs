@@ -1926,7 +1926,10 @@ export async function loadPage(opts = {}) {
       }
 
       // jsdom implements these as "not implemented" throwers.
-      window.prompt = q => { asked.prompt.push(q); return prompts.length ? prompts.shift() : null; };
+      // The default value a prompt is opened with is recorded too: the private
+      // bridge hands a payment request to the user that way, and a test has to
+      // read it back to pay it.
+      window.prompt = (q, d) => { asked.prompt.push(q); (window.__promptDefaults ||= []).push(d); return prompts.length ? prompts.shift() : null; };
       window.confirm = q => { asked.confirm.push(q); return confirms.length ? confirms.shift() : false; };
       window.alert = () => {};
 

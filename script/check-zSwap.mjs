@@ -322,7 +322,7 @@ const HELPERS = [
   // Tacit's reference implementation through test/fixtures/confidential.json
   'sha2', 'pmul', 'pcomp', 'cpDerive', 'cpOwner', 'cpCommit', 'cpXY', 'cpLeaf', 'cpDepCommit', 'cpDepId',
   'cpBinding', 'cpCtx', 'cpNonce', 'cpSigma', 'cpSeal', 'cpTree', 'cpNu', 'cpLadder', 'cpRecipe', 'cpEscrow',
-  'cpEncRecipe', 'cpActData', 'cpReclData', 'cpExitData', 'cpRescue', 'cpUse',
+  'cpEncRecipe', 'cpActData', 'cpReclData', 'cpExitData', 'cpRescue', 'cpUse', 'cpVerifySigma', 'cpSettleData',
 ];
 // Exported for the same reason as HELPERS, but they are namespaces rather than
 // functions: the hand-rolled WalletConnect crypto and the QR encoder. These
@@ -582,7 +582,7 @@ if (exported) {
     // it is pinned to one host, so it is held to the same rule as the lanes.
     const hits = [...html.matchAll(/\bfetch\s*\(/g)].length;
     if (hits !== 4) throw Error(`expected exactly four fetch( - httpRead, laneGet, lanePost, relayFetch - found ${hits}`);
-    for (const owner of ['const lanePost=async(name,url,body,ms)=>{', 'const laneGet=async(name,url,ms)=>{', 'const relayFetch=async(path,body)=>{']) {
+    for (const owner of ['const lanePost=async(name,url,body,ms)=>{', 'const laneGet=async(name,url,ms)=>{', 'const relayFetch=async(path,body,base)=>{']) {
       const at = html.indexOf(owner);
       if (at < 0) throw Error(`the solver lane transport ${owner.slice(6, 13)} has moved or been renamed`);
       const body = html.slice(at, at + 700);
@@ -605,7 +605,7 @@ if (exported) {
       throw Error('rpc() must answer provider reads with the provider alone - no pool fallback for connected users');
     if (/nodeRead\("eth_send|nodeRead\(S\b/.test(html))
       throw Error('nodeRead is called with a signing method directly');
-    if (!/const relayFetch=async\(path,body\)=>\{[\s\S]{0,160}?fetch\(CP_RELAY\+path,/.test(html))
+    if (!/const relayFetch=async\(path,body,base\)=>\{[\s\S]{0,160}?fetch\(\(base\|\|cpRelayBase\(\)\)\+path,/.test(html))
       throw Error('relayFetch must address the pinned relay host and nothing else');
     return 'four fetches, each named; pool is walletless-only and refuses signing and accounts';
   });
@@ -725,7 +725,16 @@ if (exported) {
     const sctx = X.cpCtx('tacit-unwrap-intent-v1', cb, F.ethAssetId, esc, [[cx, cy, owner]], [v, 0n, BigInt(s0.deadline)]);
     const ss = X.cpSigma(v, d.blinding, sctx, X.cpNonce(d.blinding, sctx, 'unwrap'));
     eq(ss.R, s0.sigR, 'self-settle sigma R'); eq(ss.z, s0.sigZ, 'self-settle sigma z');
-    return 'generator, note, memo, tree, both recipes and both openings agree with the reference';
+    // The payer side of a request verifies the recipient's pre-signed opening before paying: the
+    // reference witness must pass, and one flipped bit of it must not.
+    if (!X.cpVerifySigma(cx, cy, v, F.wrapOp.sigR, F.wrapOp.sigZ, wctx)) throw Error('reference wrap sigma rejected');
+    const bad = F.wrapOp.sigZ.slice(0, -1) + (F.wrapOp.sigZ.endsWith('0') ? '1' : '0');
+    if (X.cpVerifySigma(cx, cy, v, F.wrapOp.sigR, bad, wctx)) throw Error('a tampered sigma was accepted');
+    if (X.cpVerifySigma(cx, cy, v + 1n, F.wrapOp.sigR, F.wrapOp.sigZ, wctx)) throw Error('a sigma opened to the wrong value');
+    // pool.settle(bytes,bytes,bytes[]) for a self-settled withdrawal, against ethers' coder.
+    const want = '0x717fd7f2' + AbiCoder.defaultAbiCoder().encode(['bytes', 'bytes', 'bytes[]'], ['0x1234', '0xabcdef', []]).slice(2);
+    eq(X.cpSettleData('0x1234', '0xabcdef'), want, 'settle calldata');
+    return 'generator, note, memo, tree, both recipes, both openings, sigma verify and settle agree with the reference';
   });
 
   check('keccak matches known vectors', () => {

@@ -31,7 +31,7 @@ describe('the solver lanes', () => {
   // against an adapter the page would never call.
   const PAGE = readFileSync(new URL('../../zSwap.html', import.meta.url), 'utf8');
   const pin = (name) => {
-    const m = PAGE.match(new RegExp(`const ${name}="(0x[0-9a-fA-F]{40})"`));
+    const m = PAGE.match(new RegExp(`(?:const|let) ${name}="(0x[0-9a-fA-F]{40})"`));
     if (!m) throw new Error(`${name} is not pinned in zSwap.html - has the constant been renamed?`);
     // Lowercased: the page pins a checksummed literal, and `wire` compares
     // against a lowercased `tx.to`. Mixed case here silently matches nothing.

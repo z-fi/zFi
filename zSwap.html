@@ -367,10 +367,11 @@ background:var(--e);margin:.5em auto .1em}
 <small id="wnNote" role="status" aria-live="polite"></small>
 </div>
 <div id="pvPanel" class="hide">
-<div class="hdr lnhdr"><small>Private bridge</small><small id="pvSub">Ethereum → an L2, through the shielded pool</small></div>
+<div class="hdr lnhdr"><small>Private bridge</small><small id="pvSub">Shielded ether on Ethereum: exit to an L2, withdraw, or pay a request</small></div>
 <label class="dly" title="Deposited into the confidential pool on Ethereum as a shielded note. Exit it later to an L2 address that nothing on-chain ties to this wallet. The amount, the L2 recipient and the timing of the exit are public; what is hidden is which deposit it came from, so the privacy is only as good as the number of other deposits in the pool.">Amount<span class="lnu"><input id="pvAmt" inputmode="decimal" placeholder="0.01" autocomplete="off" spellcheck="false"><i>ETH</i></span></label>
-<label class="dly">Arrives on<select id="pvChain"><option value="8453">Base</option><option value="4663">Robinhood</option></select></label>
-<label class="dly" title="The address credited on the L2. Leave blank for this wallet. On Robinhood the unused gas budget refunds here too, so a contract wallet gets its refund at an aliased address.">Recipient<input id="pvTo" placeholder="0x… on the L2, defaults to you" autocomplete="off" spellcheck="false"></label>
+<label class="dly" title="Split the deposit into equal notes that can be spent one at a time. A withdrawal or exit always spends a whole note, so several small notes are what makes a partial spend possible later.">Notes<select id="pvSplit"><option value="1">1</option><option value="2">2</option><option value="4">4</option></select></label>
+<label class="dly">Arrives on<select id="pvChain"><option value="8453">Base</option><option value="4663">Robinhood</option><option value="1">Ethereum (withdraw)</option></select></label>
+<label class="dly" title="The address credited on the chain chosen above. Leave blank for this wallet. On Robinhood the unused gas budget refunds here too, so a contract wallet gets its refund at an aliased address.">Recipient<input id="pvTo" placeholder="0x… on that chain, defaults to you" autocomplete="off" spellcheck="false"></label>
 <label class="dly" title="Relayed: the relay proves and settles the exit, paying its own gas out of a flat fee, so this wallet never signs the exit. Yourself: the relay only proves; you send one atomic transaction that exits and bridges, fee-free, but from this wallet.">Exit<select id="pvPath"><option value="relay">Relayed, for a fee</option><option value="self">Yourself, one tx</option></select></label>
 <small id="pvKey" role="status"></small>
 <div id="pvList"></div>
@@ -6492,7 +6493,7 @@ const CP_L2={8453:{bridge:"0x3154Cf16ccdb4C6d922629664174b904d80F2C35",peer:"0x4
 4663:{inbox:"0x1A07cc4BD17E0118BdB54D70990D2158AbAD7a2D",peer:"0xDf8755334ce7A73cCF6b581C02eA649AE3E864b3",gas:1000000n}};
 const SEL_CPESCROW="2bf0cda2",SEL_CPACT="1699fd5b",SEL_CPRECL="02edf635",SEL_CPEXIT="acad0634",SEL_CPWRAP="859a9cee",
 SEL_CPDEP="7da9874f",SEL_CPDEPTO="9a2ac6d5",SEL_CPRETRY="679b6ded",SEL_CPSUBFEE="a66b327d",SEL_CPESTRT="c3dc5879",
-SEL_CPIMPL="93228617",SEL_CPNEXT="0be4f422",SEL_CPASSET="9fda5b66",SEL_CPOTHER="7f46ddb2",SEL_CPBRIDGE="e78cea92";
+SEL_CPIMPL="93228617",SEL_CPSETTLE="717fd7f2",SEL_CPNEXT="0be4f422",SEL_CPASSET="9fda5b66",SEL_CPOTHER="7f46ddb2",SEL_CPBRIDGE="e78cea92";
 const CP_T_LEAVES="0x7783fb256f5b4e1d4d8b79583488756286326ae15d9997d4098ce5432ed2708b",
 CP_T_SPENT="0x576d91547505afce99e7ebe2baf1a0948b5915598105a55f40ba72fea86e875e",
 CP_T_WRAP="0xf5d1711d21af6f42622ab6237626933cefc42cc9f0663d81b7c4c7bc5ce99e44";
@@ -6575,8 +6576,9 @@ data:"0x"+SEL_CPDEPTO+encAddr(x.to)+encUint(200000)+pad32("60")+pad32("0")}
 :{target:l2.inbox,value:BigInt(x.wei),token:ZERO,amount:0n,push:false,
 data:"0x"+SEL_CPRETRY+encAddr(x.to)+encUint(x.l2v)+encUint(x.sc)+encAddr(x.to)+encAddr(x.to)+encUint(x.gl)+encUint(x.mf)+pad32("100")+pad32("0")}];
 return r};
-const relayFetch=async(path,body)=>{const ac=new AbortController(),k=setTimeout(()=>ac.abort(),20000);
-try{const r=await fetch(CP_RELAY+path,body?{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body),signal:ac.signal}:{signal:ac.signal});
+const cpRelayBase=()=>{try{const u=LS["zswap:cprelay"];if(/^https:\/\/[\w.-]+(:\d+)?(\/[\w./-]*)?$/.test(u||""))return u.replace(/\/$/,"")}catch{}return CP_RELAY};
+const relayFetch=async(path,body,base)=>{const ac=new AbortController(),k=setTimeout(()=>ac.abort(),20000);
+try{const r=await fetch((base||cpRelayBase())+path,body?{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body),signal:ac.signal}:{signal:ac.signal});
 let j=null;try{j=await r.json()}catch{}
 if(r.status===404&&!body)return{status:"unknown"};
 if(!r.ok)throw Error((j&&j.error)||"The relay answered "+r.status+".");
@@ -6586,7 +6588,14 @@ if(e instanceof TypeError)throw Error("The relay could not be reached from this 
 finally{clearTimeout(k)}};
 let cpSeed="",cpFp="",cpPub="",cpNotes=[],cpPool=null,cpSyncAt=0,cpBusy=0,pvMode=false,pvTimer=0,pvTick=0;
 const cpNoteOf=n=>{const{secret,blinding}=cpDerive(cpSeed,n.i),owner=cpOwner(secret),{cx,cy}=cpXY(cpCommit(n.v,blinding)),leaf=cpLeaf(cx,cy,owner);
-return{secret,blinding,owner,cx,cy,leaf,nu:cpNu(secret,leaf),value:BigInt(n.v)}};
+return{secret,blinding,owner,cx,cy,leaf,nu:cpNu(secret,leaf),value:BigInt(n.v),dep:cpDepId(n.v,cpDepCommit(cx,cy,owner))}};
+const pneg=([x,y,z])=>[x,fmod(-y,FP),z];
+const cpOnCurve=(x,y)=>x<FP&&y<FP&&y*y%FP===(x*x%FP*x+7n)%FP;
+const cpVerifySigma=(cx,cy,v,Rh,zh,ctx)=>{const x=BigInt(cx),y=BigInt(cy);if(!cpOnCurve(x,y))return false;
+const R=pfromx(BigInt("0x"+strip0x(Rh).slice(2)),strip0x(Rh).slice(0,2)==="03");if(!R||!/^0x0[23][0-9a-fA-F]{64}$/.test(Rh))return false;
+const Cc=[x,y,1n],e=fmod(big(hexToBytes(keccak(cpCat(cpU8("tacit-open-sigma-v1"),beN(v,8),b32(ctx),hexToBytes(pcomp(Cc)),hexToBytes(pcomp(R)))))),FN);
+const X=padd(Cc,pneg(pmul(cpH,BigInt(v))));return pcomp(pmul(GP,BigInt(zh)))===pcomp(padd(R,pmul(X,e)))};
+const cpSettleData=(pv,pr)=>{const a=encBytes(pv),b=encBytes(pr);return"0x"+SEL_CPSETTLE+pad32("60")+encUint(96+a.length/2)+encUint(96+(a.length+b.length)/2)+a+b+pad32("0")};
 const cpSaveNotes=()=>{try{LS[CP_NOTES+cpFp]=JSON.stringify(cpNotes)}catch{}};
 const cpLoadNotes=()=>{try{const a=JSON.parse(LS[CP_NOTES+cpFp]||"[]");return Array.isArray(a)?a.filter(n=>Number.isInteger(n.i)&&/^\d+$/.test(n.v||"")):[]}catch{return[]}};
 const cpKeyFor=a=>{try{return LS[CP_KEY+a.toLowerCase()]}catch{return""}};
@@ -6654,9 +6663,11 @@ const tries=[()=>cfgRead(C,[req,L,ov]),...CP_LOGS.map(u=>()=>httpRead(u,C,[req,L
 for(const t of tries){try{if(strip0x(await t()||"")==="")return"";last=""}catch(e){const m=String(e&&e.message||"");if(/revert|execution|out of gas|BadTarget|Expired/i.test(m))throw Error("The bridge call would fail: "+m.slice(0,80));last=m}}
 return"Could not dry-run the bridge call ("+(last||"no node")+")."};
 const cpEnsureBalance=async(esc,need)=>BigInt(await cfgRead("eth_getBalance",[esc,L])||"0x0")>=need;
-const cpStatus=n=>{const k=cpNoteOf(n),c=cpPool;
+const cpStatus=n=>{if(n.p)return{k:null,li:-1,s:n.js==="settled"?"paid":n.js==="failed"?"payfailed":"paying"};
+const k=cpNoteOf(n),c=cpPool;
 const li=c?c.leaves.indexOf(k.leaf):-1,spent=!!c&&c.spent.includes(k.nu);
 const x=n.ex,dl=x?Number(x.dl):0,now=Math.floor(Date.now()/1000);
+if(x&&x.ch===1)return{k,li,s:spent?"withdrawn":"exiting"};
 if(x&&(x.atx||x.ptx||x.rtx))return{k,li,s:x.rtx?"reclaimed":"bridged"};
 if(x&&spent)return{k,li,s:now>dl?"expired":"funded"};
 if(x)return{k,li,s:"exiting"};
@@ -6664,60 +6675,93 @@ if(spent)return{k,li,s:"spent"};
 if(li>=0)return{k,li,s:"ready"};
 return{k,li,s:"pending"}};
 const cpRelayPoll=async n=>{const job=n.ex?n.ex.job:n.job;if(!job)return;
-const st=await relayFetch("/confidential/status?id="+encodeURIComponent(job));
-const tgt=n.ex||n;tgt.js=st.status||"unknown";
+const tgt=n.ex||n,st=await relayFetch("/confidential/status?id="+encodeURIComponent(job),null,tgt.rb);tgt.js=st.status||"unknown";
 if(st.txHash)tgt.jtx=st.txHash;if(st.error)tgt.jerr=String(st.error).slice(0,120);
 const pr=st.proof||st.proofBytes;if(st.status==="proven"&&/^0x[0-9a-fA-F]+$/.test(st.publicValues||"")&&/^0x[0-9a-fA-F]+$/.test(pr||"")){tgt.pv=st.publicValues;tgt.pr=pr}
 cpSaveNotes()};
 const cpSettleWrap=async n=>{const r=await relayFetch("/confidential/submit",{type:"wrap",op:n.op,memos:[n.memo],mode:"settle"});
-if(!r.jobId)throw Error("The relay did not take the deposit.");n.job=r.jobId;n.js=r.status||"pending";cpSaveNotes()};
-const cpDeposit=async()=>{
-const wei=parseUnits(pvAmt.value||"",18);
+if(!r.jobId)throw Error("The relay did not take the deposit.");n.job=r.jobId;n.js=r.status||"pending";n.rb=cpRelayBase();cpSaveNotes()};
+const cpAmount=parts=>{const wei=parseUnits(pvAmt.value||"",18);
 if(wei<=0n)throw Error("How much ether?");
-if(wei%CP_SCALE)throw Error("The pool keeps eight decimals — round the amount.");
-const v=wei/CP_SCALE;if(v>=1n<<64n)throw Error("Too large for one note.");
-if(wei>fromBalance)throw Error("Not enough ETH.");
-let i=cpNotes.reduce((m,n)=>Math.max(m,n.i+1),0),k;
+if(wei%(CP_SCALE*BigInt(parts)))throw Error(parts>1?"That amount does not split evenly into "+parts+" notes.":"The pool keeps eight decimals — round the amount.");
+const v=wei/CP_SCALE/BigInt(parts);if(v>=1n<<64n)throw Error("Too large for one note.");return{wei,v}};
+const cpFresh=async v=>{let i=cpNotes.reduce((m,n)=>Number.isInteger(n.i)&&n.i>=0?Math.max(m,n.i+1):m,0),k;
 for(let t=0;;i++){k=cpNoteOf({i,v:String(v)});
-const st=await cfgRead(C,[{to:CP_POOL,data:"0x"+SEL_CPDEP+pad32(cpDepId(v,cpDepCommit(k.cx,k.cy,k.owner)))},L]);
-if(BigInt(st||"0x0")===0n)break;if(++t>20)throw Error("Could not find a fresh note slot.")}
-const cb=cpBinding(),commit=cpDepCommit(k.cx,k.cy,k.owner),dep=cpDepId(v,commit);
-const ctx=cpCtx("tacit-wrap-intent-v1",cb,CP_ETH,dep,[[k.cx,k.cy,k.owner]],[v]),sig=cpSigma(v,k.blinding,ctx,cpNonce(k.blinding,ctx,"wrap"));
-const n={i,v:String(v),at:Math.floor(Date.now()/1000),memo:cpSeal(cpPub,k,cpRandom()),
-op:{chainBinding:cb,asset:CP_ETH,value:String(v),cx:k.cx,cy:k.cy,owner:k.owner,sigR:sig.R,sigZ:sig.z}};
-const req={from:account,to:CP_ROUTER,value:toHex(wei),data:"0x"+SEL_CPWRAP+pad32(commit)};
+const st=await cfgRead(C,[{to:CP_POOL,data:"0x"+SEL_CPDEP+pad32(k.dep)},L]);
+if(BigInt(st||"0x0")===0n)return{i,k};if(++t>20)throw Error("Could not find a fresh note slot.")}};
+const cpNote=(i,k)=>{const v=k.value,cb=cpBinding(),ctx=cpCtx("tacit-wrap-intent-v1",cb,CP_ETH,k.dep,[[k.cx,k.cy,k.owner]],[v]),sig=cpSigma(v,k.blinding,ctx,cpNonce(k.blinding,ctx,"wrap"));
+return{i,v:String(v),at:Math.floor(Date.now()/1000),memo:cpSeal(cpPub,k,cpRandom()),
+op:{chainBinding:cb,asset:CP_ETH,value:String(v),cx:k.cx,cy:k.cy,owner:k.owner,sigR:sig.R,sigZ:sig.z}}};
+const cpDepositOne=async(v,label)=>{const{i,k}=await cpFresh(v),n=cpNote(i,k);
+const req={from:account,to:CP_ROUTER,value:toHex(v*CP_SCALE),data:"0x"+SEL_CPWRAP+pad32(cpDepCommit(k.cx,k.cy,k.owner))};
 await rpc(C,[req,L]);
 n.tx=await sendTx([req]);cpNotes.push(n);cpSaveNotes();cpPaint();
 await settle(n.tx,true);
-stat.textContent="Deposited. Asking the relay to settle it…";
-await cpSettleWrap(n);pvAmt.value="";refreshBalance();
-stat.textContent="Deposited. The relay is settling it into the pool.";sGot()};
+stat.textContent=label+" Asking the relay to settle it…";
+await cpSettleWrap(n);return n};
+const cpDeposit=async()=>{
+const parts=+pvSplit.value||1,{wei,v}=cpAmount(parts);
+if(wei>fromBalance)throw Error("Not enough ETH.");
+for(let p=1;p<=parts;p++)await cpDepositOne(v,parts>1?"Deposit "+p+" of "+parts+" sent.":"Deposited.");
+pvAmt.value="";refreshBalance();
+stat.textContent=(parts>1?"Deposited as "+parts+" notes.":"Deposited.")+" The relay is settling them into the pool.";sGot()};
+const cpRequest=async()=>{const{v}=cpAmount(1),{i,k}=await cpFresh(v),n=cpNote(i,k);n.inv=1;
+cpNotes.push(n);cpSaveNotes();cpPaint();
+const inv={v:1,chainBinding:n.op.chainBinding,assetId:CP_ETH,underlying:ZERO,ticker:"cETH",amount:String(v*CP_SCALE),value:String(v),
+cx:k.cx,cy:k.cy,owner:k.owner,commit:cpDepCommit(k.cx,k.cy,k.owner),depositId:k.dep,leaf:k.leaf,memo:n.memo,witness:n.op};
+pvAmt.value="";stat.textContent="Request built. Send it to whoever is paying; the note settles once they pay.";
+prompt("Your payment request. Anyone can pay it; only this key can spend the result.",JSON.stringify(inv))};
+const cpPay=async()=>{let inv;try{inv=JSON.parse((prompt("Paste the payment request (JSON).")||"").trim())}catch{}
+const h32=x=>/^0x[0-9a-fA-F]{64}$/.test(x||"");
+if(!inv||inv.v!==1||!inv.witness)throw Error("That is not a payment request.");
+if(String(inv.assetId).toLowerCase()!==CP_ETH||String(inv.underlying||ZERO).toLowerCase()!==ZERO)throw Error("This request is not for ether.");
+if(![inv.cx,inv.cy,inv.owner,inv.commit,inv.depositId,inv.leaf,inv.chainBinding].every(h32)||!/^\d+$/.test(inv.value||"")||!/^\d+$/.test(inv.amount||""))throw Error("The request is malformed.");
+const v=BigInt(inv.value),wei=BigInt(inv.amount),w=inv.witness;
+if(wei!==v*CP_SCALE||v<=0n||v>=1n<<64n)throw Error("The request's amounts disagree.");
+if(String(inv.chainBinding).toLowerCase()!==cpBinding()||w.chainBinding!==inv.chainBinding||String(w.asset).toLowerCase()!==CP_ETH||w.value!==inv.value||w.cx!==inv.cx||w.cy!==inv.cy||w.owner!==inv.owner)throw Error("The request is for another pool.");
+const commit=cpDepCommit(inv.cx,inv.cy,inv.owner);
+if(commit!==String(inv.commit).toLowerCase()||cpLeaf(inv.cx,inv.cy,inv.owner)!==String(inv.leaf).toLowerCase()||cpDepId(v,commit)!==String(inv.depositId).toLowerCase())throw Error("The request does not add up — refusing to pay it.");
+const ctx=cpCtx("tacit-wrap-intent-v1",inv.chainBinding,CP_ETH,inv.depositId,[[inv.cx,inv.cy,inv.owner]],[v]);
+if(!cpVerifySigma(inv.cx,inv.cy,v,w.sigR,w.sigZ,ctx))throw Error("The request is not claimable by its author — refusing to pay it.");
+if(!/^0x0[23][0-9a-fA-F]{64}[0-9a-fA-F]{272}$/.test(inv.memo||""))throw Error("The request carries no recovery memo.");
+const st=await cfgRead(C,[{to:CP_POOL,data:"0x"+SEL_CPDEP+pad32(inv.depositId)},L]);
+if(BigInt(st||"0x0")!==0n)throw Error("This request was already paid.");
+if(wei>fromBalance)throw Error("Not enough ETH.");
+const n={p:1,i:-1,v:String(v),dep:inv.depositId,at:Math.floor(Date.now()/1000),op:w,memo:inv.memo};
+const req={from:account,to:CP_ROUTER,value:toHex(wei),data:"0x"+SEL_CPWRAP+pad32(commit)};
+await rpc(C,[req,L]);
+n.tx=await sendTx([req]);cpNotes.unshift(n);cpSaveNotes();cpPaint();
+await settle(n.tx,true);
+stat.textContent="Paid. Asking the relay to settle it for the recipient…";
+await cpSettleWrap(n);refreshBalance();
+stat.textContent="Paid. The relay is settling the recipient's note.";sGot()};
 const cpExit=async n=>{
 const ch=+pvChain.value,to=pvTo.value.trim()||account,self=pvPath.value==="self",k=cpNoteOf(n);
 if(n.ex&&n.ex.job&&n.ex.js!=="failed")throw Error("This note is already exiting.");
 if(!isAddr(to))throw Error("The recipient must be a 0x address on "+CHAINS[ch].name+".");
-if(!CP_L2[ch])throw Error("Unknown chain.");
+if(!CP_L2[ch]&&ch!==1)throw Error("Unknown chain.");
 const c=await cpSync(true),li=c.leaves.indexOf(k.leaf);
 if(li<0)throw Error("This deposit has not settled into the pool yet.");
 if(c.spent.includes(k.nu))throw Error("This note is already spent.");
 if(c.leaves.length<20)pvNote.textContent="The pool holds only "+c.leaves.length+" notes, so an exit today is easy to link. Treat it as a test, not as privacy.";
-const impl=await cpPins(ch);
+const impl=ch===1?ZERO:await cpPins(ch);
 const fee=self?0n:await cpFee(k.value);
 if(!self&&fee>=k.value)throw Error("This note is too small to relay — submit it yourself instead.");
 if(!self&&fee*10000n/k.value>300n)throw Error("The relay fee would be "+(Number(fee*10000n/k.value)/100).toFixed(1)+"% of this note — wait for cheaper gas, or submit it yourself.");
 const net=k.value-fee,wei=net*CP_SCALE;
-const code=await cfgRead("eth_getCode",[to,L]);
 const x={ch,to,dl:String((Math.floor(Date.now()/86400000)+3)*86400),nonce:big(sha2(cpU8("zswap-exit-nonce-v1:"+cpFp+":"+n.i))).toString(),
 fee:String(fee),wei:String(wei),self,fin:to};
+let esc=to.toLowerCase(),warn="";
+if(ch!==1){const code=await cfgRead("eth_getCode",[to,L]);
 if(strip0x(code||"")!==""){x.fin=cpRescue(n.i).addr;x.rk=1;
 if(ch===4663)pvNote.textContent="That recipient has contract code on Ethereum, so Robinhood will refund unused gas to an aliased address rather than to it."}
 if(ch===4663){const g=await cpRhGas(to);x.gl=String(g.gl);x.sc=String(g.sc);x.mf=String(g.mf);
 const over=g.sc+g.gl*g.mf;if(over>=wei)throw Error("The note would be eaten by Robinhood's gas budget.");x.l2v=String(wei-over)}
-const r=cpRecipe(x),esc=cpEscrow(impl,r);
+const r=cpRecipe(x);esc=cpEscrow(impl,r);
 const onchain=retAddr(await cfgRead(C,[{to:CP_ROUTER,data:"0x"+SEL_CPESCROW+pad32("20")+cpEncRecipe(r)},L]));
 if(onchain!==esc)throw Error("Escrow address mismatch — refusing to build a proof.");
 x.esc=esc;
-const warn=await cpDry(x,r,esc);
+warn=await cpDry(x,r,esc)}
 const{root,path}=cpTree(c.leaves,li);
 const dlu=String(Math.ceil((Math.floor(Date.now()/1000)+3600)/600)*600),cb=cpBinding();
 const ctx=cpCtx("tacit-unwrap-intent-v1",cb,CP_ETH,pad32(strip0x(esc)),[[k.cx,k.cy,k.owner]],[k.value,fee,BigInt(dlu)]);
@@ -6727,8 +6771,8 @@ value:String(k.value),recipient:esc,fee:String(fee),deadline:dlu,sigR:sig.R,sigZ
 n.ex=x;cpSaveNotes();cpPaint();
 const r2=await relayFetch("/confidential/submit",{type:"unwrap",op,memos:[],mode:self?"prove":"settle"});
 if(!r2.jobId)throw Error("The relay did not take the exit.");
-x.job=r2.jobId;x.js=r2.status||"pending";cpSaveNotes();
-stat.textContent=(self?"Proving. The wallet will ask you to send the exit when the proof is ready.":"The relay is settling the exit. Activate it once it lands.")+(warn?" "+warn:"");
+x.job=r2.jobId;x.js=r2.status||"pending";x.rb=cpRelayBase();cpSaveNotes();
+stat.textContent=(self?"Proving. The wallet will ask you to send it when the proof is ready.":ch===1?"The relay is settling the withdrawal.":"The relay is settling the exit. Activate it once it lands.")+(warn?" "+warn:"");
 if(self)await cpSelfSend(n)};
 const cpSelfSend=async n=>{const x=n.ex;
 for(let t=0;t<180&&!(x.pv&&x.pr);t++){await new Promise(r=>setTimeout(r,5000));await cpRelayPoll(n);
@@ -6736,10 +6780,11 @@ if(x.js==="failed")throw Error("The prover failed: "+(x.jerr||"unknown"));
 if(x.js==="settled")return cpPaint()}
 if(!(x.pv&&x.pr))throw Error("The proof is taking a while — it keeps proving; come back and press Send.");
 await checkWallet();
-const req={from:account,to:CP_ROUTER,value:"0x0",data:cpExitData(x.pv,x.pr,cpRecipe(x)),gas:toHex(2000000)};
+const req=x.ch===1?{from:account,to:CP_POOL,value:"0x0",data:cpSettleData(x.pv,x.pr),gas:toHex(700000)}
+:{from:account,to:CP_ROUTER,value:"0x0",data:cpExitData(x.pv,x.pr,cpRecipe(x)),gas:toHex(2000000)};
 await rpc(C,[req,L]);
 x.ptx=await sendTx([req]);cpSaveNotes();cpPaint();
-await settle(x.ptx);stat.textContent="Bridged. It lands on "+CHAINS[x.ch].name+" in a few minutes."};
+await settle(x.ptx);stat.textContent=x.ch===1?"Withdrawn to "+x.to+".":"Bridged. It lands on "+CHAINS[x.ch].name+" in a few minutes."};
 const cpActivate=async n=>{const x=n.ex,r=cpRecipe(x),now=Math.floor(Date.now()/1000);
 if(now>Number(x.dl))throw Error("The exit expired — reclaim it instead.");
 if(!await cpEnsureBalance(x.esc,BigInt(x.wei)))throw Error("The escrow is not funded yet — the relay has not settled.");
@@ -6755,28 +6800,30 @@ x.rtx=await sendTx([req]);cpSaveNotes();cpPaint();
 await settle(x.rtx);stat.textContent="Returned to "+x.fin+" on Ethereum."};
 const cpRecover=async()=>{const c=await cpSync(true);let found=0;
 for(const[id,amt]of c.wraps){const wei=BigInt(amt);if(wei%CP_SCALE)continue;const v=wei/CP_SCALE;
-if(cpNotes.some(n=>BigInt(n.v)===v&&cpDepId(v,cpDepCommit(...(k=>[k.cx,k.cy,k.owner])(cpNoteOf(n))))===id))continue;
+if(cpNotes.some(n=>!n.p&&BigInt(n.v)===v&&cpNoteOf(n).dep===id))continue;
 for(let i=0;i<64;i++){const k=cpNoteOf({i,v:String(v)});
-if(cpDepId(v,cpDepCommit(k.cx,k.cy,k.owner))===id){if(!cpNotes.some(n=>n.i===i))cpNotes.push({i,v:String(v),at:0,rec:1});found++;break}}}
+if(k.dep===id){if(!cpNotes.some(n=>!n.p&&n.i===i))cpNotes.push({i,v:String(v),at:0,rec:1});found++;break}}}
 cpNotes.sort((a,b)=>a.i-b.i);cpSaveNotes();return found};
 const cpFmt=v=>trimAmt(BigInt(v)*CP_SCALE,18);
 const cpPaint=()=>{if(!pvMode)return;
 const on=!!cpSeed;
 pvKey.innerHTML=!account?"Connect a wallet to begin.":!on?"Sign once to unlock the key that owns your deposits.":
-`Key unlocked <button type="button" class="fclink" data-a="backup">backup</button><button type="button" class="fclink" data-a="import">import</button><button type="button" class="fclink" data-a="recover">recover</button><button type="button" class="fclink" data-a="export">export</button>`;
+`Key unlocked <button type="button" class="fclink" data-a="request">request</button><button type="button" class="fclink" data-a="pay">pay</button><button type="button" class="fclink" data-a="backup">backup</button><button type="button" class="fclink" data-a="import">import</button><button type="button" class="fclink" data-a="recover">recover</button><button type="button" class="fclink" data-a="export">export</button><button type="button" class="fclink" data-a="relay">relay</button>`;
 pvGo.textContent=!account?"Connect Wallet":!on?"Unlock key":"Deposit";
 pvGo.disabled=!!cpBusy;
 if(!on){pvList.innerHTML="";return}
-const rows=cpNotes.map(n=>{const{s}=cpStatus(n),x=n.ex,ch=x?CHAINS[x.ch].name:"";
-const act=s==="ready"?`<button type="button" class="fclink" data-a="exit" data-i="${n.i}">exit</button>`
-:s==="pending"?(n.job?(n.js==="failed"?`relay failed<button type="button" class="fclink" data-a="settle" data-i="${n.i}">retry</button>`:"settling…")
-:`<button type="button" class="fclink" data-a="settle" data-i="${n.i}">settle</button>`)
-:s==="exiting"?(!x.job||x.js==="failed"?`relay failed<button type="button" class="fclink" data-a="exit" data-i="${n.i}">retry</button>`
-:x.self?(x.pv?`<button type="button" class="fclink" data-a="send" data-i="${n.i}">send</button>`:"proving…"):"relaying…")
-:s==="funded"?`<button type="button" class="fclink" data-a="activate" data-i="${n.i}">activate</button>`
-:s==="expired"?`<button type="button" class="fclink" data-a="reclaim" data-i="${n.i}">reclaim</button>`
-:s==="bridged"?`<a href="${CHAINS[x.ch].explorer}/address/${x.to}" target="_blank" rel="noreferrer">on ${ch}</a>`:s;
-return`<div class="cpr"><span><b>${cpFmt(n.v)} ETH</b> #${n.i}${x&&s!=="bridged"?" → "+ch:""}</span><span>${act}</span></div>`}).join("");
+const rows=cpNotes.map((n,j)=>{const{s,k}=cpStatus(n),x=n.ex,ch=x?CHAINS[x.ch].name:"",B=(a,l)=>`<button type="button" class="fclink" data-a="${a}" data-j="${j}">${l}</button>`;
+const paid=n.inv&&!!cpPool&&cpPool.wraps.some(w=>w[0]===k.dep);
+const act=s==="ready"?B("exit","exit")
+:s==="pending"?(n.job?(n.js==="failed"?"relay failed"+B("settle","retry"):"settling…"):n.inv&&!paid?"awaiting payment":B("settle","settle"))
+:s==="exiting"?(!x.job||x.js==="failed"?"relay failed"+B("exit","retry")
+:x.self?(x.ptx?"sent…":x.pv?B("send","send"):"proving…"):"relaying…")
+:s==="funded"?B("activate","activate")
+:s==="expired"?B("reclaim","reclaim")
+:s==="bridged"||s==="withdrawn"?`<a href="${CHAINS[x.ch].explorer}/address/${x.to}" target="_blank" rel="noreferrer">on ${ch}</a>`
+:s==="paying"?(n.job?"settling…":B("settle","settle")):s==="payfailed"?"relay failed"+B("settle","retry")
+:s==="paid"?`<a href="${CHAINS[1].explorer}/tx/${n.tx}" target="_blank" rel="noreferrer">paid</a>`:s;
+return`<div class="cpr"><span><b>${cpFmt(n.v)} ETH</b> ${n.p?"paid":n.inv?"request #"+n.i:"#"+n.i}${x&&s!=="bridged"&&s!=="withdrawn"?" → "+ch:""}</span><span>${act}</span></div>`}).join("");
 pvList.innerHTML=rows||`<div class="cpr"><span>No deposits yet.</span></div>`};
 const pvPaint=()=>{const on=pvMode;
 pv.setAttribute("aria-pressed",on?"true":"false");
@@ -6801,7 +6848,8 @@ const pvWake=()=>{if(!account){cpSeed="";cpNotes=[]}else if(!cpSeed){const s=cpK
 if(account)pvTo.placeholder=account;cpPaint();pvRefresh()};
 const pvRefresh=async()=>{if(!cpSeed||cpBusy)return;const my=++pvTick;
 try{await cpSync(cpNotes.some(n=>/pending|exiting/.test(cpStatus(n).s)));
-for(const n of cpNotes){const t=n.ex||n;if(t.job&&!["settled","failed","proven"].includes(t.js||""))await cpRelayPoll(n)}
+for(const n of cpNotes){const t=n.ex||n;if(t.job&&!["settled","failed","proven"].includes(t.js||""))await cpRelayPoll(n);
+if(n.inv&&!n.job&&!n.p&&cpPool&&cpPool.wraps.some(w=>w[0]===cpNoteOf(n).dep))try{await cpSettleWrap(n)}catch{}}
 if(my===pvTick&&pvMode)cpPaint()}catch(e){try{if(my===pvTick&&pvMode)pvNote.textContent=explain(e)}catch{}}};
 const pvRun=async(fn,label)=>{if(cpBusy)return;cpBusy=1;pvGo.disabled=true;stat.textContent=label||"";
 try{await checkWallet();await fn();cpSyncAt=0}catch(e){err(e)}
@@ -6812,7 +6860,7 @@ if(!account)return void connect();
 if(!cpSeed)return pvRun(cpUnlock,"Check your wallet for the message to sign.");
 pvRun(cpDeposit,"Building the deposit…")};
 pvList.onclick=pvKey.onclick=e=>{const b=e.target.closest("button[data-a]");if(!b)return;sBlip();
-const a=b.dataset.a,n=cpNotes.find(x=>x.i===+b.dataset.i);
+const a=b.dataset.a,n=b.dataset.j!==undefined?cpNotes[+b.dataset.j]:null;
 if(a==="backup"){prompt("Your private-bridge key. Anyone holding it can spend your deposits.",cpSeed);return}
 if(a==="import"){const s=(prompt("Paste a private-bridge key (0x + 64 hex), or an exported note list.")||"").trim();
 if(/^\[/.test(s)){let arr;try{arr=JSON.parse(s)}catch{}
@@ -6822,6 +6870,11 @@ cpNotes.sort((a,b)=>a.i-b.i);cpSaveNotes();cpPaint();pvRefresh();stat.textConten
 if(!/^0x[0-9a-fA-F]{64}$/.test(s))return void(stat.textContent="That is not a key.");
 try{LS[CP_KEY+account.toLowerCase()]=s.toLowerCase()}catch{}cpUse(s.toLowerCase());cpPaint();pvRefresh();return}
 if(a==="export"){prompt("Your note records — keep them with the key. Exit recipes cannot be rebuilt without them.",JSON.stringify(cpNotes));return}
+if(a==="relay"){const u=(prompt("Relay to prove and settle through. Leave empty for the default ("+CP_RELAY+").",cpRelayBase())||"").trim();
+try{if(!u||u===CP_RELAY)delete LS["zswap:cprelay"];else if(/^https:\/\/[\w.-]+(:\d+)?(\/[\w./-]*)?$/.test(u))LS["zswap:cprelay"]=u.replace(/\/$/,"");else return void(stat.textContent="A relay is an https URL.")}catch{}
+stat.textContent="Relay: "+cpRelayBase();return}
+if(a==="request")return pvRun(cpRequest,"Building the request…");
+if(a==="pay")return pvRun(cpPay,"Checking the request…");
 if(a==="recover")return pvRun(async()=>{const f=await cpRecover();stat.textContent=f?"Recovered "+f+" deposit"+(f>1?"s":"")+".":"Nothing new on chain for this key."},"Scanning the pool…");
 if(!n)return;
 if(a==="settle")return pvRun(()=>cpSettleWrap(n),"Asking the relay…");

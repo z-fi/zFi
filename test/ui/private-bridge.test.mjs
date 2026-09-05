@@ -34,7 +34,7 @@ const RELAY = 'api.tacit.finance';
 const SEL = {
   IMPL: '93228617', ASSETS: '9fda5b66', NEXT: '0be4f422', DEPOSIT: '7da9874f', WRAP: '859a9cee',
   OTHER: '7f46ddb2', BRIDGE: 'e78cea92', ESCROW: '2bf0cda2', ACTIVATE: '1699fd5b', RECLAIM: '02edf635',
-  EXIT: 'acad0634', SUBFEE: 'a66b327d',
+  EXIT: 'acad0634', SUBFEE: 'a66b327d', SETTLE: '717fd7f2',
 };
 const T = {
   LEAVES: keccak256(toUtf8Bytes('LeavesInserted(uint256,bytes32[],bytes[])')),
@@ -127,6 +127,7 @@ function withPool(chain, { escrow } = {}) {
   chain.answer(ROUTER, SEL.ACTIVATE, '0x');
   chain.answer(ROUTER, SEL.RECLAIM, '0x');
   chain.answer(ROUTER, SEL.EXIT, '0x');
+  chain.answer(POOL, SEL.SETTLE, '0x');
   chain.answer(BASE_BRIDGE, SEL.OTHER, '0x' + addrWord('0x4200000000000000000000000000000000000010'));
   chain.answer(RH_INBOX, SEL.BRIDGE, '0x' + addrWord('0xDf8755334ce7A73cCF6b581C02eA649AE3E864b3'));
   chain.answer(RH_INBOX, SEL.SUBFEE, '0x' + u256(F.robinhood.sub));
@@ -162,7 +163,7 @@ async function open(opts = {}) {
   const inner = p.window.fetch;
   p.window.__relayPosts = [];
   p.window.fetch = async (url, init) => {
-    if (String(url).includes(RELAY) && init && init.body) p.window.__relayPosts.push(JSON.parse(init.body));
+    if (String(url).includes('/confidential/') && init && init.body) p.window.__relayPosts.push(JSON.parse(init.body));
     return inner(url, init);
   };
   if (opts.connect !== false) await p.connect();
@@ -522,5 +523,185 @@ describe('self-help', () => {
     await q.settle();
     assert.equal(q.window.localStorage['zswap:cpk:' + A.ACCOUNT.toLowerCase()], F.seed);
     p.close(); q.close();
+  });
+});
+
+describe('withdrawing to Ethereum', () => {
+  test('relayed: the unwrap pays the address directly, no recipe, no escrow', async () => {
+    const p = await open();
+    await unlock(p);
+    await deposit(p);
+    settleDeposit(p);
+    poke(p);
+    await p.waitFor(() => /exit/.test(p.text('pvList')), SLOW);
+    p.select('pvChain', '1');
+    p.type('pvTo', A.OTHER);
+    p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
+    await p.waitFor(() => p.window.__relayPosts.length === 2, SLOW);
+    const post = p.window.__relayPosts[1];
+    assert.equal(post.type, 'unwrap');
+    assert.equal(post.mode, 'settle');
+    assert.equal(post.op.recipient, A.OTHER.toLowerCase(), 'paid straight to the address');
+    assert.equal(post.op.fee, String(FEE));
+    assert.equal(p.chain.calls.filter(c => c.selector === SEL.ESCROW).length, 0, 'no recipe was built');
+    assert.equal(p.chain.calls.filter(c => c.selector === SEL.IMPL).length, 0, 'no bridge pins were read');
+    p.chain.relay.status = { status: 'settled' };
+    p.chain.logs.push(spentLog([F.nullifier]));
+    advance(p);
+    poke(p);
+    await p.waitFor(() => /on Ethereum/.test(p.text('pvList')), { label: 'the withdrawal to show', timeout: 20000 });
+    assert.equal(p.chain.sentTo(ROUTER).length, 1, 'nothing further to send');
+    p.close();
+  });
+
+  test('yourself: the relay proves, the wallet sends pool.settle fee-free', async () => {
+    const p = await open();
+    await unlock(p);
+    await deposit(p);
+    settleDeposit(p);
+    poke(p);
+    await p.waitFor(() => /exit/.test(p.text('pvList')), SLOW);
+    p.select('pvChain', '1');
+    p.select('pvPath', 'self');
+    p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
+    await p.waitFor(() => p.window.__relayPosts.length === 2, SLOW);
+    const post = p.window.__relayPosts[1];
+    assert.equal(post.mode, 'prove');
+    assert.equal(post.op.fee, '0');
+    assert.equal(post.op.recipient, A.ACCOUNT.toLowerCase(), 'defaults to this wallet');
+    const pv = '0x' + '12'.repeat(200), pr = '0x' + 'ab'.repeat(260);
+    p.chain.relay.status = { status: 'proven', publicValues: pv, proof: pr };
+    await p.waitFor(() => p.chain.sentTo(POOL).length === 1, { label: 'settle to be sent', timeout: 20000 });
+    const tx = p.chain.sentTo(POOL)[0];
+    assert.equal(tx.data, '0x717fd7f2' + coder.encode(['bytes', 'bytes', 'bytes[]'], [pv, pr, []]).slice(2), 'pool.settle(pv, proof, [])');
+    assert.equal(BigInt(tx.gas), 700000n);
+    assert.equal(BigInt(tx.value), 0n);
+    p.close();
+  });
+});
+
+describe('depositing as several notes', () => {
+  test('two notes are two deposits at consecutive indices, each settled on its own', async () => {
+    const p = await open();
+    await unlock(p);
+    p.select('pvSplit', '2');
+    p.type('pvAmt', '0.02');
+    p.click('pvGo');
+    await p.waitFor(() => p.window.__relayPosts.length === 2, { label: 'both wraps to reach the relay', timeout: 20000 });
+    const txs = p.chain.sentTo(ROUTER);
+    assert.equal(txs.length, 2);
+    for (const tx of txs) assert.equal(BigInt(tx.value), BigInt(F.amountWei), 'each note is half');
+    assert.equal(txs[0].data, F.wrapCalldata, 'the first note is the reference note (index 0)');
+    assert.notEqual(txs[1].data, txs[0].data, 'the second is a different commitment');
+    const ops = p.window.__relayPosts.map(x => x.op);
+    assert.deepEqual(ops[0], F.wrapOp);
+    assert.equal(ops[1].value, F.wrapOp.value);
+    assert.notEqual(ops[1].owner, ops[0].owner, 'a fresh per-note key');
+    assert.equal((p.text('pvList').match(/0\.01 ETH/g) || []).length, 2, 'two rows');
+    p.close();
+  });
+
+  test('refuses an amount that does not split', async () => {
+    const p = await open();
+    await unlock(p);
+    p.select('pvSplit', '4');
+    p.type('pvAmt', '0.00000003');
+    p.click('pvGo');
+    await p.waitFor(() => /does not split evenly/.test(p.text('stat')));
+    assert.equal(p.chain.sentTo(ROUTER).length, 0);
+    p.close();
+  });
+});
+
+describe('paying a request', () => {
+  test('a request is the reference invoice, and paying it is the reference wrap plus the pre-signed settle', async () => {
+    // The recipient builds the request.
+    const r = await open();
+    await unlock(r);
+    r.type('pvAmt', '0.01');
+    r.click(r.$('pvKey').querySelector('button[data-a="request"]'));
+    await r.waitFor(() => r.asked.prompt.length === 1, { label: 'the request prompt', timeout: 15000 });
+    assert.match(r.asked.prompt[0], /payment request/);
+    const invoice = JSON.parse(r.window.__promptDefaults[0]);
+    assert.equal(invoice.v, 1);
+    assert.equal(invoice.assetId, F.ethAssetId);
+    assert.equal(invoice.underlying, A.ZERO);
+    assert.equal(invoice.amount, F.amountWei);
+    assert.equal(invoice.value, F.note.value);
+    for (const k of ['cx', 'cy', 'owner']) assert.equal(invoice[k], F.note[k], k);
+    assert.equal(invoice.commit, F.commit);
+    assert.equal(invoice.depositId, F.depositId);
+    assert.equal(invoice.leaf, F.leaf);
+    assert.deepEqual(invoice.witness, F.wrapOp, 'the pre-signed consume is the reference wrap witness');
+    assert.match(invoice.memo, /^0x0[23][0-9a-f]{64}[0-9a-f]{272}$/);
+    assert.match(r.text('pvList'), /request #0/);
+    assert.match(r.text('pvList'), /awaiting payment/);
+
+    // The payer pays it from another browser.
+    const q = await open();
+    await unlock(q);
+    q.queuePrompt(JSON.stringify(invoice));
+    q.click(q.$('pvKey').querySelector('button[data-a="pay"]'));
+    await q.waitFor(() => q.chain.sentTo(ROUTER).length === 1, { label: 'the payment to be sent', timeout: 15000 });
+    const tx = q.chain.sentTo(ROUTER)[0];
+    assert.equal(BigInt(tx.value), BigInt(F.amountWei));
+    assert.equal(tx.data, F.wrapCalldata, 'wrapETH to the request\'s commitment');
+    await q.waitFor(() => q.window.__relayPosts.length === 1, { label: 'the settle to reach the relay', timeout: 15000 });
+    const post = q.window.__relayPosts[0];
+    assert.equal(post.type, 'wrap');
+    assert.deepEqual(post.op, invoice.witness, 'the payer submits the recipient\'s witness untouched');
+    assert.deepEqual(post.memos, [invoice.memo]);
+    assert.match(q.text('pvList'), /0\.01 ETH paid/);
+    assert.equal(q.chain.personalSigned.length, 1, 'paying needs no extra signature');
+
+    // Back on the recipient's browser the note lands like any deposit.
+    settleDeposit(r);
+    poke(r);
+    await r.waitFor(() => /exit/.test(r.text('pvList')), { label: 'the paid note to be spendable', timeout: 20000 });
+    r.close(); q.close();
+  });
+
+  test('a tampered request is refused before anything is paid', async () => {
+    const q = await open();
+    await unlock(q);
+    const bad = {
+      v: 1, chainBinding: F.wrapOp.chainBinding, assetId: F.ethAssetId, underlying: A.ZERO, ticker: 'cETH',
+      amount: F.amountWei, value: F.note.value, cx: F.note.cx, cy: F.note.cy, owner: F.note.owner,
+      commit: F.commit, depositId: F.depositId, leaf: F.leaf, memo: F.memo,
+      witness: { ...F.wrapOp, sigZ: F.wrapOp.sigZ.slice(0, -1) + (F.wrapOp.sigZ.endsWith('0') ? '1' : '0') },
+    };
+    q.queuePrompt(JSON.stringify(bad));
+    q.click(q.$('pvKey').querySelector('button[data-a="pay"]'));
+    await q.waitFor(() => /not claimable/.test(q.text('stat')), { label: 'the refusal', timeout: 15000 });
+    assert.equal(q.chain.sentTo(ROUTER).length, 0);
+    // The genuine one, with a different amount claimed, is also refused.
+    q.queuePrompt(JSON.stringify({ ...bad, witness: F.wrapOp, amount: '20000000000000000' }));
+    q.click(q.$('pvKey').querySelector('button[data-a="pay"]'));
+    await q.waitFor(() => /amounts disagree/.test(q.text('stat')), { timeout: 15000 });
+    assert.equal(q.chain.sentTo(ROUTER).length, 0);
+    q.close();
+  });
+});
+
+describe('choosing a relay', () => {
+  test('an https override is used for every relay call and can be cleared', async () => {
+    const p = await open({ storage: { 'zswap:cprelay': 'https://relay.example' } });
+    // Route the override host to the same canned relay.
+    Object.defineProperty(p.chain.lanes, 'relay.example/confidential/submit', { enumerable: true, get: () => ({ ok: true, jobId: '0xjobx', status: 'pending' }) });
+    Object.defineProperty(p.chain.lanes, 'relay.example/confidential/status', { enumerable: true, get: () => p.chain.relay.status });
+    await unlock(p);
+    await deposit(p);
+    const urls = (p.chain.httpLog || []).map(x => x.url).filter(u => /confidential/.test(u));
+    assert.ok(urls.length >= 1);
+    assert.ok(urls.every(u => u.startsWith('https://relay.example/')), 'every relay call went to the override');
+    assert.ok(urls.every(u => !u.includes(RELAY)), 'and none to the default');
+    p.queuePrompt('');
+    p.click(p.$('pvKey').querySelector('button[data-a="relay"]'));
+    assert.equal(p.window.localStorage['zswap:cprelay'], undefined, 'an empty answer clears the override');
+    assert.match(p.text('stat'), /Relay: https:\/\/api\.tacit\.finance/);
+    p.queuePrompt('http://not-secure');
+    p.click(p.$('pvKey').querySelector('button[data-a="relay"]'));
+    assert.match(p.text('stat'), /https URL/);
+    p.close();
   });
 });

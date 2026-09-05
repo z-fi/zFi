@@ -4,14 +4,14 @@ pragma solidity ^0.8.36;
 
 /// @title zSwap v0.3
 /// @notice Permanently-deployed onchain HTML swap dapp for Ethereum mainnet.
-/// @dev Architecture: the HTML payload (428032 B) is the runtime bytecode of
+/// @dev Architecture: the HTML payload (434153 B) is the runtime bytecode of
 ///      17 data contracts, deployed separately and passed to the constructor.
 ///      html() reassembles them via EXTCODECOPY with proper ABI encoding
 ///      (offset + length + padded data) so any RPC client decodes directly.
 ///      request() implements ERC-5219 for first-class web3:// gateway
 ///      compatibility (ERC-4804). Splitting the page across 18 data contracts
 ///      means EIP-170 caps each chunk, not the dapp
-///      (24576 B per chunk, 14336 B headroom).
+///      (24576 B per chunk, 8215 B headroom).
 ///
 ///      The chunk count is fixed in the constructor arity and the page is
 ///      immutable, so it is sized to ceil(len/17) with headroom for a release
