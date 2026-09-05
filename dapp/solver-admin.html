@@ -69,7 +69,10 @@
     <table id="tbl"><thead><tr>
       <th>#</th><th>Solver</th><th>Endpoint</th><th>Covers</th><th>Probe</th><th></th>
     </tr></thead><tbody id="rows"><tr><td colspan="6" class="hint">Connect, then Load list.</td></tr></tbody></table>
-    <p class="hint">Load the list, then <b>Test all on Base</b>. Each row is probed with the
+    <p class="hint"><b>Probing needs a normal origin.</b> Wallet calls work anywhere, but plain
+       outbound requests are blocked when this page is sandboxed — serve it with
+       <code>cd dapp &amp;&amp; python3 -m http.server 8017</code> and open it from localhost.
+       Load the list, then <b>Test all on Base</b>. Each row is probed with the
        same request shape zSwap uses, against its own endpoint — and this page runs from the
        origin your keyed gateways accept, so it can test what an outside caller cannot.
        A row that answers gets its flag filled in and its Apply button enabled; a row that
@@ -290,9 +293,32 @@ function render(){
 // A row is only flaggable once its own endpoint has answered on the chain in
 // question, using the same request shape zSwap will use. The page runs from the
 // gateway's allowed origin, which is why it can test what an outside caller cannot.
+// A canary against an endpoint known to permit cross-origin reads. If even that
+// cannot be reached, the page is sandboxed and every probe would read as "no
+// answer" — which would blame the solver for a restriction on this page.
+async function fetchAllowed(){
+  try{
+    const r=await fetch('https://api.paraswap.io/prices?srcToken=0x4200000000000000000000000000000000000006'
+      +'&destToken=0x833589fcd6edb6e08f4c7c32d4f71b54bda02913&amount=100000000000000000'
+      +'&srcDecimals=18&destDecimals=6&side=SELL&network=8453&version=6.2');
+    return r.ok;
+  }catch{return false}
+}
 async function testAll(chainId){
   const C=PROBE_CHAINS[chainId];
   const me=account||'0x0000000000000000000000000000000000000001';
+  show($('t-out'),'Checking whether this page may make outbound requests…');
+  if(!await fetchAllowed()){
+    for(const r of rows)if(r._ui)r._ui.st.textContent='cannot ask';
+    return show($('t-out'),
+      'This page cannot reach the solver APIs, so nothing can be probed here.\n\n'
+      +'Wallet calls work because they go through the extension; plain requests do not.\n'
+      +'Serve the page from a normal origin instead:\n\n'
+      +'  cd dapp && python3 -m http.server 8017\n'
+      +'  http://localhost:8017/solver-admin.html\n\n'
+      +'Public APIs will answer there. The keyed gateways allow only the dapp origin,\n'
+      +'so 0x, 1inch, Enso and OKX may still refuse until this runs from that host.','warn');
+  }
   show($('t-out'),'Testing '+rows.length+' endpoints on '+nameChain(chainId)+'…');
   let ok=0,bad=0,skip=0;
   for(const r of rows){
