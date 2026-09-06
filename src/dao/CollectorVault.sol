@@ -230,7 +230,7 @@ contract CollectorVault {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Claim vested tap from DAICO factory.
-    function claimTap() public returns (uint256 claimed) {
+    function claimTap() public nonReentrant returns (uint256 claimed) {
         claimed = IDAICO(DAICO).claimTap(dao);
         if (claimed != 0) emit TapClaimed(claimed);
     }
