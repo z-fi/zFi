@@ -110,7 +110,7 @@ p code, li code {
 
 <h1>On-Chain API</h1>
 
-<p class="lead">A free, public DEX aggregator. The routing core is fully on-chain &mdash; call zQuoter from any Ethereum, Base or Robinhood RPC and get ready-to-send calldata, no keys and no intermediary. The hosted REST API wraps that in one HTTP call and, on Ethereum, additionally shops the trade against every major off-chain aggregator, returning whichever wins.</p>
+<p class="lead">A free, public DEX aggregator. The routing core is fully on-chain &mdash; call zQuoter from any Ethereum, Base or Robinhood RPC and get ready-to-send calldata, no keys and no intermediary. The hosted REST API wraps that in one HTTP call and additionally shops the trade against the off-chain aggregators that serve the chain you asked for, returning whichever wins.</p>
 
 <div class="section">
   <h2>REST API</h2>
@@ -132,11 +132,19 @@ p code, li code {
   </ul>
 
   <p style="margin-top:10px"><strong>Chains</strong></p>
-  <p>zQuoter, zRouter and Multicall3 sit at the <em>same addresses</em> on all three chains, so the on-chain half of the API is identical everywhere and <code>tx.to</code> is the same zRouter. Two things do differ:</p>
+  <p>zQuoter, zRouter and Multicall3 sit at the <em>same addresses</em> on all three chains, so the on-chain half of the API is identical everywhere and an on-chain win returns the same zRouter as <code>tx.to</code>. Two things differ:</p>
   <ul>
-    <li><strong>Off-chain aggregators run on Ethereum only.</strong> Every lane is wired to mainnet, so on Base and Robinhood the quote is zQuoter-only. This is a deliberate refusal rather than a gap: a mainnet-shaped answer to a Base quote is executable calldata for the wrong chain</li>
+    <li><strong>Which off-chain lanes answer.</strong> Every lane states its chain explicitly, so an unsupported chain is an upstream error that becomes a skipped route &mdash; never a mainnet-shaped answer to an L2 quote. <code>GET /health</code> lists the lanes each chain actually runs</li>
     <li><strong>Venue names are per chain.</strong> The <code>source</code> field is an enum position, and the enums differ &mdash; index 1 is SushiSwap on Ethereum but Aerodrome on Base, index 5 Curve on Ethereum but Aerodrome CL on Base. Base's enum ends at index 6 (WETH Wrap). Robinhood keeps Ethereum's enum shape, though only Uniswap V2/V3/V4 have deployments there, so the other slots never win</li>
   </ul>
+
+  <table style="width:100%;border-collapse:collapse;margin-top:10px;font-size:13px">
+    <tr style="text-align:left"><th style="padding:4px 8px 4px 0">Chain</th><th style="padding:4px 8px 4px 0">chainId</th><th style="padding:4px 0">Off-chain lanes</th></tr>
+    <tr><td style="padding:4px 8px 4px 0">Ethereum</td><td style="padding:4px 8px 4px 0"><code>1</code></td><td style="padding:4px 0">Bebop, Enso, 0x, 1inch, OKX, KyberSwap, Odos, Paraswap, OpenOcean</td></tr>
+    <tr><td style="padding:4px 8px 4px 0">Base</td><td style="padding:4px 8px 4px 0"><code>8453</code></td><td style="padding:4px 0">Bebop, Enso, 0x, 1inch, KyberSwap, Odos, Paraswap, OpenOcean</td></tr>
+    <tr><td style="padding:4px 8px 4px 0">Robinhood</td><td style="padding:4px 8px 4px 0"><code>4663</code></td><td style="padding:4px 0">KyberSwap, Paraswap</td></tr>
+  </table>
+  <p style="margin-top:8px;font-size:12px;color:var(--fg-muted)">OKX is absent off Ethereum because its TokenApprove spender is a different contract per chain and the mainnet one has no code on either L2 &mdash; approving it would be a no-op. A lane only appears for a chain where its approval target actually exists.</p>
 
   <p style="margin-top:10px"><strong>Example &mdash; the same swap on Base:</strong></p>
 <pre>curl "https://api.zfi.wei.is/quote?chainId=8453&amp;tokenIn=0x0000000000000000000000000000000000000000&amp;tokenOut=0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913&amp;amount=1000000000000000000"</pre>

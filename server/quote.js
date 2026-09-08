@@ -29,12 +29,19 @@ const ENSO_API = 'https://api.enso.build/api/v1/shortcuts/route';
 const OX_API = 'https://api.0x.org';
 const INCH_API = 'https://api.1inch.dev';
 const OKX_API = 'https://web3.okx.com';
-const KYBER_API = 'https://aggregator-api.kyberswap.com/ethereum/api/v1';
+const kyberBase = slug => `https://aggregator-api.kyberswap.com/${slug}/api/v1`;
 const ODOS_API = 'https://api.odos.xyz';
 const PARASWAP_API = 'https://api.paraswap.io';
 const OPENOCEAN_API = 'https://open-api.openocean.finance';
 
-// Approval targets (must match wrapper contracts)
+// Approval targets (must match wrapper contracts).
+//
+// These are MAINNET addresses, and not all of them are the same contract - or
+// any contract - on the L2s. Measured with eth_getCode on 2026-09-08:
+//   same code on 1 / 8453 / 4663: 0x, 1inch, KyberSwap, Paraswap, OpenOcean
+//   Odos and Enso: present on 1 and 8453, absent on 4663
+//   OKX: present on 1 ONLY
+// A lane may only appear in a chain's LANES row if its spender exists there.
 const APPROVAL_TARGETS = {
   '0x': '0x0000000000001fF3684f28c67538d4D072C22734',         // AllowanceHolder
   '1inch': '0x111111125421cA6dc452d289314280a0f8842A65',       // AggregationRouterV6
@@ -75,25 +82,72 @@ const AMM_NAMES_BASE = {
   6: 'WETH Wrap',
 };
 
+// Which off-chain lanes answer for a chain, and under what name. A lane absent
+// from a chain's table is not asked there at all.
+//
+// EVERY lane below states its chain explicitly - a path slug or a chainId
+// parameter - so an unsupported chain is an upstream error that becomes a null
+// route, never a mainnet-shaped answer to an L2 quote. That property is what
+// makes the table safe to extend; do not add a lane that cannot express the
+// chain it is quoting.
+//
+// Probed live 2026-09-08 (unkeyed lanes, ETH -> the chain's dollar token):
+//   ParaSwap    1 / 8453 / 4663   all answer, but 4663 REQUIRES src+destDecimals
+//   KyberSwap   ethereum / base / robinhood   all answer
+//   Bebop       ethereum / base   answer; /robinhood/ resolves but has no makers
+//   Odos        530 on every chain INCLUDING mainnet, so its outage is not
+//               chain-specific and the mainnet lane is left as it was
+//   Enso, OpenOcean   403 without a key; slugs kept per chain
+// The keyed lanes (0x, 1inch, OKX, Enso) are enabled where the provider
+// publicly supports the chain. None claims Robinhood, so Robinhood runs on the
+// two lanes actually seen to answer.
+const LANES = {
+  1: {
+    bebop: 'ethereum', enso: 1, ox: 1, inch: 1, okx: 1,
+    kyber: 'ethereum', odos: 1, paraswap: 1, openocean: 'eth',
+  },
+  // OKX is deliberately absent: its TokenApprove spender in APPROVAL_TARGETS
+  // (0x40aA958d...) has NO CODE on Base or Robinhood - OKX uses a different
+  // approve contract per chain. Quoting it here would hand back an approval
+  // target that cannot take an approval, so the swap fails and the allowance
+  // sits on an address nobody controls yet. Verified by eth_getCode on all
+  // three chains 2026-09-08; re-add only with a per-chain spender.
+  8453: {
+    bebop: 'base', enso: 8453, ox: 8453, inch: 8453,
+    kyber: 'base', odos: 8453, paraswap: 8453, openocean: 'base',
+  },
+  4663: {
+    kyber: 'robinhood', paraswap: 4663,
+  },
+};
+
 // Robinhood's quoter keeps Ethereum's enum shape, so the labels match even
 // though only Uniswap V2/V3/V4 have deployments there - the unused slots simply
 // never win a route.
 const CHAINS = {
-  1: { name: 'Ethereum', rpcs: RPCS, ammNames: AMM_NAMES_ETH, aggregators: true },
+  1: { name: 'Ethereum', rpcs: RPCS, ammNames: AMM_NAMES_ETH, lanes: LANES[1] },
   8453: {
     name: 'Base',
     rpcs: ['https://mainnet.base.org', 'https://base-rpc.publicnode.com'],
     ammNames: AMM_NAMES_BASE,
-    aggregators: false,
+    lanes: LANES[8453],
   },
   4663: {
     name: 'Robinhood',
     rpcs: ['https://rpc.mainnet.chain.robinhood.com'],
     ammNames: AMM_NAMES_ETH,
-    aggregators: false,
+    lanes: LANES[4663],
   },
 };
 const DEFAULT_CHAIN = 1;
+
+// Per-chain WETH, for the lanes that name wrapped ether instead of the native
+// sentinel. Bebop is the one that does.
+const WETH_BY_CHAIN = {
+  1: WETH,
+  8453: '0x4200000000000000000000000000000000000006',
+  4663: '0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73',
+};
 
 // Heavy builders are >100M-gas eth_calls; give them a much longer budget than
 // the default RPC timeout. Tune with HEAVY_TIMEOUT_MS.
@@ -360,12 +414,36 @@ async function rpcCall(to, data, env, timeoutMs, chainId) {
   throw new Error('All RPCs failed: ' + lastErr);
 }
 
+// ParaSwap wants the decimals of both sides and will not infer them on every
+// chain. One batched read, defaulted to 18, so a failed read costs the lane its
+// precision hint rather than the whole quote.
+const SEL_DECIMALS = '313ce567';
+async function fetchDecimals(tokenIn, tokenOut, env, chainId) {
+  const isNative = a => a.toLowerCase() === ZERO.toLowerCase();
+  if (isNative(tokenIn) && isNative(tokenOut)) return [18, 18];
+  try {
+    const calls = [
+      { target: isNative(tokenIn) ? WETH_BY_CHAIN[chainId] : tokenIn, data: '0x' + SEL_DECIMALS },
+      { target: isNative(tokenOut) ? WETH_BY_CHAIN[chainId] : tokenOut, data: '0x' + SEL_DECIMALS },
+    ];
+    const raw = await rpcCall(MC3, encAggregate3(calls), env, undefined, chainId);
+    const out = decAggregate3(raw);
+    const read = r => {
+      if (!r?.success || !r.returnData) return 18;
+      const v = Number(BigInt('0x' + r.returnData.slice(0, 64)));
+      return Number.isInteger(v) && v >= 0 && v <= 36 ? v : 18;
+    };
+    return [read(out[0]), read(out[1])];
+  } catch { return [18, 18]; }
+}
+
 // --- Bebop quote fetcher ---
 
-async function fetchBebopQuote(tokenIn, tokenOut, amount, taker) {
-  // Bebop uses WETH address for native ETH
-  const sellToken = tokenIn.toLowerCase() === ZERO.toLowerCase() ? WETH : tokenIn;
-  const buyToken = tokenOut.toLowerCase() === ZERO.toLowerCase() ? WETH : tokenOut;
+async function fetchBebopQuote(tokenIn, tokenOut, amount, taker, slug, chainId) {
+  // Bebop uses WETH address for native ETH - the WETH of the chain being quoted
+  const weth = WETH_BY_CHAIN[chainId || DEFAULT_CHAIN] || WETH;
+  const sellToken = tokenIn.toLowerCase() === ZERO.toLowerCase() ? weth : tokenIn;
+  const buyToken = tokenOut.toLowerCase() === ZERO.toLowerCase() ? weth : tokenOut;
   // Skip pure WETH wrap/unwrap
   if (sellToken.toLowerCase() === buyToken.toLowerCase()) return null;
 
@@ -379,7 +457,7 @@ async function fetchBebopQuote(tokenIn, tokenOut, amount, taker) {
   });
 
   try {
-    const res = await fetch(`${BEBOP_API}?${params}`, {
+    const res = await fetch(`https://api.bebop.xyz/router/${slug}/v1/quote?${params}`, {
       headers: { 'Accept': 'application/json' },
       signal: AbortSignal.timeout(4000),
     });
@@ -410,7 +488,7 @@ async function fetchBebopQuote(tokenIn, tokenOut, amount, taker) {
 
 // --- Enso quote fetcher ---
 
-async function fetchEnsoQuote(tokenIn, tokenOut, amount, taker, env) {
+async function fetchEnsoQuote(tokenIn, tokenOut, amount, taker, env, laneChain) {
   // Enso uses 0xeeee...eeee for native ETH
   const sellToken = tokenIn.toLowerCase() === ZERO.toLowerCase() ? NATIVE : tokenIn;
   const buyToken = tokenOut.toLowerCase() === ZERO.toLowerCase() ? NATIVE : tokenOut;
@@ -420,7 +498,7 @@ async function fetchEnsoQuote(tokenIn, tokenOut, amount, taker, env) {
   const from = taker || '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045';
 
   const params = new URLSearchParams({
-    chainId: '1',
+    chainId: String(laneChain),
     fromAddress: from,
     tokenIn: sellToken,
     tokenOut: buyToken,
@@ -452,14 +530,14 @@ async function fetchEnsoQuote(tokenIn, tokenOut, amount, taker, env) {
 
 // --- 0x (Matcha) quote fetcher ---
 
-async function fetchOxQuote(tokenIn, tokenOut, amount, taker, env) {
+async function fetchOxQuote(tokenIn, tokenOut, amount, taker, env, laneChain) {
   if (!env?.OX_API_KEY) return null;
   const sellToken = tokenIn.toLowerCase() === ZERO.toLowerCase() ? NATIVE : tokenIn;
   const buyToken = tokenOut.toLowerCase() === ZERO.toLowerCase() ? NATIVE : tokenOut;
   if (sellToken.toLowerCase() === buyToken.toLowerCase()) return null;
 
   const params = new URLSearchParams({
-    chainId: '1',
+    chainId: String(laneChain),
     sellToken,
     buyToken,
     sellAmount: amount.toString(),
@@ -488,7 +566,7 @@ async function fetchOxQuote(tokenIn, tokenOut, amount, taker, env) {
 
 // --- 1inch quote fetcher ---
 
-async function fetchInchQuote(tokenIn, tokenOut, amount, taker, env) {
+async function fetchInchQuote(tokenIn, tokenOut, amount, taker, env, laneChain) {
   if (!env?.INCH_API_KEY) return null;
   const src = tokenIn.toLowerCase() === ZERO.toLowerCase() ? NATIVE : tokenIn;
   const dst = tokenOut.toLowerCase() === ZERO.toLowerCase() ? NATIVE : tokenOut;
@@ -501,7 +579,7 @@ async function fetchInchQuote(tokenIn, tokenOut, amount, taker, env) {
   });
 
   try {
-    const res = await fetch(`${INCH_API}/swap/v6.0/1/swap?${params}`, {
+    const res = await fetch(`${INCH_API}/swap/v6.0/${laneChain}/swap?${params}`, {
       headers: { 'Authorization': `Bearer ${env.INCH_API_KEY}` },
       signal: AbortSignal.timeout(4000),
     });
@@ -521,7 +599,7 @@ async function fetchInchQuote(tokenIn, tokenOut, amount, taker, env) {
 
 // --- OKX quote fetcher ---
 
-async function fetchOkxQuote(tokenIn, tokenOut, amount, taker, env) {
+async function fetchOkxQuote(tokenIn, tokenOut, amount, taker, env, laneChain) {
   if (!env?.OKX_API_KEY || !env?.OKX_SECRET_KEY || !env?.OKX_PASSPHRASE) return null;
   const fromToken = tokenIn.toLowerCase() === ZERO.toLowerCase() ? NATIVE : tokenIn;
   const toToken = tokenOut.toLowerCase() === ZERO.toLowerCase() ? NATIVE : tokenOut;
@@ -529,7 +607,7 @@ async function fetchOkxQuote(tokenIn, tokenOut, amount, taker, env) {
 
   const userAddr = taker || '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045';
   const qs = new URLSearchParams({
-    chainId: '1', fromTokenAddress: fromToken, toTokenAddress: toToken,
+    chainId: String(laneChain), fromTokenAddress: fromToken, toTokenAddress: toToken,
     amount: amount.toString(), userWalletAddress: userAddr, slippage: '0.005',
   }).toString();
 
@@ -572,7 +650,7 @@ async function fetchOkxQuote(tokenIn, tokenOut, amount, taker, env) {
 
 // --- KyberSwap quote fetcher (two-step: routes → build) ---
 
-async function fetchKyberQuote(tokenIn, tokenOut, amount, taker) {
+async function fetchKyberQuote(tokenIn, tokenOut, amount, taker, slug) {
   const sellToken = tokenIn.toLowerCase() === ZERO.toLowerCase() ? NATIVE : tokenIn;
   const buyToken = tokenOut.toLowerCase() === ZERO.toLowerCase() ? NATIVE : tokenOut;
   if (sellToken.toLowerCase() === buyToken.toLowerCase()) return null;
@@ -584,7 +662,7 @@ async function fetchKyberQuote(tokenIn, tokenOut, amount, taker) {
     const routeParams = new URLSearchParams({
       tokenIn: sellToken, tokenOut: buyToken, amountIn: amount.toString(), saveGas: 'false',
     });
-    const routeRes = await fetch(`${KYBER_API}/routes?${routeParams}`, {
+    const routeRes = await fetch(`${kyberBase(slug)}/routes?${routeParams}`, {
       headers: { 'x-client-id': 'zfi' },
       signal: AbortSignal.timeout(2500),
     });
@@ -594,7 +672,7 @@ async function fetchKyberQuote(tokenIn, tokenOut, amount, taker) {
     if (!routeSummary?.amountOut) return null;
 
     // Step 2: build tx
-    const buildRes = await fetch(`${KYBER_API}/route/build`, {
+    const buildRes = await fetch(`${kyberBase(slug)}/route/build`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-client-id': 'zfi' },
       body: JSON.stringify({ routeSummary, sender: from, recipient: from, slippageTolerance: 50 }),
@@ -624,7 +702,7 @@ async function fetchKyberQuote(tokenIn, tokenOut, amount, taker) {
 
 const ODOS_ENABLED = false;
 
-async function fetchOdosQuote(tokenIn, tokenOut, amount, taker) {
+async function fetchOdosQuote(tokenIn, tokenOut, amount, taker, laneChain) {
   if (!ODOS_ENABLED) return null;
   // Odos uses zero address for native ETH
   const sellToken = tokenIn.toLowerCase() === ZERO.toLowerCase() ? ZERO : tokenIn;
@@ -639,7 +717,7 @@ async function fetchOdosQuote(tokenIn, tokenOut, amount, taker) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        chainId: 1,
+        chainId: laneChain,
         inputTokens: [{ tokenAddress: sellToken, amount: amount.toString() }],
         outputTokens: [{ tokenAddress: buyToken, proportion: 1 }],
         slippageLimitPercent: 0.5,
@@ -675,7 +753,7 @@ async function fetchOdosQuote(tokenIn, tokenOut, amount, taker) {
 
 // --- Paraswap quote fetcher (two-step: prices → transactions) ---
 
-async function fetchParaswapQuote(tokenIn, tokenOut, amount, taker) {
+async function fetchParaswapQuote(tokenIn, tokenOut, amount, taker, laneChain, decIn, decOut) {
   const srcToken = tokenIn.toLowerCase() === ZERO.toLowerCase() ? NATIVE : tokenIn;
   const destToken = tokenOut.toLowerCase() === ZERO.toLowerCase() ? NATIVE : tokenOut;
   if (srcToken.toLowerCase() === destToken.toLowerCase()) return null;
@@ -685,7 +763,12 @@ async function fetchParaswapQuote(tokenIn, tokenOut, amount, taker) {
   try {
     // Step 1: price quote
     const priceParams = new URLSearchParams({
-      srcToken, destToken, amount: amount.toString(), network: '1', side: 'SELL',
+      srcToken, destToken, amount: amount.toString(),
+      network: String(laneChain), side: 'SELL',
+      // Optional on Ethereum and Base, REQUIRED on Robinhood - without them the
+      // price call is a 400 and the lane looks unsupported rather than
+      // under-specified.
+      srcDecimals: String(decIn), destDecimals: String(decOut),
     });
     const priceRes = await fetch(`${PARASWAP_API}/prices?${priceParams}`, {
       signal: AbortSignal.timeout(2500),
@@ -697,7 +780,7 @@ async function fetchParaswapQuote(tokenIn, tokenOut, amount, taker) {
     const destAmount = BigInt(priceRoute.destAmount);
 
     // Step 2: build tx
-    const txRes = await fetch(`${PARASWAP_API}/transactions/1?ignoreChecks=true`, {
+    const txRes = await fetch(`${PARASWAP_API}/transactions/${laneChain}?ignoreChecks=true`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -723,7 +806,7 @@ async function fetchParaswapQuote(tokenIn, tokenOut, amount, taker) {
 
 // --- OpenOcean quote fetcher (one-step GET, no auth) ---
 
-async function fetchOpenOceanQuote(tokenIn, tokenOut, amount, taker) {
+async function fetchOpenOceanQuote(tokenIn, tokenOut, amount, taker, slug) {
   const sellToken = tokenIn.toLowerCase() === ZERO.toLowerCase() ? NATIVE : tokenIn;
   const buyToken = tokenOut.toLowerCase() === ZERO.toLowerCase() ? NATIVE : tokenOut;
   if (sellToken.toLowerCase() === buyToken.toLowerCase()) return null;
@@ -739,7 +822,7 @@ async function fetchOpenOceanQuote(tokenIn, tokenOut, amount, taker) {
   });
 
   try {
-    const res = await fetch(`${OPENOCEAN_API}/v4/eth/swap?${params}`, {
+    const res = await fetch(`${OPENOCEAN_API}/v4/${slug}/swap?${params}`, {
       signal: AbortSignal.timeout(4000),
     });
     if (!res.ok) return null;
@@ -764,6 +847,7 @@ async function getQuote(params, env) {
   const chainId = params.chainId || DEFAULT_CHAIN;
   const chain = CHAINS[chainId] || CHAINS[DEFAULT_CHAIN];
   const AMM_NAMES = chain.ammNames;
+  const lanes = chain.lanes || {};
   const receiver = to || ZERO;
   const refundTo = to || ZERO;
   const slippageBps = slippage || 50;
@@ -796,22 +880,29 @@ async function getQuote(params, env) {
       .catch(() => ({ success: false, returnData: '' }));
 
   // Batch zQuoter multicalls + all external APIs in parallel
-  // Skipped for exact-out (no lane supports it) and off Ethereum (every lane
-  // below is hardcoded to mainnet, so an answer would be calldata for the
-  // wrong chain rather than a worse price).
-  const skip = (exactOut || !chain.aggregators) ? Promise.resolve(null) : undefined;
+  // No lane quotes exact-out, and a lane the chain's table does not list is not
+  // asked at all - `lanes.x` being undefined is the whole gate.
+  const none = Promise.resolve(null);
+  const lane = (key, run) => (exactOut || lanes[key] === undefined ? none : run(lanes[key]));
+
+  // ParaSwap needs both sides' decimals. It resolves alongside everything else
+  // rather than ahead of it, so the extra read costs no wall-clock.
+  const decP = (exactOut || lanes.paraswap === undefined)
+    ? Promise.resolve([18, 18])
+    : fetchDecimals(tokenIn, tokenOut, env, chainId);
+
   const [lightRaw, ...rest] = await Promise.all([
     rpcCall(MC3, encAggregate3(lightCalls), env, undefined, chainId).catch(() => null),
     ...heavyCalls.map(heavyOne),
-    skip || fetchBebopQuote(tokenIn, tokenOut, amount, to),
-    skip || fetchEnsoQuote(tokenIn, tokenOut, amount, to, env),
-    skip || fetchOxQuote(tokenIn, tokenOut, amount, to, env),
-    skip || fetchInchQuote(tokenIn, tokenOut, amount, to, env),
-    skip || fetchOkxQuote(tokenIn, tokenOut, amount, to, env),
-    skip || fetchKyberQuote(tokenIn, tokenOut, amount, to),
-    skip || fetchOdosQuote(tokenIn, tokenOut, amount, to),
-    skip || fetchParaswapQuote(tokenIn, tokenOut, amount, to),
-    skip || fetchOpenOceanQuote(tokenIn, tokenOut, amount, to),
+    lane('bebop', slug => fetchBebopQuote(tokenIn, tokenOut, amount, to, slug, chainId)),
+    lane('enso', c => fetchEnsoQuote(tokenIn, tokenOut, amount, to, env, c)),
+    lane('ox', c => fetchOxQuote(tokenIn, tokenOut, amount, to, env, c)),
+    lane('inch', c => fetchInchQuote(tokenIn, tokenOut, amount, to, env, c)),
+    lane('okx', c => fetchOkxQuote(tokenIn, tokenOut, amount, to, env, c)),
+    lane('kyber', slug => fetchKyberQuote(tokenIn, tokenOut, amount, to, slug)),
+    lane('odos', c => fetchOdosQuote(tokenIn, tokenOut, amount, to, c)),
+    lane('paraswap', c => decP.then(([di, dobj]) => fetchParaswapQuote(tokenIn, tokenOut, amount, to, c, di, dobj))),
+    lane('openocean', slug => fetchOpenOceanQuote(tokenIn, tokenOut, amount, to, slug)),
   ]);
   const extNames = ['Bebop', 'Enso', '0x', '1inch', 'OKX', 'KyberSwap', 'Odos', 'Paraswap', 'OpenOcean'];
 
@@ -1043,7 +1134,7 @@ export default {
       return jsonResponse({
         status: 'ok',
         chains: Object.entries(CHAINS).map(([id, c]) => ({
-          chainId: Number(id), name: c.name, aggregators: c.aggregators,
+          chainId: Number(id), name: c.name, lanes: Object.keys(c.lanes || {}),
         })),
       });
     }

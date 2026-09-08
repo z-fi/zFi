@@ -405,6 +405,7 @@ background:var(--e);margin:.5em auto .1em}
 <div id="wnRollPanel" class="hide"><div class="lngap">roll.wei</div><small id="wnRollEl" role="status" aria-live="polite"></small><button id="wnEnter" class="wnbtn hide">Enter the roll</button></div>
 <label class="dly hide" id="kindL">Order type<select id="kind"><option value="fixed">Fixed limit</option><option value="dutch">Dutch decay</option><option value="floor">Climbing bid</option></select></label>
 <label class="dly hide" id="dlyL">SLOW<select id="dly"><option value="0">Instant</option><option value="600">10 minutes</option><option value="3600">1 hour</option><option value="86400">1 day</option><option value="259200">3 days</option><option value="604800">7 days</option></select></label>
+<label class="dly hide" id="sdChainL" title="Where the ether lands. Ethereum reaches Base and Robinhood through each chain's own bridge — the same deposit those chains make for themselves, with nobody holding the money in between. It arrives in a few minutes. A time-locked send crosses through SlowArrival, which keeps the reverse yours on the far side; without it the bridge would be the sender there and nobody could take the transfer back.">Arrives on<span class="tipr"><small id="brNote"></small><select id="sdChain"><option value="0">This chain</option><option value="8453">Base</option><option value="4663">Robinhood</option></select></span></label>
 <label class="dly hide" id="tipL" title="A time-locked transfer does not move on its own: once the lock expires somebody has to send the claim transaction. Tick this and the page posts a small ETH tip alongside the deposit, which pays a keeper to claim it for the recipient the moment it matures. The tip is refundable — if you reverse the transfer, the ether comes back to you.">Auto-claim<span class="tipr"><small id="tipNote"></small><input id="tipCk" type="checkbox" aria-describedby="tipNote"></span></label>
 <div class="dly hide" id="slowMoreL" title="SLOW's own page, served from its own bytes on this chain — guardians, per-token balances, and every transfer in and out, which this panel does not show. It opens with what you have typed here already filled in.">Everything else<a id="slowMore" target="_blank" rel="noopener">SLOW on chain ↗</a></div>
 <label class="dly hide" id="fillL">Fill<select id="fill"><option value="1">Any amount</option><option value="0">All or nothing</option></select></label>
@@ -2179,7 +2180,11 @@ const a=`${trimAmt(sendReady.amount,sendReady.token.dec)} ${sendReady.token.sym}
 if(dv&&sendTipWei>0n&&sendReady.token.addr===ZERO
 &&sendReady.amount+sendTipWei>fromBalance){
 swap.textContent="Insufficient ETH for amount + keeper tip";swap.disabled=true;return}
-swap.textContent=(dv?`Lock ${a} for ${rel(dv)}`:`Send ${a}`)+` \u2192 ${sendReady.label}`;
+const bd=brDest();
+if(bd&&sendReady.amount+sendBrWei>fromBalance){
+swap.textContent="Insufficient ETH for amount + destination gas";swap.disabled=true;return}
+swap.textContent=(dv?`Lock ${a} for ${rel(dv)}`:`Send ${a}`)+` \u2192 ${sendReady.label}`
++(bd?` on ${CHAINS[bd].name}`:"");
 swap.disabled=false;return;
 }
 if(quoting){swap.textContent="Quoting…";swap.disabled=true;return}
@@ -4764,10 +4769,49 @@ const GRACE=2592000n;
 const SLOW_GATE="0x76D1956b3BE7c0D09A16dE00DcE9B6f54ef28D34";
 const SEL_DEPOSITTIP="75f92e42",SEL_TIPS="a5c68c59",SEL_REFUNDTIP="d27e1e72";
 const TIP_GAS=180000n;
+const ARRIVAL="0x9F8D89D298caBDC0D64cbA3888D0DA85Dc95097f";
+const SEL_ARRIVE="24eb6264",SEL_AREV="99c5ff88",SEL_ACLAW="e3035405",SEL_AORIGIN="794b2a07",
+SEL_ARESC="839006f2",SEL_ACLAIMR="b422b718",SEL_OPDEP="e9e05c42";
+const BRIDGES={8453:{entry:"0x49048044D57e1C92A77f79988d21Fa8fAF74E97e",op:1},
+4663:{entry:"0x1A07cc4BD17E0118BdB54D70990D2158AbAD7a2D",op:0}};
+let sendBrWei=0n,brSeq=0;
+const brDest=()=>{const d=tab==="send"&&CHAIN_ID===1?+(sdChain.value||0):0;return BRIDGES[d]?d:0};
+const brGas=(lock,isC)=>lock?(isC?2500000n:800000n):(isC?400000n:100000n);
+const brInner=(to,delay)=>delay>0n
+?"0x"+SEL_ARRIVE+encAddr(to)+encUint(delay)+encAddr(account)+encUint(0):"0x";
+const brIsC=async(dest,to)=>{
+try{return strip0x(await httpRead(CHAINS[dest].rpcs[0],"eth_getCode",[to,L])||"")!==""}catch{return true}};
+const brPlan=async(dest,to,wei,delay)=>{
+const b=BRIDGES[dest];if(!b)throw Error("There is no bridge to that chain.");
+const inner=brInner(to,delay),tgt=delay>0n?ARRIVAL:to,gas=brGas(delay>0n,await brIsC(dest,to));
+if(b.op)return{extra:0n,req:{from:account,to:b.entry,value:toHex(wei),
+data:"0x"+SEL_OPDEP+encAddr(tgt)+encUint(wei)+encUint(gas)+encBool(false)+pad32("a0")+encBytes(inner)}};
+const l1=BigInt(await cfgRead("eth_gasPrice",[])||"0x0");
+const sub=BigInt(await cfgRead(C,[{to:b.entry,
+data:"0x"+SEL_CPSUBFEE+encUint(strip0x(inner).length/2)+encUint(l1*2n)},L])||"0x0")*3n/2n;
+let mf=0n;try{mf=BigInt(await httpRead(CHAINS[dest].rpcs[0],"eth_gasPrice",[])||"0x0")*2n}catch{}
+const fl=CHAINS[dest].gasFloor||0n;if(mf<fl)mf=fl;
+if(!sub||!mf)throw Error("The destination's fees could not be quoted.");
+const extra=sub+gas*mf;
+return{extra,req:{from:account,to:b.entry,value:toHex(wei+extra),
+data:"0x"+SEL_CPRETRY+encAddr(tgt)+encUint(wei)+encUint(sub)+encAddr(account)+encAddr(account)
++encUint(gas)+encUint(mf)+pad32("100")+encBytes(inner)}}};
+async function syncBr(){
+const my=++brSeq,d=brDest();
+sdChainL.classList.toggle("hide",tab!=="send"||CHAIN_ID!==1);
+if(!d||!account||!sendReady||sendReady.token.addr!==ZERO){sendBrWei=0n;brNote.textContent="";return}
+brNote.textContent="quoting…";
+let x=0n,ok=true;
+try{x=(await brPlan(d,sendReady.to,sendReady.amount,BigInt(dly.value||0))).extra}catch{ok=false}
+if(my!==brSeq)return;
+sendBrWei=ok?x:0n;
+brNote.textContent=!ok?"":x>0n?"+ "+trimAmt(x,18)+" ETH gas":"";
+render();
+}
 let sendTipWei=0n,tipSeq=0;
 async function syncTip(){
 const my=++tipSeq;
-const on=tab==="send"&&+dly.value>0&&!!chainCfg().slowTip;
+const on=tab==="send"&&+dly.value>0&&!!chainCfg().slowTip&&!brDest();
 tipL.classList.toggle("hide",!on);
 if(!on||!tipCk.checked){sendTipWei=0n;tipNote.textContent="";return}
 tipNote.textContent="estimating…";
@@ -4798,7 +4842,7 @@ const a=amt.value.trim();
 if(a&&/^\d*\.?\d*$/.test(a)&&+a>0)q.set("amount",a);
 const d=+dly.value||0;
 if(d>0)q.set("delay",String(d));
-q.set("chain",String(CHAIN_ID));
+q.set("chain",String(brDest()||CHAIN_ID));
 slowMore.href=slowPageUrl()+"#/pay?"+q;
 }
 const SEL_OUT="d40d4bc6",SEL_IN="e3993ee7",SEL_PENDING="6577b86a";
@@ -4976,7 +5020,10 @@ stat.textContent=toErr||"Name not registered";render();return}
 rc.classList.remove("bad");
 rcvEl.textContent=to;
 stat.textContent=amtErr;
+if(brDest()&&f.addr!==ZERO){sendBrWei=0n;brNote.textContent="";
+stat.textContent="Only ETH can be sent to another chain.";render();return}
 if(amount>0n)sendReady={to,amount,token:f,label:/^0x/.test(v)?to.slice(0,6)+"\u2026"+to.slice(-4):v};
+syncBr();
 render();
 }
 const syncNftUI=()=>{
@@ -4996,6 +5043,8 @@ ln.classList.toggle("hide",tab!=="swap"||PLAUNCH===ZERO);
 wn.classList.toggle("hide",tab!=="swap"||CHAIN_ID!==1);
 pv.classList.toggle("hide",tab!=="swap"||CHAIN_ID!==1);
 tabBook.classList.toggle("hide",SB2===ZERO);
+sdChainL.classList.toggle("hide",tab!=="send"||CHAIN_ID!==1);
+if(CHAIN_ID!==1){sdChain.value="0";sendBrWei=0n;brNote.textContent=""}
 if(lqMode&&PROUTE===ZERO)lqSet(false);
 if(lnMode&&PLAUNCH===ZERO)lnSet(false);
 if(wnMode&&CHAIN_ID!==1)wnSet(false);
@@ -5036,6 +5085,8 @@ syncDisabled();
 syncNftUI();
 slipL.classList.toggle("hide",t!=="swap");
 dlyL.classList.toggle("hide",t==="swap"||(send&&!chainCfg().slow));
+sdChainL.classList.toggle("hide",!send||CHAIN_ID!==1);
+if(!send){sdChain.value="0";sendBrWei=0n;brNote.textContent=""}
 kindL.classList.toggle("hide",!bk);
 ethModeL.classList.toggle("hide",!bk);
 dlyL.firstChild.nodeValue=bk?"Expires":"Time lock";
@@ -5053,7 +5104,8 @@ if(wnMode)wnPaint();
 if(pvMode)pvPaint();
 update();
 };
-dly.onchange=()=>{if(tab==="book")bookD=dly.value;else sendD=dly.value;syncTip();syncSlowLink();render()};
+dly.onchange=()=>{if(tab==="book")bookD=dly.value;else sendD=dly.value;syncTip();syncSlowLink();syncBr();render()};
+sdChain.onchange=()=>{syncTip();syncSlowLink();updateSend()};
 for(const el of[amt,rc])el.addEventListener("input",syncSlowLink);
 fromSel.addEventListener("change",syncSlowLink);
 tipCk.onchange=()=>{syncTip();render()};
