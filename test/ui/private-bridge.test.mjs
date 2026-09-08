@@ -507,6 +507,18 @@ describe('self-help', () => {
     q.close();
   });
 
+  test('rejects markup in imported transaction records', async () => {
+    const p = await open();
+    await unlock(p);
+    p.queuePrompt(JSON.stringify([{ i: 123456, v: '1', p: 1, js: 'settled', tx: '"><img src=x onerror=alert(1)>' }]));
+    p.click(p.$('pvKey').querySelector('button[data-a="import"]'));
+    await p.waitFor(() => /Imported 1 note/.test(p.text('stat')), { label: 'the import result' });
+    assert.equal(p.$('pvList').querySelector('img'), null, 'imported markup is not rendered');
+    assert.equal(p.$('pvList').querySelector('[onerror]'), null, 'imported event handlers are not rendered');
+    assert.equal(p.$('pvList').querySelector('a'), null, 'invalid transaction hashes do not become links');
+    p.close();
+  });
+
   test('the key can be shown and imported', async () => {
     const p = await open();
     await unlock(p);

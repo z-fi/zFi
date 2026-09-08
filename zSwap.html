@@ -7030,6 +7030,11 @@ for(let i=0;i<64;i++){const k=cpNoteOf({i,v:String(v)});
 if(k.dep===id){if(!cpNotes.some(n=>!n.p&&n.i===i))cpNotes.push({i,v:String(v),at:0,rec:1});found++;break}}}
 cpNotes.sort((a,b)=>a.i-b.i);cpSaveNotes();return found};
 const cpFmt=v=>trimAmt(BigInt(v)*CP_SCALE,18);
+const cpExplorerLink=(base,value,label,kind)=>{
+if(typeof value!=="string")return label;
+const ok=kind==="tx"?/^0x[0-9a-fA-F]{64}$/.test(value):/^0x[0-9a-fA-F]{40}$/.test(value);
+return ok?`<a href="${base}/${value}" target="_blank" rel="noreferrer">${label}</a>`:label;
+};
 const cpPaint=()=>{if(!pvMode)return;
 const on=!!cpSeed;
 pvKey.innerHTML=!account?"Connect a wallet to begin.":!on?"Sign once to unlock the key that owns your deposits.":
@@ -7037,7 +7042,7 @@ pvKey.innerHTML=!account?"Connect a wallet to begin.":!on?"Sign once to unlock t
 pvGo.textContent=!account?"Connect Wallet":!on?"Unlock key":"Deposit";
 pvGo.disabled=!!cpBusy;
 if(!on){pvList.innerHTML="";return}
-const rows=cpNotes.map((n,j)=>{const{s,k}=cpStatus(n),x=n.ex,ch=x?CHAINS[x.ch].name:"",B=(a,l)=>`<button type="button" class="fclink" data-a="${a}" data-j="${j}">${l}</button>`;
+const rows=cpNotes.map((n,j)=>{const{s,k}=cpStatus(n),x=n.ex,chain=x&&CHAINS[x.ch],ch=chain?.name||"",B=(a,l)=>`<button type="button" class="fclink" data-a="${a}" data-j="${j}">${l}</button>`;
 const seen=!!k&&!!cpPool&&cpPool.wraps.some(w=>w[0]===k.dep),paid=n.inv&&seen,stale=!seen&&Date.now()/1000-(n.at||0)>600;
 const act=s==="ready"?B("exit","exit")
 :s==="pending"?(n.inv&&!paid?"awaiting payment":stale?"deposit not seen"+B("forget","forget"):n.job?(n.js==="failed"?"relay failed"+B("settle","retry"):n.self?(n.stx?"sent…":n.pv?B("wrapsend","settle"):"proving…"):"settling…"):B("settle","settle"))
@@ -7045,9 +7050,9 @@ const act=s==="ready"?B("exit","exit")
 :x.self?(x.ptx?"sent…":x.pv?B("send","send"):"proving…"):"relaying…")
 :s==="funded"?B("activate","activate")
 :s==="expired"?B("reclaim","reclaim")
-:s==="bridged"||s==="withdrawn"?`<a href="${CHAINS[x.ch].explorer}/address/${x.to}" target="_blank" rel="noreferrer">on ${ch}</a>`
+:s==="bridged"||s==="withdrawn"?(chain?cpExplorerLink(chain.explorer,x.to,"on "+ch,"address"):s)
 :s==="paying"?(n.job?(n.self?(n.stx?"sent…":n.pv?B("wrapsend","settle"):"proving…"):"settling…"):B("settle","settle")):s==="payfailed"?"relay failed"+B("settle","retry")
-:s==="paid"?`<a href="${CHAINS[1].explorer}/tx/${n.tx}" target="_blank" rel="noreferrer">paid</a>`:s;
+:s==="paid"?cpExplorerLink(CHAINS[1].explorer,n.tx,"paid","tx"):s;
 return`<div class="cpr"><span><b>${cpFmt(n.v)} ETH</b> ${n.p?"paid":n.inv?"request #"+n.i:"#"+n.i}${x&&s!=="bridged"&&s!=="withdrawn"?" → "+ch:""}</span><span>${act}${x&&x.rk?B("rescue","rescue key"):""}</span></div>`}).join("");
 pvList.innerHTML=rows||`<div class="cpr"><span>No deposits yet.</span></div>`};
 const pvPaint=()=>{const on=pvMode;
