@@ -1442,10 +1442,14 @@ if(!Number.isSafeInteger(off)||off+64>h.length)return"";
 const len=Number(BigInt("0x"+h.slice(off,off+64)))*2;
 if(!Number.isSafeInteger(len)||off+64+len>h.length)return"";
 return "0x"+h.slice(off+64,off+64+len)};
+const nsBatch=async cs=>{
+if(cs.length<2)return[await cfgRead(C,[cs[0],L]).catch(()=>null)];
+try{const r=decAgg3(await cfgRead(C,[{to:MC3,data:encAgg3(cs)},L]));
+if(r.length===cs.length)return r}catch{}
+return Promise.all(cs.map(c=>cfgRead(C,[c,L]).catch(()=>null)))};
 const ensFind=async n=>{const parts=n.split("."),
 nodes=parts.map((_,i)=>namehash(parts.slice(i).join(".")));
-const rs=await Promise.all(nodes.map(nd=>
-cfgRead(C,[{to:ENSREG,data:"0x"+SEL_RSLV+pad32(nd)},L]).catch(()=>null)));
+const rs=await nsBatch(nodes.map(nd=>({to:ENSREG,data:"0x"+SEL_RSLV+pad32(nd)})));
 for(let i=0;i<nodes.length;i++){const r=retAddr(rs[i]);
 if(r)return{r,nd:nodes[i],exact:i===0}}
 return null};
@@ -1467,7 +1471,25 @@ return"";
 const ensRevName=async(nd,r)=>{
 if(!r)return"";
 try{return decodeString(await cfgRead(C,[{to:r,data:"0x"+SEL_ENAME+pad32(nd)},L])).trim()}catch{return""}};
-const nameFwd=n=>/\.gwei$/i.test(n)?nsFwd(GNS,n):/\.wei$/i.test(n)?nsFwd(WNS,n):/\.eth$/i.test(n)?ensFwd(n):Promise.resolve("");
+const BNREG="0xB94704422c2a1E396835A571837Aa5AE53285a95";
+const BASE_ID=8453,BN_COIN="80002105";
+let bsi=0;
+const baseRead=async(method,params)=>{
+if(CHAIN_ID===BASE_ID)return rpc(method,params);
+const us=(CHAINS[BASE_ID]&&CHAINS[BASE_ID].rpcs)||[];
+for(let k=0;k<us.length*2;k++){
+try{return await httpRead(us[bsi%us.length],method,params)}catch(e){bsi++}
+}
+throw Error("no base read node");
+};
+const bnRead=c=>baseRead(C,[c,L]).catch(()=>null);
+const bnRes=async nd=>retAddr(await bnRead({to:BNREG,data:"0x"+SEL_RSLV+pad32(nd)}));
+const bnFwd=async n=>{const nd=namehash(n),r=await bnRes(nd);
+return r?retAddr(await bnRead({to:r,data:"0x"+SEL_EADDR+pad32(nd)})):""};
+const bnRev=async a=>{const nd=namehash(strip0x(a).toLowerCase()+"."+BN_COIN+".reverse"),r=await bnRes(nd);
+if(!r)return"";
+try{return decodeString(await bnRead({to:r,data:"0x"+SEL_ENAME+pad32(nd)})||"0x").trim()}catch{return""}};
+const nameFwd=n=>/\.gwei$/i.test(n)?nsFwd(GNS,n):/\.wei$/i.test(n)?nsFwd(WNS,n):/\.base\.eth$/i.test(n)?bnFwd(n):/\.eth$/i.test(n)?ensFwd(n):Promise.resolve("");
 const FWD_TTL=30000;
 const fwdCache=new Map();
 const nameFwdCached=n=>{const hit=fwdCache.get(n);
@@ -1476,20 +1498,28 @@ const p=nameFwd(n);
 fwdCache.set(n,{p,exp:Date.now()+FWD_TTL});
 p.catch(()=>fwdCache.delete(n));
 return p};
-const nameRev=async a=>{
-const nd=namehash(strip0x(a).toLowerCase()+".addr.reverse");
-const [w,g,er]=await Promise.all([
-{to:WNS,data:"0x"+SEL_REV+encAddr(a)},
-{to:GNS,data:"0x"+SEL_REV+encAddr(a)},
-{to:ENSREG,data:"0x"+SEL_RSLV+pad32(nd)}]
-.map(c=>cfgRead(C,[c,L]).catch(()=>null)));
-const str=h=>{try{return h?decodeString(h).trim():""}catch{return""}};
+const nameRevRaw=async a=>{
 const agrees=async n=>{
 if(!n||!nameOk(n.toLowerCase()))return"";
 let f="";try{f=await nameFwdCached(n.toLowerCase())}catch{}
 return f&&f.toLowerCase()===a.toLowerCase()?n:""};
+if(CHAIN_ID===BASE_ID){const b=await agrees(await bnRev(a));if(b)return b}
+const nd=namehash(strip0x(a).toLowerCase()+".addr.reverse");
+const [w,g,er]=await nsBatch([
+{to:WNS,data:"0x"+SEL_REV+encAddr(a)},
+{to:GNS,data:"0x"+SEL_REV+encAddr(a)},
+{to:ENSREG,data:"0x"+SEL_RSLV+pad32(nd)}]);
+const str=h=>{try{return h?decodeString(h).trim():""}catch{return""}};
 return await agrees(str(w))||await agrees(str(g))
 ||await agrees(await ensRevName(nd,retAddr(er)))||""};
+const REV_TTL=60000;
+const revCache=new Map();
+const nameRev=a=>{const k=CHAIN_ID+":"+a.toLowerCase(),hit=revCache.get(k);
+if(hit&&hit.exp>Date.now())return hit.p;
+const p=nameRevRaw(a);
+revCache.set(k,{p,exp:Date.now()+REV_TTL});
+p.catch(()=>revCache.delete(k));
+return p};
 const decodeString=hex=>{
 const h=strip0x(hex);
 if(h.length<=64)return new TextDecoder().decode(hexToBytes(h)).replace(/\0+$/,"");

@@ -85,6 +85,10 @@ export const A = {
   POOL: '0x5555555555555555555555555555555555555555',
   ENSREG: '0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e',
   ENSRESOLVER: '0x00000000000000000000000000000000000e5e50',
+  // Basenames' registry, which lives on Base rather than on Ethereum. It is
+  // read exactly like the ENS registry, so a Base MockChain answers it with
+  // the same fixtures - `ensResolver`, `ensNames`, `ensRevNames`.
+  BNREG: '0xB94704422c2a1E396835A571837Aa5AE53285a95',
   WNS: '0x0000000000696760E15f265e828DB644A0c242EB',
   GNS: '0x9D51D507BC7264d4fE8Ad1cf7Fe191933A0a81d6',
   ACCOUNT: '0x1111111111111111111111111111111111111111',
@@ -1423,7 +1427,7 @@ export class MockChain {
           : encodeTapeBar(b))]);
     }
     if (to === A.WNS.toLowerCase() || to === A.GNS.toLowerCase()) return this.ns(sel, data);
-    if (to === A.ENSREG.toLowerCase()) {
+    if (to === A.ENSREG.toLowerCase() || to === A.BNREG.toLowerCase()) {
       if (sel === SEL.ENS_RSLV) {
         // A resolver pinned to one node beats the flat default, so a test can
         // give an ANCESTOR one while the exact node has none — the shape the
@@ -1623,8 +1627,9 @@ export class MockChain {
     if (sel === SEL.ENS_EADDR) return '0x' + addrWord(byNode(wordHex(body, 0)) || A.ZERO);
     if (sel === SEL.ENS_ENAME) {
       for (const [addr, name] of this.ensRevNames)
-        if (ensNamehash(strip(addr).toLowerCase() + '.addr.reverse') === wordHex(body, 0))
-          return encodeString(name);
+        for (const suffix of ['.addr.reverse', '.80002105.reverse'])
+          if (ensNamehash(strip(addr).toLowerCase() + suffix) === wordHex(body, 0))
+            return encodeString(name);
       return encodeString('');
     }
     if (sel === SEL.ENS_RESOLVE) {

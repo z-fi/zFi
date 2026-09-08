@@ -332,9 +332,10 @@ describe('quoting', () => {
 
   test('all quotes in one update resolve against a single pinned block', async () => {
     const p = await setup();
+    const before = p.chain.calls.length;
     await p.typeAmount('amt', '1');
     const quoteBlocks = new Set(
-      p.chain.calls.filter(c => c.selector === SEL.AGG3).map(c => c.block));
+      p.chain.calls.slice(before).filter(c => c.selector === SEL.AGG3).map(c => c.block));
     assert.equal(quoteBlocks.size, 1, 'routes must be compared at one chain state');
     assert.equal([...quoteBlocks][0], p.chain.blockNumber);
     p.close();
