@@ -97,6 +97,26 @@ check(`fits ${CHUNKS} x EIP-170`, () => {
     + `${(EIP170 * CHUNKS - bytes).toLocaleString('en-US')} B headroom`;
 });
 
+// The registry calldata embeds the page verbatim, so it goes stale on every
+// edit — silently, because nothing reads it until a deploy. It was only caught
+// by a fork test that needs a mainnet RPC, which is a slow and network-dependent
+// place to learn that a build step was skipped. Checked here instead, where it
+// costs a buffer compare.
+check('the registry calldata carries THIS page', () => {
+  const file = path.join(ROOT, 'script', 'zSwapRegistry-setHtmlAsTarget.calldata.txt');
+  if (!fs.existsSync(file)) throw Error(`${file} is missing; run: node script/build-zSwapRegistry-call.mjs`);
+  const cd = Buffer.from(fs.readFileSync(file, 'utf8').trim().replace(/^0x/, ''), 'hex');
+  // setHtmlAsTarget(address,string): selector, address, offset, length, data.
+  const len = Number(BigInt('0x' + cd.subarray(4 + 64, 4 + 96).toString('hex')));
+  const embedded = cd.subarray(4 + 96, 4 + 96 + len);
+  const page = fs.readFileSync(HTML_PATH);
+  if (len !== page.length || !embedded.equals(page)) {
+    throw Error(`registry calldata holds ${len.toLocaleString('en-US')} B, the page is `
+      + `${page.length.toLocaleString('en-US')} B — run: node script/build-zSwapRegistry-call.mjs`);
+  }
+  return `${len.toLocaleString('en-US')} B, byte-identical to the page`;
+});
+
 check('actionable quotes expire after 45 seconds', () => {
   if (!/\bconst QUOTE_TTL=45000;/.test(html)) throw Error('QUOTE_TTL is not 45 seconds');
   // Three: the routed quote, and the two 1:1 wrapped-ether shortcuts. The
