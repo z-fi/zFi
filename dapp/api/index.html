@@ -110,7 +110,7 @@ p code, li code {
 
 <h1>On-Chain API</h1>
 
-<p class="lead">A free, public DEX aggregator. The routing core is fully on-chain &mdash; call zQuoter from any Ethereum RPC and get ready-to-send calldata, no keys and no intermediary. The hosted REST API wraps that in one HTTP call and additionally shops the trade against every major off-chain aggregator, returning whichever wins.</p>
+<p class="lead">A free, public DEX aggregator. The routing core is fully on-chain &mdash; call zQuoter from any Ethereum, Base or Robinhood RPC and get ready-to-send calldata, no keys and no intermediary. The hosted REST API wraps that in one HTTP call and, on Ethereum, additionally shops the trade against every major off-chain aggregator, returning whichever wins.</p>
 
 <div class="section">
   <h2>REST API</h2>
@@ -128,7 +128,18 @@ p code, li code {
     <li><code>to</code> &mdash; recipient / taker address. Pass it for executable calldata; without it the quote is still priced correctly but the on-chain route targets <code>address(0)</code> and aggregator routes are quoted for a placeholder taker, so the returned <code>tx</code> is <strong>not</strong> safe to send <em>(optional)</em></li>
     <li><code>slippage</code> &mdash; basis points, 1&ndash;5000, default 50 (0.5%). Split / multi-hop legs automatically use 3&times; this, clamped to 150&ndash;500 bps, since per-leg slippage compounds <em>(optional)</em></li>
     <li><code>exactOut</code> &mdash; <code>true</code> for exact output mode. Off-chain aggregators are skipped in this mode, so the quote is zQuoter-only <em>(optional)</em></li>
+    <li><code>chainId</code> &mdash; <code>1</code> (Ethereum, default), <code>8453</code> (Base) or <code>4663</code> (Robinhood). An unsupported id is a <code>400</code> rather than a silent fallback to Ethereum. The response echoes the <code>chainId</code> it priced <em>(optional)</em></li>
   </ul>
+
+  <p style="margin-top:10px"><strong>Chains</strong></p>
+  <p>zQuoter, zRouter and Multicall3 sit at the <em>same addresses</em> on all three chains, so the on-chain half of the API is identical everywhere and <code>tx.to</code> is the same zRouter. Two things do differ:</p>
+  <ul>
+    <li><strong>Off-chain aggregators run on Ethereum only.</strong> Every lane is wired to mainnet, so on Base and Robinhood the quote is zQuoter-only. This is a deliberate refusal rather than a gap: a mainnet-shaped answer to a Base quote is executable calldata for the wrong chain</li>
+    <li><strong>Venue names are per chain.</strong> The <code>source</code> field is an enum position, and the enums differ &mdash; index 1 is SushiSwap on Ethereum but Aerodrome on Base, index 5 Curve on Ethereum but Aerodrome CL on Base. Base's enum ends at index 6 (WETH Wrap). Robinhood keeps Ethereum's enum shape, though only Uniswap V2/V3/V4 have deployments there, so the other slots never win</li>
+  </ul>
+
+  <p style="margin-top:10px"><strong>Example &mdash; the same swap on Base:</strong></p>
+<pre>curl "https://api.zfi.wei.is/quote?chainId=8453&amp;tokenIn=0x0000000000000000000000000000000000000000&amp;tokenOut=0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913&amp;amount=1000000000000000000"</pre>
 
   <p style="margin-top:10px"><strong>Example &mdash; swap 1 ETH for USDC:</strong></p>
 <pre>curl "https://api.zfi.wei.is/quote?tokenIn=0x0000000000000000000000000000000000000000&tokenOut=0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48&amount=1000000000000000000"</pre>
@@ -177,9 +188,9 @@ await signer.sendTransaction({
 
   <p style="margin-top:10px"><strong>Other endpoints:</strong></p>
   <ul>
-    <li><code>GET /health</code> &mdash; returns <code>{"status":"ok"}</code></li>
+    <li><code>GET /health</code> &mdash; returns <code>{status, chains}</code>, where <code>chains</code> lists each supported <code>chainId</code>, its name, and whether off-chain aggregators run for it</li>
     <li><code>GET /</code> &mdash; 302 redirect to this page</li>
-    <li><code>POST /simulate</code> &mdash; body <code>{from, to, data, value}</code>; runs a mainnet Tenderly simulation and returns <code>{id, url, status}</code> with a shareable link. Returns <code>503</code> if the deployment has no Tenderly credentials configured</li>
+    <li><code>POST /simulate</code> &mdash; body <code>{from, to, data, value, chainId}</code>; runs a Tenderly simulation and returns <code>{id, url, status}</code> with a shareable link. <code>chainId</code> defaults to <code>1</code> and accepts <code>8453</code>; Robinhood is refused with a <code>400</code> because Tenderly has no such network. Returns <code>503</code> if the deployment has no Tenderly credentials configured</li>
   </ul>
 
   <p style="margin-top:8px;font-size:12px;color:var(--fg-muted)">Open to all origins (CORS <code>*</code>), no API keys or signup required. Please be reasonable with request volume &mdash; each <code>/quote</code> fans out to a dozen upstreams.</p>
@@ -347,7 +358,7 @@ return await quoter.build3HopMulticall(
 
   <h3>Individual AMM Quotes<span class="pill">view</span></h3>
   <p>Low-level quoting for specific venues. Available on the base quoter at <code>0x658bF1A6608210FDE7310760f391AD4eC8006A5F</code>.</p>
-  <p style="font-size:12px;color:var(--fg-muted)">Do not call <code>quoteV4</code> on the base quoter. Its swap-fee expression breaks once a V4 pool has a protocol fee set (live since Uniswap enabled them at block 25623201), producing a bogus fee and either a revert or a garbage price. Call it on the corrected V4 quoter at <code>0x00005d8a3675b7b00BA172Aa85485Fc5D23121B6</code> instead &mdash; same signature. The main zQuoter above already routes V4 through it, so <code>getQuotes</code> and every <code>build*</code> function are unaffected.</p>
+  <p style="font-size:12px;color:var(--fg-muted)">Do not call <code>quoteV4</code> on the base quoter. Its swap-fee expression breaks once a V4 pool has a protocol fee set (live since Uniswap enabled them at block 25623201), producing a bogus fee and either a revert or a garbage price. Call it on the corrected V4 quoter at <code>0x56033EBF90EbdEf9D74b38e5F7201c0624EFef01</code> instead &mdash; same signature. (It supersedes <code>0x00005d8a3675b7b00BA172Aa85485Fc5D23121B6</code>, which this page named until the zQuoter above was repointed; the live zQuoter's bytecode references the new one.) The main zQuoter above already routes V4 through it, so <code>getQuotes</code> and every <code>build*</code> function are unaffected.</p>
   <div class="sig">quoteV2(bool exactOut, address tokenIn, address tokenOut, uint256 swapAmount, bool sushi) &rarr; (uint256 amountIn, uint256 amountOut)</div>
   <div class="sig">quoteV3(bool exactOut, address tokenIn, address tokenOut, uint24 fee, uint256 swapAmount) &rarr; (uint256 amountIn, uint256 amountOut)</div>
   <div class="sig">quoteV4(bool exactOut, address tokenIn, address tokenOut, uint24 fee, int24 tickSpacing, address hooks, uint256 swapAmount) &rarr; (uint256 amountIn, uint256 amountOut)</div>

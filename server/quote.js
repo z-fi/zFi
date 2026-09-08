@@ -1,5 +1,12 @@
 // Cloudflare Worker: zFi On-Chain DEX Aggregator API
-// Deploy: cd worker/api && wrangler deploy
+// Deploy: wrangler deploy server/quote.js
+//
+// zQuoter, zRouter and Multicall3 all sit at the SAME address on Ethereum,
+// Base and Robinhood, so serving the L2s costs a node list and a venue-name
+// table rather than a second code path. What does NOT carry across is the
+// off-chain aggregator lanes: every one of them below is wired to Ethereum,
+// and a mainnet-shaped answer to a Base quote is executable calldata for the
+// wrong chain. They are gated to chain 1 for that reason - see CHAINS.
 
 // Moved off 0x0000002d9a651b729e3aFBE57Fc84FFDa4a98a13, which offered Curve for
 // EXACT-OUT routes it cannot execute: Curve's `exchange` is exact-in only, the
@@ -53,15 +60,44 @@ const RPCS = [
   'https://eth.drpc.org',
 ];
 
+// The venue index a Quote carries is an enum position, and the enums differ per
+// chain: Base's quoter has AERO and AERO_CL where Ethereum's has SUSHI and
+// CURVE, and stops at WETH_WRAP = 6. Labelling a Base route off Ethereum's
+// table renames Aerodrome to SushiSwap, so each chain names its own.
+const AMM_NAMES_ETH = {
+  0: 'Uniswap V2', 1: 'SushiSwap', 2: 'zAMM',
+  3: 'Uniswap V3', 4: 'Uniswap V4', 5: 'Curve',
+  6: 'Lido', 7: 'WETH Wrap',
+};
+const AMM_NAMES_BASE = {
+  0: 'Uniswap V2', 1: 'Aerodrome', 2: 'zAMM',
+  3: 'Uniswap V3', 4: 'Uniswap V4', 5: 'Aerodrome CL',
+  6: 'WETH Wrap',
+};
+
+// Robinhood's quoter keeps Ethereum's enum shape, so the labels match even
+// though only Uniswap V2/V3/V4 have deployments there - the unused slots simply
+// never win a route.
+const CHAINS = {
+  1: { name: 'Ethereum', rpcs: RPCS, ammNames: AMM_NAMES_ETH, aggregators: true },
+  8453: {
+    name: 'Base',
+    rpcs: ['https://mainnet.base.org', 'https://base-rpc.publicnode.com'],
+    ammNames: AMM_NAMES_BASE,
+    aggregators: false,
+  },
+  4663: {
+    name: 'Robinhood',
+    rpcs: ['https://rpc.mainnet.chain.robinhood.com'],
+    ammNames: AMM_NAMES_ETH,
+    aggregators: false,
+  },
+};
+const DEFAULT_CHAIN = 1;
+
 // Heavy builders are >100M-gas eth_calls; give them a much longer budget than
 // the default RPC timeout. Tune with HEAVY_TIMEOUT_MS.
 const HEAVY_TIMEOUT_MS = Number(process.env.HEAVY_TIMEOUT_MS) || 20000;
-
-const AMM_NAMES = {
-  0: 'Uniswap V2', 1: 'SushiSwap', 2: 'zAMM',
-  3: 'Uniswap V3', 4: 'Uniswap V4', 5: 'Curve',
-  6: 'Lido', 7: 'WETH Wrap', 8: 'V4 Hooked',
-};
 
 // --- Minimal ABI encoding/decoding (no dependencies) ---
 
@@ -287,18 +323,23 @@ function decQuoteCurve(hex) {
 
 // --- RPC call with fallback ---
 
-function rpcList(env) {
-  const extra = (env?.QUOTE_RPCS || '').split(',').map(s => s.trim()).filter(Boolean);
-  return extra.length ? extra.concat(RPCS) : RPCS;
+// QUOTE_RPCS prepends to Ethereum; QUOTE_RPCS_<id> to that chain. An operator
+// with one high-cap key should not have it silently used for another chain.
+function rpcList(env, chainId) {
+  const id = chainId || DEFAULT_CHAIN;
+  const base = (CHAINS[id] || CHAINS[DEFAULT_CHAIN]).rpcs;
+  const key = id === DEFAULT_CHAIN ? 'QUOTE_RPCS' : `QUOTE_RPCS_${id}`;
+  const extra = (env?.[key] || '').split(',').map(s => s.trim()).filter(Boolean);
+  return extra.length ? extra.concat(base) : base;
 }
 
-async function rpcCall(to, data, env, timeoutMs) {
+async function rpcCall(to, data, env, timeoutMs, chainId) {
   const body = JSON.stringify({
     jsonrpc: '2.0', id: 1, method: 'eth_call',
     params: [{ to, data }, 'latest'],
   });
   let lastErr;
-  for (const url of rpcList(env)) {
+  for (const url of rpcList(env, chainId)) {
     try {
       const res = await fetch(url, {
         method: 'POST',
@@ -720,6 +761,9 @@ async function fetchOpenOceanQuote(tokenIn, tokenOut, amount, taker) {
 
 async function getQuote(params, env) {
   const { tokenIn, tokenOut, amount, to, slippage, exactOut } = params;
+  const chainId = params.chainId || DEFAULT_CHAIN;
+  const chain = CHAINS[chainId] || CHAINS[DEFAULT_CHAIN];
+  const AMM_NAMES = chain.ammNames;
   const receiver = to || ZERO;
   const refundTo = to || ZERO;
   const slippageBps = slippage || 50;
@@ -744,7 +788,7 @@ async function getQuote(params, env) {
   // quote silently degrades to aggregators only. Split, they run concurrently
   // (same wall-clock) and any that fit still contribute.
   const heavyOne = (call) =>
-    rpcCall(call.target, call.data, env, HEAVY_TIMEOUT_MS)
+    rpcCall(call.target, call.data, env, HEAVY_TIMEOUT_MS, chainId)
       // Strip 0x: decAggregate3 hands inner returnData to the decoders WITHOUT a
       // prefix, so a direct eth_call result must be normalised the same way or
       // every decode throws (into a silent catch) and the route vanishes.
@@ -752,9 +796,12 @@ async function getQuote(params, env) {
       .catch(() => ({ success: false, returnData: '' }));
 
   // Batch zQuoter multicalls + all external APIs in parallel
-  const skip = exactOut ? Promise.resolve(null) : undefined;
+  // Skipped for exact-out (no lane supports it) and off Ethereum (every lane
+  // below is hardcoded to mainnet, so an answer would be calldata for the
+  // wrong chain rather than a worse price).
+  const skip = (exactOut || !chain.aggregators) ? Promise.resolve(null) : undefined;
   const [lightRaw, ...rest] = await Promise.all([
-    rpcCall(MC3, encAggregate3(lightCalls), env).catch(() => null),
+    rpcCall(MC3, encAggregate3(lightCalls), env, undefined, chainId).catch(() => null),
     ...heavyCalls.map(heavyOne),
     skip || fetchBebopQuote(tokenIn, tokenOut, amount, to),
     skip || fetchEnsoQuote(tokenIn, tokenOut, amount, to, env),
@@ -941,6 +988,7 @@ async function getQuote(params, env) {
   }
 
   return {
+    chainId,
     bestRoute: {
       expectedOutput: bestOutput.toString(),
       source: bestSource,
@@ -992,7 +1040,12 @@ export default {
 
     // GET /health
     if (url.pathname === '/health') {
-      return jsonResponse({ status: 'ok' });
+      return jsonResponse({
+        status: 'ok',
+        chains: Object.entries(CHAINS).map(([id, c]) => ({
+          chainId: Number(id), name: c.name, aggregators: c.aggregators,
+        })),
+      });
     }
 
     // GET /quote
@@ -1027,8 +1080,19 @@ export default {
 
       const exactOut = url.searchParams.get('exactOut') === 'true';
 
+      const chainStr = url.searchParams.get('chainId');
+      let chainId = DEFAULT_CHAIN;
+      if (chainStr) {
+        chainId = parseInt(chainStr, 10);
+        if (!CHAINS[chainId]) {
+          return jsonResponse({
+            error: `Unsupported chainId. Supported: ${Object.keys(CHAINS).join(', ')}`,
+          }, 400);
+        }
+      }
+
       try {
-        const result = await getQuote({ tokenIn, tokenOut, amount: amountBn, to, slippage, exactOut }, env);
+        const result = await getQuote({ tokenIn, tokenOut, amount: amountBn, to, slippage, exactOut, chainId }, env);
         return jsonResponse(result);
       } catch (e) {
         return jsonResponse({ error: e.message }, 502);
@@ -1043,6 +1107,12 @@ export default {
       try { body = await request.json(); } catch { return jsonResponse({ error: 'Invalid JSON body' }, 400); }
       const { from, to, data, value } = body;
       if (!from || !to || !data) return jsonResponse({ error: 'Missing from, to, or data' }, 400);
+      // Tenderly has no Robinhood network, so a simulation there would either
+      // error upstream or silently run against the wrong chain.
+      const simChain = body.chainId ? parseInt(body.chainId, 10) : DEFAULT_CHAIN;
+      if (simChain !== 1 && simChain !== 8453) {
+        return jsonResponse({ error: 'simulate supports chainId 1 and 8453' }, 400);
+      }
       const acct = env.TENDERLY_ACCOUNT || 'z0r0zzz';
       const proj = env.TENDERLY_PROJECT || 'project';
       try {
@@ -1052,7 +1122,7 @@ export default {
             method: 'POST',
             headers: { 'X-Access-Key': env.TENDERLY_ACCESS_TOKEN, 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              network_id: '1',
+              network_id: String(simChain),
               from,
               to,
               input: data,
