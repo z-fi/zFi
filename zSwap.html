@@ -405,7 +405,8 @@ background:var(--e);margin:.5em auto .1em}
 <div id="wnRollPanel" class="hide"><div class="lngap">roll.wei</div><small id="wnRollEl" role="status" aria-live="polite"></small><button id="wnEnter" class="wnbtn hide">Enter the roll</button></div>
 <label class="dly hide" id="kindL">Order type<select id="kind"><option value="fixed">Fixed limit</option><option value="dutch">Dutch decay</option><option value="floor">Climbing bid</option></select></label>
 <label class="dly hide" id="dlyL">SLOW<select id="dly"><option value="0">Instant</option><option value="600">10 minutes</option><option value="3600">1 hour</option><option value="86400">1 day</option><option value="259200">3 days</option><option value="604800">7 days</option></select></label>
-<label class="dly hide" id="sdChainL" title="Where the ether lands. Ethereum reaches Base and Robinhood through each chain's own bridge — the same deposit those chains make for themselves, with nobody holding the money in between. It arrives in a few minutes. A time-locked send crosses through SlowArrival, which keeps the reverse yours on the far side; without it the bridge would be the sender there and nobody could take the transfer back.">Arrives on<span class="tipr"><small id="brNote"></small><select id="sdChain"><option value="0">This chain</option><option value="8453">Base</option><option value="4663">Robinhood</option></select></span></label>
+<label class="dly hide" id="sdChainL" title="Where the ether lands. From Ethereum this is that chain's own bridge — the same deposit those chains make for themselves, with nobody holding the money in between. It arrives in a few minutes. A time-locked send crosses through SlowArrival, which keeps the reverse yours on the far side; without it the bridge would be the sender there and nobody could take the transfer back.">Arrives on<span class="tipr"><small id="brNote"></small><select id="sdChain"><option value="0">This chain</option><option value="8453">Base</option><option value="4663">Robinhood</option></select></span></label>
+<div class="dly hide" id="rlOptL" title="Leaving an L2 has no bridge that is not about a week, so this escrows your ether here and pays a relayer to deliver it there. Nobody is obliged to take it. Until someone is running a relayer, opening one is a way to lock up your own money for eight days, and that is the whole of the risk — it cannot be spent, and it comes back.">Another chain<button type="button" id="rlOpt" class="lnbtn">Enable</button></div>
 <label class="dly hide" id="tipL" title="A time-locked transfer does not move on its own: once the lock expires somebody has to send the claim transaction. Tick this and the page posts a small ETH tip alongside the deposit, which pays a keeper to claim it for the recipient the moment it matures. The tip is refundable — if you reverse the transfer, the ether comes back to you.">Auto-claim<span class="tipr"><small id="tipNote"></small><input id="tipCk" type="checkbox" aria-describedby="tipNote"></span></label>
 <div class="dly hide" id="slowMoreL" title="SLOW's own page, served from its own bytes on this chain — guardians, per-token balances, and every transfer in and out, which this panel does not show. It opens with what you have typed here already filled in.">Everything else<a id="slowMore" target="_blank" rel="noopener">SLOW on chain ↗</a></div>
 <label class="dly hide" id="fillL">Fill<select id="fill"><option value="1">Any amount</option><option value="0">All or nothing</option></select></label>
@@ -434,6 +435,10 @@ background:var(--e);margin:.5em auto .1em}
 <p>ETH and WETH are interchangeable here. The page wraps or unwraps whichever way the pool needs, inside the same transaction.</p></details>
 <details><summary>Sending</summary>
 <p>A plain transfer, or a <b>SLOW</b> one: time-locked, and reversible by you at any point until it matures. Useful for large amounts and for addresses you have not paid before. SLOW sits at one address on all three chains &mdash; Ethereum, Base and Robinhood &mdash; so the lock is offered wherever you are, and a position belongs to the chain it was made on.</p>
+<p>From Ethereum a send can <b>land on Base or Robinhood</b> instead. It goes through that chain's own bridge &mdash; the same deposit the chain makes for itself &mdash; so no third party holds the ether in between; it arrives in a few minutes, and only ETH crosses. A time-locked one is routed through <b>SlowArrival</b>, which becomes the depositor on the far side and hands the reverse back to you: without it the bridge itself would be the sender there, and nobody could take the transfer back. Connect to the destination chain and a bridged lock of yours appears in this list with its Reverse button, alongside anything arriving for you. If a deposit could not be made on landing, the ether waits there under your name and this list offers it back.</p>
+<p>Leaving an L2 is <b>off until you turn it on</b>, under &ldquo;Another chain&rdquo; on the Send tab. Not because it is unfinished, but because it needs someone on the other side: no relayer is obliged to take your escrow, and until one is running, opening one locks your own ether for eight days and six hours before it comes back. That is the whole of the downside &mdash; it cannot be spent while it waits, and it cannot be lost &mdash; and somebody has to go first for there to be anything to relay.</p>
+<p>The other way &mdash; <b>leaving</b> Base or Robinhood &mdash; has no canonical route that is not about a week, so the page opens a <b>SlowRelay</b> escrow instead. Your ether stays on the chain it started on; a relayer delivers the far leg out of their own inventory and is repaid from that escrow only against a canonical proof that they did. Nothing of yours enters a bridge, and there is no bond, oracle or committee. The recipient is paid in seconds either way &mdash; what waits is the relayer's own money, not yours or theirs.</p>
+<p>Two things to know before you open one. The fee is <b>higher between the two L2s</b> than it is to Ethereum, because that is the leg where the relayer waits about a week to be repaid rather than minutes, and a fee that does not cover the wait is one nobody fills. The escrow is remembered <b>in this browser</b>, because taking it back names every term it was opened with; if that record is gone the page looks the chain up for it, as far back as the node will answer. And if nobody does fill it, the escrow comes back to you <b>after eight days</b> &mdash; that floor is the contract's, and it is there so that a refund cannot beat a real delivery whose proof is still crossing. Until then it is yours but not spendable, so this is a way to send money and not a way to park it. If it is filled, the reverse is still yours on the far side for as long as the lock runs.</p>
 <p>A locked transfer does not deliver itself &mdash; someone must send the claim once it matures. Tick <b>auto-claim</b> and the page posts a small tip so a keeper does that for the recipient. The tip is refundable: reverse the transfer and it comes back. Only mainnet is offered it, because that is the only chain a keeper is watching; elsewhere the recipient claims, which costs them almost nothing.</p>
 <p>This panel does the common half. A <b>guardian</b> that has to cosign your withdrawals, balances held per token and delay, the full history in and out &mdash; those live on SLOW's own page, which SLOW serves from its own bytes the way this one does. The link under the delay opens it with what you have typed here already in it.</p></details>
 <details><summary>Orders</summary>
@@ -2182,7 +2187,8 @@ if(dv&&sendTipWei>0n&&sendReady.token.addr===ZERO
 swap.textContent="Insufficient ETH for amount + keeper tip";swap.disabled=true;return}
 const bd=brDest();
 if(bd&&sendReady.amount+sendBrWei>fromBalance){
-swap.textContent="Insufficient ETH for amount + destination gas";swap.disabled=true;return}
+swap.textContent="Insufficient ETH for amount + "+(CHAIN_ID===1?"destination gas":"relay fee");
+swap.disabled=true;return}
 swap.textContent=(dv?`Lock ${a} for ${rel(dv)}`:`Send ${a}`)+` \u2192 ${sendReady.label}`
 +(bd?` on ${CHAINS[bd].name}`:"");
 swap.disabled=false;return;
@@ -4774,38 +4780,165 @@ const SEL_ARRIVE="24eb6264",SEL_AREV="99c5ff88",SEL_ACLAW="e3035405",SEL_AORIGIN
 SEL_ARESC="839006f2",SEL_ACLAIMR="b422b718",SEL_OPDEP="e9e05c42";
 const BRIDGES={8453:{entry:"0x49048044D57e1C92A77f79988d21Fa8fAF74E97e",op:1},
 4663:{entry:"0x1A07cc4BD17E0118BdB54D70990D2158AbAD7a2D",op:0}};
+const RELAY="0xC58C217791E397550492c4F84a6995Db60aDE2da";
+const SEL_ROPEN="6a144013",SEL_RCANCEL="47bfb904",SEL_RSTATUS="c7df14e2",SEL_RFILLED="d70e3dfd",SEL_RPROVEN="62cfad7e";
+const RL_BPS={1:2n,8453:30n,4663:35n},RL_GASUNITS=600000n;
+const RL_WINDOW=21600,RL_GRACE=691200,RL_KEY="zswap:rl:",RL_ON="zswap:relay";
+const rlOn=()=>{try{return LS[RL_ON]==="1"}catch{return false}};
+const BRCHAINS=[1,8453,4663];
 let sendBrWei=0n,brSeq=0;
-const brDest=()=>{const d=tab==="send"&&CHAIN_ID===1?+(sdChain.value||0):0;return BRIDGES[d]?d:0};
+const FLAGS="0x0000008a1a3C78440d0a28EBB4bb5526abA91d45";
+const SEL_FLAGOF="eb517a45",FLAG_BRIDGE="6272696467650000000000000000000000000000000000000000000000000000";
+const FLAG_KEY="zswap:flag:";
+let brFlags={},brFlagAt={};
+const brFlag=()=>{const k=FLAG_KEY+CHAIN_ID;
+if(brFlags[CHAIN_ID]!==undefined)return brFlags[CHAIN_ID];
+try{const c=LS[k];if(c==="1"||c==="2")return +c}catch{}
+return 0};
+const brFlagSync=async()=>{
+if(!BRCHAINS.includes(CHAIN_ID)||brFlagAt[CHAIN_ID])return;
+brFlagAt[CHAIN_ID]=1;
+let v;
+try{v=Number(w(await cfgRead(C,[{to:FLAGS,data:"0x"+SEL_FLAGOF+FLAG_BRIDGE+encUint(CHAIN_ID)},L]),0))}
+catch{brFlagAt[CHAIN_ID]=0;return}
+if(!(v===0||v===1||v===2))return;
+brFlags[CHAIN_ID]=v;
+try{if(v)LS[FLAG_KEY+CHAIN_ID]=String(v);else delete LS[FLAG_KEY+CHAIN_ID]}catch{}
+try{brOpts();brPaint();syncBr()}catch{}};
+const brLanes=()=>brFlag()!==2&&(CHAIN_ID===1||brFlag()===1||rlOn());
+const brPaint=t=>{const on=(t||tab)==="send"&&BRCHAINS.includes(CHAIN_ID)&&brFlag()!==2;
+sdChainL.classList.toggle("hide",!on||!brLanes());
+rlOptL.classList.toggle("hide",!on||brLanes()||CHAIN_ID===1)};
+const brDest=()=>{const d=tab==="send"&&brLanes()?+(sdChain.value||0):0;
+return d!==CHAIN_ID&&BRCHAINS.includes(d)&&BRCHAINS.includes(CHAIN_ID)?d:0};
+const brCanon=()=>CHAIN_ID===1;
+const brOpts=()=>{if(!BRCHAINS.includes(CHAIN_ID)||!brLanes())return;
+const want=BRCHAINS.filter(c=>c!==CHAIN_ID).join(",");
+if(sdChain.dataset.for===want)return;
+sdChain.textContent="";
+const mk=(v,t)=>{const o=document.createElement("option");o.value=String(v);o.textContent=t;return o};
+sdChain.append(mk(0,"This chain"));
+for(const c of BRCHAINS)if(c!==CHAIN_ID)sdChain.append(mk(c,CHAINS[c].name));
+sdChain.dataset.for=want;
+sdChain.value="0"};
+const rlFee=(wei,dest,l1gas)=>{
+const rate=BigInt(wei)*(RL_BPS[dest]||35n)/10000n;
+const flat=BigInt(l1gas||0)*RL_GASUNITS;
+return rate>flat?rate:flat};
+const rlNonce=()=>{const b=new Uint8Array(32);crypto.getRandomValues(b);
+let s="";for(const x of b)s+=x.toString(16).padStart(2,"0");return BigInt("0x"+s)};
+const rlIntent=(to,wei,delay,dest,l1gas)=>({s:account,r:to,st:ZERO,dt:ZERO,a:String(wei),f:String(rlFee(wei,dest,l1gas)),
+d:String(delay),sc:String(CHAIN_ID),dc:String(dest),dl:String(Math.floor(Date.now()/1000)+RL_WINDOW),
+n:rlNonce().toString()});
+const rlEnc=i=>encAddr(i.s)+encAddr(i.r)+encAddr(i.st)+encAddr(i.dt)+encUint(i.a)+encUint(i.f)
++encUint(i.d)+encUint(i.sc)+encUint(i.dc)+encUint(i.dl)+encUint(i.n);
+const rlId=i=>keccak(hexToBytes(rlEnc(i)));
+const RL_OPENED="0xdd10c5d1da4dfd4cb1bb4c515b2c692c4a4a67e18fcbcf1bb0a3ea4d01591865";
+const RL_SPAN={1:64500,8453:388800,4663:7700000};
+const rlNum=v=>typeof v==="string"&&/^\d{1,78}$/.test(v);
+const rlOk=i=>!!i&&isAddr(i.s)&&isAddr(i.r)&&isAddr(i.st)&&isAddr(i.dt)
+&&rlNum(i.a)&&rlNum(i.f)&&rlNum(i.d)&&rlNum(i.sc)&&rlNum(i.dc)&&rlNum(i.dl)&&rlNum(i.n);
+const rlLoad=()=>{try{const v=JSON.parse(LS[RL_KEY+CHAIN_ID]||"[]");
+return Array.isArray(v)?v.filter(rlOk):[]}catch{return[]}};
+const rlDurable=()=>{try{return LS===localStorage}catch{return false}};
+const rlSave=v=>{if(!rlDurable())return false;
+const ok=v.filter(rlOk);
+const own=ok.filter(i=>i.o),rest=ok.filter(i=>!i.o);
+const keep=own.slice(-40).concat(rest.slice(-(40-Math.min(own.length,40))));
+try{LS[RL_KEY+CHAIN_ID]=JSON.stringify(keep);return LS[RL_KEY+CHAIN_ID]!==undefined}catch{return false}};
+const RL_STRIDE=9000,RL_STEPS=45;
+const rlGet=async(from,to)=>{
+const f={address:RELAY,fromBlock:toHex(from),toBlock:toHex(to),
+topics:[RL_OPENED,null,"0x"+pad32(strip0x(account))]};
+try{const r=await rpc("eth_getLogs",[f]);if(Array.isArray(r))return r}catch{}
+return null};
+const rlLogs=async(from,to)=>{
+const whole=await rlGet(from,to);
+if(whole)return whole;
+const stride=Math.max(RL_STRIDE,Math.ceil((to-from)/RL_STEPS));
+const out=[];let hi=to;
+for(let n=0;n<RL_STEPS&&hi>=from;n++){
+const lo=Math.max(from,hi-stride+1);
+const r=await rlGet(lo,hi);
+if(r)out.push(...r);
+hi=lo-1}
+return out};
+const rlFromLog=l=>{
+if(!l||typeof l.data!=="string"||!Array.isArray(l.topics))return null;
+if(String(l.address||"").toLowerCase()!==RELAY.toLowerCase())return null;
+if(String(l.topics[0]||"").toLowerCase()!==RL_OPENED)return null;
+const d=strip0x(l.data),at=n=>"0x"+d.slice(n*64,n*64+64);
+if(d.length<12*64)return null;
+let i;
+try{i={s:retAddr(at(1)),r:retAddr(at(2)),st:retAddr(at(3))||ZERO,dt:retAddr(at(4))||ZERO,
+a:BigInt(at(5)).toString(),f:BigInt(at(6)).toString(),d:BigInt(at(7)).toString(),
+sc:BigInt(at(8)).toString(),dc:BigInt(at(9)).toString(),dl:BigInt(at(10)).toString(),
+n:BigInt(at(11)).toString()}}catch{return null}
+if(!rlOk(i)||i.sc!==String(CHAIN_ID))return null;
+return rlId(i).toLowerCase()===(l.topics[1]||"").toLowerCase()?i:null};
+let rlScanned={};
+const rlRecover=async()=>{
+const k=CHAIN_ID+":"+(account||"");
+if(!account||!BRCHAINS.includes(CHAIN_ID)||rlScanned[k])return false;
+let head=0;try{head=parseInt(await rpc("eth_blockNumber",[]),16)}catch{return false}
+if(!head)return false;
+const logs=await rlLogs(Math.max(0,head-(RL_SPAN[CHAIN_ID]||100000)),head);
+rlScanned[k]=1;
+const have=rlLoad();let add=0;
+for(const l of logs){const i=rlFromLog(l);
+if(!i||i.s.toLowerCase()!==account.toLowerCase())continue;
+if(have.some(x=>x&&x.n===i.n))continue;
+have.push(i);add++}
+if(add)rlSave(have);
+return add>0};
 const brGas=(lock,isC)=>lock?(isC?2500000n:800000n):(isC?400000n:100000n);
 const brInner=(to,delay)=>delay>0n
 ?"0x"+SEL_ARRIVE+encAddr(to)+encUint(delay)+encAddr(account)+encUint(0):"0x";
+const brHasCode=c=>typeof c!=="string"||!/^0x([0-9a-fA-F]{2})*$/.test(c)||strip0x(c)!=="";
 const brIsC=async(dest,to)=>{
-try{return strip0x(await httpRead(CHAINS[dest].rpcs[0],"eth_getCode",[to,L])||"")!==""}catch{return true}};
+try{return brHasCode(await httpRead(CHAINS[dest].rpcs[0],"eth_getCode",[to,L]))}catch{return true}};
+let brSelfCode=null;
+const brSelfIsC=async()=>{
+if(brSelfCode&&brSelfCode.a===account)return brSelfCode.c;
+let c=true;try{c=brHasCode(await rpc("eth_getCode",[account,L]))}catch{c=true}
+brSelfCode={a:account,c};return c};
+const brNum=h=>{const s=strip0x(h||"");return /^[0-9a-fA-F]{1,64}$/.test(s)?BigInt("0x"+s):0n};
 const brPlan=async(dest,to,wei,delay)=>{
+if([ARRIVAL,RELAY,SLOW].some(a=>a.toLowerCase()===String(to).toLowerCase()))
+throw Error("That address is part of the bridge itself, and ether sent to it there cannot be recovered.");
+if(await brSelfIsC())throw Error("This wallet is a contract, and both rollups rewrite a contract sender's address on the far side \u2014 the refund and the reverse would land where nobody holds a key. Send from an ordinary account.");
+if(!brCanon()){
+const l1=brNum(await cfgRead("eth_gasPrice",[]).catch(()=>"0x0"));
+if(!l1)throw Error("Ethereum's gas price could not be read, and it sets the relay fee.");
+const it=rlIntent(to,wei,delay,dest,l1),fee=BigInt(it.f);
+it.o=1;
+return{extra:fee,intent:it,req:{from:account,to:RELAY,value:toHex(BigInt(wei)+fee),
+data:"0x"+SEL_ROPEN+rlEnc(it)}}}
 const b=BRIDGES[dest];if(!b)throw Error("There is no bridge to that chain.");
 const inner=brInner(to,delay),tgt=delay>0n?ARRIVAL:to,gas=brGas(delay>0n,await brIsC(dest,to));
 if(b.op)return{extra:0n,req:{from:account,to:b.entry,value:toHex(wei),
 data:"0x"+SEL_OPDEP+encAddr(tgt)+encUint(wei)+encUint(gas)+encBool(false)+pad32("a0")+encBytes(inner)}};
-const l1=BigInt(await cfgRead("eth_gasPrice",[])||"0x0");
-const sub=BigInt(await cfgRead(C,[{to:b.entry,
-data:"0x"+SEL_CPSUBFEE+encUint(strip0x(inner).length/2)+encUint(l1*2n)},L])||"0x0")*3n/2n;
-let mf=0n;try{mf=BigInt(await httpRead(CHAINS[dest].rpcs[0],"eth_gasPrice",[])||"0x0")*2n}catch{}
-const fl=CHAINS[dest].gasFloor||0n;if(mf<fl)mf=fl;
+const l1=brNum(await cfgRead("eth_gasPrice",[]));
+const sub=brNum(await cfgRead(C,[{to:b.entry,
+data:"0x"+SEL_CPSUBFEE+encUint(strip0x(inner).length/2)+encUint(l1*2n)},L]))*3n/2n;
+let mf=0n;try{mf=brNum(await httpRead(CHAINS[dest].rpcs[0],"eth_gasPrice",[]))*2n}catch{}
 if(!sub||!mf)throw Error("The destination's fees could not be quoted.");
+const fl=CHAINS[dest].gasFloor||0n;if(mf<fl)mf=fl;
 const extra=sub+gas*mf;
 return{extra,req:{from:account,to:b.entry,value:toHex(wei+extra),
 data:"0x"+SEL_CPRETRY+encAddr(tgt)+encUint(wei)+encUint(sub)+encAddr(account)+encAddr(account)
 +encUint(gas)+encUint(mf)+pad32("100")+encBytes(inner)}}};
 async function syncBr(){
-const my=++brSeq,d=brDest();
-sdChainL.classList.toggle("hide",tab!=="send"||CHAIN_ID!==1);
-if(!d||!account||!sendReady||sendReady.token.addr!==ZERO){sendBrWei=0n;brNote.textContent="";return}
-brNote.textContent="quoting…";
+const my=++brSeq,d=brDest(),note=brNote;
+brPaint();
+if(!d||!account||!sendReady||sendReady.token.addr!==ZERO){sendBrWei=0n;note.textContent="";return}
+note.textContent=brCanon()&&BRIDGES[d].op?"":"quoting…";
 let x=0n,ok=true;
 try{x=(await brPlan(d,sendReady.to,sendReady.amount,BigInt(dly.value||0))).extra}catch{ok=false}
 if(my!==brSeq)return;
 sendBrWei=ok?x:0n;
-brNote.textContent=!ok?"":x>0n?"+ "+trimAmt(x,18)+" ETH gas":"";
+note.textContent=!ok?"":!x?"":brCanon()?"+ "+trimAmt(x,18)+" ETH gas"
+:"+ "+trimAmt(x,18)+" ETH relay fee \u00b7 back in 8d if unfilled";
 render();
 }
 let sendTipWei=0n,tipSeq=0;
@@ -4882,23 +5015,38 @@ capMap(metaCache,META_MAX);
 const rel=s=>{const a=Math.abs(s),u=[[86400,"d"],[3600,"h"],[60,"m"]];
 for(const[n,l]of u)if(a>=n)return Math.floor(a/n)+l;return a+"s"};
 let posSeq=0,posShown=25,slowGuard=false;
-const POSPAGE=25;
+const POSPAGE=25,VIA_MAX=120;
 async function loadPos(){
 if(!account){pos.innerHTML="";tabSend.textContent="Send";slowGuard=false;return}
 const my=++posSeq;
-let outIds=[],inIds=[];
+let outIds=[],inIds=[],arIds=[],rlIds=[],rescWei=0n;
 try{
-const[oh,ih,gd]=await Promise.all([
+const[oh,ih,gd,ah,rh,lh]=await Promise.all([
 rpc(C,[{to:SLOW,data:"0x"+SEL_OUT+encAddr(account)},L]),
 rpc(C,[{to:SLOW,data:"0x"+SEL_IN+encAddr(account)},L]),
-rpc(C,[{to:SLOW,data:"0x"+SEL_GUARDIAN+encAddr(account)},L]).catch(()=>"0x")]);
+rpc(C,[{to:SLOW,data:"0x"+SEL_GUARDIAN+encAddr(account)},L]).catch(()=>"0x"),
+rpc(C,[{to:SLOW,data:"0x"+SEL_OUT+encAddr(ARRIVAL)},L]).catch(()=>"0x"),
+rpc(C,[{to:ARRIVAL,data:"0x"+SEL_ARESC+encAddr(account)},L]).catch(()=>"0x"),
+rpc(C,[{to:SLOW,data:"0x"+SEL_OUT+encAddr(RELAY)},L]).catch(()=>"0x")]);
 outIds=decUintArr(oh);inIds=decUintArr(ih);
+try{arIds=decUintArr(ah)}catch{arIds=[]}
+try{rlIds=decUintArr(lh)}catch{rlIds=[]}
+try{rescWei=w(rh,0)}catch{rescWei=0n}
 if(my===posSeq)slowGuard=w(gd,0)!==0n;
 }catch{return}
 if(my!==posSeq)return;
+const viaAr=new Map();
+for(const[who,all]of[[ARRIVAL,arIds],[RELAY,rlIds]]){
+const ids=all.slice(-VIA_MAX);
+if(!ids.length)continue;
+const os=await mc3Deep(ids.map(t=>({to:who,data:"0x"+SEL_AORIGIN+encUint(t)}))).catch(()=>[]);
+if(my!==posSeq)return;
+ids.forEach((t,i)=>{if(os[i]&&retAddr(os[i])===account.toLowerCase())viaAr.set(t.toString(),who)});
+}
 const dirs=new Map();
-for(const[t,d]of[...outIds.map(i=>[i,"out"]),...inIds.map(i=>[i,"in"])]){
-const k=t.toString();dirs.set(k,(dirs.get(k)||"")+d)}
+for(const[t,d]of[...outIds.map(i=>[i,"out"]),...[...viaAr.keys()].map(k=>[BigInt(k),"out"]),
+...inIds.map(i=>[i,"in"])]){
+const k=t.toString();if((dirs.get(k)||"").includes(d))continue;dirs.set(k,(dirs.get(k)||"")+d)}
 const allKeys=[...dirs.keys()].sort((a,b)=>a.length-b.length||(a<b?1:-1));
 const keys=allKeys.slice(0,posShown);
 const more=allKeys.length-keys.length;
@@ -4908,7 +5056,7 @@ const rows=[],settled=[];
 keys.forEach((k,i)=>{const p=ps[i];if(!p)return;
 const ts=w(p,0);
 if(ts===0n){if(dirs.get(k).includes("out"))settled.push(k);return}
-rows.push({tid:BigInt(k),dir:dirs.get(k),ts,id:w(p,3),amount:w(p,4)})});
+rows.push({tid:BigInt(k),dir:dirs.get(k),ts,id:w(p,3),amount:w(p,4),va:viaAr.get(k)||""})});
 const stale=[];
 if(chainCfg().slowTip&&settled.length){
 const ts=await mc3Deep(settled.map(k=>({to:SLOW_GATE,data:"0x"+SEL_TIPS+encUint(BigInt(k))}))).catch(()=>[]);
@@ -4916,10 +5064,30 @@ if(my!==posSeq)return;
 ts.forEach((t,j)=>{if(t&&w(t,0)>0n&&idTok(w(t,1))===account.toLowerCase())
 stale.push({tid:settled[j],amount:w(t,0)})});
 }
+if(tab==="send"&&!rlScanned[CHAIN_ID+":"+account])
+{if(await rlRecover().catch(()=>false)){if(my!==posSeq)return}}
+let its=rlLoad().filter(i=>i&&i.s&&i.s.toLowerCase()===account.toLowerCase());
+if(its.length){
+const st=await mc3Deep(its.flatMap(i=>{const id=rlId(i);
+return[{to:RELAY,data:"0x"+SEL_RSTATUS+strip0x(id)},{to:RELAY,data:"0x"+SEL_RPROVEN+strip0x(id)}]})).catch(()=>[]);
+if(my!==posSeq)return;
+if(st.length===its.length*2){
+if(st.some(x=>x==null))its=[];
+else{its.forEach((i,j)=>{i.q=Number(w(st[j*2],0));i.pv=retAddr(st[j*2+1])});
+const live=its.filter(i=>i.q===1);
+if(live.length!==its.length)rlSave(rlLoad().filter(i=>!i||!i.s
+||i.s.toLowerCase()!==account.toLowerCase()||live.some(x=>x.n===i.n)));
+its=live;}
+await Promise.all(its.map(async i=>{if(i.pv)return;
+const c=CHAINS[+i.dc];if(!c)return;
+try{i.by=retAddr(await httpRead(c.rpcs[0],C,[{to:RELAY,data:"0x"+SEL_RFILLED+strip0x(rlId(i))},L]))}catch{}}));
+if(my!==posSeq)return;
+}else its=[];
+}
 const now=BigInt(Math.floor(Date.now()/1e3));
 const ready=rows.filter(r=>r.dir.includes("in")&&now>=r.ts+idDelay(r.id)).length;
 tabSend.textContent=ready?`Send (${ready}${more?"+":""})`:"Send";
-if(tab!=="send"||!(rows.length||stale.length)){pos.innerHTML="";return}
+if(tab!=="send"||!(rows.length||stale.length||its.length||rescWei>0n)){pos.innerHTML="";return}
 rows.sort((a,b)=>Number((a.ts+idDelay(a.id))-(b.ts+idDelay(b.id))));
 const metas=await Promise.all(rows.map(r=>tokMeta(idTok(r.id))));
 if(my!==posSeq)return;
@@ -4934,16 +5102,29 @@ const cb=oo&&ripe&&now>=exp+GRACE;
 let act,note;
 if(cb)note=slowGuard?"Unclaimed past grace · unlock credits SLOW; withdraw needs guardian approval":"Unclaimed past grace · recoverable";
 else if(ripe)note=io?(slowGuard?"Matured · unlock credits SLOW; withdraw needs guardian approval":"Ready to claim"):"Matured · recipient can claim, you in "+rel(Number(exp+GRACE-now));
-else note=(io&&!oo?"Arrives in ":"Reversible · sends in ")+rel(left);
+else note=(io&&!oo?"Arrives in ":r.va?"Bridged in · reversible · sends in ":"Reversible · sends in ")+rel(left);
+const va=r.va?` data-v="${r.va}"`:"";
 if(io&&ripe)act=`<button data-a="c" data-t="${r.tid}">${slowGuard?"Unlock":"Claim"}</button>`;
-else if(oo&&!ripe)act=`<button data-a="r" ${held}>Reverse</button>`;
-else if(cb)act=`<button data-a="k" ${held}>Clawback</button>`;
+else if(oo&&!ripe)act=`<button data-a="r" ${held}${va}>Reverse</button>`;
+else if(cb)act=`<button data-a="k" ${held}${va}>Clawback</button>`;
 else act=`<button disabled>${io?"In":"Out"}</button>`;
 html+=`<div class="p"><span><b>${oo&&io?"↺":oo?"→":"←"} ${amt}</b><i>${note}</i></span>${act}</div>`;
 });
 stale.forEach(s=>{html+=`<div class="p"><span><b>↩ ${trimAmt(s.amount,18)} ETH</b>`
 +`<i>Keeper tip on a settled transfer · unspent</i></span>`
 +`<button data-a="t" data-t="${s.tid}">Reclaim tip</button></div>`});
+its.forEach(i=>{const dn=(CHAINS[+i.dc]||{}).name||("chain "+i.dc);
+const refundAt=Number(i.dl)+RL_GRACE,can=Number(now)>refundAt,done=!!(i.pv||i.by);
+const note=i.pv?"Delivered on "+dn+" · paying the relayer out of this escrow"
+:i.by?"Delivered on "+dn+" · the proof is still crossing"
+:can?"Nobody delivered it · take it back"
+:"Escrowed for "+dn+" · refundable "+rel(refundAt-Number(now))+" from now";
+html+=`<div class="p"><span><b>⇄ ${trimAmt(BigInt(i.a),18)} ETH</b><i>${note}</i></span>`
++(can&&!done?`<button data-a="z" data-t="${i.n}">Take back</button>`
+:`<button disabled>${done?"Sent":"Open"}</button>`)+`</div>`});
+if(rescWei>0n)html+=`<div class="p"><span><b>↩ ${trimAmt(rescWei,18)} ETH</b>`
++`<i>Bridged in but could not be locked · held for you</i></span>`
++`<button data-a="x" data-t="0">Recover</button></div>`;
 if(more)html+=`<div class="p" style="justify-content:center"><button data-a="m">Show ${Math.min(more,POSPAGE)} more of ${more}</button></div>`;
 pos.innerHTML=html;
 }
@@ -4959,7 +5140,21 @@ await checkWallet();
 const a=b.dataset.a;
 if(a==="t"){if(!await refundTipBestEffort(b.dataset.t,"Tip"))throw Error("the tip is no longer refundable");
 refreshBalance();loadPos();return}
+if(a==="z"){const i=rlLoad().find(x=>x&&x.n===b.dataset.t
+&&x.s&&x.s.toLowerCase()===account.toLowerCase());
+if(!i)throw Error("that escrow is no longer on this device");
+const req={from:account,to:RELAY,data:"0x"+SEL_RCANCEL+rlEnc(i),value:"0x0"};
+await rpc(C,[req,L]);await settle(await sendTx([req]));
+refreshBalance();loadPos();return}
+if(a==="x"){const req={from:account,to:ARRIVAL,data:"0x"+SEL_ACLAIMR+encAddr(account),value:"0x0"};
+await rpc(C,[req,L]);await settle(await sendTx([req]));
+refreshBalance();loadPos();return}
 const back=a==="r"||a==="k";
+if(back&&b.dataset.v){
+const req={from:account,to:b.dataset.v,value:"0x0",
+data:"0x"+(a==="r"?SEL_AREV:SEL_ACLAW)+encUint(BigInt(b.dataset.t))+encAddr(account)};
+await rpc(C,[req,L]);await settle(await sendTx([req]));
+refreshBalance();loadPos();return}
 let data="0x"+(a==="r"?SEL_REVERSE:a==="k"?SEL_CLAWBACK:slowGuard?SEL_UNLOCK:SEL_CLAIM)+encUint(BigInt(b.dataset.t));
 if(back&&!slowGuard)data=encCalls([data,"0x"+SEL_WITHDRAWFROM+encAddr(account)+encAddr(account)
 +encUint(BigInt(b.dataset.i))+encUint(BigInt(b.dataset.m))]);
@@ -5000,7 +5195,7 @@ return !isAddr(a)||/^0x0{40}$/i.test(a)?"":a;
 };
 async function updateSend(){
 const my=++sSeq;
-sendReady=null;
+sendReady=null;syncBr();
 const f=TOKENS[fromSel.value];
 const v=rc.value.trim();
 let amount=0n,amtErr="";
@@ -5043,8 +5238,10 @@ ln.classList.toggle("hide",tab!=="swap"||PLAUNCH===ZERO);
 wn.classList.toggle("hide",tab!=="swap"||CHAIN_ID!==1);
 pv.classList.toggle("hide",tab!=="swap"||CHAIN_ID!==1);
 tabBook.classList.toggle("hide",SB2===ZERO);
-sdChainL.classList.toggle("hide",tab!=="send"||CHAIN_ID!==1);
-if(CHAIN_ID!==1){sdChain.value="0";sendBrWei=0n;brNote.textContent=""}
+brOpts();
+brPaint();
+brFlagSync();
+if(!BRCHAINS.includes(CHAIN_ID)||!brLanes()){sdChain.value="0";sendBrWei=0n;brNote.textContent=""}
 if(lqMode&&PROUTE===ZERO)lqSet(false);
 if(lnMode&&PLAUNCH===ZERO)lnSet(false);
 if(wnMode&&CHAIN_ID!==1)wnSet(false);
@@ -5085,7 +5282,9 @@ syncDisabled();
 syncNftUI();
 slipL.classList.toggle("hide",t!=="swap");
 dlyL.classList.toggle("hide",t==="swap"||(send&&!chainCfg().slow));
-sdChainL.classList.toggle("hide",!send||CHAIN_ID!==1);
+brOpts();
+brPaint(t);
+if(send)brFlagSync();
 if(!send){sdChain.value="0";sendBrWei=0n;brNote.textContent=""}
 kindL.classList.toggle("hide",!bk);
 ethModeL.classList.toggle("hide",!bk);
@@ -5106,6 +5305,11 @@ update();
 };
 dly.onchange=()=>{if(tab==="book")bookD=dly.value;else sendD=dly.value;syncTip();syncSlowLink();syncBr();render()};
 sdChain.onchange=()=>{syncTip();syncSlowLink();updateSend()};
+rlOpt.onclick=()=>{sBlip();
+if(!confirm("Send to another chain from here?\n\nThere is no bridge off an L2 that is not about a week, so this escrows your ether on this chain and pays a relayer to deliver it on the other one. The recipient is paid in seconds when that happens.\n\nNobody is obliged to take it. If no relayer does, your ether comes back to you after 8 days and 6 hours \u2014 and not before. It cannot be spent in the meantime, and it cannot be lost.\n\nEnable it?"))return;
+try{LS[RL_ON]="1"}catch{}
+if(!rlOn())return void(stat.textContent="This browser will not remember the setting.");
+brOpts();brPaint();syncSlowLink();updateSend()};
 for(const el of[amt,rc])el.addEventListener("input",syncSlowLink);
 fromSel.addEventListener("change",syncSlowLink);
 tipCk.onchange=()=>{syncTip();render()};
@@ -7983,6 +8187,7 @@ applyLink().catch(()=>{});
 async function doSend(){
 if(!sendReady)return;
 swap.disabled=true;++busy;
+let openedIntent=null;
 try{
 const{to,amount,token}=sendReady;
 const fresh=await rcvOf(rc.value.trim(),true);
@@ -7990,8 +8195,19 @@ if(fresh.toLowerCase()!==to.toLowerCase())throw Error("recipient changed \u2014 
 if(amount>fromBalance)throw Error("insufficient balance");
 await checkWallet();
 const dsec=chainCfg().slow?BigInt(dly.value||0):0n;
+const dest=brDest();
 let txReq,batch=null;
-if(dsec>0n){
+if(dest){
+if(token.addr!==ZERO)throw Error("only ETH can be sent to another chain");
+const p=await brPlan(dest,to,amount,dsec);
+if(amount+p.extra>fromBalance)throw Error(brCanon()
+?"insufficient ETH for amount + destination gas":"insufficient ETH for amount + relay fee");
+txReq=p.req;openedIntent=p.intent||null;
+if(openedIntent){const v=rlLoad();v.push(openedIntent);
+if(!rlSave(v)||!rlLoad().some(x=>x.n===openedIntent.n))
+throw Error("this browser will not keep the escrow's terms, and taking it back needs them \u2014 free some storage, or leave private browsing");
+}
+}else if(dsec>0n){
 const isE=token.addr===ZERO;
 if(tipCk.checked){await syncTip();swap.disabled=true}
 const tip=tipCk.checked?sendTipWei:0n;
@@ -8023,6 +8239,11 @@ if(batch){await checkWallet();tx=await sendBatch(account,batch)}
 else{const ret=await rpc(C,[txReq,L]);if(dsec===0n&&token.addr!==ZERO)okRet(ret);tx=await sendTx([txReq])}
 await settle(tx);
 amt.value="";fitFont(amt);sendReady=null;
+if(dest)stat.append(openedIntent
+?" — escrowed here. A relayer delivers it on "+CHAINS[dest].name
++" and is repaid from this escrow; if none does, you take it back below."
+:" — on its way to "+CHAINS[dest].name+", landing in a few minutes"
++(dsec>0n?". The lock runs there: connect to "+CHAINS[dest].name+" to reverse it.":"."));
 refreshBalance();render();loadPos();
 }catch(e){err(e);render()}
 finally{--busy}

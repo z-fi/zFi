@@ -4,14 +4,14 @@ pragma solidity ^0.8.36;
 
 /// @title zSwap v0.3
 /// @notice Permanently-deployed onchain HTML swap dapp for Ethereum mainnet.
-/// @dev Architecture: the HTML payload (440972 B) is the runtime bytecode of
-///      17 data contracts, deployed separately and passed to the constructor.
+/// @dev Architecture: the HTML payload (470457 B) is the runtime bytecode of
+///      20 data contracts, deployed separately and passed to the constructor.
 ///      html() reassembles them via EXTCODECOPY with proper ABI encoding
 ///      (offset + length + padded data) so any RPC client decodes directly.
 ///      request() implements ERC-5219 for first-class web3:// gateway
-///      compatibility (ERC-4804). Splitting the page across 19 data contracts
+///      compatibility (ERC-4804). Splitting the page across 20 data contracts
 ///      means EIP-170 caps each chunk, not the dapp
-///      (24576 B per chunk, 25972 B headroom).
+///      (24576 B per chunk, 21063 B headroom).
 ///
 ///      The chunk count is fixed in the constructor arity and the page is
 ///      immutable, so it is sized to ceil(len/17) with headroom for a release
@@ -250,6 +250,11 @@ contract zSwap {
     ///      requests, self-settled deposits - took the page past eighteen. Same
     ///      arithmetic, same cost: a new arity is a new address.
     address public immutable DATA19;
+    /// @dev A twentieth. Sending ether from Ethereum into Base or Robinhood -
+    ///      the canonical deposit, and the SlowArrival call that keeps a
+    ///      time-locked one reversible on the far side - took the page past
+    ///      nineteen. Same arithmetic, same cost: a new arity is a new address.
+    address public immutable DATA20;
 
     /// @dev A missing or duplicated data chunk would permanently serve broken HTML.
     error InvalidData();
@@ -428,13 +433,13 @@ contract zSwap {
     ///      positional form every existing deploy artifact already appends.
     ///      It also means the next change to the count touches one number here
     ///      instead of a parameter list, a temporary array and 16 assignments.
-    constructor(address dao, address previous, address[19] memory d) {
+    constructor(address dao, address previous, address[20] memory d) {
         if (previous != address(0) && msg.sender != previous) revert InvalidData();
         DAO = dao;
         PREVIOUS = previous;
-        for (uint256 i; i != 19; ++i) {
+        for (uint256 i; i != 20; ++i) {
             if (d[i].code.length == 0) revert InvalidData();
-            for (uint256 j = i + 1; j != 19; ++j) {
+            for (uint256 j = i + 1; j != 20; ++j) {
                 if (d[i] == d[j]) revert InvalidData();
             }
         }
@@ -457,6 +462,7 @@ contract zSwap {
         DATA17 = d[16];
         DATA18 = d[17];
         DATA19 = d[18];
+        DATA20 = d[19];
     }
 
     /// @notice Deploy the next version, at an address known before it exists.
@@ -616,9 +622,9 @@ contract zSwap {
     /// cursor advances by construction, so the tenth chunk lands after the
     /// ninth for the same reason the second lands after the first.
     function _html() private view returns (string memory s) {
-        address[19] memory d = [
+        address[20] memory d = [
             DATA1, DATA2, DATA3, DATA4, DATA5, DATA6, DATA7, DATA8, DATA9, DATA10, DATA11, DATA12,
-            DATA13, DATA14, DATA15, DATA16, DATA17, DATA18, DATA19
+            DATA13, DATA14, DATA15, DATA16, DATA17, DATA18, DATA19, DATA20
         ];
         assembly ("memory-safe") {
             s := mload(0x40)
@@ -631,7 +637,7 @@ contract zSwap {
             // page short of its last slice. If you change the count, change it
             // here, and let the length assertions in test/zSwap.t.sol catch you
             // if you do not.
-            for { let i := 0 } lt(i, 19) { i := add(i, 1) } {
+            for { let i := 0 } lt(i, 20) { i := add(i, 1) } {
                 let a := mload(add(d, shl(5, i)))
                 let n := extcodesize(a)
                 extcodecopy(a, at, 0, n)

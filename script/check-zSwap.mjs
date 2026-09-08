@@ -38,7 +38,7 @@ const FIXTURES = path.join(ROOT, 'test', 'fixtures', 'quoter.json');
 const TAPE_FIXTURES = path.join(ROOT, 'test', 'fixtures', 'tape.json');
 
 const EIP170 = 24576;
-const CHUNKS = 19;
+const CHUNKS = 20;
 
 const html = fs.readFileSync(HTML_PATH, 'utf8');
 const bytes = Buffer.byteLength(html, 'utf8');
@@ -430,7 +430,10 @@ if (exported) {
       'wallet_switchEthereumChain', 'wallet_addEthereumChain', 'wallet_sendCalls', 'wallet_getCapabilities',
       'wallet_getCallsStatus', 'wallet_revokePermissions'];
     const toNode = ['eth_call', 'eth_getCode', 'eth_gasPrice', 'eth_getBalance',
-      'eth_blockNumber', 'eth_getTransactionReceipt', 'eth_getBlockByNumber'];
+      'eth_blockNumber', 'eth_getTransactionReceipt', 'eth_getBlockByNumber',
+      // Relay-escrow recovery reads `Opened` back off the chain. A read, and a
+      // heavy one - routing it to a phone over the relay would hang the panel.
+      'eth_getLogs'];
     for (const m of toWallet) if (!wcToWallet(m)) throw Error(`${m} would leave the wallet`);
     for (const m of toNode) if (wcToWallet(m)) throw Error(`${m} would go to the wallet, not the node`);
     // Everything the page actually calls must be classified deliberately.

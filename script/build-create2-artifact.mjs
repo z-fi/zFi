@@ -30,6 +30,7 @@ const SOURCES = {
   Swapbol: "src/forwarders/Swapbol.sol",
   Cowol: "src/forwarders/Cowol.sol",
   TokenList: "src/utils/TokenList.sol",
+  zSwapFlags: "src/utils/zSwapFlags.sol",
   TokenListRenderer: "src/utils/TokenListRenderer.sol",
   FWCPoisonPillProposer: "src/dao/FWCPoisonPill.sol",
   ZorgPageStyle: "src/dao/ZorgPageStyle.sol",

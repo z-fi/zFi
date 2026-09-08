@@ -1,0 +1,328 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>zSwap Flags Admin</title>
+<style>
+  :root { color-scheme: light dark; --bg:#0b0d10; --fg:#e6e8eb; --mut:#8b949e; --line:#232a31;
+          --ok:#3fb950; --bad:#f85149; --warn:#d29922; --acc:#58a6ff; }
+  @media (prefers-color-scheme: light) {
+    :root { --bg:#fff; --fg:#14171a; --mut:#57606a; --line:#d8dee4; --ok:#1a7f37; --bad:#cf222e; --warn:#9a6700; --acc:#0969da; }
+  }
+  * { box-sizing:border-box }
+  body { margin:0; background:var(--bg); color:var(--fg); padding:28px 18px; display:flex; justify-content:center;
+         font:14px/1.55 ui-sans-serif,-apple-system,system-ui,sans-serif }
+  main { width:100%; max-width:700px }
+  h1 { font-size:17px; margin:0 0 2px }
+  .sub { color:var(--mut); margin:0 0 22px }
+  section { border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-bottom:14px }
+  h2 { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--mut); margin:0 0 10px; font-weight:600 }
+  dl { display:grid; grid-template-columns:auto 1fr; gap:5px 14px; margin:0 }
+  dt { color:var(--mut) }
+  dd { margin:0; font-family:ui-monospace,Menlo,monospace; font-size:12.5px; word-break:break-all }
+  button { font:inherit; font-weight:600; padding:9px 15px; border-radius:8px; border:1px solid var(--line);
+           background:var(--acc); color:#fff; cursor:pointer }
+  button.ghost { background:transparent; color:var(--fg) }
+  button.danger { background:var(--bad) }
+  button:disabled { opacity:.45; cursor:not-allowed }
+  .row { display:flex; gap:9px; align-items:center; flex-wrap:wrap }
+  .msg { margin-top:11px; padding:9px 11px; border-radius:8px; border:1px solid var(--line); display:none;
+         font-family:ui-monospace,Menlo,monospace; font-size:12px; word-break:break-all; white-space:pre-wrap }
+  .msg.show { display:block }
+  .ok { color:var(--ok); border-color:var(--ok) }
+  .bad { color:var(--bad); border-color:var(--bad) }
+  .warn { color:var(--warn); border-color:var(--warn) }
+  .hint { color:var(--mut); font-size:12.5px; margin-top:9px }
+  a { color:var(--acc) }
+  ul { margin:8px 0 0; padding-left:18px; color:var(--mut); font-size:12.5px }
+  li { margin:3px 0 }
+  table { width:100%; border-collapse:collapse; font-size:12.5px }
+  th,td { text-align:left; padding:7px 8px; border-bottom:1px solid var(--line); vertical-align:middle }
+  th { color:var(--mut); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.05em }
+  td.name { font-weight:600; white-space:nowrap }
+  select { font:inherit; font-size:12.5px; padding:5px 7px; background:transparent; color:var(--fg);
+           border:1px solid var(--line); border-radius:6px }
+  input.addr { width:100%; font-family:ui-monospace,Menlo,monospace; font-size:11.5px; padding:6px 8px;
+               background:transparent; color:var(--fg); border:1px solid var(--line); border-radius:6px }
+  .eff { font-family:ui-monospace,Menlo,monospace; font-size:11.5px }
+  .eff.on { color:var(--ok) } .eff.off { color:var(--bad) } .eff.unset { color:var(--mut) }
+  .chg { color:var(--warn); font-size:11px; font-family:ui-monospace,Menlo,monospace }
+</style>
+
+<main>
+  <h1>zSwap flags — lane switch</h1>
+  <p class="sub">
+    <code>zSwapFlags</code> at <code>0x0000008a1a3C78440d0a28EBB4bb5526abA91d45</code>, on mainnet only —
+    zSwap reads it from every chain through its mainnet read path. It decides whether the page
+    offers a cross-chain send, and nothing else: it holds no funds, names no contracts and
+    authorises no calls.
+  </p>
+
+  <section>
+    <h2>Wallet</h2>
+    <div class="row" id="wallets"><span class="hint">Looking for wallets…</span></div>
+    <div class="row" style="margin-top:9px">
+      <button id="connect">Connect</button>
+      <button id="reload" class="ghost">Reload</button>
+    </div>
+    <dl style="margin-top:12px">
+      <dt>Steward</dt><dd id="owner">…</dd>
+      <dt>Pending</dt><dd id="pending">…</dd>
+      <dt>You</dt><dd id="me">not connected</dd>
+    </dl>
+    <div class="msg" id="who"></div>
+  </section>
+
+  <section>
+    <h2>The <code>bridge</code> lane</h2>
+    <table>
+      <thead><tr><th>Chain</th><th>Stored</th><th>In effect</th><th>Set to</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="row" style="margin-top:12px">
+      <button id="apply" disabled>Apply changes</button>
+      <span class="chg" id="diff"></span>
+    </div>
+    <p class="hint">
+      <b>Unset</b> is not off — it means the page decides, which today leaves the choice to each
+      viewer: on Ethereum the lane is always shown (its bridges need no relayer), and on an L2 the
+      viewer sees a door they can open themselves.
+      <b>On</b> shows the lane to everyone with no door to find — use it once a relayer is
+      actually running.
+      <b>Off</b> withdraws it from everyone <em>including viewers who already opted in</em>, which
+      is the only remedy an immutable page has if the thing behind a lane breaks. The page caches
+      an Off, so a node that later refuses to answer cannot undo it.
+    </p>
+    <p class="hint">
+      <b>All chains</b> is the fallback: a chain with its own entry ignores it, so you can turn
+      everything off and bring one chain back up.
+    </p>
+    <div class="msg" id="setmsg"></div>
+  </section>
+
+  <section>
+    <h2>Stewardship</h2>
+    <div class="row">
+      <input class="addr" id="newOwner" placeholder="0x… — the address to hand it to" spellcheck="false">
+    </div>
+    <div class="row" style="margin-top:9px">
+      <button id="propose" class="ghost" disabled>Propose</button>
+      <button id="accept" class="ghost" disabled>Accept</button>
+      <button id="cancel" class="ghost" disabled>Cancel offer</button>
+    </div>
+    <p class="hint">
+      Two steps: proposing changes nothing until the named address accepts. Propose the zero
+      address to cancel an offer. Getting this wrong is the one thing the contract cannot
+      recover from — a lane nobody can ever withdraw again.
+    </p>
+    <div class="msg" id="ownmsg"></div>
+  </section>
+</main>
+
+<script>
+const FLAGS = '0x0000008a1a3C78440d0a28EBB4bb5526abA91d45';
+const RPC = 'https://ethereum-rpc.publicnode.com';
+const NAME = '6272696467650000000000000000000000000000000000000000000000000000'; // "bridge"
+const SEL = { owner:'8da5cb5b', pending:'e30c3978', stateOf:'eb517a45', stateAt:'ab9bea1d',
+              setMany:'f5459d96', transfer:'f2fde38b', accept:'79ba5097' };
+const CHAINS = [
+  { id: 0,    name: 'All chains',  note: 'fallback' },
+  { id: 1,    name: 'Ethereum',    note: 'canonical bridges' },
+  { id: 8453, name: 'Base',        note: 'relay escrow' },
+  { id: 4663, name: 'Robinhood',   note: 'relay escrow' },
+];
+const LABEL = ['Unset — the page decides', 'On — everyone', 'Off — withdrawn'];
+const CLS = ['unset', 'on', 'off'];
+
+const $ = id => document.getElementById(id);
+const hex = n => BigInt(n).toString(16).padStart(64, '0');
+const pad = a => a.replace(/^0x/, '').toLowerCase().padStart(64, '0');
+const say = (el, text, kind) => {
+  const e = $(el); e.textContent = text;
+  e.className = 'msg show' + (kind ? ' ' + kind : '');
+};
+const hide = el => { $(el).className = 'msg'; };
+
+let provider = null, account = null, owner = null, pending = null;
+const stored = new Map();   // chainId -> raw stateAt
+const wanted = new Map();   // chainId -> what the selects say
+
+// ---------------------------------------------------------------- reads
+async function rpcCall(data, to = FLAGS) {
+  const body = { jsonrpc: '2.0', id: 1, method: 'eth_call', params: [{ to, data }, 'latest'] };
+  // Reads go to a public node even with no wallet, so this page is useful
+  // read-only — you can check what the lane is set to before connecting.
+  const r = await fetch(RPC, { method: 'POST', headers: { 'content-type': 'application/json' },
+                               body: JSON.stringify(body) });
+  const j = await r.json();
+  if (j.error) throw Error(j.error.message || 'call failed');
+  return j.result;
+}
+
+async function load() {
+  try {
+    owner = '0x' + (await rpcCall('0x' + SEL.owner)).slice(26);
+    pending = '0x' + (await rpcCall('0x' + SEL.pending)).slice(26);
+    $('owner').textContent = owner;
+    $('pending').textContent = /^0x0+$/.test(pending) ? 'none' : pending;
+    for (const c of CHAINS) {
+      stored.set(c.id, Number(await rpcCall('0x' + SEL.stateAt + NAME + hex(c.id))));
+    }
+    render();
+    checkWho();
+  } catch (e) { say('who', 'Could not read the contract: ' + e.message, 'bad'); }
+}
+
+/** What zSwap will actually do on a chain: its own entry, else the fallback. */
+const effective = id => (stored.get(id) || stored.get(0) || 0);
+
+function render() {
+  $('rows').innerHTML = '';
+  for (const c of CHAINS) {
+    const tr = document.createElement('tr');
+    const eff = c.id === 0 ? stored.get(0) : effective(c.id);
+    const inherited = c.id !== 0 && !stored.get(c.id) && stored.get(0);
+
+    const td = (html, cls) => { const d = document.createElement('td');
+      if (cls) d.className = cls; d.innerHTML = html; tr.append(d); return d; };
+    td(`${c.name}<div class="hint" style="margin:0">${c.id ? c.id + ' · ' + c.note : c.note}</div>`, 'name');
+    td(`<span class="eff ${CLS[stored.get(c.id)]}">${LABEL[stored.get(c.id)].split(' —')[0]}</span>`);
+    td(c.id === 0 ? '—'
+      : `<span class="eff ${CLS[eff]}">${LABEL[eff].split(' —')[0]}</span>` +
+        (inherited ? '<div class="hint" style="margin:0">from the fallback</div>' : ''));
+
+    const cell = document.createElement('td');
+    const sel = document.createElement('select');
+    sel.dataset.chain = String(c.id);
+    LABEL.forEach((l, i) => {
+      const o = document.createElement('option');
+      o.value = String(i); o.textContent = l; sel.append(o);
+    });
+    sel.value = String(wanted.has(c.id) ? wanted.get(c.id) : stored.get(c.id));
+    sel.disabled = !account || account.toLowerCase() !== (owner || '').toLowerCase();
+    sel.onchange = () => { wanted.set(c.id, Number(sel.value)); diff(); };
+    cell.append(sel); tr.append(cell);
+    $('rows').append(tr);
+  }
+  diff();
+}
+
+function changes() {
+  return CHAINS.filter(c => wanted.has(c.id) && wanted.get(c.id) !== stored.get(c.id));
+}
+
+function diff() {
+  const ch = changes();
+  const mine = account && owner && account.toLowerCase() === owner.toLowerCase();
+  $('apply').disabled = !ch.length || !mine;
+  $('diff').textContent = !ch.length ? ''
+    : ch.map(c => `${c.name}: ${LABEL[stored.get(c.id)].split(' —')[0]} → ${LABEL[wanted.get(c.id)].split(' —')[0]}`).join('   ·   ');
+}
+
+function checkWho() {
+  const mine = account && owner && account.toLowerCase() === owner.toLowerCase();
+  const isPending = account && pending && account.toLowerCase() === pending.toLowerCase();
+  $('propose').disabled = !mine;
+  $('cancel').disabled = !mine || /^0x0+$/.test(pending || '0x0');
+  $('accept').disabled = !isPending;
+  if (!account) say('who', 'Read-only. Connect the steward to change anything.', 'warn');
+  else if (mine) say('who', 'You are the steward.', 'ok');
+  else if (isPending) say('who', 'Stewardship has been offered to you. Accept it below.', 'warn');
+  else say('who', 'This account is not the steward — every write will revert.', 'bad');
+  render();
+}
+
+// ---------------------------------------------------------------- writes
+async function send(data, msgEl) {
+  hide(msgEl);
+  const id = await provider.request({ method: 'eth_chainId' });
+  if (parseInt(id, 16) !== 1) {
+    try { await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x1' }] }); }
+    catch { return say(msgEl, 'This contract is on Ethereum. Switch your wallet to mainnet.', 'bad'); }
+  }
+  try {
+    // Simulate first: a revert here is almost always "not the steward", and it
+    // is much cheaper to learn that before signing.
+    await provider.request({ method: 'eth_call', params: [{ from: account, to: FLAGS, data }, 'latest'] });
+  } catch (e) { return say(msgEl, 'It would revert: ' + (e.message || e), 'bad'); }
+  try {
+    const tx = await provider.request({ method: 'eth_sendTransaction',
+      params: [{ from: account, to: FLAGS, data }] });
+    say(msgEl, 'Sent ' + tx + '\nWaiting for it to be mined…', 'warn');
+    for (let i = 0; i < 120; i++) {
+      await new Promise(r => setTimeout(r, 2500));
+      const r = await provider.request({ method: 'eth_getTransactionReceipt', params: [tx] });
+      if (r) {
+        if (r.status === '0x0') return say(msgEl, 'Reverted on chain: ' + tx, 'bad');
+        say(msgEl, 'Done — ' + tx, 'ok');
+        wanted.clear();
+        return load();
+      }
+    }
+    say(msgEl, 'Still pending: ' + tx, 'warn');
+  } catch (e) { say(msgEl, e.message || String(e), 'bad'); }
+}
+
+$('apply').onclick = () => {
+  const ch = changes();
+  if (!ch.length) return;
+  if (ch.some(c => wanted.get(c.id) === 2) &&
+      !confirm('Setting a lane to Off withdraws it from everyone, including viewers who already '
+             + 'opted in, on every device. Continue?')) return;
+  // setMany, so a reorg or a stuck nonce cannot leave the chains half-applied.
+  const ids = ch.map(c => c.id), st = ch.map(c => wanted.get(c.id));
+  const data = '0x' + SEL.setMany + NAME
+    + hex(96) + hex(96 + 32 + ids.length * 32)
+    + hex(ids.length) + ids.map(hex).join('')
+    + hex(st.length) + st.map(hex).join('');
+  send(data, 'setmsg');
+};
+$('propose').onclick = () => {
+  const to = $('newOwner').value.trim();
+  if (!/^0x[0-9a-fA-F]{40}$/.test(to)) return say('ownmsg', 'That is not an address.', 'bad');
+  if (!confirm('Offer stewardship to ' + to + '?\n\nNothing changes until they accept.')) return;
+  send('0x' + SEL.transfer + pad(to), 'ownmsg');
+};
+$('cancel').onclick = () => {
+  if (!confirm('Withdraw the pending offer?')) return;
+  send('0x' + SEL.transfer + pad('0x' + '0'.repeat(40)), 'ownmsg');
+};
+$('accept').onclick = () => send('0x' + SEL.accept, 'ownmsg');
+
+// ---------------------------------------------------------------- wallet
+const found = [];
+addEventListener('eip6963:announceProvider', e => {
+  if (found.some(p => p.info.uuid === e.detail.info.uuid)) return;
+  found.push(e.detail); paintWallets();
+});
+dispatchEvent(new Event('eip6963:requestProvider'));
+
+function paintWallets() {
+  const box = $('wallets'); box.innerHTML = '';
+  const list = found.length ? found
+    : (window.ethereum ? [{ info: { name: 'Injected wallet' }, provider: window.ethereum }] : []);
+  if (!list.length) { box.innerHTML = '<span class="hint">No wallet found.</span>'; return; }
+  for (const w of list) {
+    const b = document.createElement('button');
+    b.className = 'ghost'; b.textContent = w.info.name;
+    b.onclick = () => connect(w.provider);
+    box.append(b);
+  }
+}
+async function connect(p) {
+  provider = p || (found[0] && found[0].provider) || window.ethereum;
+  if (!provider) return say('who', 'No wallet found.', 'bad');
+  try {
+    const a = await provider.request({ method: 'eth_requestAccounts' });
+    account = a[0];
+    $('me').textContent = account;
+    provider.on && provider.on('accountsChanged', () => location.reload());
+    provider.on && provider.on('chainChanged', () => location.reload());
+    checkWho();
+  } catch (e) { say('who', e.message || String(e), 'bad'); }
+}
+$('connect').onclick = () => connect();
+$('reload').onclick = () => { wanted.clear(); load(); };
+
+paintWallets();
+load();
+</script>

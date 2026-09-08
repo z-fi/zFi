@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url';
 import { JsonRpcProvider, Wallet, formatEther } from 'ethers';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const N = 19;
+const N = 20;
 const DRY = process.argv.includes('--dry-run');
 const REC = path.join(ROOT, 'out', 'zSwap.chunks.deployed.json');
 

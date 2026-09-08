@@ -62,6 +62,16 @@ export const A = {
   TAPVEST: '0x0000000060cdD33cbE020fAE696E70E7507bF56D',
   SLOW: '0x000000006513B7821171C8447ec7ECdfa3b956Fd',
   SLOW_GATE: '0x76D1956b3BE7c0D09A16dE00DcE9B6f54ef28D34',
+  // SlowArrival — one CREATE3 address on Ethereum, Base and Robinhood. It is
+  // the depositor on the far side of a bridged SLOW send, which is what keeps
+  // the reverse with the sender rather than with the bridge.
+  ARRIVAL: '0x9F8D89D298caBDC0D64cbA3888D0DA85Dc95097f',
+  RELAY: '0xC58C217791E397550492c4F84a6995Db60aDE2da',
+  FLAGS: '0x0000008a1a3C78440d0a28EBB4bb5526abA91d45',
+  // The canonical entrypoints the page deposits through: Base's OptimismPortal
+  // and Robinhood's Inbox, both on Ethereum.
+  OP_PORTAL: '0x49048044D57e1C92A77f79988d21Fa8fAF74E97e',
+  ARB_INBOX: '0x1A07cc4BD17E0118BdB54D70990D2158AbAD7a2D',
   SB2: '0x000000dA7bb4B2A9E3e80e9A4D4157E26CA6189b',
   SB1: '0x000000fF3D7A2d373615141d7489Ca66683DbecF',
   SBVIEW: '0x000000E0b25449F32f7D9259aC449bA88E78dFCE',
@@ -142,6 +152,12 @@ export const SEL = {
   DEPOSITTIP: '75f92e42', TIPS: 'a5c68c59', REFUNDTIP: 'd27e1e72',
   OUT: 'd40d4bc6', IN: 'e3993ee7', PENDING: '6577b86a',
   GUARDIAN: '0633b14a', UNLOCK: '6198e339', CLAWBACK: 'fcc36bc9',
+  // SlowArrival, and the two canonical entrypoints a bridged send goes through.
+  ARRIVE: '24eb6264', AREV: '99c5ff88', ACLAW: 'e3035405',
+  AORIGIN: '794b2a07', ARESC: '839006f2', ACLAIMR: 'b422b718',
+  ROPEN: '6a144013', RCANCEL: '47bfb904', RSTATUS: 'c7df14e2', RFILLED: 'd70e3dfd',
+  RPROVEN: '62cfad7e', FLAGOF: 'eb517a45', OPENED: '0xdd10c5d1da4dfd4cb1bb4c515b2c692c4a4a67e18fcbcf1bb0a3ea4d01591865',
+  OPDEP: 'e9e05c42', RETRY: '679b6ded', SUBFEE: 'a66b327d',
   WETH_DEPOSIT: 'd0e30db0', WETH_WITHDRAW: '2e1a7d4d',
   LATEST: '52bfe789', PREVIOUS: '247dfaa8', SUCCEEDED_AT: '451aae60',
 };
@@ -280,6 +296,21 @@ export function encodeViewPage(rows, next = 0n) {
 
 const encodeString = s => coder.encode(['string'], [s]);
 export const wordHex = (hex, i) => '0x' + strip(hex).slice(i * 64, (i + 1) * 64);
+
+/**
+ * `SlowRelay.intentId` — keccak of the whole ABI-encoded Intent, which is what
+ * both chains independently recompute. Deliberately not an EIP-712 digest: that
+ * would fold in the LOCAL chainId, and the two chains have to agree. Takes the
+ * shape the page stores in localStorage so a fixture and the page's own record
+ * cannot drift apart.
+ */
+export function relayIntentId(i) {
+  return keccak256(coder.encode(
+    ['address', 'address', 'address', 'address', 'uint256', 'uint256',
+      'uint96', 'uint64', 'uint64', 'uint64', 'uint256'],
+    [i.s, i.r, i.st, i.dt, i.a, i.f, i.d, i.sc, i.dc, i.dl, i.n],
+  ));
+}
 /** namehash, computed independently of the page so the test is not the code. */
 export const ensNamehash = name => {
   let node = '0x' + '0'.repeat(64);
@@ -412,6 +443,25 @@ export class MockChain {
     this.ensOffchain = false;       // resolve() reverts OffchainLookup, as a CCIP resolver does
     this.slowOut = [];
     this.slowIn = [];
+    // getOutboundTransfers(SlowArrival): every live bridged deposit on this
+    // chain, whoever sent it. Kept apart from slowOut because the page has to
+    // narrow it with originOf — reading one as the other would hand a stranger
+    // a Reverse button.
+    this.slowArrivalOut = [];
+    this.arrivalOrigin = new Map(); // transferId -> who may reverse it
+    this.arrivalRescue = 0n;        // rescue(account): an arrival that failed
+    // SlowRelay. The escrow lives on the SOURCE chain and the fill lands on the
+    // destination, so a relayed send touches two of these - one holding an open
+    // intent, one holding the filled leg the sender can still reverse.
+    this.slowRelayOut = [];          // getOutboundTransfers(SlowRelay): filled legs here
+    this.relayOrigin = new Map();    // transferId -> the sender who may reverse it
+    this.relayStatus = new Map();    // intentId -> 0 NONE, 1 OPEN, 2 RELEASED, 3 CANCELLED
+    // filledBy is written on the DESTINATION chain by `fill`; provenBy on the
+    // SOURCE chain when the proof lands. Reading one where the other lives is
+    // the mistake this split exists to catch.
+    this.relayFilledBy = new Map();  // intentId -> the relayer that delivered it
+    this.relayProvenBy = new Map();  // intentId -> the relayer a proof named here
+    this.submissionFee = 10n ** 14n; // Inbox.calculateRetryableSubmissionFee
     this.slowPending = new Map();
     // transferId -> tip in wei, as the gate holds it. Absent means no tip was
     // posted, which is what a plain depositTo leaves behind.
@@ -436,6 +486,13 @@ export class MockChain {
     this.callsStatusHandler = null;
     this.reverts = new Map();      // `${to}:${selector}` -> message, for eth_call
     this.batchLimit = Infinity;    // max aggregate3 calls before the node balks
+    this.codeRaw = undefined;      // set to override eth_getCode verbatim
+    this.failCallsTo = new Set();  // addresses that are unreachable: eth_call throws,
+                                   // and their multicall legs come back null
+    // zSwapFlags.stateOf(name, chainId): 0 unset (the page decides), 1 on for
+    // everyone, 2 off for everyone. Keyed by chain id, and it lives on mainnet
+    // — an L2 page reads it through its mainnet read path.
+    this.bridgeFlag = new Map();
     this.failEveryCall = false;    // batch returns, but every call inside it failed
     // zTokenlist rows, IN CONVICTION ORDER, as rankedIds() returns them. Null
     // means the registry is unreachable and the page uses its built-in list,
@@ -781,7 +838,12 @@ export class MockChain {
       case 'eth_blockNumber': return this.blockNumber;
       case 'eth_gasPrice': return '0x' + this.gasPrice.toString(16);
       case 'eth_getBalance': return '0x' + this.balanceOf(A.ZERO, params[0]).toString(16);
-      case 'eth_getCode': return this.code.get((params[0] || '').toLowerCase()) ?? '0x';
+      // A node answering eth_getCode with something that is not well-formed
+      // hex — null, a number, a truncated string. Callers that read "no code"
+      // out of that pick the wrong branch, so it must be testable.
+      case 'eth_getCode':
+        if (this.codeRaw !== undefined) return this.codeRaw;
+        return this.code.get((params[0] || '').toLowerCase()) ?? '0x';
       case 'eth_getLogs': {
         const f = params[0] || {};
         const addr = (f.address || '').toLowerCase();
@@ -1036,6 +1098,42 @@ export class MockChain {
     }
     if (to === A.DUTCH.toLowerCase() && sel === SEL.DUTCH_LISTING) return this.dutchListing(data);
     if (to === A.SLOW.toLowerCase()) return this.slow(sel, data, tx);
+    if (to === A.ARRIVAL.toLowerCase()) {
+      if (sel === SEL.AORIGIN) {
+        const id = word('0x' + data.slice(8), 0).toString();
+        return '0x' + addrWord(this.arrivalOrigin.get(id) || ZERO_ADDR);
+      }
+      if (sel === SEL.ARESC) return '0x' + u256(this.arrivalRescue);
+      return '0x';                                            // pre-flight eth_call
+    }
+    if (this.failCallsTo && this.failCallsTo.has(to)) throw Error('node refused the call');
+    if (to === A.FLAGS.toLowerCase() && sel === SEL.FLAGOF) {
+      const chainId = word('0x' + data.slice(8), 1).toString();
+      return '0x' + u256(this.bridgeFlag.get(chainId) ?? 0);
+    }
+    if (to === A.RELAY.toLowerCase()) {
+      // originOf shares its selector with SlowArrival's - the two contracts
+      // expose the same right over different transfers, which is exactly why
+      // the page has to address the row's OWN holder and not a constant.
+      if (sel === SEL.AORIGIN) {
+        const id = word('0x' + data.slice(8), 0).toString();
+        return '0x' + addrWord(this.relayOrigin.get(id) || ZERO_ADDR);
+      }
+      if (sel === SEL.RSTATUS) {
+        return '0x' + u256(this.relayStatus.get(wordHex('0x' + data.slice(8), 0)) ?? 0);
+      }
+      if (sel === SEL.RFILLED) {
+        return '0x' + addrWord(this.relayFilledBy.get(wordHex('0x' + data.slice(8), 0)) || ZERO_ADDR);
+      }
+      if (sel === SEL.RPROVEN) {
+        return '0x' + addrWord(this.relayProvenBy.get(wordHex('0x' + data.slice(8), 0)) || ZERO_ADDR);
+      }
+      return '0x';                                            // pre-flight eth_call
+    }
+    if (to === A.ARB_INBOX.toLowerCase() && sel === SEL.SUBFEE) {
+      return '0x' + u256(this.submissionFee);
+    }
+    if (to === A.ARB_INBOX.toLowerCase() || to === A.OP_PORTAL.toLowerCase()) return '0x';
     // SLOW's tip gate: `tips(transferId) -> (uint96 amount, address sender)`.
     // refundTip is state-changing and only pre-flighted, so it answers empty.
     if (to === A.SLOW_GATE.toLowerCase()) {
@@ -1458,6 +1556,20 @@ export class MockChain {
     if (this.failEveryCall) {
       return coder.encode(['tuple(bool,bytes)[]'], [calls.map(() => [false, '0x'])]);
     }
+    // One contract unreachable while the rest of the batch answers. This is the
+    // shape that matters for a reader which decodes a fixed-length result set:
+    // the array is the right length and only SOME entries are null.
+    if (this.failCallsTo && this.failCallsTo.size) {
+      const fails = calls.map(([target]) => this.failCallsTo.has(target.toLowerCase()));
+      if (fails.some(Boolean)) {
+        return coder.encode(['tuple(bool,bytes)[]'],
+          [calls.map(([target, , callData], i) => {
+            if (fails[i]) return [false, '0x'];
+            try { return [true, this.ethCall({ to: target, data: callData }, block) ?? '0x']; }
+            catch { return [false, '0x']; }
+          })]);
+      }
+    }
     const results = calls.map(([target, , callData]) => {
       try {
         return [true, this.ethCall({ to: target, data: callData }, block)];
@@ -1694,7 +1806,12 @@ export class MockChain {
       return '0x' + u256(1);
     }
     if (sel === SEL.GUARDIAN) return '0x' + addrWord(this.slowGuardian);
-    if (sel === SEL.OUT) return arr(this.slowOut);
+    if (sel === SEL.OUT) {
+      const who = wordAddr('0x' + data.slice(8), 0).toLowerCase();
+      if (who === A.ARRIVAL.toLowerCase()) return arr(this.slowArrivalOut);
+      if (who === A.RELAY.toLowerCase()) return arr(this.slowRelayOut);
+      return arr(this.slowOut);
+    }
     if (sel === SEL.IN) return arr(this.slowIn);
     if (sel === SEL.PENDING) {
       const id = word('0x' + data.slice(8), 0).toString();
@@ -1868,7 +1985,8 @@ export function closeAllPages() {
 const PINNED_PAIR = 'token=ETH&out=USDC';
 
 export async function loadPage(opts = {}) {
-  let { chain = new MockChain(), hash = '', storage = {}, session = {}, patch = [], prefersDark = false } = opts;
+  let { chain = new MockChain(), hash = '', storage = {}, session = {}, patch = [], prefersDark = false,
+    storageBroken = false } = opts;
   if (hash === '') hash = PINNED_PAIR;
   else if (hash === null) hash = '';
   // Tests that exercise the price tape or the liquidity panel repoint PPLENS
@@ -1904,6 +2022,23 @@ export async function loadPage(opts = {}) {
     virtualConsole,
     beforeParse(window) {
       for (const [k, v] of Object.entries(storage)) window.localStorage.setItem(k, v);
+      // Safari private browsing and a full quota both throw here. The page must
+      // not report success for state it could not keep.
+      if (storageBroken) {
+        // A store that reads but will not write: a full quota, or a browser
+        // that has decided this origin may not persist. Reads still work, so
+        // the page cannot notice by reading.
+        const kept = { ...Object.fromEntries(Object.entries(storage)) };
+        const boom = () => { throw Error('QuotaExceededError'); };
+        Object.defineProperty(window, 'localStorage', {
+          configurable: true,
+          value: new Proxy(kept, {
+            set: boom,
+            get: (t, k) => (k === 'setItem' || k === 'removeItem' ? boom
+              : k === 'getItem' ? (n) => (n in t ? t[n] : null) : t[k]),
+          }),
+        });
+      }
       // `dc` lives in sessionStorage: a deliberate disconnect lasts the tab, not forever.
       for (const [k, v] of Object.entries(session)) window.sessionStorage.setItem(k, v);
 
@@ -2202,7 +2337,7 @@ export function assertAddressesMatchPage(assert) {
   const html = fs.readFileSync(HTML_PATH, 'utf8');
   const pinned = {
     ZQUOTER: 'ZQUOTER', ZROUTER: 'ZROUTER', PERMIT2: 'PERMIT2', SLOW: 'SLOW',
-    SLOW_GATE: 'SLOW_GATE',
+    SLOW_GATE: 'SLOW_GATE', ARRIVAL: 'ARRIVAL', RELAY: 'RELAY', FLAGS: 'FLAGS',
     SB2: 'SB2', SB1: 'SB1', SBVIEW: 'SBVIEW', SWAPBOL: 'SWAPBOL', DUTCH: 'DUTCH',
     ORDERBOL: 'ORDERBOL', WETH: 'WETH', FLOOR: 'FLOOR', FLOORVIEW: 'FLOORVIEW',
     // Not patched by any suite, so the fixtures answer at the real addresses
@@ -2222,6 +2357,14 @@ export function assertAddressesMatchPage(assert) {
   }
   const mc3 = html.match(/const MC3="(0x[0-9a-fA-F]{40})"/);
   assert.equal(mc3[1].toLowerCase(), A.MC3.toLowerCase(), 'MC3 fixture matches the page');
+  // The bridge entrypoints live inside BRIDGES rather than at top level. A
+  // wrong one here is ether handed to an address that is not a bridge, so the
+  // fixtures pin both.
+  for (const [chain, key] of [[8453, 'OP_PORTAL'], [4663, 'ARB_INBOX']]) {
+    const m = html.match(new RegExp(`${chain}:\\{entry:"(0x[0-9a-fA-F]{40})"`));
+    assert.ok(m, `page still names a bridge entry for chain ${chain}`);
+    assert.equal(m[1].toLowerCase(), A[key].toLowerCase(), `chain ${chain} bridge entry matches the fixture`);
+  }
   // Both v4 ports come from the chain table, so a redeploy of either has to
   // update the fixture rather than quietly stop being exercised.
   for (const [chain, key] of [[1, 'V4PORT'], [8453, 'V4PORT_L2'], [4663, 'V4PORT_L2']]) {

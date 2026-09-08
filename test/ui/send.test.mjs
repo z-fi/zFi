@@ -583,9 +583,10 @@ describe('recovery paths', () => {
 describe('SLOW on the other chains', () => {
   const BASE = '0x2105', RH = '0x1237';
 
-  async function onChain(hex) {
+  async function onChain(hex, prep = () => {}) {
     const chain = new MockChain({ chainId: hex });
     chain.setNative(A.ACCOUNT, 10n * ETH);
+    prep(chain);
     const p = await loadPage({ chain, hash: null });
     await p.connect({ pin: false });
     p.click('tabSend');
@@ -620,6 +621,50 @@ describe('SLOW on the other chains', () => {
       p.select('dly', '86400');
       await p.settle();
       assert.equal(p.visible('tipL'), false, 'no keeper watches this chain, so nothing is offered');
+      p.close();
+    });
+
+    // The other half of the round trip. A position made here is settled here,
+    // and the page must reach it through SLOW itself — the bridged rows use a
+    // different contract, and routing an ordinary one that way would revert.
+    test(`${name} claims a matured position through SLOW itself`, async () => {
+      const now = Math.floor(Date.now() / 1000);
+      const p = await onChain(hex, c => {
+        c.slowIn = [4n];
+        c.slowPending.set('4', {
+          timestamp: BigInt(now) - 2n * 86400n,
+          id: BigInt(A.ZERO) | (86400n << 160n), amount: ETH,
+        });
+      });
+      await p.waitFor(() => p.$('pos').textContent.includes('Ready to claim'), { label: 'positions' });
+      const b = [...p.$('pos').querySelectorAll('button')].find(x => x.textContent === 'Claim');
+      assert.ok(b, `a matured position is claimable on ${name}`);
+      p.click(b);
+      await p.waitFor(() => p.chain.sent.length > 0, { label: 'claim tx' });
+      await p.settle();
+      assert.equal(p.chain.lastSent.to.toLowerCase(), A.SLOW.toLowerCase());
+      assert.equal(selectorOf(p.chain.lastSent.data), SEL.CLAIM);
+      p.close();
+    });
+
+    test(`${name} reverses an ordinary lock through SLOW, not through the bridge`, async () => {
+      const now = Math.floor(Date.now() / 1000);
+      const p = await onChain(hex, c => {
+        c.slowOut = [5n];
+        c.slowPending.set('5', {
+          timestamp: BigInt(now), id: BigInt(A.ZERO) | (86400n << 160n), amount: ETH,
+        });
+      });
+      await p.waitFor(() => p.$('pos').textContent.includes('Reversible'), { label: 'positions' });
+      assert.equal(p.$('pos').textContent.includes('Bridged in'), false,
+        'a lock made here was not bridged, and must not be labelled as if it were');
+      const b = [...p.$('pos').querySelectorAll('button')].find(x => x.textContent === 'Reverse');
+      p.click(b);
+      await p.waitFor(() => p.chain.sent.length > 0, { label: 'reverse tx' });
+      await p.settle();
+      assert.equal(p.chain.lastSent.to.toLowerCase(), A.SLOW.toLowerCase(),
+        'SlowArrival would refuse it — this account is pt.from, so SLOW hears it directly');
+      assert.equal(selectorOf(p.chain.lastSent.data), SEL.MULTICALL);
       p.close();
     });
   }
