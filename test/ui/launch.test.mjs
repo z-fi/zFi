@@ -100,14 +100,24 @@ test("launching a coin", async (t) => {
     p.close();
   });
 
-  await t.test("keeps every meta-row control on one line", async () => {
-    // `.meta` is an explicit grid. Adding the coin without widening it pushed
-    // the theme toggle onto a second row.
+  await t.test("keeps every meta-row control in the cluster that reflows", async () => {
+    // `.meta` used to be an explicit grid, and adding the coin without widening
+    // it squeezed the address column to nothing on anything but a wide mouse
+    // screen. It is a wrapping flex row now: the address takes the space it
+    // needs and the controls ride in one cluster that drops to its own line
+    // rather than crushing the address out of sight. A control added outside
+    // that cluster would compete with the address again, so check it is in it.
     const p = await loadPage({chain: new MockChain()});
-    const cols = p.window.getComputedStyle(p.doc.querySelector(".meta")).gridTemplateColumns;
-    const kids = p.doc.querySelector(".meta").children.length;
-    assert.ok(cols.split(/\s+/).filter(Boolean).length >= kids,
-      `${kids} controls but only ${cols} - something will wrap`);
+    const meta = p.doc.querySelector(".meta");
+    const cluster = meta.querySelector(".mtl");
+    assert.ok(cluster, "the meta row still has a control cluster");
+    assert.deepEqual([...meta.children].map(el => el.id || el.className),
+      ["addr", "mtl"], "the address and the cluster are the only two items");
+    for (const id of ["slipL", "lq", "ln", "wn", "pv", "lk", "th"])
+      assert.equal(p.$(id).parentElement, cluster, `${id} rides in the cluster`);
+    const cs = p.window.getComputedStyle(meta);
+    assert.equal(cs.display, "flex");
+    assert.equal(cs.flexWrap, "wrap", "the row reflows instead of overflowing");
     p.close();
   });
 
