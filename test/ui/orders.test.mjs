@@ -532,6 +532,17 @@ describe('the orderbook list', () => {
     await p.settle();
   };
 
+  test('Edit re-reads the order and refuses one filled since the book was read', async () => {
+    const p = await setup(c => { c.recent = [order({ id: 4, maker: A.ACCOUNT })]; });
+    await p.waitFor(() => p.$('book').querySelector('button[data-x="r"]'), { label: 'edit' });
+    p.chain.recent[0].aA = 1000n * USDC;
+    p.queuePrompt('2');
+    p.click(p.$('book').querySelector('button[data-x="r"]'));
+    await p.waitFor(() => /order changed/.test(p.text('stat')), { label: 'the refusal' });
+    assert.equal(p.chain.sent.length, 0, 'nothing is sent for a stale size');
+    p.close();
+  });
+
   test('Fill asks how much, and takes only that much', async () => {
     // The button used to mean "take the whole order", which on a large one
     // quotes a number most people cannot cover and stops - while the same order

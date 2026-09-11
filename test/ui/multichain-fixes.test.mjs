@@ -151,8 +151,26 @@ describe('without a wallet', () => {
     const q = await loadPage({ walletless: true, hash: null, storage: { 'zswap:chain': '8453' } });
     await q.settle();
     assert.equal(q.window.eval('CHAIN_ID'), 8453, 'the stored chain is restored');
-    assert.match(q.text('net'), /BASE/);
+    assert.match(q.text('net'), /Base network/);
     q.close();
+  });
+
+  test('a stored L2 seats its own pair before the list lands', async () => {
+    const { HTML_PATH } = await import('./harness.mjs');
+    const html = (await import('node:fs')).readFileSync(HTML_PATH, 'utf8');
+    const gate = [...html.matchAll(/(?:tokenlist:"|ZLISTLENS=")0x([0-9a-fA-F]{40})/g)].map(m => m[1].toLowerCase());
+    for (const id of ['8453', '4663']) {
+      const chain = new MockChain({ chainId: 1 }), req = chain.request.bind(chain);
+      chain.request = async a => {
+        if (a.method === 'eth_call' && gate.some(g => JSON.stringify(a.params).toLowerCase().includes(g))) await new Promise(r => setTimeout(r, 3000));
+        return req(a);
+      };
+      const q = await loadPage({ chain, walletless: true, hash: null, storage: { 'zswap:chain': id } });
+      const [ready, sym, opt, pick] = q.window.eval('[listReady,TOKENS[toSel.value].sym,toSel.options[toSel.selectedIndex].textContent,toPick.textContent]');
+      assert.equal(ready, false, 'the list is still out');
+      assert.ok(opt.includes(sym) && pick.includes(sym), `${id}: the label ${pick} sits over ${sym}`);
+      q.close();
+    }
   });
 
   test('a pinned read node is only used on the chain it was pinned for', async () => {

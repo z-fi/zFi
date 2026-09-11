@@ -43,6 +43,9 @@ const bidWethForUsdc = (over = {}) => ({
   ...over,
 });
 
+/** Floorboard refuses a zero duration, and the page checks a routed bid's window before signing. */
+const OPEN = { startTime: BigInt(Math.floor(Date.now() / 1000)) - 60n, duration: 86400n };
+
 async function setup(prep = () => {}, { rate = 3000n * ETH } = {}) {
   const chain = new MockChain();
   chain.setNative(A.ACCOUNT, 100n * ETH);
@@ -168,7 +171,7 @@ describe('quoting a partial take the way the board settles it', () => {
 describe('routing a swap into a bid', () => {
   it('prefers the bid when it beats the AMM, and sends it through Swapbol', async () => {
     // AMM pays 3,000/ETH; the bid pays 4,000. The bid must win.
-    const p = await setup(c => { c.floorBids = [bidWethForUsdc()]; });
+    const p = await setup(c => { c.floorBids = [bidWethForUsdc(OPEN)]; });
     await quoteEthToUsdc(p, '1');
 
     const rate = p.text('rate');
@@ -185,7 +188,7 @@ describe('routing a swap into a bid', () => {
   });
 
   it('names the bid board on the leg it plans', async () => {
-    const p = await setup(c => { c.floorBids = [bidWethForUsdc()]; });
+    const p = await setup(c => { c.floorBids = [bidWethForUsdc(OPEN)]; });
     await quoteEthToUsdc(p, '1');
     p.click('swap');
     await p.settle();
@@ -196,6 +199,18 @@ describe('routing a swap into a bid', () => {
       data.toLowerCase().includes(A.FLOOR.toLowerCase().replace(/^0x/, '')),
       'the planned leg does not name Floorboard',
     );
+    p.close();
+  });
+
+  it('refuses a bid whose window closed after the quote, before anything is signed', async () => {
+    const p = await setup(c => { c.floorBids = [bidWethForUsdc(OPEN)]; });
+    await quoteEthToUsdc(p, '1');
+    assert.match(p.text('rate'), /Orderbook/);
+    // Floorboard.hit reverts once block.timestamp >= startTime + duration.
+    p.chain.floorBids[0].duration = 1n;
+    p.click('swap');
+    await p.settle();
+    assert.equal(p.chain.sent.length, 0, 'the route would revert at Floorboard');
     p.close();
   });
 

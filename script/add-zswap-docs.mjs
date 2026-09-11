@@ -57,7 +57,7 @@ const DOCS = `<div id="docPanel" class="docs hide">
 
 <details><summary>Orders</summary>
 <p><b>Fixed limit</b> &mdash; a price you name. It rests until someone fills it or you cancel.</p>
-<p><b>Dutch decay</b> &mdash; starts above your floor and falls to it over a window you choose. It has two clocks: the decay, then how long it rests at the floor before the escrow returns to you. Set that to <em>Forever</em> and it waits until you cancel.</p>
+<p><b>Dutch decay</b> &mdash; starts above your floor and falls to it over a window you choose. It has two clocks: the decay, then how long it rests at the floor before it lapses; the escrow then waits until you reclaim it. Set that to <em>Forever</em> and it waits until you cancel.</p>
 <p><b>Climbing bid</b> &mdash; the mirror: a bid that rises toward a ceiling you name.</p>
 <p>Orders are escrowed on chain when placed, so a fill cannot fail for want of funds, and cancelling returns the escrow. Boards are denominated in WETH &mdash; an order asking for ETH is asking for WETH, and pays out as such.</p></details>
 

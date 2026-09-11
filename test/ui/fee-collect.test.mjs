@@ -41,11 +41,12 @@ const POOL2 = '0x00000000000000000000000000000000000b0002';
 
 /* The creator path: the wallet is connected, the coin is NOT selected, and the
  * page has to volunteer the information. */
-async function openMine({ many = false, creator = A.ACCOUNT } = {}) {
+async function openMine({ many = false, creator = A.ACCOUNT, listed = false } = {}) {
   const rows = [row('ETH', A.ZERO, { p: 'Native' }), row('USDC', A.USDC, { d: 6 })];
+  if (listed) rows.push(row('ZCAT', COIN));
   const chain = new MockChain();
   chain.registry = rows;
-  chain.conviction = [1, 2];
+  chain.conviction = rows.map((_, i) => i + 1);
   chain.setNative(A.ACCOUNT, 10n * ETH);
   chain.quoteHandler = fixedRateQuoter({ rate: 3000n * ETH });
   chain.setToken(COIN, { symbol: 'ZCAT', decimals: 18, name: 'Zero Cat' });
@@ -111,6 +112,14 @@ describe('collecting a launched coin\'s fees', () => {
     const p = await openMine();
     assert.ok(shown(p), 'a creator saw nothing on a plain ETH/USDC screen');
     assert.match(line(p).textContent, /ZCAT/, `did not name the coin: ${line(p).textContent}`);
+    assert.match(line(p).textContent, /0\.4099/, line(p).textContent);
+    p.close();
+  });
+
+  test('a creator is still told once their coin is on the list', async () => {
+    const p = await openMine({ listed: true });
+    assert.ok(shown(p), 'a listed coin hid its creator fees');
+    assert.match(line(p).textContent, /ZCAT/, line(p).textContent);
     assert.match(line(p).textContent, /0\.4099/, line(p).textContent);
     p.close();
   });

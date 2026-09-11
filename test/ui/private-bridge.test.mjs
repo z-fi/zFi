@@ -347,12 +347,14 @@ describe('exiting to Base through the relay', () => {
     await p.waitFor(() => p.chain.sentTo(ROUTER).length === 2, { label: 'activateExit to be sent' });
     const tx = p.chain.sentTo(ROUTER)[1];
     assert.equal(tx.data, activateOf(recipe), 'activateExit(recipe), encoded by ethers');
-    assert.equal(BigInt(tx.gas), 800000n, 'the gas the live run needed');
+    assert.equal(BigInt(tx.gas), 1200000n, 'the activate gas limit');
     assert.equal(BigInt(tx.value), 0n);
     // The pre-flight ran at the SAME gas cap as the real send.
     const dry = p.chain.calls.filter(c => c.selector === SEL.ACTIVATE);
     assert.ok(dry.length >= 1);
     await p.waitFor(() => /on Base/.test(p.text('pvList')), { label: 'the row to report the bridge' });
+    const on = [...p.$('pvList').querySelectorAll('a')].find(a => /on Base/.test(a.textContent));
+    assert.match(on ? on.getAttribute('href') : '', /\/address\/0x[0-9a-fA-F]{40}$/, 'the explorer link opens the address page');
     p.close();
   });
 
@@ -386,6 +388,59 @@ describe('exiting to Base through the relay', () => {
     p.close();
   });
 
+  test('an exit already activated from another browser is marked bridged, not activated again', async () => {
+    const p = await open();
+    await unlock(p);
+    await deposit(p);
+    settleDeposit(p);
+    poke(p);
+    await p.waitFor(() => /exit/.test(p.text('pvList')), SLOW);
+    p.chain.escrow = escrowOf(baseRecipe(NET * 10n ** 10n));
+    p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
+    await p.waitFor(() => p.window.__relayPosts.length === 2, SLOW);
+    p.chain.relay.status = { status: 'settled' };
+    p.chain.logs.push(spentLog([F.nullifier]));
+    advance(p);
+    p.chain.code.set(p.chain.escrow, '0x6000');
+    poke(p);
+    await p.waitFor(() => p.$('pvList').querySelector('button[data-a="activate"]'), { label: 'the activate button', timeout: 20000 });
+    p.click(p.$('pvList').querySelector('button[data-a="activate"]'));
+    await p.waitFor(() => /Already activated/.test(p.text('stat')), { label: 'the activation to be recognised' });
+    assert.equal(p.chain.sentTo(ROUTER).length, 1, 'no second activation is sent');
+    await p.waitFor(() => /on Base/.test(p.text('pvList')), { label: 'the row to report the bridge' });
+    p.close();
+  });
+
+  test('a retry while the first attempt can still land keeps its escrow and fee', async () => {
+    const p = await open();
+    await unlock(p);
+    await deposit(p);
+    settleDeposit(p);
+    poke(p);
+    await p.waitFor(() => /exit/.test(p.text('pvList')), SLOW);
+    p.chain.escrow = escrowOf(baseRecipe(NET * 10n ** 10n));
+    const inner = p.window.fetch;
+    let dropped = false;
+    p.window.fetch = async (url, init) => {
+      if (!dropped && String(url).includes('/confidential/submit')) {
+        dropped = true;
+        p.window.__relayPosts.push(JSON.parse(init.body));
+        throw new Error('connection reset');
+      }
+      return inner(url, init);
+    };
+    p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
+    await p.waitFor(() => /relay failed/.test(p.text('pvList')), { label: 'the retry to be offered', ...SLOW });
+    p.chain.gasPrice = GAS * 2n;
+    p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
+    await p.waitFor(() => p.window.__relayPosts.length === 3, { label: 'the retry to reach the relay', ...SLOW });
+    const [, first, again] = p.window.__relayPosts;
+    assert.equal(again.op.recipient, first.op.recipient, 'the same escrow');
+    assert.equal(again.op.fee, first.op.fee, 'the same fee, though gas moved');
+    assert.equal(again.op.fee, String(FEE));
+    p.close();
+  });
+
   test('refuses a recipe the router maps elsewhere', async () => {
     const p = await open();
     await unlock(p);
@@ -414,14 +469,16 @@ describe('exiting yourself, in one transaction', () => {
     const recipe = baseRecipe(whole);
     p.chain.escrow = escrowOf(recipe);
     p.select('pvPath', 'self');
+    const pv = '0x' + '12'.repeat(200) + F.nullifier.slice(2), pr = '0x' + 'ab'.repeat(260);
+    p.chain.relay.status = { status: 'proven', publicValues: pv, proof: pr };
     p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
     await p.waitFor(() => p.window.__relayPosts.length === 2);
     const post = p.window.__relayPosts[1];
     assert.equal(post.mode, 'prove');
     assert.equal(post.op.fee, '0');
     assert.equal(post.op.recipient, p.chain.escrow);
-    const pv = '0x' + '12'.repeat(200), pr = '0x' + 'ab'.repeat(260);
-    p.chain.relay.status = { status: 'proven', publicValues: pv, proof: pr };
+    await p.waitFor(() => p.$('pvList').querySelector('button[data-a="send"]'), { label: 'the send button', timeout: 20000 });
+    p.click(p.$('pvList').querySelector('button[data-a="send"]'));
     await p.waitFor(() => p.chain.sentTo(ROUTER).length === 2, { label: 'exitAndExecute to be sent', timeout: 20000 });
     const tx = p.chain.sentTo(ROUTER)[1];
     assert.equal(tx.data, exitOf(pv, pr, recipe), 'exitAndExecute(pv, proof, [], recipe)');
@@ -443,7 +500,7 @@ describe('exiting to Robinhood Chain', () => {
     poke(p);
     await p.waitFor(() => /exit/.test(p.text('pvList')), SLOW);
     const net = NET * 10n ** 10n;
-    const g = { gl: BigInt(F.robinhood.gasLimit), sc: BigInt(F.robinhood.sub), mf: BigInt(F.robinhood.maxFeePerGas) };
+    const g = { gl: BigInt(F.robinhood.gasLimit), sc: BigInt(F.robinhood.sub), mf: 8n * BigInt(F.robinhood.l2Gas) };
     const recipe = rhRecipe(net, g);
     p.chain.escrow = escrowOf(recipe);
     p.select('pvChain', '4663');
@@ -575,14 +632,16 @@ describe('withdrawing to Ethereum', () => {
     await p.waitFor(() => /exit/.test(p.text('pvList')), SLOW);
     p.select('pvChain', '1');
     p.select('pvPath', 'self');
+    const pv = '0x' + '12'.repeat(200) + F.nullifier.slice(2), pr = '0x' + 'ab'.repeat(260);
+    p.chain.relay.status = { status: 'proven', publicValues: pv, proof: pr };
     p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
     await p.waitFor(() => p.window.__relayPosts.length === 2, SLOW);
     const post = p.window.__relayPosts[1];
     assert.equal(post.mode, 'prove');
     assert.equal(post.op.fee, '0');
     assert.equal(post.op.recipient, A.ACCOUNT.toLowerCase(), 'defaults to this wallet');
-    const pv = '0x' + '12'.repeat(200), pr = '0x' + 'ab'.repeat(260);
-    p.chain.relay.status = { status: 'proven', publicValues: pv, proof: pr };
+    await p.waitFor(() => p.$('pvList').querySelector('button[data-a="send"]'), { label: 'the send button', timeout: 20000 });
+    p.click(p.$('pvList').querySelector('button[data-a="send"]'));
     await p.waitFor(() => p.chain.sentTo(POOL).length === 1, { label: 'settle to be sent', timeout: 20000 });
     const tx = p.chain.sentTo(POOL)[0];
     assert.equal(tx.data, '0x717fd7f2' + coder.encode(['bytes', 'bytes', 'bytes[]'], [pv, pr, []]).slice(2), 'pool.settle(pv, proof, [])');
@@ -728,7 +787,7 @@ describe('settling from this wallet', () => {
     assert.equal(post.type, 'wrap');
     assert.equal(post.mode, 'prove');
     const memo = post.memos[0];
-    const pv = '0x' + '12'.repeat(200), pr = '0x' + 'ab'.repeat(260);
+    const pv = '0x' + '12'.repeat(200) + F.depositId.slice(2), pr = '0x' + 'ab'.repeat(260);
     p.chain.relay.status = { status: 'proven', publicValues: pv, proof: pr };
     poke(p);
     await p.waitFor(() => p.$('pvList').querySelector('button[data-a="wrapsend"]'), { label: 'the settle button', timeout: 20000 });

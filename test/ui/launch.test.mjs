@@ -327,7 +327,7 @@ test("launching a coin", async (t) => {
     await p.settle();
 
     assert.equal(p.value("lnName"), "", "the name survived a completed launch");
-    assert.equal(p.value("lnSupply"), "", "the supply survived a completed launch");
+    assert.equal(p.value("lnSupply"), "1,000,000,000", "the supply should stay for the next launch");
     p.click("lnGo");
     await p.settle();
     assert.equal(p.chain.sent.length, 1, "a second click sent a second launch");

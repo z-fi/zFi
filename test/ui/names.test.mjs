@@ -557,6 +557,7 @@ describe('claiming a name', () => {
     chain.answer(WNS, SEL.REV, '0x' + u256(0x20) + u256(9) + Buffer.from('zswap.wei').toString('hex').padEnd(64, '0'));
     chain.answer(WROLL, SEL.WEIGHT, '0x' + u256(10n ** 17n));
     chain.answer(WROLL, SEL.TICKET, '0x' + u256(0));
+    chain.answer(WNS, SEL.OWNER, '0x' + '0'.repeat(24) + A.ACCOUNT.slice(2).toLowerCase());
     const p = await openNames({ chain });
     assert.ok(p.visible('wnEnter'), 'a weighing name was not offered the roll');
     assert.match(p.text('wnRollEl'), /zswap\.wei can enter, free/, `got ${p.text('wnRollEl')}`);

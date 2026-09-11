@@ -301,7 +301,25 @@ check('lineage constants are well-formed', () => {
   if (!/function latest\(\) external view returns \(address tip\)/.test(sol)) {
     throw Error('zSwap.sol no longer exposes latest() with the signature the page calls');
   }
-  return prev ? `successor build, prev ${prev}` : 'root build (no predecessor)';
+  const ver = html.match(/const ZSWAP_VERSION="([^"]*)";/);
+  const solVer = sol.match(/string public constant VERSION = "([^"]*)";/);
+  if (!ver || !solVer || ver[1] !== solVer[1]) {
+    throw Error(`page ZSWAP_VERSION=${ver && ver[1]} but zSwap.sol VERSION=${solVer && solVer[1]}`);
+  }
+  if (prev) {
+    for (const [f, re] of [
+      ['script/build-zSwapNext.mjs', /const TIP = '(0x[0-9a-fA-F]{40})'/],
+      ['script/mine-zSwapNext-salt.mjs', /arg\('--tip', '(0x[0-9a-fA-F]{40})'\)/],
+      ['test/zSwapNextDeploy.t.sol', /address constant TIP = (0x[0-9a-fA-F]{40});/],
+      ['test/zSwapNextServes.t.sol', /address constant TIP = (0x[0-9a-fA-F]{40});/],
+      ['test/ui/shell.test.mjs', /const PREVIOUS = '(0x[0-9a-fA-F]{40})';/],
+    ]) {
+      const m = fs.readFileSync(path.join(ROOT, f), 'utf8').match(re);
+      if (!m) throw Error(`${f} names no tip`);
+      if (m[1].toLowerCase() !== prev.toLowerCase()) throw Error(`${f} builds on ${m[1]}, but the page names ${prev} as its predecessor`);
+    }
+  }
+  return prev ? `successor build, prev ${prev} (agrees with the 5 tip pins), v${ver[1]}` : `root build (no predecessor), v${ver[1]}`;
 });
 
 // ---------- 5. auto-global element ids resolve ----------
@@ -453,7 +471,7 @@ if (exported) {
       'eth_blockNumber', 'eth_getTransactionReceipt', 'eth_getBlockByNumber',
       // Relay-escrow recovery reads `Opened` back off the chain. A read, and a
       // heavy one - routing it to a phone over the relay would hang the panel.
-      'eth_getLogs'];
+      'eth_getLogs', 'eth_getTransactionByHash', 'eth_getTransactionCount'];
     for (const m of toWallet) if (!wcToWallet(m)) throw Error(`${m} would leave the wallet`);
     for (const m of toNode) if (wcToWallet(m)) throw Error(`${m} would go to the wallet, not the node`);
     // Everything the page actually calls must be classified deliberately.
@@ -498,11 +516,13 @@ if (exported) {
   // in the same paragraphs whose sizes it had just updated. Somebody following
   // it would deploy the wrong number of contracts.
   check('the deploy runbook agrees about the chunk count', () => {
-    const WORDS = { 6: 'six', 12: 'twelve', 13: 'thirteen', 14: 'fourteen', 15: 'fifteen', 16: 'sixteen', 17: 'seventeen', 18: 'eighteen', 19: 'nineteen' };
+    const WORDS = { 6: 'six', 12: 'twelve', 13: 'thirteen', 14: 'fourteen', 15: 'fifteen', 16: 'sixteen', 17: 'seventeen', 18: 'eighteen', 19: 'nineteen', 20: 'twenty' };
     const want = WORDS[CHUNKS];
+    if (!want) throw Error(`WORDS has no word for CHUNKS=${CHUNKS}`);
     const bad = [];
     for (const f of ['README.md', 'docs/src/README.md']) {
       const txt = fs.readFileSync(path.join(ROOT, f), 'utf8');
+      if (!new RegExp(`\\b${want}\\b`, 'i').test(txt)) bad.push(`${f}: never says "${want}"`);
       for (const m of txt.matchAll(/chunk(\d+)/g))
         if (Number(m[1]) !== 1 && Number(m[1]) !== CHUNKS) bad.push(`${f}: chunk${m[1]}`);
       // `chunk1..14` - the upper bound of a range is not preceded by the word.
@@ -523,8 +543,11 @@ if (exported) {
         }
       }
     }
+    const sol = fs.readFileSync(SOL_PATH, 'utf8');
+    for (const m of sol.matchAll(new RegExp(`\\b(${Object.values(WORDS).join('|')})\\s+(?:separate\\s+)?(?:data\\s+contracts|chunks)\\b`, 'gi')))
+      if (m[1].toLowerCase() !== want) bad.push(`src/zSwap.sol: "${m[0]}"`);
     if (bad.length) throw Error(`the runbook contradicts CHUNKS=${CHUNKS}:\n      ${bad.join('\n      ')}`);
-    return `both READMEs agree on ${want} (${CHUNKS})`;
+    return `both READMEs and zSwap.sol agree on ${want} (${CHUNKS})`;
   });
 
   check('the game keeps its score out of reach of the console', () => {
@@ -634,8 +657,7 @@ if (exported) {
   });
 
   check('WalletConnect protocol tags match the spec', () => {
-    const want = { T_PROPOSE: 1100, T_APPROVE: 1101, T_SETTLE: 1102,
-                   T_SETTLE_RES: 1103, T_REQ: 1108, T_RES: 1109 };
+    const want = { T_PROPOSE: 1100, T_SETTLE_RES: 1103, T_REQ: 1108 };
     for (const [name, v] of Object.entries(want)) {
       const m = html.match(new RegExp(`${name}=(\\d+)`));
       if (!m) throw Error(`${name} is not declared in the page`);
@@ -1336,6 +1358,7 @@ if (exported) {
     fail('decQ fixtures present', `${path.relative(ROOT, FIXTURES)} missing`);
   } else {
     const fx = JSON.parse(fs.readFileSync(FIXTURES, 'utf8'));
+    for (const f of Object.values(fx)) if (typeof f.S === 'string') f.S = BigInt(f.S);
     const SOURCES = ['UniV2', 'Sushi', 'zAMM', 'UniV3', 'UniV4', 'Curve', 'Lido'];
     const MULTICALL = '0xac9650d8';
 

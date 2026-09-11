@@ -364,6 +364,17 @@ describe('navigating between links', () => {
     p.close();
   });
 
+  test('going back keeps what the user typed, and drops a lock the link set', async () => {
+    const p = await open('to=alice.wei&amount=1&token=ETH&lock=1w', c => { c.names.set('alice.wei', A.OTHER); });
+    await p.waitFor(() => p.value('dly') === '604800', { label: 'link applied' });
+    await p.typeAmount('amt', '2');
+    p.window.location.hash = '';
+    await p.waitFor(() => p.value('dly') === '0', { label: 'lock dropped' });
+    assert.equal(p.value('amt'), '2', 'going back must not wipe an amount the user typed');
+    assert.equal(p.value('rc'), '', 'the recipient the link supplied is still there');
+    p.close();
+  });
+
   test('a load with no hash leaves a typed form alone', async () => {
     const p = await open('');
     await p.typeAmount('amt', '2.5');
@@ -749,7 +760,15 @@ describe('a symbol that resolves to nothing says so', () => {
     p.close();
   });
 
-  test('an address is never warned about, listed or not', async () => {
+  test('an address that does not load is reported too', async () => {
+    const p = await open('token=ETH&out=0x00000000000000000000000000000000deadbeef&amount=2');
+    await p.waitFor(() => /Couldn/.test(p.text('stat')), { label: 'notice' });
+    assert.match(p.text('stat'), /0x0000/, 'the ignored leg should be named');
+    assert.doesNotMatch(p.text('stat'), /by address/, 'an address cannot be linked by address');
+    p.close();
+  });
+
+  test('a readable address is never warned about, listed or not', async () => {
     const p = await open(`token=ETH&out=${MOON}`, chain =>
       chain.setToken(MOON, { symbol: 'MOON', decimals: 18, name: 'Moon' }));
     assert.doesNotMatch(p.text('stat'), /Couldn/,

@@ -79,7 +79,7 @@ describe('slippage', () => {
 
     p.$('slip').value = '0';
     p.$('slip').dispatchEvent(new p.window.Event('change', { bubbles: true }));
-    assert.equal(p.value('slip'), '0.5', 'zero is meaningless, so it falls back to the default');
+    assert.equal(p.value('slip'), '0.01', 'zero clamps to the minimum');
     p.close();
   });
 
@@ -285,7 +285,8 @@ describe('accessibility and shell affordances', () => {
   test('inputs and icon buttons are labelled', async () => {
     const p = await setup();
     for (const id of ['amt', 'outAmt']) {
-      assert.ok(p.$(id).getAttribute('aria-label'), `${id} needs a label`);
+      const by = p.$(id).getAttribute('aria-labelledby');
+      assert.ok(by ? p.text(by) : p.$(id).getAttribute('aria-label'), `${id} needs a label`);
     }
     for (const id of ['flip', 'th', 'lk']) {
       assert.ok(p.$(id).getAttribute('aria-label'), `${id} is icon-only and needs a label`);
@@ -481,19 +482,29 @@ describe('the footer', () => {
     p.close();
   });
 
-  test('stays silent when the notice cannot be trusted', async () => {
-    // A wallet on another chain reads another chain's `latest()`, which is not
-    // this contract's lineage. A missing notice is a smaller harm than one
-    // pointing at an address that means nothing here.
+  test('reads the lineage from a mainnet node, never through the wallet', async () => {
+    // The page contract and its successors exist only on Ethereum. A wallet on
+    // Base answers `latest()` from Base, where this address has no code, so the
+    // lineage is read from an L1 node whatever chain the wallet is on.
     const self = '0x00000000000000000000000000000000000000ab';
-    const chain = new MockChain();
-    chain.chainId = '0xa';
-    chain.lineage.set(self, '0x00000000000000000000000000000000000000cd');
+    const chain = new MockChain({ chainId: '0x2105' });
+    const l1 = new MockChain();
+    l1.lineage.set(self, '0x00000000000000000000000000000000000000cd');
+    chain.remotes['ethereum-rpc'] = chain.remotes['blastapi'] = l1;
     const p = await loadPage({ chain, url: `https://${self}.1.w3link.io/` });
     await p.settle();
-    assert.doesNotMatch(p.text('footAddr'), /newer/i);
-    assert.ok(!chain.calls.some(c => c.selector === '52bfe789'),
-      'and the call is not even made off mainnet');
+    assert.match(p.text('footAddr'), /newer/i, 'a wallet on Base still learns of the successor');
+    assert.ok(!chain.calls.some(c => c.selector === '52bfe789'), 'and the wallet\'s chain is never asked');
+    p.close();
+  });
+
+  test('announces a newer version without a wallet too', async () => {
+    const self = '0x00000000000000000000000000000000000000ab';
+    const chain = new MockChain();
+    chain.lineage.set(self, '0x00000000000000000000000000000000000000cd');
+    const p = await loadPage({ walletless: true, chain, url: `https://${self}.1.w3link.io/` });
+    await p.settle();
+    assert.match(p.text('footAddr'), /newer/i);
     p.close();
   });
 });

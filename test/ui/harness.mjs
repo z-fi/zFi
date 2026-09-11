@@ -39,7 +39,7 @@ export const A = {
   // meant a v4 swap on Base or Robinhood aimed at an address the mock did not
   // know, so nothing asserted the page picks the right one per chain.
   V4PORT_L2: '0x508ad1b0ae31FaF295c5af8C5c2bE9e33E0D19C4',
-  // MUST track `v4lens` in zSwap.html's chain table. The mock answers the lens
+  // MUST track `V4LENS` in zSwap.html. The mock answers the lens
   // call by address; when the page moved to the CREATE3 lens and this did not,
   // every hooked-pool quote silently fell through to the plain router and the
   // v4pool tests failed on the TARGET rather than on anything about v4.
@@ -1688,9 +1688,8 @@ export class MockChain {
   }
 
   /**
-   * WNS/GNS name registry. nameToId hashes the label off-chain in the page, so
-   * the mock just needs a stable name <-> id round-trip: id is the index of the
-   * name in an interning table, and ownerOf(id) returns the mapped address.
+   * WNS/GNS name registry. The page namehashes the name itself (computeId is a
+   * pure namehash), so resolve(id) looks the node up by namehash.
    */
   ns(sel, data) {
     const body = '0x' + data.slice(8);
@@ -1702,7 +1701,7 @@ export class MockChain {
       return '0x' + u256(i + 1);
     }
     if (sel === SEL.NS_RES) {
-      const name = (this.__nsNames || [])[Number(word(body, 0)) - 1];
+      const name = [...this.names.keys()].find(n => ensNamehash(n) === wordHex(body, 0));
       const a = name && this.names.get(name);
       if (!a) return '0x' + addrWord(A.ZERO);
       return '0x' + addrWord(a);
@@ -1987,7 +1986,7 @@ const PINNED_PAIR = 'token=ETH&out=USDC';
 export async function loadPage(opts = {}) {
   let { chain = new MockChain(), hash = '', storage = {}, session = {}, patch = [], prefersDark = false,
     storageBroken = false } = opts;
-  if (hash === '') hash = PINNED_PAIR;
+  if (hash === '') hash = PINNED_PAIR + (Number(chain.chainId) !== 1 ? '&chain=' + Number(chain.chainId) : '');
   else if (hash === null) hash = '';
   // Tests that exercise the price tape or the liquidity panel repoint PPLENS
   // at a mock address through `patch`, matched by shape rather than by literal
@@ -2343,7 +2342,7 @@ export function assertAddressesMatchPage(assert) {
     // Not patched by any suite, so the fixtures answer at the real addresses
     // and a redeploy has to update both.
     PFACTORY: 'PFACTORY', PLQLENS: 'PLQLENS', PROUTE: 'PROUTE',
-    TOKENLIST: 'TOKENLIST', ZLISTLENS: 'ZLISTLENS',
+    TOKENLIST: 'TOKENLIST', ZLISTLENS: 'ZLISTLENS', V4LENS: 'V4LENS',
   };
   // The book, the route and the launcher are per-chain: the page keeps their
   // mainnet addresses in the `MB` table and rebinds the names in setChain.

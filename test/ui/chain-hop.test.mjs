@@ -39,8 +39,8 @@ describe('a walletless chain hop', () => {
       const w = p.window;
       assert.equal(w.eval('WETH'), w.eval(`CHAINS[${id}].wrapped`), `${id}: WETH follows the chain`);
       assert.equal(w.eval('V4PORT').toLowerCase(), w.eval(`CHAINS[${id}].v4port||ZERO`).toLowerCase(), `${id}: v4 port follows`);
-      assert.equal(w.eval('V4LENS').toLowerCase(), w.eval(`CHAINS[${id}].v4lens||ZERO`).toLowerCase(), `${id}: v4 lens follows`);
-      assert.equal(w.eval('TOKENLIST'), w.eval(`CHAINS[${id}].tokenlist`), `${id}: the registry pin follows`);
+      assert.equal(w.eval('V4LENS').toLowerCase(), A.V4LENS.toLowerCase(), `${id}: the one CREATE3 v4 lens`);
+      assert.equal(w.eval('TOKENLIST').toLowerCase(), A.TOKENLIST.toLowerCase(), `${id}: the one registry, read from mainnet`);
       const boards = w.eval('JSON.stringify([SB2,SWAPBOL,DUTCH,ORDERBOL,FLOOR,PROUTE])');
       const expect = w.eval(`JSON.stringify((b=>[b.sb||ZERO,b.sw||ZERO,b.du||ZERO,b.ob||ZERO,b.fl||ZERO,b.pr||ZERO])(${id}===1?MB:L2B))`);
       assert.equal(boards, expect, `${id}: the board set is the chain's own`);

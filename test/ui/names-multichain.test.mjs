@@ -34,8 +34,8 @@ const NAMED = '0x3333333333333333333333333333333333333333';
 
 // Every mainnet RPC the page carries, plus Base's, keyed the way the harness
 // routes them: a JSON-RPC POST whose URL contains the fragment.
-const L1_FRAGMENTS = ['publicnode', 'blastapi'];
-const BASE_FRAGMENT = 'mainnet.base.org';
+const L1_FRAGMENTS = ['ethereum-rpc', 'blastapi'];
+const BASE_FRAGMENT = 'base-rpc';
 
 /** A mainnet MockChain that knows one .eth name and one .wei name. */
 const l1Fixture = () => {
@@ -127,13 +127,14 @@ describe('the registry walk is one read, not one per label', () => {
     const { shown } = await resolveRecipient(p, 'pay.team.alice.eth');
     assert.equal(shown.toLowerCase(), NAMED);
 
-    // One batch for the four-label walk, one addr() at the resolver it found.
+    // One batch for the four-label walk, one at the resolver it found, which
+    // asks addr() and supportsInterface(ENSIP-10) together.
     assert.equal(l1Requests(chain) - before, 2,
       'the walk must not spend a round trip per label');
 
     const batched = l1.calls.slice(seen).filter(c =>
       c.to.toLowerCase() === A.MC3.toLowerCase() && c.selector === SEL.AGG3);
-    assert.equal(batched.length, 1, 'and it is a multicall that carries it');
+    assert.equal(batched.length, 2, 'and multicalls carry both');
     p.close();
   });
 

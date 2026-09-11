@@ -423,4 +423,72 @@ test('launching a cause', async (t) => {
     assert.match(p.text('lnArtNote'), /KB/, 'a coin may store up to 24 KB');
     p.close();
   });
+
+  await t.test('refuses an SVG that can run script rather than half-cleaning it', async () => {
+    for (const svg of [
+      '<svg xmlns="http://www.w3.org/2000/svg"/onload="alert(1)"><circle r="4"/></svg>',
+      '<svg xmlns="http://www.w3.org/2000/svg"><a href="&#106;avascript:alert(1)"><circle r="4"/></a></svg>',
+      '<svg xmlns="http://www.w3.org/2000/svg"><a><set attributeName="href" to="javascript:alert(1)"/><circle r="4"/></a></svg>',
+      '<svg xmlns="http://www.w3.org/2000/svg"><svg:script xmlns:svg="http://www.w3.org/2000/svg">alert(1)</svg:script></svg>',
+    ]) {
+      const p = await openLauncher('cause');
+      await upload(p, svg);
+      assert.equal(p.text('lnArtNote'), 'none', `accepted ${svg}`);
+      assert.match(p.text('stat'), /script/, p.text('stat'));
+      p.close();
+    }
+  });
+
+  await t.test('still takes an SVG with a copyright sign and an animation', async () => {
+    const p = await openLauncher('cause');
+    await upload(p, '<svg xmlns="http://www.w3.org/2000/svg"><circle r="4"><animate attributeName="r" values="4;6;4" dur="2s"/></circle><text>&#169; 2026</text></svg>');
+    assert.match(p.text('lnArtNote'), /KB/, p.text('stat'));
+    p.close();
+  });
+
+  await t.test('closes the panel after a launch, so a second press cannot summon a twin', async () => {
+    const p = await openLauncher('cause');
+    await launch(p);
+    assert.equal(p.value('lnName'), '', 'the name survived a completed launch');
+    assert.ok(p.$('lnPanel').classList.contains('hide'), 'the launch panel stayed open');
+    assert.match(p.$('stat').innerHTML, /is raising at/, 'closing the panel wiped the receipt');
+    p.click('lnGo');
+    await p.settle();
+    assert.equal(p.chain.sent.length, 1, 'a second press sent a second summon');
+    p.close();
+  });
+
+  await t.test('lands on the new token, so the backing line is one glance away', async () => {
+    const chain = new MockChain();
+    chain.setNative(A.ACCOUNT, 10n ** 19n);
+    const LOOT = '0x00000000000000000000000000000000000100c7';
+    chain.setToken(LOOT, { symbol: 'WATER', decimals: 18, name: 'Clean Water' });
+    const call = chain.ethCall.bind(chain);
+    chain.ethCall = (tx, b) => /^0x9b7b2ab0/i.test(tx.data || '') ? '0x' + LOOT.slice(2).padStart(64, '0') : call(tx, b);
+    const p = await loadPage({ chain });
+    await p.connect();
+    p.click('ln');
+    p.select('lnKind', 'cause');
+    await p.settle();
+    await launch(p);
+    await p.settle();
+    const opt = id => p.$(id).options[p.$(id).selectedIndex]?.textContent || '';
+    assert.match(opt('toSel'), /WATER/, `landed on ${opt('toSel')}`);
+    assert.match(opt('fromSel'), /^ETH/, `paying with ${opt('fromSel')}`);
+    p.close();
+  });
+
+  await t.test('a raise too long to be a number is refused in words, not a RangeError', async () => {
+    const p = await openLauncher('cause');
+    p.type('lnName', 'Long');
+    p.type('lnSym', 'LONG');
+    p.type('lnGoal', '10');
+    p.type('lnDays', '9'.repeat(400));
+    await p.settle();
+    p.click('lnGo');
+    await p.settle();
+    assert.equal(p.chain.sent.length, 0);
+    assert.match(p.text('stat'), /at least an hour\./, p.text('stat'));
+    p.close();
+  });
 });

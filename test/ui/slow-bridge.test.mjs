@@ -43,7 +43,7 @@ async function setup(prep = () => {}) {
   chain.setErc20(A.USDC, A.ACCOUNT, 5_000n * 10n ** 6n);
   // The page asks the DESTINATION whether the recipient has code, and asks
   // Robinhood its gas price. Both go out over plain HTTP to that chain's node.
-  chain.remotes['base.org'] = new MockChain({ chainId: BASE });
+  chain.remotes['base-rpc'] = new MockChain({ chainId: BASE });
   chain.remotes['robinhood'] = new MockChain({ chainId: RH });
   prep(chain);
   const p = await loadPage({ chain });
@@ -81,7 +81,7 @@ const L1_GWEI = 10n ** 9n;
 async function onBaseSend(prep = () => {}, storage = {}) {
   return onChainSend(BASE, c => {
     const l1 = new MockChain({ chainId: '0x1', gasPrice: L1_GWEI });
-    c.remotes['publicnode'] = l1;
+    c.remotes['ethereum-rpc'] = l1;
     c.remotes['blastapi'] = l1;
     c.l1 = l1;
     prep(c);
@@ -93,7 +93,7 @@ async function onBaseSendBrokenStorage() {
   const chain = new MockChain({ chainId: BASE });
   chain.setNative(A.ACCOUNT, 10n * ETH);
   const l1 = new MockChain({ chainId: '0x1', gasPrice: L1_GWEI });
-  chain.remotes['publicnode'] = l1;
+  chain.remotes['ethereum-rpc'] = l1;
   chain.remotes['blastapi'] = l1;
   const p = await loadPage({ chain, hash: null, storage: RELAY_ON, storageBroken: true });
   await p.connect({ pin: false });
@@ -342,7 +342,7 @@ describe('Base — the OP Stack deposit', () => {
   });
 
   test('buys more destination gas when the recipient is a contract', async () => {
-    const p = await setup(c => c.remotes['base.org'].code.set(A.OTHER.toLowerCase(), '0x60006000'));
+    const p = await setup(c => c.remotes['base-rpc'].code.set(A.OTHER.toLowerCase(), '0x60006000'));
     const tx = await sendTo(p, { dest: '8453', delay: '3600' });
     assert.equal(word('0x' + tx.data.slice(10), 2), 2_500_000n,
       'a contract recipient runs onERC1155Received on the way in');
@@ -378,7 +378,7 @@ describe('Robinhood — the Arbitrum retryable', () => {
     const submission = word(body, 2), gas = word(body, 5), maxFee = word(body, 6);
     assert.equal(submission, 10n ** 14n * 3n / 2n, 'the quoted submission fee, with headroom');
     assert.equal(gas, 800_000n);
-    assert.equal(maxFee, 2n * GWEI, 'twice the destination gas price');
+    assert.equal(maxFee, 8n * GWEI, 'eight times the destination gas price');
     assert.equal(wordAddr(body, 3).toLowerCase(), A.ACCOUNT.toLowerCase(),
       'unused ticket fees come back to the sender');
     assert.equal(wordAddr(body, 4).toLowerCase(), A.ACCOUNT.toLowerCase());
@@ -411,7 +411,7 @@ describe('Robinhood — the Arbitrum retryable', () => {
     p.select('dly', '600');
     p.select('sdChain', '4663');
     await p.waitFor(() => p.text('brNote').startsWith('+'), { label: 'fee quote' });
-    assert.match(p.text('brNote'), /^\+ [\d.]+ ETH gas$/);
+    assert.match(p.text('brNote'), /^\+ [\d.]+ ETH gas, unused part refunded there$/);
     p.close();
   });
 
@@ -734,7 +734,7 @@ describe('leaving an L2 through the relay', () => {
   test('refuses to quote at all when mainnet gas reads as zero', async () => {
     const p = await onChainSend(BASE, c => {
       const l1 = new MockChain({ chainId: '0x1', gasPrice: 0n });
-      c.remotes['publicnode'] = l1; c.remotes['blastapi'] = l1;
+      c.remotes['ethereum-rpc'] = l1; c.remotes['blastapi'] = l1;
     }, RELAY_ON);
     await p.typeAmount('amt', '2');
     await recipient(p, A.OTHER);
@@ -832,7 +832,7 @@ describe('an open escrow', () => {
     l1.relayFilledBy.set(e.id, A.OTHER);          // filled over there
     const p = await onBaseSend(c => {
       c.relayStatus.set(e.id, 1);                 // still OPEN here
-      c.remotes['publicnode'] = l1;
+      c.remotes['ethereum-rpc'] = l1;
       c.remotes['blastapi'] = l1;
     }, { 'zswap:rl:8453': e.json });
 
@@ -1036,6 +1036,29 @@ describe('the refusals', () => {
     p.close();
   });
 
+  // An EIP-7702 account holds a delegation designator, not contract code: the
+  // OP portal does not alias it and nobody can deploy an impostor at a
+  // key-derived address. Robinhood's Inbox still aliases any sender with code.
+  const D7702 = '0xef0100' + '11'.repeat(20);
+  test('bridges to Base from a 7702-delegated account', async () => {
+    const p = await setup(c => withCode(c, A.ACCOUNT, D7702));
+    assert.equal(await tryToSend(p, { dest: '8453' }), 1);
+    p.close();
+  });
+
+  test('but not to Robinhood, whose Inbox aliases it', async () => {
+    const p = await setup(c => withCode(c, A.ACCOUNT, D7702));
+    assert.equal(await tryToSend(p, { dest: '4663' }), 0);
+    assert.match(p.text('stat'), /contract/i);
+    p.close();
+  });
+
+  test('and opens a relay escrow from one', async () => {
+    const p = await onBaseSend(c => withCode(c, A.ACCOUNT, D7702));
+    assert.equal(await tryToSend(p, { dest: '1' }), 1);
+    p.close();
+  });
+
   test('still bridges normally from an ordinary account', async () => {
     const p = await setup();
     assert.equal(await tryToSend(p, { dest: '8453' }), 1);
@@ -1046,7 +1069,7 @@ describe('the refusals', () => {
   // guessing "no code" picks the small gas limit, and a deposit that runs out
   // of gas on the far side is minted to the sender's address there.
   test('treats a malformed eth_getCode answer as code, not as absence', async () => {
-    const p = await setup(c => { c.remotes['base.org'].codeRaw = null; });
+    const p = await setup(c => { c.remotes['base-rpc'].codeRaw = null; });
     await p.typeAmount('amt', '1');
     await recipient(p, A.OTHER);
     p.select('dly', '3600');
@@ -1141,11 +1164,11 @@ describe('a store that only looks like one', () => {
     const chain = new MockChain({ chainId: BASE });
     chain.setNative(A.ACCOUNT, 10n * ETH);
     const l1 = new MockChain({ chainId: '0x1', gasPrice: L1_GWEI });
-    chain.remotes['publicnode'] = l1;
+    chain.remotes['ethereum-rpc'] = l1;
     chain.remotes['blastapi'] = l1;
     const p = await loadPage({
       chain, hash: null, storage: RELAY_ON,
-      patch: [['try{LS=localStorage}catch{LS={}}', 'LS={"zswap:relay":"1"}']],
+      patch: [['try{LS=localStorage||{}}catch{LS={}}', 'LS={"zswap:relay":"1"}']],
     });
     await p.connect({ pin: false });
     p.click('tabSend');
@@ -1224,13 +1247,32 @@ describe('the on-chain switch', () => {
     const chain = new MockChain();
     chain.setNative(A.ACCOUNT, 10n * ETH);
     chain.bridgeFlag.set('8453', 2);
-    chain.remotes['base.org'] = new MockChain({ chainId: BASE });
+    chain.remotes['base-rpc'] = new MockChain({ chainId: BASE });
     chain.remotes['robinhood'] = new MockChain({ chainId: RH });
     const p = await loadPage({ chain });
     await p.connect();
     p.click('tabSend');
     await p.settle();
     assert.equal(p.visible('sdChainL'), true, 'the flag is keyed by the chain you are on');
+    p.close();
+  });
+
+  test('a lane closed after a destination was picked does not send here instead', async () => {
+    const p = await setup(c => c.failCallsTo.add(A.FLAGS.toLowerCase()));
+    await p.typeAmount('amt', '1');
+    await recipient(p, A.OTHER);
+    p.select('sdChain', '8453');
+    await p.settle();
+    await p.waitFor(() => /on Base/.test(p.text('swap')), { label: 'on Base' });
+    p.chain.failCallsTo.clear();
+    p.chain.bridgeFlag.set('1', 2);
+    await p.window.eval('brFlagSync()');
+    await p.settle();
+    assert.doesNotMatch(p.text('swap'), /on Base/, 'the button follows the closed lane');
+    p.click('swap');
+    await p.settle();
+    assert.equal(p.chain.sent.length, 0, 'a plain transfer on Ethereum is not what was asked for');
+    assert.match(p.text('stat'), /destination changed/);
     p.close();
   });
 

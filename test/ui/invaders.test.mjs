@@ -412,7 +412,7 @@ describe('the game in the page', () => {
     test('a preflight that answers with nothing is not treated as success', () => {
       assert.match(body, /strip0x\(ret\|\|""\)\.length!==64/,
         'claim returns a token id; anything else means the call did not run');
-      assert.match(body, /mainnet/, 'and the message should point at the likely reason');
+      assert.match(body, /on Ethereum\./, 'and the message should point at the likely reason');
     });
 
     test('a mint that lands after a restart does not touch the new run', () => {
@@ -420,7 +420,7 @@ describe('the game in the page', () => {
       assert.ok(/if\(r===runId\)\{minted=/.test(body), 'and checked before the name is kept');
       assert.ok(/if\(r===runId\)\{[\s\S]{0,120}?mintMsg=/.test(body),
         'and before a failure is reported');
-      assert.ok(page.includes('const again=()=>{runId++'), 'a restart must invalidate it');
+      assert.match(page, /const again=\(\)=>\{[^}]*runId\+\+/, 'a restart must invalidate it');
     });
 
     /**
@@ -430,7 +430,7 @@ describe('the game in the page', () => {
      * actually got, and a forged one has to pick a wave that fits its score.
      */
     test('the label records the wave as well as the score', () => {
-      assert.match(body, /const lbl=sc\+"-w"\+wv\+"-"/,
+      assert.match(body, /const lbl=s\+"-w"\+v\+"-"/,
         'score, wave reached, then the collision tag');
       const label = (sc, wv, tag) => sc + '-w' + wv + '-' + tag;
       assert.equal(label(4820, 7, 'k3x9'), '4820-w7-k3x9');
@@ -452,7 +452,7 @@ describe('the game in the page', () => {
     test('a status is not dressed up as something to press', () => {
       // "minting..." and the finished name are underlined-link styling in the
       // same slot the action lives in; only the action should look pressable.
-      assert.ok(page.includes('${minted||minting?"invmsg":"invm"}'),
+      assert.ok(page.includes('${minted||minting||!sc?"invmsg":"invm"}'),
         'a result or an in-flight mint should not read as a control');
       assert.match(page, /\.invmsg\{color:var\(--m\)\}/, 'and should be styled as text');
     });
