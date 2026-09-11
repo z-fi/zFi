@@ -37,8 +37,7 @@ const ALLOWED_ORIGINS = [
 // origin, and still cannot get an address subdomain on these gateways without
 // deploying a contract that serves their own page, at which point they are
 // paying for their own bytes.
-const ORIGIN_SUFFIXES = ['.w4eth.io', '.w3link.io', '.eth.limo', '.wei.limo', '.wei.is', '.wei.domains'];
-const ADDR_HOST = /^0x[0-9a-fA-F]{40}(\.\d+)?\./;
+const ADDR_HOST = /^0x[0-9a-f]{40}(\.\d+)?\.(?:w4eth\.io|w3link\.io|wei\.limo|wei\.is|wei\.domains)$/i;
 
 // THE NAMES PEOPLE ARE ACTUALLY SENT TO. The address-subdomain rule above
 // covers a contract-served page found by its own address, which is how a
@@ -47,13 +46,7 @@ const ADDR_HOST = /^0x[0-9a-fA-F]{40}(\.\d+)?\./;
 // front (`new.zswap.wei.limo`). Naming them is narrower than the suffix rule
 // it sits beside: a suffix match plus a first label from this set, not any
 // host that happens to live on the gateway.
-const NAMED_HOSTS = /^(?:[a-z0-9-]+\.)?(?:zfi|zerofi|zswap)\./i;
-// ...but only under the .wei namespace, which is ours. `zswap.eth.limo` is
-// whoever holds `zswap.eth`, and that is not necessarily us - allowing a bare
-// name on every gateway suffix would hand these keys to a name we do not
-// control. Address subdomains stay allowed on all of them, because there the
-// host IS the contract serving the bytes.
-const NAMED_SUFFIXES = ['.wei.limo', '.wei.is', '.wei.domains'];
+const NAMED_HOSTS = /^(?:[a-z0-9-]+\.)?(?:zfi|zerofi|zswap)\.(?:wei\.limo|wei\.is|wei\.domains)$/i;
 
 // A DOMAIN WE OWN OUTRIGHT, so the name itself is the authorisation - there is
 // no gateway in front of it and no other tenant on it. Apex and one subdomain
@@ -61,17 +54,20 @@ const NAMED_SUFFIXES = ['.wei.limo', '.wei.is', '.wei.domains'];
 // exact host, not a suffix.
 const OWN_HOSTS = /^(?:[a-z0-9-]+\.)?zerofi\.sh$/i;
 
+const INTERNAL_HOST = /^\[|^[\d.]+$|^[^.]+\.?$|\.(?:localhost|local|internal|intranet|lan|home|corp|arpa)\.?$/i;
+const MAX_HOPS = 4;
+function publicHttps(s) {
+  let u;
+  try { u = new URL(s); } catch { return false; }
+  return u.protocol === 'https:' && !INTERNAL_HOST.test(u.hostname);
+}
+
 function originAllowed(origin) {
   if (ALLOWED_ORIGINS.includes(origin)) return true;
   let u;
   try { u = new URL(origin); } catch { return false; }
   if (u.protocol !== 'https:') return false;
-  if (OWN_HOSTS.test(u.hostname)) return true;
-  if (!ORIGIN_SUFFIXES.some((sfx) => u.hostname.endsWith(sfx))) return false;
-  // Only an address-shaped subdomain, so a suffix match cannot hand the keys to
-  // an unrelated host that merely lives on the same gateway.
-  if (ADDR_HOST.test(u.hostname)) return true;
-  return NAMED_HOSTS.test(u.hostname) && NAMED_SUFFIXES.some((sfx) => u.hostname.endsWith(sfx));
+  return OWN_HOSTS.test(u.hostname) || ADDR_HOST.test(u.hostname) || NAMED_HOSTS.test(u.hostname);
 }
 
 function cors(request) {
@@ -80,6 +76,7 @@ function cors(request) {
     'Access-Control-Allow-Origin': originAllowed(origin) ? origin : '',
     'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Prefer',
+    Vary: 'Origin',
   };
 }
 
@@ -299,18 +296,31 @@ export default {
     // only ever used for the one metadata JSON roundtrip.
     if (url.pathname === '/proxy-metadata') {
       if (request.method !== 'GET') return json(request, { error: 'GET only' }, 405);
-      const target = url.searchParams.get('url');
+      let target = url.searchParams.get('url');
       if (!target) return json(request, { error: 'missing url' }, 400);
-      if (!target.startsWith('https://')) return json(request, { error: 'https only' }, 400);
       try {
-        const upstream = await fetch(target, { cf: { cacheTtl: 300, cacheEverything: true } });
-        // NFT metadata is small; anything larger is abuse/misuse.
+        let upstream;
+        for (let hop = 0; ; hop++) {
+          if (!publicHttps(target)) return json(request, { error: 'https to a public host only' }, 400);
+          upstream = await fetch(target, { redirect: 'manual', cf: { cacheTtl: 300, cacheEverything: true } });
+          const loc = upstream.status >= 300 && upstream.status < 400 && upstream.headers.get('location');
+          if (!loc) break;
+          if (hop === MAX_HOPS) return json(request, { error: 'too many redirects' }, 502);
+          target = new URL(loc, target).href;
+        }
         const MAX_META = 256 * 1024;
         const cl = parseInt(upstream.headers.get('content-length') || '0', 10);
         if (cl > MAX_META) return json(request, { error: 'too large' }, 413);
-        const text = await upstream.text();
-        if (text.length > MAX_META) return json(request, { error: 'too large' }, 413);
-        return new Response(text, {
+        const parts = [], rd = upstream.body && upstream.body.getReader();
+        let size = 0;
+        for (let c; rd && !(c = await rd.read()).done;) {
+          if ((size += c.value.byteLength) > MAX_META) {
+            rd.cancel().catch(() => {});
+            return json(request, { error: 'too large' }, 413);
+          }
+          parts.push(c.value);
+        }
+        return new Response(new Blob(parts), {
           status: upstream.status,
           headers: {
             ...cors(request),
@@ -319,7 +329,7 @@ export default {
           },
         });
       } catch (e) {
-        return json(request, { error: 'fetch failed: ' + (e.message || 'unknown') }, 502);
+        return json(request, { error: 'fetch failed' }, 502);
       }
     }
 

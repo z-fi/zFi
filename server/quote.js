@@ -3,10 +3,10 @@
 //
 // zQuoter, zRouter and Multicall3 all sit at the SAME address on Ethereum,
 // Base and Robinhood, so serving the L2s costs a node list and a venue-name
-// table rather than a second code path. What does NOT carry across is the
-// off-chain aggregator lanes: every one of them below is wired to Ethereum,
-// and a mainnet-shaped answer to a Base quote is executable calldata for the
-// wrong chain. They are gated to chain 1 for that reason - see CHAINS.
+// table rather than a second code path. What does NOT carry across on its own
+// is the off-chain aggregator lanes: a mainnet-shaped answer to a Base quote
+// is executable calldata for the wrong chain, and a spender with no code there
+// takes no approval. So each chain names the lanes it asks - see LANES.
 
 // Moved off 0x0000002d9a651b729e3aFBE57Fc84FFDa4a98a13, which offered Curve for
 // EXACT-OUT routes it cannot execute: Curve's `exchange` is exact-in only, the

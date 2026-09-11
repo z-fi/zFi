@@ -128,7 +128,7 @@ const PROBES={
   return j&&j.buyAmount?BigInt(j.buyAmount):null},
 "OKX":async(ep,C,me)=>{const j=await jget(`${ep}/dex/aggregator/swap?chainIndex=${C.id}`
   +`&fromTokenAddress=${C.weth}&toTokenAddress=${C.usdc}&amount=${AMT}`
-  +`&slippagePercent=0.005&userWalletAddress=${me}&swapMode=exactIn`);
+  +`&slippagePercent=0.5&userWalletAddress=${me}&swapMode=exactIn`);
   const d=j&&j.code==="0"&&j.data&&j.data[0];
   return d&&d.routerResult?BigInt(d.routerResult.toTokenAmount):null},
 "Enso":async(ep,C,me)=>{const j=await jget(`${ep}?chainId=${C.id}&fromAddress=${me}&receiver=${me}`
@@ -155,6 +155,7 @@ const PROBES={
 const proven={};
 const $=(id)=>document.getElementById(id);
 const show=(el,t,c)=>{el.textContent=t;el.className='msg show '+(c||'')};
+const esc=s=>String(s).replace(/[<>&"']/g,c=>'&#'+c.charCodeAt(0)+';');
 let provider=null,account=null,rows=[],staged=null,listOwner="";
 
 // Every installed wallet announces itself under EIP-6963. Taking the first to
@@ -314,7 +315,7 @@ function render(){
   for(const r of rows){
     const tr=document.createElement('tr');
     const chains=chainsOf(r.endpoint).map(nameChain).join(', ');
-    tr.innerHTML='<td>'+r.i+'</td><td class="name">'+r.name+(r.enabled?'':' <span class="chip">(off)</span>')+
+    tr.innerHTML='<td>'+r.i+'</td><td class="name">'+esc(r.name)+(r.enabled?'':' <span class="chip">(off)</span>')+
       '</td><td><input class="ep" value="'+r.endpoint.replace(/"/g,'&quot;')+'"></td>'+
       '<td class="chip">'+chains+'</td><td class="chip st">not tested</td><td></td>';
     const inp=tr.querySelector('input');
@@ -464,8 +465,8 @@ function renderPlan(){
   if(!plan.length){tb.innerHTML='<tr><td colspan="4" class="hint">Nothing staged.</td></tr>';return}
   plan.forEach((p,i)=>{
     const tr=document.createElement('tr');
-    tr.innerHTML='<td>'+(i+1)+'</td><td class="name">'+p.label+'</td>'
-      +'<td class="chip">'+p.detail+'</td><td></td>';
+    tr.innerHTML='<td>'+(i+1)+'</td><td class="name">'+esc(p.label)+'</td>'
+      +'<td class="chip">'+esc(p.detail)+'</td><td></td>';
     const b=document.createElement('button');
     b.className='ghost'; b.textContent='Send';
     b.onclick=()=>sendOne(i,b);

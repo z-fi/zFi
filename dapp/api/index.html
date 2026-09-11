@@ -144,7 +144,7 @@ p code, li code {
     <tr><td style="padding:4px 8px 4px 0">Base</td><td style="padding:4px 8px 4px 0"><code>8453</code></td><td style="padding:4px 0">Bebop, Enso, 0x, 1inch, KyberSwap, Odos, Paraswap, OpenOcean</td></tr>
     <tr><td style="padding:4px 8px 4px 0">Robinhood</td><td style="padding:4px 8px 4px 0"><code>4663</code></td><td style="padding:4px 0">KyberSwap, Paraswap</td></tr>
   </table>
-  <p style="margin-top:8px;font-size:12px;color:var(--fg-muted)">OKX is absent off Ethereum because its TokenApprove spender is a different contract per chain and the mainnet one has no code on either L2 &mdash; approving it would be a no-op. A lane only appears for a chain where its approval target actually exists.</p>
+  <p style="margin-top:8px;font-size:12px;color:var(--fg-muted)">Odos is switched off for now, and OpenOcean answers only with a key this deployment does not hold, so neither returns a route today. OKX is absent off Ethereum because its TokenApprove spender is a different contract per chain and the mainnet one has no code on either L2 &mdash; approving it would be a no-op. A lane only appears for a chain where its approval target actually exists.</p>
 
   <p style="margin-top:10px"><strong>Example &mdash; the same swap on Base:</strong></p>
 <pre>curl "https://api.zfi.wei.is/quote?chainId=8453&amp;tokenIn=0x0000000000000000000000000000000000000000&amp;tokenOut=0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913&amp;amount=1000000000000000000"</pre>
@@ -196,7 +196,7 @@ await signer.sendTransaction({
 
   <p style="margin-top:10px"><strong>Other endpoints:</strong></p>
   <ul>
-    <li><code>GET /health</code> &mdash; returns <code>{status, chains}</code>, where <code>chains</code> lists each supported <code>chainId</code>, its name, and whether off-chain aggregators run for it</li>
+    <li><code>GET /health</code> &mdash; returns <code>{status, chains}</code>, where <code>chains</code> lists each supported <code>chainId</code>, its name, and <code>lanes</code>, the off-chain aggregators asked for it</li>
     <li><code>GET /</code> &mdash; 302 redirect to this page</li>
     <li><code>POST /simulate</code> &mdash; body <code>{from, to, data, value, chainId}</code>; runs a Tenderly simulation and returns <code>{id, url, status}</code> with a shareable link. <code>chainId</code> defaults to <code>1</code> and accepts <code>8453</code>; Robinhood is refused with a <code>400</code> because Tenderly has no such network. Returns <code>503</code> if the deployment has no Tenderly credentials configured</li>
   </ul>
