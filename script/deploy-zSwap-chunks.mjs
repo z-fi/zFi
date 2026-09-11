@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Deploy the sixteen zSwap page chunks, one transaction each.
+ * Deploy the zSwap page chunks, one transaction each.
  *
  * RESUMABLE ON PURPOSE. This spends real money for ~80M gas, and a run that
  * dies on chunk 11 must not redeploy the ten that already landed. Every
@@ -14,7 +14,7 @@
  * corrupt chunk reach the wrapper's constructor, where it would be baked into
  * an immutable address list.
  *
- * Usage: PRIVATE_KEY=0x.. ETH_RPC_URL=https://.. node script/deploy-zSwap-chunks.mjs [--dry-run]
+ * Usage: PRIVATE_KEY=0x.. ETH_RPC_URL=https://.. node script/deploy-zSwap-chunks.mjs [--dry-run] [--min-tip-gwei 0.5]
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -24,6 +24,8 @@ import { JsonRpcProvider, Wallet, formatEther } from 'ethers';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const N = 20;
 const DRY = process.argv.includes('--dry-run');
+const tipAt = process.argv.indexOf('--min-tip-gwei');
+const FLOOR = BigInt(Math.round(Number(tipAt > -1 ? process.argv[tipAt + 1] : '0.5') * 1e9));
 const REC = path.join(ROOT, 'out', 'zSwap.chunks.deployed.json');
 
 const RPC = process.env.ETH_RPC_URL || 'https://ethereum-rpc.publicnode.com';
@@ -44,6 +46,9 @@ const creations = [];
 for (let i = 1; i <= N; i++) {
   const p = path.join(ROOT, 'out', `zSwap.chunk${i}.creation.txt`);
   creations.push(fs.readFileSync(p, 'utf8').trim());
+}
+if (!Buffer.concat(creations.map(c => Buffer.from(c.replace(/^0x/, '').slice(20), 'hex'))).equals(page)) {
+  throw new Error('the chunks in out/ do not reassemble to zSwap.html - run: node script/build-zSwap-chunks.mjs');
 }
 
 let rec = {};
@@ -81,7 +86,7 @@ async function main() {
     // transaction that idles in the mempool has its nonce taken from under it. Mine promptly, and
     // if the nonce is taken anyway, stop with a clear message - the run is resumable.
     const fd = await provider.getFeeData();
-    const tip = (fd.maxPriorityFeePerGas || 0n) > 500000000n ? fd.maxPriorityFeePerGas : 500000000n;
+    const tip = (fd.maxPriorityFeePerGas || 0n) > FLOOR ? fd.maxPriorityFeePerGas : FLOOR;
     const nonce = await provider.getTransactionCount(wallet.address, 'pending');
     const tx = await wallet.sendTransaction({ data: creations[i], nonce, gasLimit: 5300000n, maxPriorityFeePerGas: tip, maxFeePerGas: ((fd.maxFeePerGas || 0n) - (fd.maxPriorityFeePerGas || 0n)) + tip });
     let rc;

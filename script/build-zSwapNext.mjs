@@ -2,14 +2,14 @@
 /**
  * Emit the successor deployment for the current zSwap tip.
  *
- * The page is already on chain by the time this runs: it lives in thirteen data
+ * The page is already on chain by the time this runs: it lives in CHUNKS data
  * contracts whose addresses are the only thing the successor needs. This turns
- * those thirteen addresses into the two payloads the deploy actually consumes -
+ * those CHUNKS addresses into the two payloads the deploy actually consumes -
  * the successor's initcode, and the DAO calldata that hands it to the tip's
  * `deployNext`. Nothing here signs or sends; it does READ the chain, to verify
  * the chunk list before anything is emitted.
  *
- * Usage: ETH_RPC_URL=https://… node script/build-zSwapNext.mjs <15 chunk addresses> [--salt 0x..]
+ * Usage: ETH_RPC_URL=https://… node script/build-zSwapNext.mjs <20 chunk addresses> [--salt 0x..]
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -38,13 +38,13 @@ const chunks = args.filter((a, i) => a.startsWith('0x') && a.length === 42 && (s
 
 if (chunks.length !== CHUNKS) {
   console.error(`need exactly ${CHUNKS} chunk addresses, got ${chunks.length}`);
-  console.error('usage: node script/build-zSwapNext.mjs 0xC1 0xC2 ... 0xC12 [--salt 0x..]');
+  console.error(`usage: node script/build-zSwapNext.mjs 0xC1 0xC2 ... 0xC${CHUNKS} [--salt 0x..]`);
   process.exit(1);
 }
 const seen = new Set(chunks.map(c => c.toLowerCase()));
 if (seen.size !== CHUNKS) { console.error('duplicate chunk address — the constructor reverts InvalidData'); process.exit(1); }
 
-// THE ONLY CHECK THAT MATTERS, MADE HERE. The initcode bakes the thirteen
+// THE ONLY CHECK THAT MATTERS, MADE HERE. The initcode bakes the CHUNKS
 // addresses in forever, and the constructor checks nothing but non-empty and
 // pairwise-distinct — so a stale list (deploy/ still holds the v0.2
 // succession's, which reassembles to the OLD page) or two addresses pasted
@@ -70,7 +70,7 @@ for (let i = 0; i < CHUNKS; i++) {
   const want = page.subarray(i * per, Math.min((i + 1) * per, page.length));
   if (!code.equals(want)) {
     console.error(`chunk ${i + 1} (${chunks[i]}) is not its slice of zSwap.html: ${code.length} B on chain vs ${want.length} B expected`);
-    console.error('stale or wrong chunk list — deploy the current page with deploy-zSwapNext.mjs first');
+    console.error('stale or wrong chunk list — deploy the current page with deploy-zSwap-chunks.mjs first');
     process.exit(1);
   }
 }

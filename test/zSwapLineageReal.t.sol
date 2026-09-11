@@ -9,15 +9,15 @@ import {zSwap} from "../src/zSwap.sol";
 ///         Two suites already cover the halves. `zSwapLineage.t.sol` proves the
 ///         pointer system - forward and backward links, generation, `latest()`,
 ///         write-once, DAO-only, a failed deploy recording nothing - but builds
-///         its versions from fourteen stub data contracts, because for the
+///         its versions from stub data contracts, because for the
 ///         pointers the content is irrelevant. `zSwap.t.sol` proves a wrapper
-///         built from the REAL fourteen chunks serves the real page.
+///         built from the REAL chunks serves the real page.
 ///
 ///         Nothing composed them, and the composition is exactly what gets done
-///         to ship a fix: deploy fourteen new chunks, call `deployNext` with the
+///         to ship a fix: deploy new chunks, call `deployNext` with the
 ///         successor's initcode, repoint the naming layer. Each half passing
 ///         does not by itself say the whole thing does - a stub successor cannot
-///         show that a real one still serves 277KB through `html()`, and it
+///         show that a real one still serves the whole page through `html()`, and it
 ///         cannot show what that costs.
 ///
 ///         The property that matters most is the one an upgrade is most likely
@@ -64,10 +64,10 @@ contract zSwapLineageRealTest is Test {
         string memory servedByV1 = v1.html();
         assertEq(bytes(servedByV1).length, vm.readFileBinary("zSwap.html").length, "v1 serves the whole page");
 
-        // A successor built from its OWN fourteen chunks, as a real one would be.
+        // A successor built from its OWN chunks, as a real one would be.
         //
         // Built BEFORE the prank, deliberately. `vm.prank` applies to the next
-        // call, and `_realChunks()` makes fourteen CREATEs of its own - so
+        // call, and `_realChunks()` makes CHUNKS CREATEs of its own - so
         // inlining it as an argument spends the prank on a chunk deploy and
         // `deployNext` arrives as this contract, which is not the DAO. The
         // failure reads `NotDAO()`, which looks like an access-control bug in
@@ -106,7 +106,7 @@ contract zSwapLineageRealTest is Test {
         emit log_named_uint("deployNext gas (wrapper only)", used);
         emit log_named_uint("initcode bytes", initcode.length);
         // The chunks are deployed SEPARATELY and are the bulk of the cost; this
-        // call only stores fourteen addresses. A figure in the millions would
+        // call only stores CHUNKS addresses. A figure in the millions would
         // mean the payload had ended up inside the wrapper. (The curation
         // satellites are named as constants rather than created here, so they
         // cost this call nothing - which is part of why they are constants.)
@@ -119,7 +119,7 @@ contract zSwapLineageRealTest is Test {
     function test_aSuccessorWithADuplicateChunkIsRefusedAndNothingIsRecorded() public {
         zSwap v1 = new zSwap(dao, address(0), _realChunks());
         address[CHUNKS] memory bad = _realChunks();
-        bad[7] = bad[6]; // the constructor requires all fourteen distinct
+        bad[7] = bad[6]; // the constructor requires every chunk distinct
 
         vm.prank(dao);
         vm.expectRevert(zSwap.DeployFailed.selector);

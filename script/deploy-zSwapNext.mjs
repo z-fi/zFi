@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /**
- * Deploy the next zSwap generation: the fourteen data chunks, then the calldata
+ * Deploy the next zSwap generation: the data chunks, then the calldata
  * the DAO needs.
  *
  * WHAT THIS DOES AND DOES NOT DO. The chunks are plain data contracts - no
  * owner, no authority, nothing but bytes - so whoever pays the gas is
- * irrelevant to what the page becomes. This script sends those thirteen, checks
+ * irrelevant to what the page becomes. This script sends those chunks, checks
  * each one's deployed code against the payload byte for byte, and stops.
  *
  * It CANNOT deploy the successor. `deployNext` reverts `NotDAO` for anyone but

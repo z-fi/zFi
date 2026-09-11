@@ -3,7 +3,7 @@
  * Strip comments and indentation from zSwap.html.
  *
  * The page IS the deployed artifact: build-zSwap-chunks.mjs splits these exact
- * bytes across ten data contracts, and EIP-170 caps each at 24,576 — so every
+ * bytes across the data contracts, and EIP-170 caps each at 24,576 — so every
  * comment byte is paid for on chain, forever, by whoever deploys the next
  * version. zSwap.html carried ~45% comments and was 97% of its ceiling; that is
  * why it is now stored stripped rather than stripped at build time. The

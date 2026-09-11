@@ -3,21 +3,21 @@ pragma solidity ^0.8.36;
 
 
 /// @title zSwap v0.3
-/// @notice Permanently-deployed onchain HTML swap dapp for Ethereum mainnet.
-/// @dev Architecture: the HTML payload (470457 B) is the runtime bytecode of
+/// @notice Permanently-deployed onchain HTML swap dapp, stored on Ethereum and trading on Ethereum, Base and Robinhood Chain.
+/// @dev Architecture: the HTML payload (471642 B) is the runtime bytecode of
 ///      20 data contracts, deployed separately and passed to the constructor.
 ///      html() reassembles them via EXTCODECOPY with proper ABI encoding
 ///      (offset + length + padded data) so any RPC client decodes directly.
 ///      request() implements ERC-5219 for first-class web3:// gateway
 ///      compatibility (ERC-4804). Splitting the page across 20 data contracts
 ///      means EIP-170 caps each chunk, not the dapp
-///      (24576 B per chunk, 21063 B headroom).
+///      (24576 B per chunk, 19878 B headroom).
 ///
 ///      The chunk count is fixed in the constructor arity and the page is
-///      immutable, so it is sized to ceil(len/17) with headroom for a release
+///      immutable, so it is sized to ceil(len/N), N the chunk count, with headroom for a release
 ///      of growth. It cannot be padded arbitrarily: every chunk must be
-///      non-empty and distinct (see the constructor), so ceil(len/17) must
-///      stay under EIP-170 while len/17 stays non-zero. The page is stored
+///      non-empty and distinct (see the constructor), so ceil(len/N) must
+///      stay under EIP-170 while len/N stays non-zero. The page is stored
 ///      stripped of comments and indentation - every byte is paid for on
 ///      chain, forever, by whoever deploys the next version.
 ///
@@ -32,7 +32,7 @@ pragma solidity ^0.8.36;
 ///     directly as a web page, which this contract does, so no ERC-5219
 ///     support is required on the gateway side:
 ///       https://<addr>.w4eth.io/
-///     e.g. https://0x000000006513b7821171c8447ec7ecdfa3b956fd.w4eth.io/
+///     e.g. https://0x000000e7dad6128683d1fb415e80b30c23dab7ac.w4eth.io/
 ///   - Via a wallet/browser with web3:// protocol support (e.g. the
 ///     Web3URL Browser Extension on Chrome/Firefox/Brave).
 ///   - Or via the "HOW TO READ THE DAPP" path above.
@@ -47,7 +47,8 @@ pragma solidity ^0.8.36;
 ///   to a stale page; test/zSwapRegistry.t.sol fails on exactly that.
 ///
 /// HOW TO USE THE DAPP (in browser)
-///   1. Connect a wallet (MetaMask, Rabby, etc.) on Ethereum mainnet.
+///   1. Connect a wallet (MetaMask, Rabby, WalletConnect, etc.) on Ethereum,
+///      Base or Robinhood Chain.
 ///   2. Pick "from" and "to" tokens; type an amount in either field.
 ///   3. Review the rate line: rate, source DEX, and Min received / Max paid.
 ///   4. Click Swap. ERC-20 inputs trigger an exact-amount approval first.
@@ -122,10 +123,6 @@ pragma solidity ^0.8.36;
 ///   The ERC-20 path is therefore approve(exact) then depositTo, collapsed into
 ///   one confirmation by EIP-5792 where the wallet supports it.
 ///
-///   The four quoter builders are called concurrently rather than in series:
-///   they are heavy multi-pool reads, and sequencing them cost four round
-///   trips per quote (measured 4.6s vs 0.8s against a public RPC).
-///
 ///   claim() pays the recipient directly, but reverse() does NOT pay the
 ///   sender - it only credits unlockedBalances. Verified on a mainnet fork:
 ///   reverse alone settles the position and returns nothing, stranding the
@@ -188,11 +185,15 @@ pragma solidity ^0.8.36;
 ///   exact-in) the split and hybrid-split builders. Comparing matters — a 2-hop
 ///   route that merely succeeds can be far worse than a 3-hop one, e.g.
 ///   BOLD->rETH priced ~$28 through a skewed V4 pool where 3-hop gave ~$36.
+///
+///   The four quoter builders are called concurrently rather than in series:
+///   they are heavy multi-pool reads, and sequencing them cost four round
+///   trips per quote (measured 4.6s vs 0.8s against a public RPC).
 contract zSwap {
     string public constant NAME = "zSwap";
     string public constant VERSION = "0.3";
 
-    /// @dev The HTML payload lives in nineteen separate data contracts whose
+    /// @dev The HTML payload lives in twenty separate data contracts whose
     /// runtime bytecode IS the markup. Splitting it removes EIP-170 as a
     /// ceiling on the dapp: the 24,576-byte limit now applies per chunk, not to
     /// the page. The chunks are deployed independently and passed in, so this
@@ -212,7 +213,7 @@ contract zSwap {
     address public immutable DATA11;
     /// @dev A twelfth chunk. Same arithmetic as eleven.
     address public immutable DATA12;
-    /// @dev A thirteenth chunk. Same arithmetic again: ceil(len/17) must stay
+    /// @dev A thirteenth chunk. Same arithmetic again: ceil(len/N) must stay
     ///      under EIP-170 with headroom for a release of growth.
     address public immutable DATA13;
     /// @dev A fourteenth chunk. The launchpad's economics, the wave clock and
@@ -232,7 +233,7 @@ contract zSwap {
     ///      It is not a size limit anyone chose - it is ceil(page / 24576) - so
     ///      the only real guard is that `script/build-zSwap-chunks.mjs` and
     ///      this arity are checked against each other before a deploy rather
-    ///      than after one. Sixteen leaves under a kilobyte spare per chunk on
+    ///      than after one. Sixteen left under a kilobyte spare per chunk on
     ///      the stripped page - low four figures of total growth, not tens of
     ///      kilobytes - so `script/strip-zSwap.mjs` reports the real margin and
     ///      is worth reading before an edit that adds a screen of markup.
@@ -316,7 +317,7 @@ contract zSwap {
     // ------------------------------------------------------------- LINEAGE
     //
     // `html()` is immutable and stays that way. The successor below is a CLAIM
-    // ABOUT LINEAGE, never a redirect: this contract serves its own nineteen chunks
+    // ABOUT LINEAGE, never a redirect: this contract serves its own twenty chunks
     // forever, whatever the DAO deploys later. Making `html()` forward to a
     // successor would have been the smaller change and it would have cost the
     // one property this design exists for - an address whose bytes cannot move
@@ -424,15 +425,14 @@ contract zSwap {
     ///      so the deployer IS the predecessor at construction time. No version
     ///      NUMBER is stored: it is derived by walking, so there is no counter
     ///      to pass in wrongly, skip, or repeat. The chain is the record.
-    /// @dev The chunks arrive as ONE fixed-size array rather than 9 positional
+    /// @dev The chunks arrive as ONE fixed-size array rather than positional
     ///      parameters. Sixteen address parameters put the constructor over the
-    ///      EVM's stack limit outright ("1 too deep") at the previous count of
-    ///      fifteen, and the array costs
+    ///      EVM's stack limit outright ("1 too deep"), and the array costs
     ///      nothing to say so: a static array is ABI-encoded inline, so
     ///      `abi.encode(dao, previous, chunks)` is byte-identical to the
     ///      positional form every existing deploy artifact already appends.
     ///      It also means the next change to the count touches one number here
-    ///      instead of a parameter list, a temporary array and 16 assignments.
+    ///      instead of a parameter list, a temporary array and an assignment per chunk.
     constructor(address dao, address previous, address[20] memory d) {
         if (previous != address(0) && msg.sender != previous) revert InvalidData();
         DAO = dao;
@@ -609,7 +609,7 @@ contract zSwap {
         return "5219";
     }
 
-    /// @dev Reassembles the page from all nineteen chunks in one pass: each chunk
+    /// @dev Reassembles the page from all twenty chunks in one pass: each chunk
     /// is copied directly after the previous one at the string body, so no
     /// intermediate copy or concatenation is needed.
     ///
@@ -633,7 +633,7 @@ contract zSwap {
             // The bound is the arity, and it is a LITERAL because assembly has
             // no view of `d.length` - which makes it the one place a chunk can
             // be dropped without anything failing to compile. It has happened:
-            // this read 15 while the array above held 16 (now 17), and `html()` served a
+            // this read 15 while the array above held 16, and `html()` served a
             // page short of its last slice. If you change the count, change it
             // here, and let the length assertions in test/zSwap.t.sol catch you
             // if you do not.

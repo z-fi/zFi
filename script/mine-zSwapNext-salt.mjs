@@ -4,7 +4,7 @@
  *
  * `deployNext` does `create2(0, initcode, salt)` FROM THE TIP, so the address
  * is keccak(0xff ++ tip ++ salt ++ keccak(initcode))[12:]. Only `salt` is free:
- * the tip is the live v0.2 contract and the initcode is fixed by the sixteen
+ * the tip is the live v0.2 contract and the initcode is fixed by the
  * chunk addresses baked into the constructor args. So this must run AFTER the
  * chunks are deployed - mine against a different initcode and the salt is
  * worthless, silently, because it still produces *an* address, just not one
@@ -27,7 +27,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const argv = process.argv.slice(2);
 const arg = (k, d) => { const i = argv.indexOf(k); return i > -1 ? argv[i + 1] : d; };
 
-const TIP = arg('--tip', '0x00000095643CFfA7D9fae407a84dfCB6406456c6');
+const TIP = arg('--tip', '0xe686952842627A2cf81DF42CCaD54ef98046DB8D');
 const PREFIX = arg('--prefix', '000000').toLowerCase().replace(/^0x/, '');
 if (!/^[0-9a-f]*$/.test(PREFIX)) throw new Error('prefix must be hex');
 
@@ -35,7 +35,7 @@ let initcode = arg('--initcode', '');
 if (!initcode) {
   const p = path.join(ROOT, 'out', 'zSwapNext.initcode.txt');
   if (!fs.existsSync(p)) {
-    console.error('no initcode: run script/build-zSwapNext.mjs first (it needs the 16 deployed chunk addresses)');
+    console.error('no initcode: run script/build-zSwapNext.mjs first (it needs the deployed chunk addresses)');
     process.exit(1);
   }
   initcode = fs.readFileSync(p, 'utf8').trim();

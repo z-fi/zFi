@@ -17,7 +17,7 @@
  * one place the page behaves exactly as it will once it is served on chain.
  *
  * Usage:
- *   node script/serve-zswap.mjs            # zSwap.html on :8899
+ *   node script/serve-zswap.mjs            # zSwap.html on :8080
  *   node script/serve-zswap.mjs --preview  # the simulated build instead
  *   node script/serve-zswap.mjs --port 3000
  *
@@ -38,7 +38,7 @@ const PREVIEW = has('--preview');
 const FILE = PREVIEW
   ? path.join(ROOT, 'dapp', 'preview', 'index.html')
   : path.join(ROOT, 'zSwap.html');
-const PORT = Number(val('--port', 8899));
+const PORT = Number(val('--port', 8080));
 
 if (!fs.existsSync(FILE)) {
   console.error(`missing ${path.relative(ROOT, FILE)}`);
@@ -71,7 +71,7 @@ server.listen(PORT, '127.0.0.1', () => {
   console.log('');
   console.log(`  ${PREVIEW ? 'PREVIEW (simulated chain)' : 'LIVE (real Ethereum, real wallet)'}`);
   console.log(`  serving ${rel}`);
-  console.log(`  http://127.0.0.1:${PORT}`);
+  console.log(`  http://localhost:${PORT}`);
   console.log('');
   if (!PREVIEW) {
     console.log('  Wallet prompts are real and transactions are real. Contracts in play:');
@@ -81,9 +81,6 @@ server.listen(PORT, '127.0.0.1', () => {
     console.log('    splitter 0x000000aA142133107c7D2664F900f80e28BbfFbd  (no split set yet)');
     console.log('    launch lens 0x00000041201F1542EE49F9722b2590DEDFE4296B\n    lens     0x000000Bad3a2fa57ed74fa06000573ccddF6B7fB');
     console.log('    lq lens  0x000000956bf20A41C54BaE4a4b6F5C8A166DAB4E');
-    console.log('');
-    console.log('  poolCount() is 0 until a market is seeded, so the droplet');
-    console.log('  will show an empty band list for every pair until then.');
     console.log('');
   }
   console.log('  Reload picks up edits to the file. Ctrl-C to stop.');

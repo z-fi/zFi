@@ -121,7 +121,7 @@ contract zSwapRootDeployTest is Test {
         assertEq(zSwap(next).generation(), 2);
     }
 
-    /// The chunks must be fourteen distinct, non-empty data contracts, or the
+    /// The chunks must all be distinct, non-empty data contracts, or the
     /// constructor reverts `InvalidData`. Checked here because the root deploy
     /// is the one place the set is assembled by hand rather than by a test.
     function test_theChunkSetIsWellFormed() public {

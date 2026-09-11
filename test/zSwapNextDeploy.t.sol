@@ -135,7 +135,7 @@ contract zSwapNextDeployTest is Test {
     /// The tip refuses anyone else, so a leaked deployer key cannot pre-empt
     /// the vote by burning the one successor slot.
     /// @dev The initcode is built OUTSIDE the prank/expectRevert window: its
-    ///      argument evaluation deploys the twelve chunks, and `create` is a
+    ///      argument evaluation deploys the chunks, and `create` is a
     ///      call as far as those cheatcodes are concerned - evaluated inline,
     ///      it consumes the prank and the real call runs as the wrong sender.
     function test_nobodyButTheDaoCanSucceedIt() public {

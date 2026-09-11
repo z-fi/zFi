@@ -9,7 +9,9 @@ the first onchain superdapp
 
 [zSwap.sol](src/zSwap.sol) is a swap dapp whose entire UI — [zSwap.html](zSwap.html) — is designed to live on Ethereum mainnet as contract code. No IPFS pin, no gateway server, no frontend build pipeline. As long as Ethereum produces blocks, the dapp resolves byte-identical forever.
 
-Deployment flow: deploy the TWENTY generated chunk contracts (`out/zSwap.chunk1..20.creation.txt`), then deploy `zSwap(dao, previous, chunk1, ..., chunk20)` with those addresses. The count is not decorative - the constructor reverts `InvalidData` unless all twenty are present, non-empty and distinct, and `script/check-zSwap.mjs` fails the build if the source and the Solidity disagree about it. Record the final wrapper address here after deployment.
+Deployment flow: deploy the TWENTY generated chunk contracts (`out/zSwap.chunk1..20.creation.txt`), then run `script/build-zSwapNext.mjs` with those addresses: it emits the successor's initcode, `zSwap(dao, previous, [chunk1, ..., chunk20])`, and the calldata for the DAO to pass it to the current tip's `deployNext`. The constructor refuses any other sender for a successor; only a root (`previous` = 0) is deployed directly. The count is not decorative - the constructor reverts `InvalidData` unless all twenty are present, non-empty and distinct, and `script/check-zSwap.mjs` fails the build if the source and the Solidity disagree about it. Record the final wrapper address here after deployment.
+
+Lineage so far: v0.1 root [`0x00000095643CFfA7D9fae407a84dfCB6406456c6`](https://etherscan.io/address/0x00000095643CFfA7D9fae407a84dfCB6406456c6), v0.2 tip [`0xe686952842627A2cf81DF42CCaD54ef98046DB8D`](https://etherscan.io/address/0xe686952842627A2cf81DF42CCaD54ef98046DB8D). [`zSwapResolver`](https://etherscan.io/address/0x000000E7DAD6128683D1fb415e80B30c23dAb7AC) serves the newest version once it is 3 days old, and [`zSwapFlags`](https://etherscan.io/address/0x0000008a1a3C78440d0a28EBB4bb5526abA91d45) switches the solver lanes on and off.
 
 `html()` is IMMUTABLE, so a page fix is never an update in place: it is a new set of chunks and a new wrapper, deployed by the DAO through `deployNext`, with the naming layer repointed at it. That is the whole design - an address whose bytes cannot move under an auditor or a bookmark - and it means an edit to `zSwap.html` is not live until that has happened.
 
@@ -17,7 +19,7 @@ Deployment flow: deploy the TWENTY generated chunk contracts (`out/zSwap.chunk1.
 
 The HTML payload is installed as the **runtime bytecode of twenty data contracts** created before the wrapper. The wrapper keeps twenty `immutable` pointers (`DATA1`…`DATA20`). At read time, `html()` copies all twenty chunks back with `EXTCODECOPY` into one ABI-encoded `string` return — any RPC client decodes it directly.
 
-- **Why multiple data contracts?** EIP-170 caps deployed code at 24,576 bytes. Splitting the page makes that limit apply per chunk instead of to the full dapp. The current payload is 470,457 bytes across 20 data contracts (23,523 / 23,523 / 23,523 / 23,523 / 23,523 / 23,523 / 23,523 / 23,523 / 23,523 / 23,523 / 23,523 / 23,523 / 23,523 / 23,523 / 23,523 / 23,523 / 23,523 / 23,523 / 23,523 / 23,520 bytes), with 21,063 bytes of 20-chunk headroom.
+- **Why multiple data contracts?** EIP-170 caps deployed code at 24,576 bytes. Splitting the page makes that limit apply per chunk instead of to the full dapp. The current payload is 471,642 bytes across 20 data contracts (23,583 / 23,583 / 23,583 / 23,583 / 23,583 / 23,583 / 23,583 / 23,583 / 23,583 / 23,583 / 23,583 / 23,583 / 23,583 / 23,583 / 23,583 / 23,583 / 23,583 / 23,583 / 23,583 / 23,565 bytes), with 19,878 bytes of 20-chunk headroom.
 - **Why runtime bytecode instead of `SSTORE`?** Code is cheaper to deploy than equivalent storage, and `EXTCODECOPY` reads the blob directly. Storage-backed HTML would pay 20k gas per 32-byte word at write time and multiple SLOADs on read.
 - **Why immutable?** Each chunk is deployed with a minimal data-contract init stub (`PUSH2 <len> DUP1 PUSH1 0x0A PUSH0 CODECOPY PUSH0 RETURN | <payload>`). The wrapper constructor rejects missing or duplicated chunks, then stores the addresses immutably. Nothing in the wrapper can mutate the response, which is why the dapp ships `Cache-Control: public, max-age=31536000, immutable`.
 
@@ -35,7 +37,7 @@ Path and query parameters are ignored — the contract is a single-page app serv
 
 Once loaded, `zSwap.html` is a self-contained swap UI that:
 
-- Connects an injected wallet (MetaMask, Rabby, etc.) on Ethereum mainnet.
+- Connects an injected wallet (MetaMask, Rabby, etc.), or a phone wallet over WalletConnect, on Ethereum, Base or Robinhood Chain.
 - Quotes via [zQuoter](https://etherscan.io/address/0x000000bd2db80567c23e353ca95a251c573cbf9b) across Uniswap V2/V3/V4, Sushi, Curve, Lido, and zAMM.
 - Compares those AMM routes with live current Swapboard, legacy Swapboard v1, and Dutchboard liquidity, then composes a better exact-in or exact-out split when one exists.
 - Routes the swap through [zRouter](https://etherscan.io/address/0x000000000000FB114709235f1ccBFfb925F600e4), handling ERC-20 approvals and native ETH.
@@ -46,8 +48,11 @@ Once loaded, `zSwap.html` is a self-contained swap UI that:
 - Displays the chosen source DEX, effective rate, and Min received / Max paid under the user's slippage setting.
 - Sends native ETH or ERC-20s directly, with recipient resolution for `0x`, `.eth`, `.wei`, and `.gwei`.
 - Manages SLOW time-locked sends: deposit with a delay, reverse before maturity, and claim when ready.
+- Sends ether to another of its three chains from the Send tab (out of Base or Robinhood Chain when the relay lane is on), and bridges privately through Tacit's confidential pool.
+- Asks the aggregators on the on-chain solver roster for a competing price. It never tells them who is asking, and what they return is bounded on chain before it settles.
+- Launches coins from the coin button.
 
-No JavaScript bundler, no external asset loads at runtime — icons are inlined SVG and the script speaks JSON-RPC directly to the injected provider.
+No JavaScript bundler and no external asset loads: icons are inlined SVG. The page talks to your wallet and to a public node for reads (which you can repoint). The only other outside parties are the solver-roster aggregators when you ask for a quote, Tacit's relay for the private bridge, and the WalletConnect relay for a phone wallet.
 
 ### Routed order ownership
 
@@ -76,12 +81,15 @@ The in-page planner compares rate-greedy execution, every single all-or-nothing 
 `zSwap.html` at the repo root is the canonical source. To rebuild the Solidity payload after editing it:
 
 ```
+node script/strip-zSwap.mjs
 node script/build-zSwap.mjs
 node script/build-zSwap-chunks.mjs
-forge test --match-path test/zSwap.t.sol
+node script/build-zSwapRegistry-call.mjs
+node script/check-zSwap.mjs
+forge test --match-path "test/zSwap*"
 ```
 
-`build-zSwap.mjs` refreshes the size natspec in `zSwap.sol`, the payload sentence in both READMEs, and the length + keccak pins in `test/zSwap.t.sol`; the page itself is no longer copied into the contract, because that copy could only ever drift and did. `build-zSwap-chunks.mjs` writes `out/zSwap.chunk1.creation.txt` through `out/zSwap.chunk20.creation.txt`; deploy those creation payloads first, then deploy `zSwap` with the resulting chunk addresses as constructor args.
+`build-zSwap.mjs` refreshes the size natspec in `zSwap.sol`, the payload sentence in both READMEs, and the length + keccak pins in `test/zSwap.t.sol`; the page itself is no longer copied into the contract, because that copy could only ever drift and did. `build-zSwap-chunks.mjs` writes `out/zSwap.chunk1.creation.txt` through `out/zSwap.chunk20.creation.txt`; deploy them with `script/deploy-zSwap-chunks.mjs`, then `script/build-zSwapNext.mjs <chunk addresses>` emits the successor's initcode and the DAO's `deployNext` calldata.
 
 Compiler pin: Foundry uses Solidity `0.8.36` with `via_ir = true` and optimizer runs `9_999_999`. The zQuoter extraction script also uses `0.8.36`, but keeps the low-runs/yul-disabled recipe needed to stay under EIP-170.
 
@@ -99,7 +107,13 @@ Hardcoded stableswap using Curve's invariant (A=2000), simplified for exactly 2 
 - **LP revenue**: 100% to LPs, no protocol fee
 - **Integration**: EIP-7702 batch wallet, zRouter `snwap`, or [multisig executeBatch](https://etherscan.io/address/0xd54cb65224410f3ff97a8e72f363f224419f4fb0)
 
-### PrecisionRangePool (ETH/USDC $2200-$3000)
+### PrecisionRangePool (ETH/USDC $2200-$3000) — deprecated
+
+> Superseded by **PrecisionPool**, which is this design with the pair, band and
+> fee as constructor parameters, behind a CREATE2 factory with an on-chain
+> registry and a lens. The AMM step is unchanged. Retained as a gas baseline;
+> not for deployment. See the contract header for the two behavioural
+> differences and the overflow bound that motivated generalising it.
 
 Concentrated constant-product pool with a hardcoded price range. The range is baked in as virtual reserve offsets — the core AMM step is a single multiplication and division, with no traversal loops, ticks, or bitmaps. Uses native ETH (not WETH).
 

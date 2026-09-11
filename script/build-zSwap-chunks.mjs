@@ -4,8 +4,8 @@
  *
  * WHY CHUNKS
  * The page is stored as the runtime bytecode of data contracts, so a single
- * contract caps the dapp at EIP-170's 24,576 bytes. Splitting across nine
- * contracts moves that ceiling to ~221KB — the limit now applies per chunk, not
+ * contract caps the dapp at EIP-170's 24,576 bytes. Splitting across n
+ * contracts moves that ceiling to n x 24,576 B — the limit now applies per chunk, not
  * to the page. zSwap takes the chunk addresses as constructor args and
  * reassembles them in html(), so its own creation bytecode stays small.
  *
@@ -14,9 +14,11 @@
  * is idempotent and reports the sizes, so run it if an edit reintroduces any.
  *
  * DEPLOY ORDER
- *   1..9. deploy chunk i           -> address A..I
- *   10.   deploy zSwap(dao, previous, A, B, C, D, E, F, G, H, I)
- *         (constructor args appended to the creation code)
+ *   1..n. deploy chunk i (script/deploy-zSwap-chunks.mjs) -> address Di
+ *   n+1.  node script/build-zSwapNext.mjs D1 .. Dn emits the successor's
+ *         initcode, zSwap(dao, previous, [D1..Dn]), and the DAO passes it to
+ *         deployNext on the current tip; only a root (previous = 0) is
+ *         deployed directly
  *
  * Every chunk must be non-empty and distinct or the constructor reverts
  * InvalidData, which is why the guard below refuses a count that would leave
