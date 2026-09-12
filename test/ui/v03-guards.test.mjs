@@ -406,6 +406,61 @@ describe('quoting', () => {
   });
 });
 
+describe('the rate line', () => {
+  const open = async () => {
+    const chain = new MockChain();
+    chain.setNative(A.ACCOUNT, 10n * ETH);
+    chain.quoteHandler = fixedRateQuoter({ rate: 3000n * ETH });
+    const p = await loadPage({ chain });
+    await p.connect();
+    return p;
+  };
+
+  test('an exact-in quote shows its minimum and no maximum', async () => {
+    const p = await open();
+    await p.typeAmount('amt', '1');
+    assert.match(p.text('rate'), /Min /, `rate line: ${p.text('rate')}`);
+    assert.doesNotMatch(p.text('rate'), /Max /, `rate line: ${p.text('rate')}`);
+    p.close();
+  });
+
+  test('an exact-out quote shows its maximum and no minimum', async () => {
+    const p = await open();
+    await p.typeAmount('outAmt', '100');
+    assert.match(p.text('rate'), /Max /, `rate line: ${p.text('rate')}`);
+    assert.doesNotMatch(p.text('rate'), /Min /, `rate line: ${p.text('rate')}`);
+    p.close();
+  });
+
+  test('a Robinhood token with a share multiplier shows it', async () => {
+    const DEEP = '0x1da24f6bb623b9d1afeae3f3146659a2662d6d27';
+    const chain = new MockChain({ chainId: '0x1237' });
+    chain.setNative(A.ACCOUNT, 10n * ETH);
+    chain.quoteHandler = fixedRateQuoter({ rate: 3000n * ETH });
+    chain.answer(DEEP, '0xa60bf13d', '0x' + (1_012_385n * 10n ** 12n).toString(16).padStart(64, '0'));
+    const p = await loadPage({ chain, hash: null });
+    await p.connect();
+    p.pickToken('toSel', 'DEEP');
+    await p.settle();
+    await p.typeAmount('amt', '1');
+    await p.settle();
+    await p.typeAmount('amt', '2');
+    assert.match(p.text('rate'), /1 DEEP = 1\.012385 shares/, `rate line: ${p.text('rate')}`);
+    p.close();
+  });
+
+  test('no multiplier is read off Robinhood', async () => {
+    const chain = new MockChain();
+    chain.setNative(A.ACCOUNT, 10n * ETH);
+    chain.quoteHandler = fixedRateQuoter({ rate: 3000n * ETH });
+    const p = await loadPage({ chain });
+    await p.connect();
+    await p.typeAmount('amt', '1');
+    assert.ok(!chain.calls.some(c => c.selector === 'a60bf13d'), 'uiMultiplier read on mainnet');
+    p.close();
+  });
+});
+
 describe('sending to another chain', () => {
   test('a contract here with no code on the destination asks first, and declining sends nothing', async () => {
     const chain = new MockChain();

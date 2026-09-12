@@ -60,6 +60,8 @@ function pageConst(name) {
   let m = page.match(new RegExp('(?:const|let) ' + name + '="(0x[0-9a-fA-F]{40})"'));
   if (!m && MB_KEY[name]) m = page.match(new RegExp(`const MB=\\{[^;]*\\b${MB_KEY[name]}:"(0x[0-9a-fA-F]{40})"`));
   if (!m) m = page.match(new RegExp(name + '="(0x[0-9a-fA-F]{40})"'));
+  const row = !m && page.match(new RegExp('\\b' + name + '=CHAINS\\[1\\]\\.(\\w+)'));
+  if (row) m = page.match(new RegExp('\\n1:\\{name:[^}]*?\\b' + row[1] + ':"(0x[0-9a-fA-F]{40})"'));
   if (!m) throw Error(`preview cannot find ${name} in zSwap.html`);
   return m[1].toLowerCase();
 }
@@ -919,23 +921,23 @@ const SHELL = `<title>zSwap — live preview</title>
 <style>
 .pv-note{
   max-width:22em;margin:0 auto 1em;padding:.7em .85em;
-  border:1px solid var(--e);border-radius:.5em;background:var(--c);
+  border:1px solid var(--e);border-radius:.5em;background:var(--b);
   font:600 .65em/1.6 system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase;
-  color:var(--n);text-align:center;box-sizing:border-box;
+  color:var(--m);text-align:center;box-sizing:border-box;
 }
 .pv-note b{display:block;color:var(--f);font-size:1.15em;letter-spacing:.08em;margin-bottom:.2em}
 .pv-note span{display:block;text-transform:none;letter-spacing:0;font-weight:400;font-size:1.05em;margin-top:.4em}
 .pv-h2{max-width:46em;margin:2.4em auto .9em;font:700 .68em/1 system-ui,sans-serif;
-  letter-spacing:.16em;text-transform:uppercase;color:var(--n);
+  letter-spacing:.16em;text-transform:uppercase;color:var(--m);
   border-bottom:1px solid var(--e);padding-bottom:.7em}
 .pv-gallery{max-width:46em;margin:0 auto;display:grid;gap:1em;
   grid-template-columns:repeat(auto-fit,minmax(19em,1fr))}
-.pv-card{margin:0;border:1px solid var(--e);border-radius:.5em;background:var(--c);
+.pv-card{margin:0;border:1px solid var(--e);border-radius:.5em;background:var(--b);
   padding:.8em;box-shadow:var(--s)}
 .pv-card figcaption{display:flex;flex-direction:column;gap:.15em;margin-bottom:.6em}
 .pv-card figcaption b{font:600 .82em/1.3 system-ui,sans-serif;color:var(--f);letter-spacing:.02em}
 .pv-card figcaption span{font:400 .68em/1.4 system-ui,sans-serif;color:var(--m)}
-.pv-chart{position:relative;border:1px solid var(--e);border-radius:.45em;overflow:hidden;background:var(--p)}
+.pv-chart{position:relative;border:1px solid var(--e);border-radius:.45em;overflow:hidden;background:var(--b)}
 .pv-chart svg{display:block;width:100%;height:auto}
 .pv-chart .hd{position:absolute;top:.4em;left:.55em;font:400 .7em/1.4 system-ui,sans-serif;
   color:var(--m);font-variant-numeric:tabular-nums;pointer-events:none}

@@ -211,7 +211,7 @@ describe('the hybrid plan on an L2', () => {
 });
 
 describe('share links', () => {
-  test('carry the chain off mainnet and omit it on mainnet', async () => {
+  test('carry the chain on every network, mainnet included', async () => {
     const p = await onBase();
     await p.connect({ pin: false });
     p.click('lk');
@@ -223,7 +223,7 @@ describe('share links', () => {
     await q.connect();
     q.click('lk');
     await q.settle();
-    assert.doesNotMatch(String(q.copied()), /chain=/);
+    assert.equal(new URLSearchParams(new URL(String(q.copied().at(-1))).hash.slice(1)).get('chain'), '1');
     q.close();
   });
 });

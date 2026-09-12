@@ -325,7 +325,7 @@ describe('accessibility and shell affordances', () => {
     // A fresh load with the flag set must stay disconnected.
     const p3 = await loadPage({ chain });
     await p3.settle();
-    assert.equal(p3.text('addr'), '0x1111...1111', 'a new session may auto-connect');
+    assert.equal(p3.text('addr'), '0x1111…1111', 'a new session may auto-connect');
     p2.close();
     p3.close();
   });

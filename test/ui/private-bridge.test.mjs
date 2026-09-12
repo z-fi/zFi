@@ -546,6 +546,58 @@ describe('self-help', () => {
     q.close();
   });
 
+  test('recovery from a busy pool derives each note index once, and the page keeps running while it scans', async () => {
+    const storage = { ['zswap:cpk:' + A.ACCOUNT.toLowerCase()]: F.seed };
+    // A second deposit of ours, at index 5 and another amount. Its id comes from
+    // the page's single-note derivation, which the reference vectors pin; the
+    // scan below has to land on the same id by its own route.
+    const p = await open({ storage });
+    const mine = p.window.eval('cpNoteOf({i:5,v:"2500000"}).dep');
+    p.close();
+    const q = await open({ storage });
+    // Every call to derive a note secret encodes this domain tag exactly once.
+    let derived = 0;
+    const Enc = q.window.TextEncoder;
+    q.window.TextEncoder = class extends Enc {
+      encode(s) { if (s === 'tacit-evm-cnote-v1') derived++; return super.encode(s); }
+    };
+    const foreign = k => keccak256(toUtf8Bytes('someone else ' + k));
+    for (let k = 0; k < 30; k++) q.chain.logs.push(wrapLog(foreign(k), (1000001n + BigInt(k)) * 10n ** 10n));
+    for (let k = 30; k < 36; k++) q.chain.logs.push(wrapLog(foreign(k), F.amountWei));
+    q.chain.logs.push(wrapLog(foreign(36), 10n ** 10n + 1n));
+    q.chain.logs.push(wrapLog(F.depositId, F.amountWei));
+    q.chain.logs.push(wrapLog(mine, 2500000n * 10n ** 10n));
+    advance(q);
+    poke(q);
+    await q.settle();
+    assert.match(q.text('pvList'), /No deposits yet/);
+    let ticks = 0, gap = 0, at = performance.now();
+    const beat = q.window.setInterval(() => { const t = performance.now(); gap = Math.max(gap, t - at); at = t; ticks++; }, 0);
+    derived = 0;
+    let t0 = performance.now();
+    q.click(q.$('pvKey').querySelector('button[data-a="recover"]'));
+    await q.waitFor(() => /Recovered 2 deposits/.test(q.text('stat')), { label: 'both deposits to be recovered', timeout: 30000 });
+    const first = performance.now() - t0;
+    q.window.clearInterval(beat);
+    assert.ok(derived <= 64 + 2, `64 indices plus one per recovered note, not 64 per distinct amount: ${derived}`);
+    assert.ok(ticks > 20 && gap < 400, `the scan yields to the event loop: ${ticks} timer ticks, longest stall ${Math.round(gap)} ms`);
+    assert.match(q.text('pvList'), /0\.01 ETH/);
+    assert.match(q.text('pvList'), /0\.025 ETH/);
+    const stored = JSON.parse(q.window.localStorage[Object.keys(q.window.localStorage).find(k => k.startsWith('zswap:cpn:'))]);
+    assert.deepEqual(stored.map(n => [n.i, n.v]), [[0, '1000000'], [5, '2500000']]);
+    assert.deepEqual(stored[0].op, F.wrapOp, 'the recovered deposit carries the reference witness');
+    assert.ok(stored.every(n => /^0x[0-9a-f]+$/i.test(n.memo)), 'and a memo for the relay');
+    derived = 0;
+    t0 = performance.now();
+    q.click(q.$('pvKey').querySelector('button[data-a="recover"]'));
+    await q.waitFor(() => /Nothing new on chain/.test(q.text('stat')), { label: 'the second scan', timeout: 30000 });
+    const second = performance.now() - t0;
+    assert.equal(derived, 0, 'a second scan reuses the index table');
+    assert.ok(second < first / 4, `and skips the wraps it already ruled out: ${Math.round(second)} ms against ${Math.round(first)} ms`);
+    assert.equal(JSON.parse(q.window.localStorage[Object.keys(q.window.localStorage).find(k => k.startsWith('zswap:cpn:'))]).length, 2);
+    q.close();
+  });
+
   test('an exported note list can be imported on another browser', async () => {
     const p = await open();
     await unlock(p);

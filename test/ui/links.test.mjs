@@ -734,6 +734,196 @@ describe('share links round-trip', () => {
       assert.equal(p.value('rc'), A.OTHER);
       assert.equal(p.value('dly'), '259200');
     }));
+
+  /**
+   * dest= is the Send tab's "Arrives on"; the book tab adds want= (what the
+   * order asks), kind= (dutch or floor), fill=0 (all or nothing), rest= (how
+   * long a Dutch lot rests at its floor), floor= (floor or opening total) and
+   * id= (the NFT). Every share also names its chain.
+   */
+  const hashOf = url => new URLSearchParams(new URL(url).hash.slice(1));
+  const book = async (p, fields) => {
+    p.click('tabBook');
+    await p.settle();
+    for (const [id, v] of fields) (p.$(id).tagName === 'SELECT' ? p.select : p.type)(id, v);
+    await p.settle();
+  };
+  const PUNKS = '0xfeed567890abcdef1234567890abcdef12345678';
+  const punks = c => {
+    c.setToken(PUNKS, { symbol: 'PUNK', name: 'CryptoPunks', erc721: true });
+    c.setNftOwner(PUNKS, 7, A.ACCOUNT);
+  };
+
+  test('a cross-chain send reopens arriving on the same chain', async () => {
+    const p = await open('');
+    p.click('tabSend');
+    await p.settle();
+    p.type('amt', '1');
+    p.type('rc', A.OTHER);
+    p.select('sdChain', '8453');
+    await p.settle();
+    const url = await share(p);
+    p.close();
+    assert.equal(hashOf(url).get('dest'), '8453');
+    assert.equal(hashOf(url).get('chain'), '1', 'a mainnet share names mainnet');
+
+    const p2 = await open(new URL(url).hash.slice(1));
+    assert.equal(tabOf(p2), 'Send');
+    assert.equal(p2.value('sdChain'), '8453');
+    await p2.waitFor(() => / on Base$/.test(p2.text('swap')), { label: 'destination on the button' });
+    p2.close();
+  });
+
+  test('a destination that is this chain, or one the page does not bridge to, is ignored', async () => {
+    for (const dest of ['1', '10', '8453x', '']) {
+      const p = await open(`tab=send&token=ETH&amount=1&to=${A.OTHER}&dest=${dest}`);
+      assert.equal(p.value('sdChain'), '0', `dest=${dest} must leave the send on this chain`);
+      p.close();
+    }
+  });
+
+  test('on an L2 its own chain is refused as a destination and Ethereum is accepted', async () => {
+    const onBase = async dest => {
+      const chain = new MockChain({ chainId: '0x2105', autoConnected: true });
+      chain.setNative(A.ACCOUNT, 10n * ETH);
+      chain.bridgeFlag.set('8453', 1);
+      const p = await loadPage({ chain, storage: { 'zswap:flag:8453': '1' },
+        hash: `chain=8453&tab=send&token=ETH&amount=1&to=${A.OTHER}&dest=${dest}` });
+      await p.settle();
+      return p;
+    };
+    let p = await onBase('8453');
+    assert.equal(p.value('sdChain'), '0');
+    p.close();
+    p = await onBase('1');
+    assert.equal(p.value('sdChain'), '1');
+    p.close();
+  });
+
+  test('a Dutch order reopens with its type, both amounts, floor, window and rest', () => roundTrip(
+    p => book(p, [['kind', 'dutch'], ['amt', '1'], ['outAmt', '3000'], ['floorAmt', '2000'],
+      ['dly', '259200'], ['dRest', '604800']]),
+    async p => {
+      assert.equal(tabOf(p), 'Book');
+      assert.equal(p.value('kind'), 'dutch');
+      assert.equal(p.value('amt'), '1');
+      assert.equal(p.value('outAmt'), '3000', 'the start ask');
+      assert.equal(p.value('floorAmt'), '2000');
+      assert.equal(p.value('dly'), '259200');
+      assert.equal(p.value('dRest'), '604800');
+      assert.match(p.text('swap'), /^Dutch 1 ETH/);
+    }));
+
+  test('an all-or-nothing limit order reopens all-or-nothing', () => roundTrip(
+    p => book(p, [['fill', '0'], ['amt', '2'], ['outAmt', '6000']]),
+    async p => {
+      assert.equal(p.value('kind'), 'fixed');
+      assert.equal(p.value('fill'), '0');
+      assert.equal(p.value('amt'), '2');
+      assert.equal(p.value('outAmt'), '6000');
+      assert.match(p.text('swap'), /all-or-nothing/);
+    }));
+
+  test('a climbing bid reopens with its opening bid and window', () => roundTrip(
+    p => book(p, [['kind', 'floor'], ['amt', '2'], ['outAmt', '5000'], ['floorAmt', '1']]),
+    async p => {
+      assert.equal(p.value('kind'), 'floor');
+      assert.equal(p.value('floorAmt'), '1');
+      assert.equal(p.value('dly'), '86400');
+      assert.match(p.text('swap'), /^Bid 1 → 2 ETH/);
+    }));
+
+  test('an NFT listing reopens with its token id and price', async () => {
+    const p = await open(`tab=book&token=${PUNKS}&out=ETH`, punks);
+    assert.equal(symOf(p, 'fromSel'), 'PUNK');
+    p.type('nftId', '7');
+    p.type('outAmt', '10');
+    await p.settle();
+    const url = await share(p);
+    p.close();
+    assert.equal(hashOf(url).get('id'), '7');
+
+    const p2 = await open(new URL(url).hash.slice(1), punks);
+    assert.equal(p2.value('nftId'), '7');
+    assert.equal(p2.value('outAmt'), '10');
+    assert.match(p2.text('swap'), /^List PUNK #7/);
+    p2.close();
+  });
+
+  test('order details a link cannot express fall back to the defaults', async () => {
+    const p = await open(`tab=book&token=${PUNKS}&out=ETH&kind=evil&fill=2&rest=5&floor=-1&want=1e5&id=%3Cb%3E`, punks);
+    assert.equal(p.value('kind'), 'fixed');
+    assert.equal(p.value('fill'), '1');
+    assert.equal(p.value('dRest'), '0');
+    assert.equal(p.value('floorAmt'), '');
+    assert.equal(p.value('outAmt'), '');
+    assert.equal(p.value('nftId'), '');
+    p.close();
+  });
+
+  test('a later link never overwrites a destination or order type the user chose', async () => {
+    const p = await open('');
+    p.click('tabSend');
+    await p.settle();
+    p.select('sdChain', '4663');
+    p.window.location.hash = `tab=send&token=ETH&amount=1&to=${A.OTHER}&dest=8453`;
+    await p.waitFor(() => p.value('amt') === '1', { label: 'send link applied' });
+    await p.settle();
+    assert.equal(p.value('sdChain'), '4663', 'the destination the user picked survives');
+
+    p.click('tabBook');
+    await p.settle();
+    p.select('kind', 'dutch');
+    p.window.location.hash = 'tab=book&token=ETH&out=USDC&amount=2&kind=floor';
+    await p.waitFor(() => p.value('amt') === '2', { label: 'book link applied' });
+    await p.settle();
+    assert.equal(p.value('kind'), 'dutch', 'the order type the user picked survives');
+    p.close();
+  });
+
+  test('a later link replaces what a link set, and going back drops it', async () => {
+    const p = await open(`tab=send&token=ETH&amount=1&to=${A.OTHER}&dest=8453`);
+    assert.equal(p.value('sdChain'), '8453');
+    p.window.location.hash = `tab=send&token=ETH&amount=1&to=${A.OTHER}&dest=4663`;
+    await p.waitFor(() => p.value('sdChain') === '4663', { label: 'second destination' });
+    p.window.location.hash = '';
+    await p.waitFor(() => p.value('sdChain') === '0', { label: 'destination dropped' });
+    p.close();
+
+    const b = await open('tab=book&token=ETH&out=USDC&amount=1&want=3000&kind=dutch&floor=2000&rest=86400');
+    assert.equal(b.value('kind'), 'dutch');
+    b.window.location.hash = 'tab=book&token=ETH&out=USDC&amount=1&want=3000';
+    await b.waitFor(() => b.value('kind') === 'fixed', { label: 'order type replaced' });
+    assert.equal(b.value('dRest'), '0');
+    b.window.location.hash = '';
+    await b.waitFor(() => b.value('amt') === '', { label: 'order dropped' });
+    assert.equal(b.value('floorAmt'), '');
+    b.close();
+  });
+
+  test('after going back, a Dutch order typed by hand proposes its own floor again', async () => {
+    const p = await open('tab=book&token=ETH&out=USDC&amount=1&want=3000&kind=dutch&floor=2000');
+    p.window.location.hash = '';
+    await p.waitFor(() => p.value('amt') === '', { label: 'order dropped' });
+    p.select('kind', 'dutch');
+    p.type('amt', '1');
+    p.type('outAmt', '3000');
+    await p.settle();
+    assert.equal(p.value('floorAmt'), '1500');
+    p.close();
+  });
+
+  test('a later link keeps an instant send the user chose over a lock a link set', async () => {
+    const p = await open(`tab=send&token=ETH&amount=1&to=${A.OTHER}&lock=3d`);
+    assert.equal(p.value('dly'), '259200');
+    p.select('dly', '0');
+    await p.settle();
+    p.window.location.hash = `tab=send&token=ETH&amount=2&to=${A.OTHER}&lock=1d`;
+    await p.waitFor(() => p.value('amt') === '2', { label: 'second link applied' });
+    await p.settle();
+    assert.equal(p.value('dly'), '0');
+    p.close();
+  });
 });
 
 /**

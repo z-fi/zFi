@@ -41,7 +41,7 @@ letter-spacing:.02em;color:var(--f);display:flex;justify-content:space-between;a
 .docs summary::-webkit-details-marker{display:none}
 .docs summary::after{content:"+";color:var(--m);font-weight:400}
 .docs details[open] summary::after{content:"\\2013"}
-.docs p{margin:0 0 .7em;padding:0 .2em;font-size:.72em;line-height:1.6;color:var(--n)}
+.docs p{margin:0 0 .7em;padding:0 .2em;font-size:.72em;line-height:1.6;color:var(--m)}
 .docs b{color:var(--f);font-weight:600}
 .docs em{font-style:normal;color:var(--m)}`;
 

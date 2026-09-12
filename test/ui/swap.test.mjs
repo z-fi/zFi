@@ -90,7 +90,7 @@ describe('connection', () => {
 
   test('connecting shows the account and its balance', async () => {
     const p = await setup();
-    assert.equal(p.text('addr'), '0x1111...1111');
+    assert.equal(p.text('addr'), '0x1111…1111');
     assert.match(p.text('bal'), /Balance: 10\b/);
     p.close();
   });
@@ -209,6 +209,15 @@ describe('quoting', () => {
     const p = await setup();
     await p.typeAmount('amt', '1');
     assert.ok(!/widened/.test(p.text('rate')));
+    p.close();
+  });
+
+  test('exact-in bounds the output and names no maximum', async () => {
+    const p = await setup();
+    await p.typeAmount('amt', '1');
+    assert.match(p.text('rate'), /Min 2985 USDC/, 'exact-in floors what arrives');
+    assert.ok(!/Max /.test(p.text('rate')), 'the input is fixed, so there is no maximum to show');
+    assert.equal(p.$('rate').title, '', 'and no exact-maximum tooltip');
     p.close();
   });
 

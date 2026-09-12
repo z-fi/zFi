@@ -44,6 +44,7 @@ async function setup(prep = () => {}) {
   // The page asks the DESTINATION whether the recipient has code, and asks
   // Robinhood its gas price. Both go out over plain HTTP to that chain's node.
   chain.remotes['base-rpc'] = new MockChain({ chainId: BASE });
+  chain.remotes['base.org'] = chain.remotes['base-rpc'];
   chain.remotes['robinhood'] = new MockChain({ chainId: RH });
   prep(chain);
   const p = await loadPage({ chain });
@@ -1248,6 +1249,7 @@ describe('the on-chain switch', () => {
     chain.setNative(A.ACCOUNT, 10n * ETH);
     chain.bridgeFlag.set('8453', 2);
     chain.remotes['base-rpc'] = new MockChain({ chainId: BASE });
+    chain.remotes['base.org'] = chain.remotes['base-rpc'];
     chain.remotes['robinhood'] = new MockChain({ chainId: RH });
     const p = await loadPage({ chain });
     await p.connect();

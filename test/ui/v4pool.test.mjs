@@ -29,11 +29,11 @@ const V4SWAP = '48e6f730';
 after(closeAllPages);
 
 /** A page whose USDC listing carries one hooked ETH pool. */
-async function setup({ v4Quote, extra = '' } = {}) {
+async function setup({ v4Quote, extra = '', hub = true } = {}) {
   const chain = new MockChain();
   chain.setNative(A.ACCOUNT, 10n * ETH);
   chain.setErc20(A.USDC, A.ACCOUNT, 50_000n * 10n ** 6n);
-  chain.quoteHandler = fixedRateQuoter({ rate: 3000n * ETH });
+  chain.quoteHandler = hub ? fixedRateQuoter({ rate: 3000n * ETH }) : () => null;
   chain.v4Quote = v4Quote || null;
   const page = await loadPage({
     chain,
@@ -237,6 +237,22 @@ describe('quoting and sending', () => {
     page.click('swap');
     await page.settle();
     assert.equal(page.chain.lastSent.to.toLowerCase(), A.ZROUTER.toLowerCase());
+    page.close();
+  });
+
+  it('points exact-output at exact-input when only the pool trades the pair', async () => {
+    // V4Port.swap is exact-in only, and the live FWA hook reverts any exact-out
+    // swap, so a pair that trades only through a listed pool has no exact-out.
+    const page = await setup({ v4Quote: ({ amountIn }) => amountIn * 3000n / 10n ** 12n, hub: false });
+    await page.typeAmount('outAmt', '3000');
+    assert.equal(page.value('amt'), '', 'no input figure');
+    assert.match(page.text('stat'), /exact-output is unavailable/i, 'it says what is wrong');
+    assert.match(page.text('stat'), /amount to PAY/i, 'and what to do instead');
+    assert.equal(page.$('swap').disabled, true);
+
+    await page.typeAmount('amt', '1');
+    assert.equal(page.value('outAmt'), '3000', 'exact-in through the same pool still quotes');
+    assert.match(page.text('rate'), /UniV4/);
     page.close();
   });
 });
