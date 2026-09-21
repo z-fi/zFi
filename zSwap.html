@@ -173,7 +173,7 @@ vertical-align:.1em;line-height:1;text-decoration:none;margin-left:.5em}
 #lnArtNote{color:var(--m);font-variant-numeric:tabular-nums}
 #lnArtNote.set{color:var(--f)}
 .lnbtn{font:inherit;font-size:.85em;letter-spacing:.08em;text-transform:uppercase;color:var(--f);background:transparent;border:1px solid var(--e);padding:.4em .7em;cursor:pointer;transition:border-color .15s}.wnbtn{display:block;width:100%;box-sizing:border-box;font:inherit;font-size:.75em;color:var(--f);background:var(--b);border:1px solid var(--e);padding:.65em .8em;margin-top:.5em;cursor:pointer;text-align:center;transition:border-color .15s,color .15s}.wnbtn:hover{border-color:var(--f)}.wnbtn.mut{color:var(--m);cursor:default;border-color:transparent}.wnbtn.mut:hover{border-color:transparent}
-#adEl{display:block;text-align:center;font-size:.72em;letter-spacing:.03em;margin-top:.9em}
+#adEl{display:block;text-align:center;color:var(--m);font-size:.72em;letter-spacing:.03em;margin-top:.9em}
 #fcEl{display:block;text-align:center;color:var(--m);font-size:.72em;letter-spacing:.03em;margin-top:.9em}
 .fclink{font:inherit;color:var(--m);background:none;border:0;border-bottom:1px solid var(--e);padding:0 0 .1em;margin-left:.35em;cursor:pointer;letter-spacing:inherit}
 .fclink:hover{color:var(--f);border-color:var(--f)}
@@ -6329,13 +6329,14 @@ let c=null;for(const u of AD_API){try{const j=await relayFetch(a.slice(2,4)+".js
 if(my!==adSeq)return;
 if(!c||!Number.isSafeInteger(c.index)||c.index<0||!/^\d{1,40}$/.test(String(c.amount))||!Array.isArray(c.proof)||c.proof.length>64||!c.proof.every(x=>/^0x[0-9a-f]{64}$/i.test(x))||adRoot({...c,a})!=="0x"+strip0x(root).slice(-64).toLowerCase())return adHide();
 const amt=BigInt(c.amount),[cl,bal]=await mc3([{to:TACAD,data:"0x9e34070f"+encUint(BigInt(c.index))},{to:TAC_TOK,data:"0x70a08231"+encAddr(TACAD)}]);
-if(my!==adSeq)return;const n=trimAmt(amt,18)+" TAC";
+if(my!==adSeq)return;const n=(amt<10n**14n?trimAmt(amt,18):(+formatUnits(amt,18)).toFixed(4))+" TAC",D=new Date(end*1e3);
 adEl.classList.remove("hide");
-if(BigInt(cl||"0x0")!==0n){adC=null;adEl.textContent="Your "+n+" airdrop has been claimed.";return}
+if(BigInt(cl||"0x0")!==0n){adC=null;adEl.title="";adEl.textContent="Tacit airdrop claimed · "+n;return}
 if(BigInt(bal||"0x0")<amt)return adHide();
 adC={index:BigInt(c.index),amt,proof:c.proof};
-adEl.textContent="You can claim "+n+" from the Tacit airdrop · by "+new Date(end*1e3).toLocaleDateString(undefined,{year:"numeric",month:"short",day:"numeric"});
-for(const [k,t] of [["me","claim"],["to","claim to…"]]){const x=document.createElement("button");x.type="button";x.className="fclink";x.dataset.ad=k;x.textContent=t;adEl.append(x)}
+adEl.textContent=n+" airdrop · until "+D.toLocaleDateString(undefined,D.getFullYear()===new Date().getFullYear()?{month:"short",day:"numeric"}:{year:"numeric",month:"short",day:"numeric"})+" ";
+adEl.title="TAC set aside for this address in Tacit's airdrop. Claim sends it to this wallet; Claim to… sends it to another address or name. Open until "+D.toLocaleString()+".";
+for(const [k,t] of [["me","Claim"],["to","Claim to…"]]){const x=document.createElement("button");x.type="button";x.className="fclink";x.dataset.ad=k;x.textContent=t;adEl.append(x)}
 }catch{if(my===adSeq)adHide()}}
 adEl.onclick=async e=>{const b=e.target.closest("button[data-ad]");if(!b||!adC||busy)return;const c=adC;let to=account;
 if(b.dataset.ad==="to"){const v=String(await ask("Send your "+trimAmt(c.amt,18)+" TAC to which address or name?","")||"").trim();if(!v)return;

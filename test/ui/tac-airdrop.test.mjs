@@ -64,7 +64,7 @@ const open = async (opts, page = {}) => {
 describe('the TAC airdrop card', () => {
   test('offers the claim, and claims to the connected wallet with the exact proof', async () => {
     const p = await open();
-    await p.waitFor(() => /You can claim 1\.23456 TAC/.test(card(p)), { label: 'the card' });
+    await p.waitFor(() => /1\.2346 TAC airdrop · until/.test(card(p)), { label: 'the card' });
     p.click(p.$('adEl').querySelector('button[data-ad="me"]'));
     await p.waitFor(() => p.chain.sentTo(TACAD).length > 0, { label: 'the claim' });
     const tx = p.chain.sentTo(TACAD).at(-1);
@@ -77,7 +77,7 @@ describe('the TAC airdrop card', () => {
 
   test('claim to… sends to another address through claimTo', async () => {
     const p = await open();
-    await p.waitFor(() => /You can claim/.test(card(p)), { label: 'the card' });
+    await p.waitFor(() => /TAC airdrop · until/.test(card(p)), { label: 'the card' });
     p.queuePrompt(A.OTHER);
     p.click(p.$('adEl').querySelector('button[data-ad="to"]'));
     await p.waitFor(() => p.chain.sentTo(TACAD).length > 0, { label: 'the claimTo' });
@@ -93,7 +93,7 @@ describe('the TAC airdrop card', () => {
     const p = await open();
     if (name.endsWith('.eth')) { p.chain.ensResolver = A.ENSRESOLVER; p.chain.ensNames.set(name, A.OTHER); }
     else p.chain.names.set(name, A.OTHER);
-    await p.waitFor(() => /You can claim/.test(card(p)), { label: 'the card' });
+    await p.waitFor(() => /TAC airdrop · until/.test(card(p)), { label: 'the card' });
     p.queuePrompt(name);
     p.queueConfirm(true);
     p.click(p.$('adEl').querySelector('button[data-ad="to"]'));
@@ -109,7 +109,7 @@ describe('the TAC airdrop card', () => {
   test('declining the name check sends nothing', async () => {
     const p = await open();
     p.chain.names.set('bob.wei', A.OTHER);
-    await p.waitFor(() => /You can claim/.test(card(p)), { label: 'the card' });
+    await p.waitFor(() => /TAC airdrop · until/.test(card(p)), { label: 'the card' });
     p.queuePrompt('bob.wei');
     p.queueConfirm(false);
     p.click(p.$('adEl').querySelector('button[data-ad="to"]'));
@@ -120,7 +120,7 @@ describe('the TAC airdrop card', () => {
 
   test('a name that resolves to nothing is refused', async () => {
     const p = await open();
-    await p.waitFor(() => /You can claim/.test(card(p)), { label: 'the card' });
+    await p.waitFor(() => /TAC airdrop · until/.test(card(p)), { label: 'the card' });
     p.queuePrompt('nobody.wei');
     p.click(p.$('adEl').querySelector('button[data-ad="to"]'));
     await p.waitFor(() => /not an address or a registered name/.test(p.text('stat')), { label: 'the refusal' });
@@ -137,7 +137,7 @@ describe('the TAC airdrop card', () => {
 
   test('an allocation already claimed, by anyone, says so and offers nothing', async () => {
     const p = await open({ claimed: true });
-    await p.waitFor(() => /has been claimed/.test(card(p)), { label: 'claimed' });
+    await p.waitFor(() => /Tacit airdrop claimed/.test(card(p)), { label: 'claimed' });
     assert.equal(p.$('adEl').querySelectorAll('button').length, 0);
     p.close();
   });
