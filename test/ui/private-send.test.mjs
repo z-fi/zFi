@@ -515,3 +515,91 @@ describe('paying a name', () => {
     p.close();
   });
 });
+
+/**
+ * A recipient with only a 0x cannot be paid privately: a lock needs their
+ * Tacit key, and a 0x does not reveal one. Tacit's advice is to offer the
+ * public payout by default, said plainly: the sender is hidden, the amount and
+ * recipient are not. So a 0x (or a name with no Tacit address behind it)
+ * hands over to the withdraw form rather than dead-ending in an error.
+ */
+describe('a recipient with only a 0x', () => {
+  const tryPay = async (p, who, ok) => {
+    p.select('pvAct', 'send');
+    await p.settle();
+    p.type('pvAmt', '0.01');
+    p.type('pvRc', who);
+    if (ok !== undefined) p.queueConfirm(ok);
+    p.click('pvGo');
+    await p.settle();
+    await new Promise(r => setTimeout(r, 300));
+  };
+
+  test('a 0x is offered as a public payout, and the form is filled in', async () => {
+    const p = await open(withNote(poolChain()));
+    await ready(p);
+    await tryPay(p, A.OTHER, true);
+    assert.match(p.asked.confirm.at(-1), /cannot be paid privately[\s\S]*hidden as the sender[\s\S]*visible on chain/);
+    assert.equal(p.value('pvAct'), 'out');
+    assert.equal(p.value('pvTo'), A.OTHER);
+    assert.equal(p.value('pvAmt'), '0.01');
+    assert.match(p.text('stat'), /Switched to a public payout/);
+    assert.ok(!posts(p).length, 'nothing is sent until the user presses Withdraw');
+    p.close();
+  });
+
+  test('a 0x whose primary name publishes a Tacit address is paid privately instead', async () => {
+    const chain = withNote(poolChain());
+    chain.names.set('erin.wei', A.OTHER);
+    chain.reverse.set(A.OTHER.toLowerCase(), 'erin.wei');
+    const p = await open(chain);
+    await ready(p);
+    chain.texts = new Map([['erin.wei|finance.tacit', p.window.eval(`cpTacEnc("tacit",cpCat([0,3],hexToBytes("${S.lock.recipient}"),hexToBytes("${S.lock.recipient}"),hexToBytes("${S.lock.recipient}")))`)]]);
+    p.window.Date.now = () => (Number(S.deadline) - 7776000) * 1000;
+    p.select('pvAct', 'send');
+    await p.settle();
+    p.type('pvAmt', '0.01');
+    p.type('pvRc', A.OTHER);
+    useStream(p, S.lock.tag);
+    p.queueConfirm(true);
+    p.click('pvGo');
+    await p.waitFor(() => posts(p).some(x => x.type === 'stealthlock'), { label: 'the private lock', ...SLOW });
+    assert.match(p.asked.confirm.at(-1), /→ erin\.wei → tacit1/, 'the whole path is shown');
+    assert.equal(canon(posts(p).find(x => x.type === 'stealthlock').op), canon(S.lock.op));
+    assert.equal(p.value('pvAct'), 'send', 'no public payout');
+    p.close();
+  });
+
+  test('declining keeps the private send as it was', async () => {
+    const p = await open(withNote(poolChain()));
+    await ready(p);
+    await tryPay(p, A.OTHER, false);
+    assert.equal(p.value('pvAct'), 'send');
+    assert.equal(p.text('stat'), '');
+    p.close();
+  });
+
+  test('a name with no Tacit address but a 0x behind it is offered the same way, by name', async () => {
+    const chain = withNote(poolChain());
+    chain.names.set('dave.wei', A.OTHER);
+    chain.texts = new Map();
+    const p = await open(chain);
+    await ready(p);
+    await tryPay(p, 'dave.wei', true);
+    assert.match(p.asked.confirm.at(-1), /^dave\.wei has no Tacit address/);
+    assert.equal(p.value('pvTo'), A.OTHER);
+    p.close();
+  });
+
+  test('the everyday key actions are in view, the rest behind more', async () => {
+    const p = await open(withNote(poolChain()));
+    await ready(p);
+    const shown = a => { const b = p.$('pvKey').querySelector(`button[data-a="${a}"]`); return !!b && !b.closest('.hide'); };
+    for (const a of ['addr', 'pub', 'request', 'pay']) assert.ok(shown(a), a + ' is in view');
+    for (const a of ['backup', 'relay', 'btckey']) assert.ok(!shown(a), a + ' waits behind more');
+    p.click(p.$('pvKey').querySelector('button[data-a="more"]'));
+    await p.settle();
+    for (const a of ['backup', 'relay', 'btckey']) assert.ok(shown(a), a + ' after more');
+    p.close();
+  });
+});

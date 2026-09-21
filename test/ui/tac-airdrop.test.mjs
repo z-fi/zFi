@@ -128,6 +128,18 @@ describe('the TAC airdrop card', () => {
     p.close();
   });
 
+  test('shows on the swap view only, like the other cards', async () => {
+    const p = await open();
+    await p.waitFor(() => /TAC airdrop · until/.test(card(p)), { label: 'the card' });
+    p.click('pv');
+    await p.settle();
+    assert.equal(card(p), '', 'not over the private panel');
+    p.click('pv');
+    await p.settle();
+    assert.match(card(p), /TAC airdrop · until/, 'back on the swap view');
+    p.close();
+  });
+
   test('a shard that does not prove against the contract root is ignored', async () => {
     const p = await open({ proof: T.proof(0) });
     await new Promise(r => setTimeout(r, 400)); await p.settle();

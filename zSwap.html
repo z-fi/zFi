@@ -384,11 +384,11 @@ background:var(--e);margin:.5em auto .1em}
 <div id="pvPanel" class="hide">
 <div class="hdr lnhdr"><small>Private bridge</small><small>Shielded assets on Ethereum: send privately, exit ether to an L2, withdraw, or pay a request</small></div>
 <label class="dly hide" id="pvAssetL" title="The shielded assets the token list names and the pool backs. Ether can exit to Base or Robinhood; the others withdraw on Ethereum as their public token.">Asset<select id="pvAsset"></select></label>
-<label class="dly" title="Deposit shields public funds into the pool. Send moves shielded funds to another Tacit address: they are locked to a one-time key only the recipient can derive, and the recipient claims them into notes of their own; the amount and the recipient stay hidden on chain. Withdraw takes any amount of the shielded balance out to an address on Ethereum, Base or Robinhood; whatever is left stays shielded as change.">Action<select id="pvAct"><option value="dep">Deposit</option><option value="send">Send privately</option><option value="out">Withdraw or exit</option></select></label>
+<label class="dly" title="Deposit shields public funds into the pool. Send moves shielded funds to another Tacit address: they are locked to a one-time key only the recipient can derive, and the recipient claims them into notes of their own; the amount and the recipient stay hidden on chain. Withdraw takes any amount of the shielded balance out to an address on Ethereum, Base or Robinhood; whatever is left stays shielded as change.">Action<select id="pvAct"><option value="dep">Deposit</option><option value="send">Send privately</option><option value="out" title="Pay out to any 0x, yourself included, on Ethereum or an L2. You stay hidden as the sender; the amount and recipient are public.">Withdraw / pay out</option></select></label>
 <label class="dly" title="Deposited into the confidential pool on Ethereum as a shielded note. Exit it later to an L2 address that nothing on-chain ties to this wallet, as long as neither the recipient nor the wallet that activates the exit is this one. The amount, the L2 recipient and the timing of the exit are public; what is hidden ON CHAIN is which deposit it came from, so the privacy is only as good as the number of other deposits in the pool. The relay that builds the proof sees that link in either settle mode.">Amount<span class="lnu"><input id="pvAmt" inputmode="decimal" placeholder="0.01" autocomplete="off" spellcheck="false"><i id="pvUnit">ETH</i></span></label>
 <label class="dly">Arrives on<select id="pvChain"><option value="8453">Base</option><option value="4663">Robinhood</option><option value="1">Ethereum (withdraw)</option></select></label>
 <label class="dly" title="The address credited on the chain chosen above. Leave blank for this wallet, which links the exit to the deposit. On Robinhood the unused gas budget refunds here too, so a contract wallet gets its refund at an aliased address.">Recipient<input id="pvTo" placeholder="0x… on that chain, defaults to you" autocomplete="off" spellcheck="false"></label>
-<label class="dly hide" id="pvRcL" title="The recipient's Tacit address (tacit1…; zSwap shows it under “address”, tacit.finance under Wallet) or their 33-byte Tacit key.">To<input id="pvRc" placeholder="tacit1…, a Tacit key, or name.wei / .gwei / .eth" autocomplete="off" spellcheck="false"></label>
+<label class="dly hide" id="pvRcL" title="The recipient's Tacit address (tacit1…; zSwap shows it under “address”, tacit.finance under Wallet) or their 33-byte Tacit key.">To<input id="pvRc" placeholder="tacit1… or name" autocomplete="off" spellcheck="false"></label>
 <label class="dly" title="Through the relay: it proves and settles, paying its own gas; an exit costs a flat fee. An exit to an L2 then needs one activate transaction; sending it from this wallet links the exit to it, so import the key and notes into another wallet to activate there. From this wallet: the relay still proves it, so it sees the same link either way; you send the settle yourself, fee-free, but from this wallet. Applies to deposits, exits and payments.">Settle<select id="pvPath"><option value="relay">Through the relay</option><option value="self">From this wallet</option></select></label>
 <small id="pvKey"></small>
 <div id="pvList"></div>
@@ -6316,8 +6316,9 @@ const SEL_POOLOF="988b1fa7",SEL_OWED0="56ea33ee",SEL_COLLECT="a480ca79";
 const SEL_COLLECTMANY="c296057e";
 const TACAD="0x4b4cb98D0C836c2783Ac46f0078b904dab533AE8",TAC_TOK="0xA1313eb9f3A445606D9583bcAc3ebeB56a858279",
 AD_API=["https://cdn.jsdelivr.net/gh/z0r0z/tacit@1b2eedde8490801c9ef4406020530059162e6d47/dapp/airdrop/v1/proofs/","https://raw.githubusercontent.com/z0r0z/tacit/1b2eedde8490801c9ef4406020530059162e6d47/dapp/airdrop/v1/proofs/"];
-const adEl=document.getElementById("adEl");let adSeq=0,adC=null;
-const adHide=()=>{adC=null;adEl.classList.add("hide");adEl.textContent=""};
+const adEl=document.getElementById("adEl");let adSeq=0,adC=null,adHas=false;
+const adShow=()=>adEl.classList.toggle("hide",!adHas||lnMode||lqMode||wnMode||pvMode||tab!=="swap");
+const adHide=()=>{adC=null;adHas=false;adEl.textContent="";adShow()};
 const adRoot=c=>{let h=keccak(hexToBytes(keccak(hexToBytes(encUint(BigInt(c.index))+encAddr(c.a)+encUint(BigInt(c.amount))))));
 for(const x of c.proof)h=BigInt(h)<BigInt(x)?keccak(hexToBytes(strip0x(h)+strip0x(x))):keccak(hexToBytes(strip0x(x)+strip0x(h)));return h.toLowerCase()};
 async function adSync(){const my=++adSeq;
@@ -6330,7 +6331,7 @@ if(my!==adSeq)return;
 if(!c||!Number.isSafeInteger(c.index)||c.index<0||!/^\d{1,40}$/.test(String(c.amount))||!Array.isArray(c.proof)||c.proof.length>64||!c.proof.every(x=>/^0x[0-9a-f]{64}$/i.test(x))||adRoot({...c,a})!=="0x"+strip0x(root).slice(-64).toLowerCase())return adHide();
 const amt=BigInt(c.amount),[cl,bal]=await mc3([{to:TACAD,data:"0x9e34070f"+encUint(BigInt(c.index))},{to:TAC_TOK,data:"0x70a08231"+encAddr(TACAD)}]);
 if(my!==adSeq)return;const n=(amt<10n**14n?trimAmt(amt,18):(+formatUnits(amt,18)).toFixed(4))+" TAC",D=new Date(end*1e3);
-adEl.classList.remove("hide");
+adHas=true;adShow();
 if(BigInt(cl||"0x0")!==0n){adC=null;adEl.title="";adEl.textContent="Tacit airdrop claimed · "+n;return}
 if(BigInt(bal||"0x0")<amt)return adHide();
 adC={index:BigInt(c.index),amt,proof:c.proof};
@@ -6399,7 +6400,7 @@ fcMine();
 const FC_DUST=10000000000000n;
 let fcTok="",fcOwner="";
 const fcPool={},fcFloorPx={};
-async function fcSync(){
+async function fcSync(){try{adShow()}catch{}
 const my=++fcSeq;
 const t=TOKENS[toSel.value],f=TOKENS[fromSel.value];
 const cand=[t,f].find(x=>x&&x.addr&&x.addr!==ZERO&&x.std!=="nft");
@@ -7211,7 +7212,7 @@ let cpBtcSat=null,cpBtcAt=0;
 const cpBtcRead=async()=>{if(!cpBtc||Date.now()-cpBtcAt<6e4)return;cpBtcAt=Date.now();const a=cpBtc;
 for(const u of B_API){try{const j=await relayFetch("/address/"+a,null,u),n=x=>Number.isSafeInteger(x)&&x>=0?x:NaN,c=j.chain_stats,m=j.mempool_stats,s=n(c.funded_txo_sum)-n(c.spent_txo_sum)+n(m.funded_txo_sum)-n(m.spent_txo_sum);
 if(Number.isFinite(s)&&s>=0&&a===cpBtc){cpBtcSat=s;if(pvMode)cpPaint();return}}catch{}}};
-let cpVer=0,cpSeed="",cpFp="",cpPub="",cpBtc="",cpNotes=[],cpLocks=[],cpPool=null,cpSyncAt=0,cpBusy=0,pvMode=false,pvTimer=0,pvTick=0;
+let cpMore=false,cpVer=0,cpSeed="",cpFp="",cpPub="",cpBtc="",cpNotes=[],cpLocks=[],cpPool=null,cpSyncAt=0,cpBusy=0,pvMode=false,pvTimer=0,pvTick=0;
 const cpK={},cpNoteOf=n=>{const a=n.a||CP_ETH,h=cpFp+(n.z?n.b:n.s?n.s+n.b:n.i)+":"+n.v+":"+a;if(cpK[h])return cpK[h];const{secret,blinding}=n.s?{secret:n.s,blinding:BigInt(n.b)}:cpDerive(cpSeed,n.i,a),owner=n.z?"0x"+"00".repeat(32):cpOwner(secret),{cx,cy}=cpXY(cpCommit(n.v,blinding)),leaf=cpLeaf(cx,cy,owner,a);
 return cpK[h]={secret,blinding,owner,cx,cy,leaf,asset:a,nu:n.z?keccak(cpCat(b32(leaf),cpU8("spent"))):cpNu(secret,leaf),value:BigInt(n.v),dep:cpDepId(n.v,cpDepCommit(cx,cy,owner),a)}};
 const pneg=([x,y,z])=>[x,fmod(-y,FP),z];
@@ -7743,10 +7744,18 @@ const cpHrp=h=>{const a=[...h].map(c=>c.charCodeAt(0));return a.map(x=>x>>5).con
 const cpTacEnc=(h,b)=>{const d=[];let acc=0,bits=0;for(const x of b){acc=(acc<<8|x)&4095;bits+=8;while(bits>=5){bits-=5;d.push(acc>>bits&31)}}if(bits)d.push(acc<<(5-bits)&31);const p=cpPm(cpHrp(h).concat(d,[0,0,0,0,0,0]))^0x2bc830a3;return h+"1"+d.concat([0,1,2,3,4,5].map(i=>p>>5*(5-i)&31)).map(x=>CP_B32[x]).join("")};
 const cpTacDec=s=>{s=String(s).toLowerCase();const k=s.lastIndexOf("1"),h=s.slice(0,k),d=[...s.slice(k+1)].map(c=>CP_B32.indexOf(c));if(k<1||d.length<7||d.some(x=>x<0)||cpPm(cpHrp(h).concat(d))!==0x2bc830a3)return null;const o=[];let acc=0,bits=0;for(const x of d.slice(0,-6)){acc=(acc<<5|x)&4095;bits+=5;if(bits>=8){bits-=8;o.push(acc>>bits&255)}}return{h,b:Uint8Array.from(o)}};
 const cpTacAddr=sd=>{const p=hexToBytes(pcomp(pmul(GP,BigInt(sd))));return cpTacEnc("tacit",cpCat([0,3],p,hexToBytes(pcomp(pmul(GP,cpN(big(bTag("BIP0352/ScanKey",b32(sd))))))),p))};
+const cpToPublic=async(to,label)=>{
+if(!await sure(label+" has no Tacit address, so it cannot be paid privately.\n\nPay it as a public payout instead? You stay hidden as the sender, but the amount and "+label+" are visible on chain.\n\nFor more privacy, send an amount that is not one you deposited, and wait a while after depositing."))throw Error("cancelled");
+pvAct.value="out";pvChain.value="1";pvTo.value=to;pvAct.dispatchEvent(new Event("change",{bubbles:true}));
+throw Object.assign(Error("Switched to a public payout to "+label+" — check the details, then press Withdraw."),{offChain:true})};
 const cpRecipAt=async s=>{s=String(s||"").trim();
+if(isAddr(s)){const lab=s.slice(0,8)+"…"+s.slice(-6),n=await nameRev(s).catch(()=>"");
+const t=n&&/\.(g?wei|eth)$/i.test(n)?String(await nameText(n.toLowerCase()).catch(()=>"")||"").trim():"";
+if(!/^tacit1/i.test(t))return cpToPublic(s,lab);
+const h=cpRecip(t);if(!await sure("Send privately to "+lab+"?\n\n"+lab+" → "+n+" → "+t.slice(0,12)+"…"+t.slice(-8)+"\n\nThis address's name publishes a Tacit address, so the payment stays private. Continue only if this is the person you mean to pay."))throw Error("cancelled");return h}
 if(/\.(g?wei|eth)$/i.test(s)&&!/^(0x|tacit1)/i.test(s)){const n=s.toLowerCase();if(!nameOk(n))throw Error("That is not a name.");
 let t;try{t=String(await nameText(n)||"").trim()}catch(e){throw Error(e&&e.offchain?e.message:"Could not read "+n+"'s records right now — try again.")}
-if(!t)throw Error(n+" has no Tacit address published. Its owner can publish one from zSwap's private panel, or send to their tacit1… address.");
+if(!t){const a=await nameFwd(n).catch(()=>"");if(isAddr(a||""))return cpToPublic(a,n);throw Error(n+" has no Tacit address published. Its owner can publish one from zSwap's private panel, or send to their tacit1… address.")}
 if(!/^tacit1/i.test(t))throw Error(n+"'s Tacit record is not a tacit1… address.");
 const h=cpRecip(t);if(!await sure("Send to "+n+"?\n\n"+n+" → "+t.slice(0,12)+"…"+t.slice(-8)+"\n\nThis is the Tacit address the name's owner published. Continue only if it is the person you mean to pay."))throw Error("cancelled");return h}
 return cpRecip(s)};
@@ -7907,7 +7916,7 @@ return ok?`<a href="${base}/${kind}/${value}" target="_blank" rel="noreferrer">$
 const cpSet=(e,h)=>{if(e._h!==h)e.innerHTML=e._h=h},cpPaint=()=>{if(!pvMode)return;
 const on=!!cpSeed;
 cpSet(pvKey,!account?"Connect a wallet to begin.":!on?"Sign once to unlock your Tacit key: the one tacit.finance derives from this wallet, with a Bitcoin address of its own.":
-`Key unlocked · ${cpVer?`<a href="https://mempool.space/address/${cpBtc}" target="_blank" rel="noreferrer" title="This key's Bitcoin address — the one tacit.finance scans and locks cBTC from">${cpBtc.slice(0,8)}…${cpBtc.slice(-6)}</a>`:'<button type="button" class="fclink" data-a="verify" title="Sign once to confirm the key saved in this browser is your wallet\'s">verify key</button>'}${cpBtcSat!=null?" "+trimAmt(BigInt(cpBtcSat),8)+" BTC":""} <button type="button" class="fclink" data-a="btckey">btc key</button><button type="button" class="fclink" data-a="lockbtc">lock btc</button><button type="button" class="fclink" data-a="addr">address</button><button type="button" class="fclink" data-a="pub" title="Publish your Tacit address on your primary .wei, .gwei or .eth name, so anyone can pay you privately by name">publish to name</button><button type="button" class="fclink" data-a="request">request</button><button type="button" class="fclink" data-a="pay">pay</button><button type="button" class="fclink" data-a="backup">backup</button><button type="button" class="fclink" data-a="import">import</button><button type="button" class="fclink" data-a="recover">recover</button><button type="button" class="fclink" data-a="export">export</button><button type="button" class="fclink" data-a="relay">relay</button>`);
+`Key unlocked · ${cpVer?`<a href="https://mempool.space/address/${cpBtc}" target="_blank" rel="noreferrer" title="This key's Bitcoin address — the one tacit.finance scans and locks cBTC from">${cpBtc.slice(0,8)}…${cpBtc.slice(-6)}</a>`:'<button type="button" class="fclink" data-a="verify" title="Sign once to confirm the key saved in this browser is your wallet\'s">verify key</button>'}${cpBtcSat!=null?" "+trimAmt(BigInt(cpBtcSat),8)+" BTC":""} <button type="button" class="fclink" data-a="addr">address</button><button type="button" class="fclink" data-a="pub" title="Publish your Tacit address on your primary .wei, .gwei or .eth name, so anyone can pay you privately by name">publish to name</button><button type="button" class="fclink" data-a="request">request</button><button type="button" class="fclink" data-a="pay">pay</button><button type="button" class="fclink" data-a="more" aria-expanded="${cpMore}">${cpMore?"less":"more"}</button><span class="${cpMore?"":"hide"}"><button type="button" class="fclink" data-a="btckey">btc key</button><button type="button" class="fclink" data-a="lockbtc">lock btc</button><button type="button" class="fclink" data-a="backup">backup</button><button type="button" class="fclink" data-a="import">import</button><button type="button" class="fclink" data-a="recover">recover</button><button type="button" class="fclink" data-a="export">export</button><button type="button" class="fclink" data-a="relay">relay</button></span>`);
 pvGo.textContent=!account?CW:!on?"Unlock key":pvAct.value==="send"?"Send":pvAct.value==="out"?"Withdraw":"Deposit";
 pvGo.disabled=!!cpBusy;
 if(!on)return cpSet(pvList,"");
@@ -7981,6 +7990,7 @@ if(a==="recover")return pvRun(async()=>{const f=await cpRecover();stat.textConte
 if(a==="lockbtc")return pvRun(cpLockBtc,"Building the lock…");
 if(a==="addr")return pvRun(async()=>{await ask("Your Tacit address. Anyone can send to it privately, from zSwap or tacit.finance; what arrives shows up here.",cpTacAddr(cpSeed))},"Check your wallet for the message to sign.");
 if(a==="verify")return pvRun(async()=>{},"Check your wallet for the message to sign.");
+if(a==="more"){cpMore=!cpMore;return cpPaint()}
 if(a==="pub")return pvRun(async()=>{const n=await nameRev(account).catch(()=>"");
 if(!n||!/\.(g?wei|eth)$/i.test(n)||/\.base\.eth$/i.test(n))throw Error("Give this wallet a primary .wei, .gwei or .eth name first, then publish.");
 const addr=cpTacAddr(cpSeed);if(String(await nameText(n)||"").trim()===addr)return void(stat.textContent=n+" already points to your Tacit address.");
