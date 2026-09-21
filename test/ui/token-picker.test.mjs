@@ -373,3 +373,15 @@ test('shows the logo, the name and the description the registry serves', async (
     p.close();
   });
 });
+
+test('the picker names the chain whose list it shows', async () => {
+  // Each chain has its own list, and a Base list looks much like a short
+  // mainnet one. The search box says which it is every time it opens.
+  const p = await loadPage({ chain: new MockChain({ chainId: '0x2105' }), walletless: true, hash: 'chain=8453' });
+  await p.waitFor(() => p.window.eval('CHAIN_ID') === 8453, { label: 'on Base' });
+  await p.settle();
+  p.click('fromPick');
+  await p.settle();
+  assert.match(p.$('tkFind').placeholder, /Search Base tokens/);
+  p.close();
+});
