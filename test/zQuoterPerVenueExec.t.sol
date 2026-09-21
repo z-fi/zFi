@@ -149,7 +149,10 @@ contract zQuoterDeployedVsSourceTest is Test {
     ///      with the contract the page CALLS, so it has to fork somewhere that
     ///      contract exists. At the old 25,640,000 pin the address is empty and
     ///      every comparison would be against nothing.
-    uint256 constant DEFAULT_FORK_BLOCK = 25_739_900;
+    /// Moved forward from 25_739_900 with the LIVE address below: that older pin
+    /// predates the hub quoter zSwap routes through, which is why this contract
+    /// used to point at an earlier deployment.
+    uint256 constant DEFAULT_FORK_BLOCK = 25_906_900;
     /// @dev The quoter zSwap.html actually calls. Moved here from
     ///      0x0000002d9a651b729e3aFBE57Fc84FFDa4a98a13 when the page repointed:
     ///      that one let Curve win an exact-out quote it cannot serve, and the
@@ -157,7 +160,11 @@ contract zQuoterDeployedVsSourceTest is Test {
     ///      would have made this suite compare the new source against the old
     ///      deployment - a divergence it would report as a source bug, on a
     ///      contract nothing calls any more.
-    address constant LIVE = 0xC7a03F9ED2Be5FEEA18ce93e12F4f05C98287C16;
+    /// The hub quoter zSwap routes through. The address here used to be a third,
+    /// unreferenced deployment (0xC7a03F9E…, 24,450 B) that nothing calls, so the
+    /// equivalence this suite claims to check was being checked against the wrong
+    /// contract. Measured 2026-09-19: this one is 24,452 B.
+    address constant LIVE = 0x000000bd2DB80567c23E353ca95a251c573cBf9B;
     address constant ETH = address(0);
     address constant USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
     address constant WBTC = 0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599;
@@ -190,6 +197,14 @@ contract zQuoterDeployedVsSourceTest is Test {
     ///      below run the same pairs through both the live contract and a local build and
     ///      require identical venue choice and identical output. That is the property a
     ///      bytecode hash was standing in for, and it survives a compiler bump.
+    ///
+    ///      Worth knowing, from 2026-09-19: this pair of tests reported
+    ///      "venue choice diverges: 4 != 3" for a long stretch, and neither the optimizer
+    ///      profile nor the V4 path was the cause. The comparison was aimed at a
+    ///      superseded quoter at a fork block that predates the current one, so it was
+    ///      measuring today's source against a deployment today's source is not. Against
+    ///      the hub quoter at a block where it exists, venue choice and output match
+    ///      exactly. If this starts failing again, check the pin before the math.
     function test_liveQuoterIsDeployableSize() public view {
         uint256 liveSize = LIVE.code.length;
         assertGt(liveSize, 0, "no code at LIVE - wrong address or fork block");

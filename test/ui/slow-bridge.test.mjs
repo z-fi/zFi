@@ -191,7 +191,7 @@ describe('the destination selector', () => {
   test('the door says the money can be locked for eight days before it opens', async () => {
     const p = await onChainSend(BASE);
     let asked = '';
-    p.window.confirm = (t) => { asked = t; return false; };
+    p.window.confirm = (t) => { asked = t; p.window.__human(); return false; };
     p.click('rlOpt');
     await p.settle();
     assert.match(asked, /8 days and 6 hours/, 'the worst case is stated, not implied');
@@ -299,7 +299,7 @@ describe('the destination selector', () => {
     p.select('sdChain', '8453');
     await p.settle();
     assert.equal(p.visible('tipL'), false,
-      'the tip pays a keeper that only watches mainnet; the lock would be on Base');
+      'the tip sits on this chain\'s gate, and a lock that lands on Base is claimed there');
     p.close();
   });
 });

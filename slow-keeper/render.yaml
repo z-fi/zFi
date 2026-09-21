@@ -9,21 +9,50 @@ services:
     startCommand: npm start
     autoDeploy: false
     envVars:
-      # OPTIONAL. The built-in endpoint pool is entirely keyless, so this can be
-      # left unset. If set, it is tried first and must support unrestricted
-      # eth_getLogs ranges. Comma-separated extras go in RPC_URLS.
+      # Which chains this one process watches, comma-separated. Unset means `1`,
+      # so leaving it off keeps the mainnet-only behaviour this service had
+      # before it was multichain. Set it to `1,8453,4663` to cover Ethereum,
+      # Base and Robinhood -- zSwap offers the auto-claim tip on all three, and
+      # a chain nobody watches is a tip a user paid and nobody collects.
+      #
+      # One worker is enough for all three: the chains share nothing but the
+      # signing key, whose nonce sequences are already per chain, and each runs
+      # its own loop behind its own error boundary.
+      - key: CHAINS
+        value: "1"
+      # OPTIONAL. The built-in endpoint pools are entirely keyless, so these can
+      # be left unset. If set, they are tried first and must support
+      # unrestricted eth_getLogs ranges. Comma-separated extras go in RPC_URLS.
+      #
+      # Unsuffixed, these apply to chain 1. Per-chain overrides take the chain
+      # id as a suffix: RPC_URL_8453, RPC_URLS_4663, RPC_URLS_LOGS_8453.
       - key: RPC_URL
         sync: false
       - key: RPC_URLS
         sync: false
-      # Keeper EOA key. Fund with gas only -- claims pay the underlying to the
-      # transfer recipient, never to this address, so exposure is the gas float.
+      # Keeper EOA key, shared across every chain in CHAINS. Fund with gas on
+      # each of them -- claims pay the underlying to the transfer recipient,
+      # never to this address, so exposure is the gas float.
       - key: PRIVATE_KEY
         sync: false
+      # Send-only endpoint, mainnet. Flashbots Protect keeps claims out of the
+      # public mempool and drops reverting txs without charging gas. It has no
+      # L2 equivalent and would not accept an L2 transaction, so it is scoped to
+      # chain 1: Base and Robinhood default to their own RPCs, overridable with
+      # SEND_RPC_URL_8453 / SEND_RPC_URL_4663.
       - key: SEND_RPC_URL
         value: https://rpc.flashbots.net/fast
+      # Required tip-to-cost ratio. Means the same thing on every chain, so an
+      # unsuffixed value applies to all of them; MARGIN_MULTIPLE_8453 and
+      # friends still override per chain.
       - key: MARGIN_MULTIPLE
         value: "1.25"
+      # Gas policy, mainnet. These are L1 numbers -- an L2 base fee is three to
+      # four orders of magnitude smaller -- so they are scoped to chain 1 and
+      # the L2s use their own defaults (Base 0.5 gwei ceiling at 0.001 priority,
+      # Robinhood 1 gwei at zero, since Nitro orders by arrival and a priority
+      # bid buys nothing). Override with MAX_FEE_GWEI_8453, PRIORITY_GWEI_4663
+      # and so on.
       - key: PRIORITY_GWEI
         value: "0.05"
       - key: MAX_FEE_GWEI
@@ -32,6 +61,18 @@ services:
         value: "10"
       - key: POLL_MS
         value: "180000"
+      # OPTIONAL, Base only. Headroom on the L1 data component of a claim, which
+      # is priced off the Ethereum base fee and can move a long way between
+      # simulation and inclusion. Defaults to 2 on OP-stack chains and 1
+      # elsewhere; Nitro already folds that cost into its gas estimate.
+      - key: L1_FEE_PAD_8453
+        sync: false
+      # OPTIONAL. Each chain's SLOW deploy block is built in, so these exist only
+      # to skip history deliberately.
+      - key: START_BLOCK_8453
+        sync: false
+      - key: START_BLOCK_4663
+        sync: false
 
   # Alternative to the worker above -- run ONE of the two, not both.
   #
@@ -39,7 +80,8 @@ services:
   # machinery. SLOW's delays are hours to days, so an hourly pass settles just
   # as reliably, costs a fraction, and cuts RPC usage ~300x. It also fails
   # loudly: a non-zero exit lands in the scheduler's run history, whereas a
-  # wedged worker just goes quiet.
+  # wedged worker just goes quiet. Every chain in CHAINS gets its pass whatever
+  # the others did, and any chain failing turns the run red.
   - type: cron
     name: slow-keeper-cron
     runtime: node
@@ -50,6 +92,8 @@ services:
     startCommand: npm run once
     autoDeploy: false
     envVars:
+      - key: CHAINS
+        value: "1"
       - key: RPC_URL
         sync: false
       - key: PRIVATE_KEY
@@ -64,3 +108,9 @@ services:
         value: "50"
       - key: MAX_BATCH
         value: "10"
+      - key: L1_FEE_PAD_8453
+        sync: false
+      - key: START_BLOCK_8453
+        sync: false
+      - key: START_BLOCK_4663
+        sync: false

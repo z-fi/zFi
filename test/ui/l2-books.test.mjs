@@ -40,7 +40,7 @@ test('mainnet binds the mainnet book, both board generations and the launcher', 
   assert.equal(w.document.getElementById('ln').classList.contains('hide'), false, 'launch mode offered');
 });
 
-test('Base binds the shared L2 book table and has no v1 board and no launcher', async () => {
+test('Base binds the shared L2 book table, has no v1 board, and launches coins but not causes', async () => {
   const chain = new MockChain({ chainId: '0x2105' });
   const p = await loadPage({ chain });
   await settle();
@@ -53,9 +53,11 @@ test('Base binds the shared L2 book table and has no v1 board and no launcher', 
   assert.equal(lower(w.eval('ORDERBOL')), c3('OrderbolL2'));
   assert.equal(lower(w.eval('PROUTE')), c3('PrecisionRouteL2'));
   assert.equal(lower(w.eval('SB1')), A.ZERO, 'no legacy board on Base');
-  assert.equal(lower(w.eval('PLAUNCH')), A.ZERO, 'cause coins are mainnet-only');
+  // The launcher is a replay too, so coins launch through one address everywhere.
+  assert.equal(lower(w.eval('PLAUNCH')), lower(w.eval('MB.la')), 'the mainnet launcher address');
   assert.equal(w.eval('BOARDS().length'), 1, 'only the current board is scanned');
-  assert.equal(w.document.getElementById('ln').classList.contains('hide'), true, 'launch mode withheld');
+  assert.equal(w.document.getElementById('ln').classList.contains('hide'), false, 'launch mode offered');
+  assert.equal(w.eval(`lnKind.querySelector('option[value="cause"]').disabled`), true, 'causes are Ethereum-only');
   // The views and the pool suite are byte-identical replays at the mainnet
   // vanity addresses, so those names do not move.
   assert.equal(lower(w.eval('SBVIEW')), lower(A.SBVIEW));
@@ -71,5 +73,23 @@ test('Robinhood shares the Base table', async () => {
   assert.equal(lower(w.eval('SB2')), c3('Swapboard'));
   assert.equal(lower(w.eval('SWAPBOL')), c3('SwapbolL2'));
   assert.equal(lower(w.eval('PROUTE')), c3('PrecisionRouteL2'));
-  assert.equal(lower(w.eval('PLAUNCH')), A.ZERO);
+  assert.equal(lower(w.eval('PLAUNCH')), lower(w.eval('MB.la')));
+  assert.equal(w.eval(`lnKind.querySelector('option[value="cause"]').disabled`), true);
+});
+
+test('a coin launched on Base is sent to the launcher, on Base', async () => {
+  const chain = new MockChain({ chainId: '0x2105' });
+  chain.setNative(A.ACCOUNT, 10n ** 19n);
+  const p = await loadPage({ chain });
+  await p.connect();
+  p.click('ln');
+  p.type('lnName', 'Layer Cat');
+  p.type('lnSym', 'LCAT');
+  p.type('lnSupply', '1000000000');
+  p.type('lnMcap', '3');
+  p.click('lnGo');
+  await p.waitFor(() => chain.sent.length > 0, { label: 'the launch call' });
+  await p.settle();
+  assert.equal(chain.chainId, '0x2105', 'still on Base');
+  assert.equal(lower(chain.sent[0].to), lower(p.window.eval('MB.la')), 'sent to the launcher');
 });

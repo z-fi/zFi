@@ -8,6 +8,12 @@ import {TokenList} from "../src/utils/TokenList.sol";
 import {TokenListRenderer} from "../src/utils/TokenListRenderer.sol";
 import {PostDeployListings} from "./PostDeployListings.sol";
 
+/// @dev Reads the facts the registry is supposed to pull rather than author.
+interface IMeta {
+    function name() external view returns (string memory);
+    function symbol() external view returns (string memory);
+}
+
 contract MockToken {
     string public name;
     string public symbol;
@@ -777,9 +783,14 @@ contract TokenListTest is Test, PostDeployListings {
         _applyPostDeployListings();
         TokenList.Token memory t = list.get(ZORG);
 
-        // These are pulled from the shares contract, not curator-authored text.
-        assertEq(t.name, "zOrg Shares");
-        assertEq(t.symbol, "ZORG");
+        // Pulled from the shares contract, not curator-authored text - so this
+        // compares against what that contract answers right now rather than a
+        // transcription of it. The shares token has been renamed once already
+        // (zOrg Shares/ZORG -> Z Shares/Z), and a hardcoded copy here turns that
+        // into a red suite instead of the non-event it is: the registry tracking
+        // a rename is the property under test.
+        assertEq(t.name, IMeta(ZORG).name());
+        assertEq(t.symbol, IMeta(ZORG).symbol());
         assertEq(t.decimals, 18);
         assertTrue(t.synced);
         assertEq(t.rank, 992_000);
@@ -829,7 +840,7 @@ contract TokenListTest is Test, PostDeployListings {
         _applyPostDeployListings();
         assertEq(list.total(), 11);
         string[11] memory expected =
-            ["ETH", "WETH", "wstETH", "rETH", "WBTC", "USDC", "USDT", "BOLD", "ZORG", "zzz", "WEI"];
+            ["ETH", "WETH", "wstETH", "rETH", "WBTC", "USDC", "USDT", "BOLD", "Z", "zzz", "WEI"];
         uint256[] memory ranked = list.rankedIds();
         for (uint256 i; i < expected.length; ++i) {
             assertEq(list.get(ranked[i]).symbol, expected[i]);

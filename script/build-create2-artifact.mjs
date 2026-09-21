@@ -31,6 +31,8 @@ const SOURCES = {
   Cowol: "src/forwarders/Cowol.sol",
   TokenList: "src/utils/TokenList.sol",
   zSwapFlags: "src/utils/zSwapFlags.sol",
+  zEndpoints: "src/utils/zEndpoints.sol",
+  zGuard: "src/utils/zGuard.sol",
   TokenListRenderer: "src/utils/TokenListRenderer.sol",
   FWCPoisonPillProposer: "src/dao/FWCPoisonPill.sol",
   ZorgPageStyle: "src/dao/ZorgPageStyle.sol",
@@ -153,10 +155,7 @@ if (!Array.isArray(constructorArgs) || constructorArgs.length !== inputs.length)
     }`
   );
 }
-const encodedArgs = AbiCoder.defaultAbiCoder().encode(
-  inputs.map((input) => input.type),
-  constructorArgs
-);
+const encodedArgs = AbiCoder.defaultAbiCoder().encode(inputs, constructorArgs);
 const creation = bytecode + encodedArgs.slice(2);
 
 const salt = zeroPadValue(toBeHex(BigInt(saltArg)), 32);

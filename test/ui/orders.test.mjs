@@ -795,6 +795,8 @@ describe('the orderbook list', () => {
     // The wallet moves to a chain that has no board on it.
     p.chain.undeploy(A.SB2);
     p.chain.undeploy(A.SB1);
+    // A real chain change wipes the code cache along with everything else.
+    p.window.eval('for(const k in codeSeen)delete codeSeen[k]');
     p.click('tabSwap');
     p.click('tabBook');
     await p.waitFor(() => p.$('book').textContent.includes('No Swapboard'), { label: 'notice' });

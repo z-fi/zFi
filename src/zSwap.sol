@@ -4,14 +4,14 @@ pragma solidity ^0.8.36;
 
 /// @title zSwap v0.3
 /// @notice Permanently-deployed onchain HTML swap dapp, stored on Ethereum and trading on Ethereum, Base and Robinhood Chain.
-/// @dev Architecture: the HTML payload (474234 B) is the runtime bytecode of
-///      20 data contracts, deployed separately and passed to the constructor.
+/// @dev Architecture: the HTML payload (573167 B) is the runtime bytecode of
+///      24 data contracts, deployed separately and passed to the constructor.
 ///      html() reassembles them via EXTCODECOPY with proper ABI encoding
 ///      (offset + length + padded data) so any RPC client decodes directly.
 ///      request() implements ERC-5219 for first-class web3:// gateway
-///      compatibility (ERC-4804). Splitting the page across 20 data contracts
+///      compatibility (ERC-4804). Splitting the page across 24 data contracts
 ///      means EIP-170 caps each chunk, not the dapp
-///      (24576 B per chunk, 17286 B headroom).
+///      (24576 B per chunk, 16657 B headroom).
 ///
 ///      The chunk count is fixed in the constructor arity and the page is
 ///      immutable, so it is sized to ceil(len/N), N the chunk count, with headroom for a release
@@ -193,7 +193,7 @@ contract zSwap {
     string public constant NAME = "zSwap";
     string public constant VERSION = "0.3";
 
-    /// @dev The HTML payload lives in twenty separate data contracts whose
+    /// @dev The HTML payload lives in twenty-four separate data contracts whose
     /// runtime bytecode IS the markup. Splitting it removes EIP-170 as a
     /// ceiling on the dapp: the 24,576-byte limit now applies per chunk, not to
     /// the page. The chunks are deployed independently and passed in, so this
@@ -256,6 +256,15 @@ contract zSwap {
     ///      time-locked one reversible on the far side - took the page past
     ///      nineteen. Same arithmetic, same cost: a new arity is a new address.
     address public immutable DATA20;
+    /// @dev A twenty-first, twenty-second and twenty-third. The private bridge's
+    ///      pool-minted token notes and its Bitcoin side took the page past
+    ///      twenty. Same arithmetic, same cost: a new arity is a new address.
+    address public immutable DATA21;
+    address public immutable DATA22;
+    address public immutable DATA23;
+    /// @dev A twenty-fourth: the pre-deploy audit's wallet, approval and error
+    ///      handling took the page past twenty-three. A new arity is a new address.
+    address public immutable DATA24;
 
     /// @dev A missing or duplicated data chunk would permanently serve broken HTML.
     error InvalidData();
@@ -292,6 +301,17 @@ contract zSwap {
     ///      a fallback this switches to - they are a lane that always runs.
     address public constant SOLVERS = 0x1Dfbb2f41B596F72187370469074C46de60dA2e3;
 
+    /// @notice The curated off-chain endpoints that are not Ethereum read
+    ///         nodes: L2 read nodes, wide-history log nodes, the private
+    ///         pool's prover, Bitcoin APIs and the WalletConnect relay. Same
+    ///         reasoning as `RPCS`, same constant form.
+    /// @dev The page merges each list ahead of the values it was built with
+    ///      and falls back to those when this cannot be read, so no entry here
+    ///      is needed for a swap to run. Its trust bound per service is stated
+    ///      in src/utils/zEndpoints.sol: a listed endpoint can cost liveness
+    ///      or privacy, never funds.
+    address public constant ENDPOINTS = 0x00000051F365d898132f4ebF345Cd3968e02F288;
+
     /// @notice The ONE adapter the page will execute a solver's route through.
     ///
     /// @dev THIS IS THE PIN, AND IT IS THE WHOLE REASON THE ROSTER IS SAFE TO
@@ -317,7 +337,7 @@ contract zSwap {
     // ------------------------------------------------------------- LINEAGE
     //
     // `html()` is immutable and stays that way. The successor below is a CLAIM
-    // ABOUT LINEAGE, never a redirect: this contract serves its own twenty chunks
+    // ABOUT LINEAGE, never a redirect: this contract serves its own twenty-four chunks
     // forever, whatever the DAO deploys later. Making `html()` forward to a
     // successor would have been the smaller change and it would have cost the
     // one property this design exists for - an address whose bytes cannot move
@@ -356,8 +376,8 @@ contract zSwap {
     ///      a rotation; it is a fork of the trust root, and no version of this
     ///      lineage will follow it.
     ///
-    ///      THE ROSTERS ARE THE EXCEPTION, DELIBERATELY. zRpcList and
-    ///      zSolverList are named above as constants, but each carries its own
+    ///      THE ROSTERS ARE THE EXCEPTION, DELIBERATELY. zRpcList, zSolverList
+    ///      and zEndpoints are named above as constants, but each carries its own
     ///      transferable two-step `owner` - which is NOT this DAO, and is not
     ///      required to be.
     ///      Curation is an ongoing job whose holder will change hands more
@@ -433,13 +453,13 @@ contract zSwap {
     ///      positional form every existing deploy artifact already appends.
     ///      It also means the next change to the count touches one number here
     ///      instead of a parameter list, a temporary array and an assignment per chunk.
-    constructor(address dao, address previous, address[20] memory d) {
+    constructor(address dao, address previous, address[24] memory d) {
         if (previous != address(0) && msg.sender != previous) revert InvalidData();
         DAO = dao;
         PREVIOUS = previous;
-        for (uint256 i; i != 20; ++i) {
+        for (uint256 i; i != 24; ++i) {
             if (d[i].code.length == 0) revert InvalidData();
-            for (uint256 j = i + 1; j != 20; ++j) {
+            for (uint256 j = i + 1; j != 24; ++j) {
                 if (d[i] == d[j]) revert InvalidData();
             }
         }
@@ -463,6 +483,10 @@ contract zSwap {
         DATA18 = d[17];
         DATA19 = d[18];
         DATA20 = d[19];
+        DATA21 = d[20];
+        DATA22 = d[21];
+        DATA23 = d[22];
+        DATA24 = d[23];
     }
 
     /// @notice Deploy the next version, at an address known before it exists.
@@ -609,7 +633,7 @@ contract zSwap {
         return "5219";
     }
 
-    /// @dev Reassembles the page from all twenty chunks in one pass: each chunk
+    /// @dev Reassembles the page from all twenty-four chunks in one pass: each chunk
     /// is copied directly after the previous one at the string body, so no
     /// intermediate copy or concatenation is needed.
     ///
@@ -622,9 +646,10 @@ contract zSwap {
     /// cursor advances by construction, so the tenth chunk lands after the
     /// ninth for the same reason the second lands after the first.
     function _html() private view returns (string memory s) {
-        address[20] memory d = [
+        address[24] memory d = [
             DATA1, DATA2, DATA3, DATA4, DATA5, DATA6, DATA7, DATA8, DATA9, DATA10, DATA11, DATA12,
-            DATA13, DATA14, DATA15, DATA16, DATA17, DATA18, DATA19, DATA20
+            DATA13, DATA14, DATA15, DATA16, DATA17, DATA18, DATA19, DATA20,
+            DATA21, DATA22, DATA23, DATA24
         ];
         assembly ("memory-safe") {
             s := mload(0x40)
@@ -637,7 +662,7 @@ contract zSwap {
             // page short of its last slice. If you change the count, change it
             // here, and let the length assertions in test/zSwap.t.sol catch you
             // if you do not.
-            for { let i := 0 } lt(i, 20) { i := add(i, 1) } {
+            for { let i := 0 } lt(i, 24) { i := add(i, 1) } {
                 let a := mload(add(d, shl(5, i)))
                 let n := extcodesize(a)
                 extcodecopy(a, at, 0, n)

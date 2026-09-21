@@ -46,12 +46,12 @@ test, through the L2 variant.
 
 ## Deliberately not mirrored
 
-- **PrecisionLauncher / PrecisionLauncherLens / FeeSplitter** — cause coins
-  stay mainnet-only for now. The launcher's tithe targets (BETH burner, DAO)
-  are source constants that do not exist off mainnet; its own runbook says not
-  to deploy it elsewhere without changing them and re-reviewing. The page
-  reads `PLAUNCH` as zero on the L2s and withholds launch mode and the
-  launcher-backed panels.
+- **Causes** — the loot-only DAICO path (`cauGo`, SafeSummoner's
+  `safeSummonDAICO` and the Majeur sale, tap and loot contracts behind it) is
+  Ethereum-only. Robinhood has none of those contracts and Base has two of six.
+  The page disables the Cause option off mainnet and turns a cause back into a
+  coin on a chain switch. Coins are a different contract (PrecisionLauncher)
+  and ARE mirrored; see "The coin launcher" below.
 - **Swapboard v1** (`0x000000fF3D7A2d...`) — legacy; `SB1` is zero on the
   L2s and the book scan covers one generation there.
 - **V4QuoteLens** — binds Uniswap's mainnet V4Quoter as a constant, so the same
@@ -152,3 +152,71 @@ remainder was an Aerodrome, Slipstream or Deepstate leg, or used the L2 routers'
 points at it. The corrected build lives at `0x000000015d9428959A495E31A6999E1C61C64F00`
 on both chains (new CREATE3 salt in the manifest; `supersedes` records the old address),
 and the page's `L2B.sw` and its forwarder gate (`BOL_OK`) name the L2 vocabulary.
+
+## The coin launcher (replay set, live 2026-09-15)
+
+Coins are PrecisionLauncher markets, and the launcher replays like the pool
+suite: its payload binds only the factory and its treasury, and the treasury is
+the FeeSplitter replayed just before it. `REPLAY` in `script/l2-mirror.mjs`
+carries all three, in dependency order. Same salt, same bytecode, same address
+as mainnet; every runtime's codehash was read back equal to mainnet's.
+
+| contract | address (same on all three chains) | tx (8453) | tx (4663) |
+|---|---|---|---|
+| FeeSplitter | `0x000000aA142133107c7D2664F900f80e28BbfFbd` | `0x6c26a274ed27a3793271e162d2a22436ffe7d381da71c349081addcc9aac34ec` | `0x48cb269595b6762854092b783a752869a00c857a9f1c864fa083da00620ce06e` |
+| PrecisionLauncher | `0x0000002fC8E77585A008Aa45d78A71ad36293aEe` | `0x601761ef8bd4c28956679c322841ea4b640c1129244fc753ab06358c850091d4` | `0x9e00eeb870533b01bf0f9cb9412d615e3ea19acfe22ccddb5e4bfa3f1de7878c` |
+| PrecisionLauncherLens | `0x00000041201F1542EE49F9722b2590DEDFE4296B` | `0xf72a83b2b5f98bb44c64facbbfcf8b899805a474ff3b87ddea5e3a763c42119e` | `0x89d0572bc90be7d1a09b64db3227b5bf68e7f35d01b073d4759568f8fa602ee1` |
+
+About 6.0M gas per chain (0.78M, 3.75M, 1.49M). All three, plus the
+LaunchToken template the launcher deploys (`0xc931Ea35093De3CD045F69258f107cd567Fe4759`,
+the same on both chains), are verified: Etherscan on 8453, Sourcify exact match
+on 4663, all at 200 runs with `--compilation-profile default`. A replay's address carries no
+sender, so on any further chain with SafeSummoner, the mirrored factory and the
+CREATE3 set live, any funded key can send them with
+`PRIVATE_KEY=0x… node script/l2-mirror.mjs deploy <chainId>`.
+
+After landing:
+
+- **FeeSplitter has no split.** Its constructor names the ops Safe
+  `0x006CD14F…` as owner and nothing else, so the treasury tenth accrues in it
+  and `release` reverts until the Safe calls `setSplit`. On mainnet the split is
+  the Safe itself at 100%. The Safe on 8453 and 4663 has three owners; mainnet's
+  has four (`0x999657A4…` is not on the L2s).
+- **The tithe mints no receipt.** `deploy/PrecisionLauncher.md` says where the
+  tenth goes on each chain.
+- `test/PrecisionLauncherL2.t.sol` replays whatever is not yet live on a fork of
+  each chain and runs launch, buy, sell and `collectFees` against it, so it
+  holds before and after the broadcast.
+
+The page names the launcher in `L2B.la`, so launch mode, launched-coin
+discovery in the token picker, fee collection and the floor readout all run
+against the connected chain.
+
+## The three-hop companion (CREATE3, live 2026-09-15)
+
+The L2 quoters have no `build3HopMulticall`, so zSwap asks `zQuoter3HopL2`
+(`src/zQuoter3HopL2.sol`) instead: same selector, same arguments, same return
+shape as mainnet zQuoter's builder. It prices every leg through the chain's
+deployed quoter (`getQuotes`) and only adds routing and router calldata. One
+source serves both chains because the quoters' AMM ordinals agree on V2, v3 and
+v4, and Aerodrome and Slipstream only ever come from Base.
+
+| chain | address | tx | block | gas |
+|---|---|---|---|---|
+| 8453 | `0x000000f584434F81fC115b1A59243a4287dB08be` | `0x66ae451708332a7f41858c33a36cbb71fa9cfbc89f98cbbab5558a790bc7a869` | 51340741 | 2,078,003 |
+| 4663 | `0x000000f584434F81fC115b1A59243a4287dB08be` | `0x294f8ff207174c196fe302e96c14dfb0fe70b7781f657d636204490062361675` | 63613437 | 2,078,423 |
+
+Constructor arguments per chain are the quoter `0x000000bd2d…`, the router, the
+chain's WETH and its hubs: WETH and USDC on Base, WETH and USDG on Robinhood.
+
+**Two hubs, on purpose.** A route asks the quoter once per first hub and twice per
+ordered hub pair, and each ask scans every venue. Measured on Base: two hubs build
+in 4-7M gas, three in 35-75M, five in 100-350M, for the same routes. Base's
+publicnode caps `eth_call` at 50M, so a five-hub build is a route the page never
+sees. With WETH as one of two hubs, an ether endpoint has no three-hop route; the
+quoter's own two-hop builder covers ether -> hub -> token.
+
+Verified: Etherscan on 8453, Sourcify exact match on 4663 (default profile,
+9,999,999 runs). Evidence: `test/zQuoter3HopL2.t.sol` builds and executes routes
+through the live routers on forks of both chains; the page asks it for three-hop
+routes off mainnet (`test/ui/three-hop-l2.test.mjs`).

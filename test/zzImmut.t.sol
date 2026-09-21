@@ -44,6 +44,10 @@ contract Immut is Test {
         vm.prank(victim);
         IE20(U).approve(address(router), type(uint256).max);
 
+        // The owner is a real address on the fork and carries whatever balance it
+        // holds that day, so what is asserted is the movement, not the total.
+        uint256 before = IE20(U).balanceOf(deployer);
+
         vm.startPrank(deployer);
         router.trust(U, true);
         router.execute(
@@ -52,7 +56,7 @@ contract Immut is Test {
         vm.stopPrank();
 
         assertEq(IE20(U).balanceOf(victim), 0, "victim kept funds");
-        assertEq(IE20(U).balanceOf(deployer), 10_000e6, "owner got nothing");
+        assertEq(IE20(U).balanceOf(deployer) - before, 10_000e6, "owner got nothing");
     }
 
     /// swapAmount == 0 is documented as "spend what the previous leg credited".

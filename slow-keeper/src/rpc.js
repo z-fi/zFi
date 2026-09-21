@@ -1,15 +1,12 @@
 import { createPublicClient, fallback, http } from "viem";
-import { mainnet } from "viem/chains";
 
-import { config } from "./config.js";
 import {
   isCapabilityError,
   isRangeError,
   isRateLimit,
   parseMaxRange,
 } from "./classify.js";
-
-const log = (...a) => console.log(new Date().toISOString(), ...a);
+import { chainLogger } from "./log.js";
 
 /**
  * Never log an endpoint verbatim. Provider URLs carry the API key in the path
@@ -23,7 +20,7 @@ export function redact(url) {
     const secretish = u.pathname.replace(/^\/+/, "") + u.search;
     if (!secretish) return u.host;
     // Keep well-known public path suffixes readable; they are not credentials.
-    if (/^(public|eth|v1\/rpc\/public|public\/mainnet|fast|noreverts)$/i.test(secretish)) {
+    if (/^(public|eth|base|v1\/rpc\/public|public\/mainnet|public\/base|fast|noreverts)$/i.test(secretish)) {
       return `${u.host}/${secretish}`;
     }
     return `${u.host}/…${secretish.slice(-4)}`;
@@ -34,57 +31,13 @@ export function redact(url) {
 
 /**
  * Endpoints are NOT interchangeable, so they are pooled by role rather than
- * round-robined as one list. Every entry below is keyless -- no account, no
- * quota to blow through, nothing to pay. Probed 2026-08-03 against this exact
- * workload:
- *
- *   endpoint                          getLogs range   eth_call / multicall
- *   rpc.mevblocker.io (+/fast)        unlimited       ok
- *   eth.api.onfinality.io/public      unlimited       ok
- *   gateway.tenderly.co/public/…      unlimited       ok
- *   eth.drpc.org                      10_000          ok (rate-limits estimateGas)
- *   eth-pokt.nodies.app                    50         ok
- *   1rpc.io/eth                            50         ok
- *   eth.blockrazor.xyz                     25         ok
- *   eth-mainnet.public.blastapi.io         10         ok
- *   ethereum-rpc.publicnode.com       archive-gated   ok
- *   eth.rpc.blxrbdn.com               unavailable     ok
- *
- * Rejected as unusable: eth.meowrpc.com and eth.rpc.blxrbdn.com (no getLogs),
- * eth.public-rpc.com and rpc.ankr.com (key required), cloudflare-eth.com,
- * eth.llamarpc.com, rpc.payload.de, blockpi, omniatech (dead or HTML errors).
- *
- * Only the unlimited tier can serve a cold backfill, and three independent
- * operators there is the whole basis for running without a provider. The
- * narrow ones still carry steady state: a pass advances far fewer blocks than
- * even a 10-block cap, and all of them serve state reads.
+ * round-robined as one list, and each chain brings its own pools -- see
+ * `chains.js` for the per-chain tables and what each was probed to do. Every
+ * default entry is keyless: no account, no quota to blow through, nothing to
+ * pay. Only the wide-range tier can serve a cold backfill; the narrow ones
+ * still carry steady state, because a pass advances far fewer blocks than even
+ * a 10-block cap.
  */
-const DEFAULT_LOG_SOURCES = [
-  // Wide-range, keyless. These three are what make a no-provider deployment
-  // possible: any one of them can carry the whole boot backfill alone.
-  { url: "https://rpc.mevblocker.io", maxRange: null },
-  { url: "https://eth.api.onfinality.io/public", maxRange: null },
-  { url: "https://gateway.tenderly.co/public/mainnet", maxRange: null },
-  { url: "https://rpc.mevblocker.io/fast", maxRange: null },
-  // Narrow, but fine for steady state: a pass advances far fewer blocks than
-  // even the tightest cap here, so these still carry incremental discovery.
-  { url: "https://eth.drpc.org", maxRange: 10_000n },
-  { url: "https://eth-pokt.nodies.app", maxRange: 50n },
-  { url: "https://1rpc.io/eth", maxRange: 50n },
-  { url: "https://eth.blockrazor.xyz", maxRange: 25n },
-  { url: "https://eth-mainnet.public.blastapi.io", maxRange: 10n },
-];
-
-const DEFAULT_STATE_URLS = [
-  "https://rpc.mevblocker.io",
-  "https://eth.api.onfinality.io/public",
-  "https://gateway.tenderly.co/public/mainnet",
-  "https://ethereum-rpc.publicnode.com",
-  "https://eth.rpc.blxrbdn.com",
-  "https://eth-mainnet.public.blastapi.io",
-  "https://eth.drpc.org",
-  "https://1rpc.io/eth",
-];
 
 const COOLDOWN_MS = 60_000;
 
@@ -102,11 +55,12 @@ function dedupe(urls) {
  * off deliberately: it would background-ping every endpoint on a timer, which
  * is real request volume for a bot that is idle most of the time.
  */
-export function makeStateClient() {
-  const urls = dedupe([config.rpcUrl, ...config.extraStateUrls, ...DEFAULT_STATE_URLS]);
+export function makeStateClient(cfg) {
+  const log = chainLogger(cfg.label);
+  const urls = dedupe([cfg.rpcUrl, ...cfg.extraStateUrls, ...cfg.defaultStateUrls]);
   log(`state pool: ${urls.length} endpoint(s), primary ${redact(urls[0])}`);
   return createPublicClient({
-    chain: mainnet,
+    chain: cfg.chain,
     transport: fallback(
       urls.map((u) => http(u, { timeout: 15_000, retryCount: 1 })),
       { retryCount: 0 },
@@ -117,12 +71,15 @@ export function makeStateClient() {
 // -- log discovery -----------------------------------------------------------
 
 export class LogPool {
-  constructor() {
-    const configured = dedupe([config.rpcUrl, ...config.extraLogUrls]).map((url) => ({
+  constructor(cfg) {
+    this.cfg = cfg;
+    this.log = chainLogger(cfg.label);
+
+    const configured = dedupe([cfg.rpcUrl, ...cfg.extraLogUrls]).map((url) => ({
       url,
       maxRange: null,
     }));
-    const defaults = DEFAULT_LOG_SOURCES.filter(
+    const defaults = cfg.defaultLogSources.filter(
       (d) => !configured.some((c) => c.url === d.url),
     ).map((d) => ({ ...d }));
 
@@ -131,7 +88,7 @@ export class LogPool {
       cooldownUntil: 0,
       capable: true,
     }));
-    log(`log pool: ${this.sources.length} endpoint(s), primary ${redact(this.sources[0]?.url ?? "")}`);
+    this.log(`log pool: ${this.sources.length} endpoint(s), primary ${redact(this.sources[0]?.url ?? "")}`);
   }
 
   available() {
@@ -142,10 +99,10 @@ export class LogPool {
   /** Largest window any currently-usable source will accept. */
   bestRange() {
     const usable = this.available();
-    if (!usable.length) return config.logChunk;
+    if (!usable.length) return this.cfg.logChunk;
     let best = 0n;
     for (const s of usable) {
-      const r = s.maxRange ?? config.logChunk;
+      const r = s.maxRange ?? this.cfg.logChunk;
       if (r > best) best = r;
     }
     return best;
@@ -156,23 +113,31 @@ export class LogPool {
    * discarded -- its learned `maxRange` is recorded so later windows shrink to
    * fit, which is what keeps a 10-block-capped endpoint useful for
    * steady-state polling. Only a missing/gated `eth_getLogs` retires a source.
+   *
+   * The learned figure is only adopted when it is strictly narrower than the
+   * window that was just refused. Endpoints quote a limit they do not honour --
+   * drpc rejects a 9,998-block window with "ranges over 10000 blocks are not
+   * supported" -- and taking that number at face value would leave the source
+   * retrying the same width forever. Halving instead walks it down to whatever
+   * the endpoint really serves.
    */
   _demote(source, msg, attempted) {
-    const learned = parseMaxRange(msg);
+    const quoted = parseMaxRange(msg);
+    const learned = quoted !== null && quoted < attempted ? quoted : null;
     if (isRangeError(msg)) {
       const halved = (source.maxRange ?? attempted) / 2n;
       source.maxRange = learned ?? (halved > 0n ? halved : 1n);
-      log(`log source ${redact(source.url)}: max range now ${source.maxRange} (${msg.slice(0, 80)})`);
+      this.log(`log source ${redact(source.url)}: max range now ${source.maxRange} (${msg.slice(0, 80)})`);
     } else if (isRateLimit(msg)) {
       // Throttling says nothing about capability -- rest the source, keep its range.
       source.cooldownUntil = Date.now() + COOLDOWN_MS;
-      log(`log source ${redact(source.url)}: rate limited, cooling down 60s (${msg.slice(0, 80)})`);
+      this.log(`log source ${redact(source.url)}: rate limited, cooling down 60s (${msg.slice(0, 80)})`);
     } else if (isCapabilityError(msg)) {
       source.capable = false;
-      log(`log source ${redact(source.url)}: cannot serve getLogs, dropped (${msg.slice(0, 80)})`);
+      this.log(`log source ${redact(source.url)}: cannot serve getLogs, dropped (${msg.slice(0, 80)})`);
     } else {
       source.cooldownUntil = Date.now() + COOLDOWN_MS;
-      log(`log source ${redact(source.url)}: error, cooling down 60s (${msg.slice(0, 80)})`);
+      this.log(`log source ${redact(source.url)}: error, cooling down 60s (${msg.slice(0, 80)})`);
     }
   }
 
@@ -182,7 +147,7 @@ export class LogPool {
       this._clients.set(
         url,
         createPublicClient({
-          chain: mainnet,
+          chain: this.cfg.chain,
           transport: http(url, { timeout: 20_000, retryCount: 0 }),
         }),
       );
@@ -207,7 +172,7 @@ export class LogPool {
     let nextReport = Date.now() + 10_000;
     while (cursor <= to) {
       const window = this.bestRange();
-      const chunk = window < config.logChunk ? window : config.logChunk;
+      const chunk = window < this.cfg.logChunk ? window : this.cfg.logChunk;
       let end = cursor + chunk - 1n;
       if (end > to) end = to;
 
@@ -229,7 +194,7 @@ export class LogPool {
           served = true;
           if (noisy && Date.now() >= nextReport) {
             const pct = Number(((windowEnd - from) * 100n) / (to - from));
-            log(`  backfill ${pct}% (block ${windowEnd} of ${to})`);
+            this.log(`  backfill ${pct}% (block ${windowEnd} of ${to})`);
             nextReport = Date.now() + 10_000;
           }
           break;

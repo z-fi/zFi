@@ -44,8 +44,25 @@ describe('a walletless chain hop', () => {
       const boards = w.eval('JSON.stringify([SB2,SWAPBOL,DUTCH,ORDERBOL,FLOOR,PROUTE])');
       const expect = w.eval(`JSON.stringify((b=>[b.sb||ZERO,b.sw||ZERO,b.du||ZERO,b.ob||ZERO,b.fl||ZERO,b.pr||ZERO])(${id}===1?MB:L2B))`);
       assert.equal(boards, expect, `${id}: the board set is the chain's own`);
-      assert.equal(w.eval('PLAUNCH') === A.ZERO, id !== 1, `${id}: the launcher is mainnet-only`);
+      assert.equal(w.eval('PLAUNCH').toLowerCase(), w.eval('MB.la').toLowerCase(), `${id}: one coin launcher on every chain`);
+      assert.equal(w.eval(`lnKind.querySelector('option[value="cause"]').disabled`), id !== 1, `${id}: causes launch on Ethereum only`);
     }
+    p.close();
+  });
+
+  test('turns a cause picked on Ethereum back into a coin on an L2', async () => {
+    const p = await loadPage({ walletless: true, hash: null });
+    await p.settle();
+    p.click('ln');
+    p.select('lnKind', 'cause');
+    assert.equal(p.value('lnKind'), 'cause');
+
+    await hopTo(p, 8453);
+    assert.equal(p.value('lnKind'), 'coin', 'Base has no cause launcher');
+    assert.equal(p.window.eval('lnTitle.textContent'), 'Launch a coin', 'the panel follows the kind');
+
+    await hopTo(p, 1);
+    assert.equal(p.window.eval(`lnKind.querySelector('option[value="cause"]').disabled`), false, 'Ethereum offers causes again');
     p.close();
   });
 
@@ -138,7 +155,7 @@ describe('features that exist on one chain only', () => {
       await hopTo(p, id);
       assert.equal(p.visible('wn'), false, `${id}: names are not offered`);
       assert.equal(p.visible('pv'), false, `${id}: the bridge is not offered`);
-      assert.equal(p.visible('ln'), false, `${id}: launching is not offered`);
+      assert.equal(p.visible('ln'), true, `${id}: coins launch here too`);
       assert.equal(p.window.eval('wnMode'), false, `${id}: and no mode is left on`);
       assert.equal(p.window.eval('pvMode'), false);
     }

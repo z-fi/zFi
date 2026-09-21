@@ -1,0 +1,43 @@
+{
+  "owner": "0x1C0Aa8cCD568d90d61659F060D1bFb1e6f855A20",
+  "measured": "2026-09-15, from Node with Origin https://zswap.wei.limo: every entry answered its real call and allowed that origin",
+  "seeds": [
+    { "service": "rpc", "chainId": 8453, "urls": [
+      "https://base.rpc.blxrbdn.com",
+      "https://base.drpc.org",
+      "https://base-rpc.publicnode.com",
+      "https://mainnet.base.org",
+      "https://base.gateway.tenderly.co",
+      "https://developer-access-mainnet.base.org"
+    ] },
+    { "service": "rpc", "chainId": 4663, "urls": [
+      "https://robinhood.drpc.org",
+      "https://robinhood-rpc.publicnode.com",
+      "https://rpc.mainnet.chain.robinhood.com"
+    ] },
+    { "service": "logs", "chainId": 1, "urls": [
+      "https://mainnet.gateway.tenderly.co",
+      "https://eth.drpc.org",
+      "https://rpc.mevblocker.io"
+    ] },
+    { "service": "tacit", "chainId": 1, "urls": [
+      "https://api.tacit.finance"
+    ] },
+    { "service": "btc", "chainId": 0, "urls": [
+      "https://mempool.space/api",
+      "https://blockstream.info/api",
+      "https://mempool.ninja/api",
+      "https://mempool.bitaroo.net/api"
+    ] },
+    { "service": "wc", "chainId": 0, "urls": [
+      "wss://relay.walletconnect.org"
+    ] },
+    { "service": "wcpid", "chainId": 0, "urls": [
+      "1e8390ef1c1d8a185e035912a1409749"
+    ] }
+  ],
+  "notes": {
+    "logs": "Only tenderly served the pool's whole history (deploy block to tip) in one call. drpc and mevblocker cap a range at 10,000 blocks; the page splits ranges on refusal, so they serve as slices.",
+    "excluded": "base.llamarpc.com and eth.llamarpc.com (HTTP 525), mempool.emzy.de (429, no CORS), rpc.robinhood.chain.robinhood.com (TLS failure). publicnode, blastapi, 1rpc, nodies, blxrbdn and merkle all refuse wide eth_getLogs on mainnet."
+  }
+}

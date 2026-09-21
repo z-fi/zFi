@@ -411,10 +411,12 @@ max_optimizer_runs = 200
 # under the limit. Dropping yul=false alone pushes it to 26,684 B, and the default profile
 # yields 32,359 B — neither is deployable.
 #
-# Verified 2026-07-31 against the live deployment at
-# 0x0000002d9a651b729e3aFBE57Fc84FFDa4a98a13: this profile reproduces the deployed contract
-# exactly. All 24,438 bytes agree except the trailing 43-byte CBOR metadata, which differs
-# only because the deployment was built with solc 0.8.34 and this repo now pins 0.8.36.
+# Verified 2026-09-19 against the live hub quoter the page reads,
+# 0x000000bd2db80567c23e353ca95a251c573cbf9b: this profile reproduces the deployed contract
+# exactly — all 24,452 bytes, including the metadata trailer. The earlier note here named
+# 0x0000002d9a651b729e3aFBE57Fc84FFDa4a98a13, a superseded 24,438-byte deployment that
+# nothing reads. Build with this profile or the comparison is meaningless: a default build
+# of src/zQuoter.sol is 32,157 B, over EIP-170, so it cannot be what is on chain.
 # That check was made out-of-band, not in CI: the test suite compiles under the default
 # profile, so it has no access to this artifact and cannot reproduce the comparison.
 # test/zQuoterPerVenueExec.t.sol instead asserts behavioural equivalence — same venue and

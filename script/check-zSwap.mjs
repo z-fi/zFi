@@ -38,7 +38,7 @@ const FIXTURES = path.join(ROOT, 'test', 'fixtures', 'quoter.json');
 const TAPE_FIXTURES = path.join(ROOT, 'test', 'fixtures', 'tape.json');
 
 const EIP170 = 24576;
-const CHUNKS = 20;
+const CHUNKS = 24;
 
 const html = fs.readFileSync(HTML_PATH, 'utf8');
 const bytes = Buffer.byteLength(html, 'utf8');
@@ -361,6 +361,9 @@ const HELPERS = [
   'sha2', 'pmul', 'pcomp', 'cpDerive', 'cpOwner', 'cpCommit', 'cpXY', 'cpLeaf', 'cpDepCommit', 'cpDepId',
   'cpBinding', 'cpCtx', 'cpNonce', 'cpSigma', 'cpSeal', 'cpTree', 'cpNu', 'cpLadder', 'cpRecipe', 'cpEscrow',
   'cpEncRecipe', 'cpActData', 'cpReclData', 'cpExitData', 'cpRescue', 'cpUse', 'cpVerifySigma', 'cpSettleData',
+  'cpScalar', 'cpBtcOf', 'cpWif', 'cpOpen', 'cpSeg', 'bLock', 'bKeys', 'bOp', 'cdpSecrets', 'cdpBuildOp', 'cdpLeaf',
+  'bAnchor', 'bEcdhSeed', 'bKs', 'bOpenOut',
+  'cpXferOp', 'cpWtOp', 'cpLockOp', 'cpClaimOp', 'cpRefundOp', 'cpSOpen', 'cpTacAddr', 'cpRecip', 'cpWtData', 'cpCalls', 'cpSTail', 'cpSuOp', 'bNoteLeaf',
 ];
 // Exported for the same reason as HELPERS, but they are namespaces rather than
 // functions: the hand-rolled WalletConnect crypto and the QR encoder. These
@@ -471,7 +474,9 @@ if (exported) {
       'eth_blockNumber', 'eth_getTransactionReceipt', 'eth_getBlockByNumber',
       // Relay-escrow recovery reads `Opened` back off the chain. A read, and a
       // heavy one - routing it to a phone over the relay would hang the panel.
-      'eth_getLogs', 'eth_getTransactionByHash', 'eth_getTransactionCount'];
+      'eth_getLogs', 'eth_getTransactionByHash', 'eth_getTransactionCount',
+      // The keeper tip prices the peak recent base fee, read off the chain.
+      'eth_feeHistory'];
     for (const m of toWallet) if (!wcToWallet(m)) throw Error(`${m} would leave the wallet`);
     for (const m of toNode) if (wcToWallet(m)) throw Error(`${m} would go to the wallet, not the node`);
     // Everything the page actually calls must be classified deliberately.
@@ -516,7 +521,7 @@ if (exported) {
   // in the same paragraphs whose sizes it had just updated. Somebody following
   // it would deploy the wrong number of contracts.
   check('the deploy runbook agrees about the chunk count', () => {
-    const WORDS = { 6: 'six', 12: 'twelve', 13: 'thirteen', 14: 'fourteen', 15: 'fifteen', 16: 'sixteen', 17: 'seventeen', 18: 'eighteen', 19: 'nineteen', 20: 'twenty' };
+    const WORDS = { 6: 'six', 12: 'twelve', 13: 'thirteen', 14: 'fourteen', 15: 'fifteen', 16: 'sixteen', 17: 'seventeen', 18: 'eighteen', 19: 'nineteen', 20: 'twenty', 21: 'twenty-one', 22: 'twenty-two', 23: 'twenty-three', 24: 'twenty-four' };
     const want = WORDS[CHUNKS];
     if (!want) throw Error(`WORDS has no word for CHUNKS=${CHUNKS}`);
     const bad = [];
@@ -538,7 +543,7 @@ if (exported) {
         if (!/chunk|data contract|immutable|constructor/i.test(sent)) continue;
         for (const [n, w] of Object.entries(WORDS)) {
           if (Number(n) === CHUNKS) continue;
-          if (new RegExp(`\\b${w}\\b`, 'i').test(sent))
+          if (new RegExp(`(?<![\\w-])${w}(?![\\w-])`, 'i').test(sent))
             bad.push(`${f}: "${w}" in "${sent.trim().slice(0, 60)}…"`);
         }
       }
@@ -724,8 +729,8 @@ if (exported) {
   // generator, the note, its leaf, the opening proofs, the memo, the Merkle
   // path and the recipe escrow - in the page's own arithmetic. Any one of
   // them drifting is a deposit the relay cannot settle or, worse, a proof paid
-  // to an escrow nobody can reach. The fixture was produced by Tacit's own
-  // modules (scratch: gen-vectors.mjs against /Users/z/tacit), not by the page.
+  // to an escrow nobody can reach. The fixture is produced by Tacit's own
+  // modules (script/gen-confidential-vectors.mjs --tacit <repo>), not by the page.
   check('private bridge matches the confidential pool reference vectors', () => {
     const F = JSON.parse(fs.readFileSync(path.join(ROOT, 'test', 'fixtures', 'confidential.json'), 'utf8'));
     const X = exported;
@@ -779,7 +784,126 @@ if (exported) {
     // pool.settle(bytes,bytes,bytes[]) for a self-settled withdrawal, against ethers' coder.
     const want = '0x717fd7f2' + AbiCoder.defaultAbiCoder().encode(['bytes', 'bytes', 'bytes[]'], ['0x1234', '0xabcdef', []]).slice(2);
     eq(X.cpSettleData('0x1234', '0xabcdef'), want, 'settle calldata');
-    return 'generator, note, memo, tree, both recipes, both openings, sigma verify and settle agree with the reference';
+    // A pool-minted token note (TAC): the asset id enters the derivation, the leaf, the deposit id,
+    // the memo and both opening contexts, so each is checked under the token's id, not ether's.
+    const T = F.tac, ta = T.assetId, dt = X.cpDerive(F.seed, 0, ta);
+    eq(dt.secret, T.note.secret, 'TAC note secret');
+    eq('0x' + dt.blinding.toString(16).padStart(64, '0'), T.note.blinding, 'TAC note blinding');
+    const tOwner = X.cpOwner(dt.secret), tv = BigInt(T.note.value), tXY = X.cpXY(X.cpCommit(tv, dt.blinding));
+    eq(tXY.cx, T.note.cx, 'TAC cx'); eq(tXY.cy, T.note.cy, 'TAC cy');
+    const tLeaf = X.cpLeaf(tXY.cx, tXY.cy, tOwner, ta); eq(tLeaf, T.leaf, 'TAC leaf');
+    const tCommit = X.cpDepCommit(tXY.cx, tXY.cy, tOwner); eq(tCommit, T.commit, 'TAC deposit commit');
+    const tDep = X.cpDepId(tv, tCommit, ta); eq(tDep, T.depositId, 'TAC deposit id');
+    const twc = X.cpCtx('tacit-wrap-intent-v1', cb, ta, tDep, [[tXY.cx, tXY.cy, tOwner]], [tv]);
+    const tws = X.cpSigma(tv, dt.blinding, twc, X.cpNonce(dt.blinding, twc, 'wrap'));
+    eq(tws.R, T.wrapOp.sigR, 'TAC wrap sigma R'); eq(tws.z, T.wrapOp.sigZ, 'TAC wrap sigma z');
+    eq(X.cpSeal(F.pub.slice(2), { value: tv, blinding: dt.blinding, secret: dt.secret, owner: tOwner, asset: ta }, BigInt(F.eph)), T.memo, 'TAC memo');
+    eq(X.cpNu(dt.secret, tLeaf), T.nullifier, 'TAC nullifier');
+    const tu = T.unwrapRelay, tuc = X.cpCtx('tacit-unwrap-intent-v1', cb, ta, '0x' + F.account.slice(2).toLowerCase().padStart(64, '0'),
+      [[tXY.cx, tXY.cy, tOwner]], [tv, BigInt(tu.fee), BigInt(tu.deadline)]);
+    const tus = X.cpSigma(tv, dt.blinding, tuc, X.cpNonce(dt.blinding, tuc, 'unwrap'));
+    eq(tus.R, tu.sigR, 'TAC unwrap sigma R'); eq(tus.z, tu.sigZ, 'TAC unwrap sigma z');
+    // One key, two chains: the seed is Tacit's identity derivation of the fixed signature, and the same key
+    // reads as a Bitcoin address and a WIF, and opens a memo Tacit's own code sealed to it.
+    eq('0x' + X.cpScalar(X.sha2(Uint8Array.from(Buffer.from(F.sig.slice(2), 'hex')))).toString(16).padStart(64, '0'), F.seed, 'Tacit identity seed');
+    eq(X.cpBtcOf(F.pub.slice(2)), F.btc.address, 'Bitcoin address');
+    eq(X.cpWif(F.seed), F.btc.wif, 'WIF');
+    const fo = X.cpOpen(F.found.memo, F.found.leaf, F.seed);
+    if (!fo || fo.sec !== F.found.note.secret || String(fo.v) !== F.found.note.value) throw Error('a memo sealed to this key did not open');
+    if (X.cpOpen(F.found.memo, F.leaf, F.seed)) throw Error('a memo opened against a leaf that is not its own');
+    // cBTC: the lock Tacit's own driver built from fixed coins, rebuilt by the page byte for byte (Schnorr aux
+    // zeroed on both sides), plus the pool outpoint and the fee-free mint witness that follow from it.
+    const C = F.cbtc, lk = X.bLock(F.seed, C.utxos, C.feeRate, C.amountSats, new Uint8Array(32));
+    eq(lk.commit, C.commit, 'cBTC lock commit tx'); eq(lk.reveal, C.reveal, 'cBTC lock reveal tx'); eq(lk.lockTxid, C.lockTxid, 'cBTC lock txid');
+    eq('0x' + lk.blinding.toString(16).padStart(64, '0'), C.blinding, 'cBTC note blinding'); eq(lk.cx, C.cx, 'cBTC cx'); eq(lk.cy, C.cy, 'cBTC cy');
+    eq(Buffer.from(X.bKeys(F.seed).lock).toString('hex'), C.lockSpk, 'cBTC lock script');
+    eq(X.bOp({ t: C.lockTxid }), C.outpoint, 'cBTC lock outpoint');
+    const mctx = X.cpCtx('tacit-cbtc-mint-intent-v1', cb, '0x62a20d98fc1cd20289621d1315294cb8772f934d822e404b71e1f471cf0679c8', C.outpoint,
+      [[C.cx, C.cy, '0x' + '00'.repeat(32)]], [BigInt(C.amountSats), 0n]);
+    const msig = X.cpSigma(BigInt(C.amountSats), BigInt(C.blinding), mctx, X.cpNonce(BigInt(C.blinding), mctx, 'cbtc-mint'));
+    eq(msig.R, C.mintOp.sigR, 'cBTC mint sigma R'); eq(msig.z, C.mintOp.sigZ, 'cBTC mint sigma z');
+    eq(X.cpSeg('bc', Uint8Array.from(Buffer.from('79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798', 'hex')), 1),
+      'bc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqzk5jj0', 'bech32m (BIP-350 vector)');
+    // cUSD: a position against that cBTC note. Its secrets are HMACs of the key (so the key alone re-derives
+    // them), and the op and position leaf must be the ones Tacit's own buildCdpMintOp / positionLeaf produce.
+    const D = F.cdp, S0 = X.cdpSecrets(0, F.seed), Z32 = '0x' + '00'.repeat(32), CB = '0x62a20d98fc1cd20289621d1315294cb8772f934d822e404b71e1f471cf0679c8';
+    eq(S0.owner, D.posOwner, 'CDP position key'); eq(S0.nk, D.debtNk, 'CDP debt nk');
+    eq('0x' + S0.blind.toString(16).padStart(64, '0'), D.debtBlinding, 'CDP debt blinding');
+    const canon = o => JSON.stringify(o, (k, v) => (v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map(x => [x, v[x]])) : v));
+    const built = X.cdpBuildOp({ asset: CB, cx: C.cx, cy: C.cy, owner: Z32, value: BigInt(C.amountSats), blinding: BigInt(C.blinding) },
+      0, D.root, D.path, BigInt(D.debtValue), D.rateSnapshot, 0, F.seed).op;
+    eq(canon(built), canon(D.op), 'CDP mint op');
+    eq(X.cdpLeaf(BigInt(D.debtValue), D.rateSnapshot, D.posOwner, Z32, [[CB, BigInt(C.amountSats)]]), D.positionLeaf, 'CDP position leaf');
+    // Bitcoin-side notes: Tacit's pinned derivation vectors (tests/vectors.test.mjs), then a CXFER built by Tacit's
+    // own code, of which the key alone must open exactly its received output and its own change.
+    const NN = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n, hexOf = b => Buffer.from(b).toString('hex');
+    const SKA = Uint8Array.from(Buffer.from('01'.repeat(32), 'hex')), PKB = Uint8Array.from(Buffer.from('024d4b6cd1361032ca9bd2aeb9d900aa4d45d9ead80ac9423374c451a7254d0766', 'hex'));
+    const AN = X.bAnchor({ txid: '11223344556677889900aabbccddeeff11223344556677889900aabbccddeeff', vout: 7 });
+    eq(hexOf(AN), 'ffeeddccbbaa00998877665544332211ffeeddccbbaa0099887766554433221107000000', 'Bitcoin note anchor');
+    const sdA = X.bEcdhSeed('0x' + '01'.repeat(32), PKB), red = b => (BigInt('0x' + hexOf(b)) % NN).toString(16).padStart(64, '0');
+    eq(red(X.bKs(sdA, 'tacit-blind-v1', AN, 0)), '38919d697d9d3dbfce07914e56e51d9e15f2c10510facbf1eebd747759b2de0b', 'deriveBlinding');
+    eq(red(X.bKs(SKA, 'tacit-change-v1', AN, 1)), '0698643988efaf27fa35d08ee78dc162457e74a88cad96f382121009c0fd6953', 'deriveChangeBlinding');
+    eq(hexOf(X.bKs(sdA, 'tacit-amount-v1', AN, 0).slice(0, 8)), 'b1697b0b93335da7', 'ECDH amount keystream');
+    eq(hexOf(X.bKs(SKA, 'tacit-amount-self-v1', AN, 1).slice(0, 8)), '429ac902e11b2350', 'self amount keystream');
+    eq(X.pcomp(X.cpCommit(1000n, 7n)), '03925611857a1dcb094300ea201b3c963d1d144fd2b1c502022f14e4c234a02fcb', 'Pedersen C(1000,7)');
+    const opened = [0, 1, 2, 3].map(o => X.bOpenOut(F.seed, F.btcNote.tx, o));
+    eq(JSON.stringify(opened.map(x => x && { a: x.a, v: x.v })), JSON.stringify([...F.btcNote.found.map(f => ({ a: f.a, v: f.v })), null, null]), 'Bitcoin notes the key alone opens');
+    for (const f of F.btcNote.found) eq(X.bNoteLeaf(opened[f.o].a, opened[f.o].c, F.btcNote.tx.vout[f.o].scriptpubkey), f.leaf, `reflected note leaf of vout ${f.o}`);
+    // Private sends: under the fixed random stream Tacit's builders ran with, the page has to rebuild the same split,
+    // wrap-and-transfer, stealth lock, refund and claim - range proofs, kernels, signatures and memos included.
+    const SV = F.send, NS = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n;
+    const stream = tag => {
+      let c = 0, buf = Buffer.alloc(0);
+      const take = n => { const o = Buffer.alloc(n); let k = 0; while (k < n) { if (!buf.length) buf = nodecrypto.createHash('sha256').update(tag + ':' + c++).digest(); const m = Math.min(buf.length, n - k); buf.copy(o, k, 0, m); buf = buf.subarray(m); k += m; } return new Uint8Array(o); };
+      return { R: () => { for (;;) { const s = BigInt('0x' + Buffer.from(take(32)).toString('hex')); if (s && s < NS) return s; } }, X: () => take(32) };
+    };
+    const same = (a, b, what) => eq(canon(a), canon(b), what);
+    const sIn = { v: F.note.value, b: BigInt(F.note.blinding), s: F.note.secret, owner: F.note.owner, cx: F.note.cx, cy: F.note.cy, li: 0, path: F.path, root: F.root };
+    const px = X.cpXferOp([sIn], BigInt(SV.xfer.amount), BigInt(SV.fee), F.ethAssetId, cb, F.seed, stream(SV.xfer.tag).R);
+    same(px.op, SV.xfer.op, 'transfer op'); eq(JSON.stringify(px.memos), JSON.stringify(SV.xfer.memos), 'transfer memos');
+    const pw = X.cpWtOp(BigInt(SV.wt.value), F.ethAssetId, SV.wt.index, F.seed, cb, stream(SV.wt.tag).R);
+    same(pw.op, SV.wt.op, 'wrap-and-transfer op'); eq(JSON.stringify(pw.memos), JSON.stringify(SV.wt.memos), 'wrap-and-transfer memo');
+    eq(pw.cm, SV.wt.commit, 'wrap-and-transfer deposit commit'); eq(pw.dep, SV.wt.depositId, 'wrap-and-transfer deposit id');
+    eq(X.cpWtData(BigInt(SV.wt.value) * 10000000000n, pw.cm, '0x1234', '0xabcdef', pw.memos), SV.wt.calldata, 'wrapAndSettleETH calldata');
+    const pl = X.cpLockOp(sIn, SV.lock.recipient, F.ethAssetId, BigInt(SV.deadline), cb, stream(SV.lock.tag).R, F.pub.slice(2));
+    same(pl.op, SV.lock.op, 'stealth lock op'); eq(pl.memo.slice(0, 292), SV.lock.memo, 'stealth lock memo, as Tacit seals it');
+    eq(pl.memo, SV.lock.memoFull, 'stealth lock memo with the sender tail');
+    const tl = X.cpSTail(pl.memo, pl.lf, F.seed);
+    if (!tl || tl.rk !== SV.lock.refundPriv || tl.to !== SV.lock.recipient.slice(2) || tl.v !== F.note.value || tl.dl !== SV.deadline) throw Error('the sender tail did not give the lock back to its sender');
+    if (X.cpSTail(SV.lock.memo, pl.lf, F.seed)) throw Error('a memo with no tail opened as a sender tail');
+    eq(pl.rk, SV.lock.refundPriv, 'lock refund key'); eq(pl.lb, SV.lock.lBlinding, 'lock blinding');
+    const rs = stream(SV.refund.tag), lockRec = { a: F.ethAssetId, v: F.note.value, lb: pl.lb, dl: SV.deadline, rp: pl.rp, rk: pl.rk, own: pl.own, lx: pl.lx, ly: pl.ly, lf: pl.lf };
+    const pr = X.cpRefundOp(lockRec, F.seed, cb, SV.lock.lockRoot, 0, SV.lock.lockPath, BigInt(SV.fee), rs.R, rs.X);
+    same(pr.op, SV.refund.op, 'stealth refund op'); eq(JSON.stringify(pr.memos), JSON.stringify(SV.refund.memos), 'stealth refund memo');
+    const inbound = X.cpSOpen(SV.claim.memo, SV.claim.leaf, F.seed);
+    if (!inbound) throw Error('a stealth payment sealed to this key did not open');
+    if (X.cpSOpen(SV.claim.memo, SV.lock.op.lockLeaf, F.seed) || X.cpSOpen(SV.lock.memo, SV.lock.op.lockLeaf, F.seed)) throw Error('a stealth memo opened against the wrong leaf or the wrong key');
+    const cs = stream(SV.claim.tag), pc = X.cpClaimOp(inbound, F.seed, cb, SV.claim.lockRoot, 1, SV.claim.lockPath, BigInt(SV.fee), cs.R, cs.X);
+    same(pc.op, SV.claim.op, 'stealth claim op'); eq(JSON.stringify(pc.memos), JSON.stringify(SV.claim.memos), 'stealth claim memo');
+    // A partial withdrawal: the payout leaves publicly, the change stays shielded - Tacit's sendUnwrap, byte for byte.
+    const ps = X.cpSuOp(sIn, BigInt(SV.su.amount), BigInt(SV.fee), SV.su.recipient, BigInt(SV.su.deadline), F.ethAssetId, cb, F.seed, stream(SV.su.tag).R);
+    same(ps.op, SV.su.op, 'send-and-unwrap op'); eq(JSON.stringify(ps.memos), JSON.stringify(SV.su.memos), 'send-and-unwrap change memo');
+    eq(X.cpExitData('0x1234', '0xabcdef', br, SV.xfer.memos.slice(0, 1)), SV.exitWithMemo, 'Base exitAndExecute carrying a change memo');
+    eq(X.cpTacAddr(F.seed), SV.address, 'tacit1 address'); eq(X.cpRecip(SV.address), F.pub.slice(2), 'tacit1 address, Ethereum lane');
+    // The lock set exists only in settle() calldata: the page's decoder, over the mainnet stealth lock and claim
+    // Tacit's doc cites, has to find what Tacit's own decoder found there.
+    const dl = X.cpCalls(SV.scan.lockInput)[0];
+    eq(JSON.stringify(dl.lk), JSON.stringify(SV.scan.lockLeaves), 'lock leaves from settle calldata');
+    eq(dl.nl, SV.scan.leavesCount, 'note leaves ahead of the lock memo tail');
+    eq(JSON.stringify(dl.ms.slice(dl.nl)), JSON.stringify(SV.scan.lockMemos), 'lock memo tail');
+    if (!X.cpCalls(SV.scan.claimInput)[0].ln.includes(SV.scan.claimNullifier)) throw Error('the claim\'s lock nullifier was not decoded');
+    for (const [inp, want, what] of [[SV.scan.relayInput, SV.scan.relayCalls, 'relaySettle'], [SV.scan.seededInput, SV.scan.seededCalls, 'seeded relaySettle'],
+      [SV.scan.nestedInput, SV.scan.nestedCalls, 'a settle nested in another contract\'s call']]) {
+      const got = X.cpCalls(inp);
+      eq(got.length, want.length, what + ' call count');
+      got.forEach((c, i) => {
+        eq(JSON.stringify(c.lk), JSON.stringify(want[i].lockLeaves), `${what} call ${i} lock leaves`);
+        eq(c.nl, want[i].leavesCount, `${what} call ${i} note leaves`);
+        eq(JSON.stringify(c.ms), JSON.stringify(want[i].memos), `${what} call ${i} memos`);
+        if (want[i].lockNullifiers) eq(JSON.stringify(c.ln), JSON.stringify(want[i].lockNullifiers), `${what} call ${i} lock nullifiers`);
+      });
+    }
+    return 'generator, note, memo, tree, both recipes, both openings, a token note, the identity, the Bitcoin key, memo recovery, the cBTC lock, the cUSD position, Bitcoin-side notes, and a split, wrap-and-transfer, stealth lock, refund and claim agree with the reference';
   });
 
   check('keccak matches known vectors', () => {
@@ -814,20 +938,27 @@ if (exported) {
     eq(safeSym('ABCDEFGHIJKLMNOPQRST'), 'ABCDEFGHIJKLMNOP', 'symbol length cap');
   });
 
-  check('safeUrl admits only https and inline images', () => {
-    eq(safeUrl('https://x.io/a.png'), 'https://x.io/a.png', 'https passes');
+  // The page loads NOTHING from a host it was not pointed at on chain. safeUrl
+  // feeds an <img src>, and its only remote-capable caller was an arbitrary
+  // NFT's own tokenURI image - one uncurated host, able to see the viewer's IP
+  // and which order they opened. Inline images only; a remote logo falls back
+  // to the generated letter, which is the same thing a broken URL already did.
+  check('safeUrl admits only inline images, never a remote host', () => {
     eq(safeUrl('data:image/svg+xml;base64,QUJD'), 'data:image/svg+xml;base64,QUJD', 'inline image passes');
+    eq(safeUrl('https://x.io/a.png'), '', 'a remote host is refused');
     eq(safeUrl('javascript:alert(1)'), '', 'javascript scheme refused');
     eq(safeUrl('data:text/html;base64,QUJD'), '', 'non-image data URL refused');
     eq(safeUrl('http://x.io/a.png'), '', 'plaintext http refused');
-    eq(safeUrl('https://x.io/a.png" onerror="alert(1)'), '', 'attribute cannot be closed');
-    // The cap bounds MARKUP SIZE, not safety - the pattern is what keeps this
-    // out of trouble. It was 2048, which was tight enough to behave like a
-    // format rule: base64 PNG logos in the registry were silently dropped for a
-    // generated letter. Now 32 KB, so this only has to stop something absurd.
-    eq(safeUrl('https://x.io/' + 'a'.repeat(4096)), 'https://x.io/' + 'a'.repeat(4096),
+    eq(safeUrl('data:image/png;base64,QUJD" onerror="alert(1)'), '', 'attribute cannot be closed');
+    // Payload is held to the base64 alphabet, as safeDataUrl already was - the
+    // two normalizers now agree rather than one being quietly looser.
+    eq(safeUrl('data:image/png;base64,{}[]();&'), '', 'payload is base64 only');
+    // The cap bounds MARKUP SIZE, not safety. It was 2048, tight enough to
+    // behave like a format rule: base64 PNG logos were dropped for a generated
+    // letter. Now 32 KB, so this only has to stop something absurd.
+    eq(safeUrl('data:image/png;base64,' + 'a'.repeat(4096)), 'data:image/png;base64,' + 'a'.repeat(4096),
       'a real base64 logo is not "too long"');
-    eq(safeUrl('https://x.io/' + 'a'.repeat(40000)), '', 'length still bounded');
+    eq(safeUrl('data:image/png;base64,' + 'a'.repeat(40000)), '', 'length still bounded');
   });
 
   // The registry is the one metadata source a list owner writes freely, and both
@@ -840,11 +971,10 @@ if (exported) {
     if (body[1] !== 'I') throw Error(`genIcon emitted raw metadata: ${JSON.stringify(body[1])}`);
     const ingress = html.match(/const sym=safeSym\(t\.s\)[\s\S]{0,400}?next\.push\([^\n]*\n/);
     if (!ingress) throw Error('loadTokenList ingress no longer sanitizes via safeSym/safeUrl');
-    // The registry ingress is held to the STRICTER of the two normalizers.
-    // `safeUrl` also admits https://, which is right for an arbitrary NFT's own
-    // tokenURI but not for this list: a registry row must not be able to put a
-    // remote host in the render path. Accept only `safeDataUrl` here, and prove
-    // it actually refuses a remote logo rather than trusting the name.
+    // The registry ingress names `safeDataUrl` explicitly rather than relying on
+    // safeUrl having become equally strict: a registry row must not be able to
+    // put a remote host in the render path, and that is worth pinning by name.
+    // Prove it actually refuses a remote logo rather than trusting the name.
     if (!/const logo=safeDataUrl\(t\.l\);/.test(ingress[0]))
       throw Error('registry logo not passed through safeDataUrl');
     if (safeDataUrl('https://x.io/a.png') !== '')

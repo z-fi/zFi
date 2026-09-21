@@ -934,3 +934,26 @@ describe('choosing the opening timeframe', () => {
     p.close();
   });
 });
+
+describe('on an L2', () => {
+  test('Base charts its own pool, through the lens at the same address', async () => {
+    const BASE_USDC = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913';
+    const chain = new MockChain({ chainId: '0x2105' });
+    chain.setNative(A.ACCOUNT, 10n * ETH);
+    chain.setToken(BASE_USDC, { symbol: 'USDC', decimals: 6, name: 'USD Coin' });
+    chain.setErc20(BASE_USDC, A.ACCOUNT, 5000n * USDC);
+    chain.quoteHandler = fixedRateQuoter({ rate: 3000n * ETH });
+    chain.setCode(LENS, '0x60006000');
+    chain.setPools(A.ZERO, BASE_USDC, [POOL_A]);
+    chain.setTape(POOL_A, bars(24));
+    const p = await loadPage({ chain, patch: patchFactory(), storage: { ch: '1' } });
+    await p.connect();
+    assert.equal(p.window.eval('CHAIN_ID'), 8453);
+    p.pickToken('fromSel', 'ETH');
+    p.pickToken('toSel', 'USDC');
+    await p.waitFor(() => svg(p), { label: 'the Base chart' });
+    assert.ok(p.chain.calls.some(c => c.selector === SEL.MARKETS), 'the lens was asked for the Base pair');
+    await p.settle();
+    p.close();
+  });
+});

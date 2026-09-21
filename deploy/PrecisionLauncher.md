@@ -31,10 +31,21 @@ different reason — see "Compiler unit".
 
 The last two are **source constants**, not constructor arguments. That is
 deliberate: a permanent tithe an operator can repoint is not permanent. The cost
-is that this contract is **not portable off Ethereum mainnet** — on a chain
-without BETH, `_tithe` falls through to its forced-transfer fallback and the
-tenth is sent to a codeless address. Do not deploy elsewhere without changing
-those constants and re-reviewing.
+is that the tithe only mints a receipt on Ethereum. Anywhere else `_tithe` falls
+through to its forced-transfer fallback and the tenth is sent to the burner's
+address with no BETH minted. On the two chains the launcher is replayed to:
+
+- **Base (8453)** — the address holds AIR JORKIN, a plain ERC-20 deployed at
+  nonce 0 by BETH's own deployer (`0x9D6Afd…`). Its bytecode has no CALL,
+  SELFDESTRUCT or CREATE, so ether forced into it stays there for good.
+- **Robinhood (4663)** — the address has no code and `0x9D6Afd…` has not sent a
+  transaction there, so its first CREATE on that chain lands at this address
+  and holds what has accrued. Accepted by the owner on the strength of who
+  holds that key (2026-09-15).
+
+`test/PrecisionLauncherL2.t.sol` forks both chains, replays the payloads and
+checks that a sweep still pays the creator and the treasury in full and sends
+the tenth there. Any other chain needs the same look before a replay.
 
 ## Compiler unit
 
@@ -87,9 +98,17 @@ new PrecisionLauncher(PrecisionPoolFactory factory_, address treasury_)
 ```
 
 - `factory_` — the address above. Constructor rejects a codeless address.
-- `treasury_` — **DECIDED: the Zorg Moloch DAO,
-  `0x5E58BA0e06ED0F5558f83bE732a4b899a674053E`.** Receives 10% of collected ETH
-  fees. Rejected if zero, immutable once set.
+- `treasury_` — **DEPLOYED: FeeSplitter `0x000000aA142133107c7D2664F900f80e28BbfFbd`**,
+  owned by the ops Safe `0x006CD14F36F65eCbB29b2519cCBe63A0DC8549F2`, whose split
+  is that Safe at 100% (read on chain 2026-09-15). Receives 10% of collected ETH
+  fees. Rejected if zero, immutable once set; the split behind it is the Safe's
+  to change.
+
+  What follows, the DAO as treasury, is the plan the FeeSplitter replaced. The
+  DAO still receives the BETH record of the tithe through `TITHE_RECORD`.
+
+  The earlier decision: **the Zorg Moloch DAO,
+  `0x5E58BA0e06ED0F5558f83bE732a4b899a674053E`.**
 
   This is the SAME address as the hardcoded `TITHE_RECORD`, so the DAO takes
   20% of the ETH side overall — a tenth paid as ETH, and a tenth as the BETH

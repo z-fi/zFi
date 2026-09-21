@@ -31,13 +31,21 @@ contract zQuoterAccuracyTest is Test {
     address constant DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
     address constant WSTETH = 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0;
 
+    /// The hub quoter zSwap routes through. What a user is actually quoted is
+    /// this contract's answer, so this is what "does the quote match the fill"
+    /// has to be asked of. A `new zQuoter()` here compiles under the default
+    /// profile, which is not the configuration the deployment was built with,
+    /// and measures a contract nobody calls.
+    address constant LIVE_QUOTER = 0x000000bd2DB80567c23E353ca95a251c573cBf9B;
+
     zQuoter q;
 
     receive() external payable {}
 
     function setUp() public {
         vm.createSelectFork(vm.envOr("ETH_RPC_URL", string(DEFAULT_RPC)), vm.envOr("FORK_BLOCK", DEFAULT_FORK_BLOCK));
-        q = new zQuoter();
+        q = zQuoter(payable(vm.envOr("QUOTER", LIVE_QUOTER)));
+        require(address(q).code.length > 0, "no quoter code at this fork block");
     }
 
     function _bal(address t) internal view returns (uint256) {
@@ -64,9 +72,17 @@ contract zQuoterAccuracyTest is Test {
 
     // -------------------------------------------------------------- single hop
 
+    /// The promise under test is "the route you are handed delivers what it was
+    /// quoted", so the figure to check the fill against is the one that comes
+    /// back with the calldata being executed. `getQuotes` surveys the AMM grid
+    /// only; `buildBestSwap` also discovers Curve, so on a pair where Curve wins
+    /// the two legitimately differ and the grid's number is the lower of them.
+    /// Asserting the fill against the grid used to read as a quoter error when
+    /// what had happened was the builder finding a better venue than the grid
+    /// knows about.
     function _checkDirect(string memory label, address tIn, address tOut, uint256 amt) internal {
-        (zQuoter.Quote memory best,) = q.getQuotes(false, tIn, tOut, amt);
-        (, bytes memory cd,, uint256 val) =
+        (zQuoter.Quote memory grid,) = q.getQuotes(false, tIn, tOut, amt);
+        (zQuoter.Quote memory built, bytes memory cd,, uint256 val) =
             q.buildBestSwap(address(this), false, tIn, tOut, amt, 300, block.timestamp + 1800);
 
         _fund(tIn, amt);
@@ -76,10 +92,15 @@ contract zQuoterAccuracyTest is Test {
         uint256 got = _bal(tOut) - before;
 
         emit log_named_string("pair", label);
-        emit log_named_uint("  quoted ", best.amountOut);
-        emit log_named_uint("  actual ", got);
-        emit log_named_uint("  drift bps", _drift(best.amountOut, got));
-        assertEq(got, best.amountOut, string.concat(label, ": QUOTE != FILL"));
+        emit log_named_uint("  grid best ", grid.amountOut);
+        emit log_named_uint("  quoted    ", built.amountOut);
+        emit log_named_uint("  actual    ", got);
+        emit log_named_uint("  drift bps ", _drift(built.amountOut, got));
+        if (built.amountOut != grid.amountOut) {
+            emit log_named_uint("  builder beat the grid, venue", uint256(uint8(built.source)));
+            assertGe(built.amountOut, grid.amountOut, string.concat(label, ": builder took a WORSE venue than the grid"));
+        }
+        assertEq(got, built.amountOut, string.concat(label, ": QUOTE != FILL"));
     }
 
     function test_accuracy_ETH_to_USDC() public {

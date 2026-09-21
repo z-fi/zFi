@@ -18,6 +18,7 @@ import {AbiCoder, keccak256} from "ethers";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SOURCES = {
   Swapboard: "src/Swapboard.sol",
+  zGuard: "src/utils/zGuard.sol",
   Dutchboard: "src/Dutchboard.sol",
   Floorboard: "src/Floorboard.sol",
   SwapboardView: "src/SwapboardView.sol",
@@ -61,6 +62,7 @@ const PINNED_RUNS = {
   V4QuoteLens: 9_999_999,
   V4Port: 9_999_999,
   zQuoterV4: 9_999_999,
+  zGuard: 9_999_999,
   PrecisionPoolFactory: 200,
   PrecisionPool: 200,
   PrecisionRoute: 200,

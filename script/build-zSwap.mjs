@@ -32,7 +32,7 @@ const HTML_PATH = path.join(ROOT, 'zSwap.html');
 const SOL_PATH = path.join(ROOT, 'src', 'zSwap.sol');
 
 const EIP170_LIMIT = 24576;
-const CHUNKS = 20;
+const CHUNKS = 24;
 
 const html = fs.readFileSync(HTML_PATH);
 const htmlText = html.toString('utf8');
@@ -101,16 +101,17 @@ for (const p of READMES) {
 // those, so an HTML edit used to leave the suite red with a bare "length
 // mismatch" until someone rediscovered the constants by hand. Refresh them here.
 // Node has no keccak256 (crypto's sha3 is FIPS SHA-3, a different padding), so
-// shell out to cast, which any Foundry checkout has.
+// it comes from ethers, which the test suite already depends on. The page is
+// hashed in process: as a command-line argument it outgrows the OS limit.
 const TESTPIN = path.join(ROOT, 'test', 'zSwap.t.sol');
 if (fs.existsSync(TESTPIN)) {
   let t = fs.readFileSync(TESTPIN, 'utf8');
   let hash = null;
   try {
-    const { execFileSync } = await import('node:child_process');
-    hash = execFileSync('cast', ['keccak', '0x' + html.toString('hex')], { encoding: 'utf8' }).trim();
+    const { keccak256 } = await import('ethers');
+    hash = keccak256(html);
   } catch {
-    console.warn('WARNING: `cast keccak` unavailable — update EXPECTED_HASH in test/zSwap.t.sol by hand.');
+    console.warn('WARNING: ethers unavailable — update EXPECTED_HASH in test/zSwap.t.sol by hand.');
   }
   const before = t;
   t = t.replace(/uint256 constant EXPECTED_LEN = \d+;/, `uint256 constant EXPECTED_LEN = ${html.length};`);

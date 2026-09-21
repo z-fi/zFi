@@ -75,6 +75,27 @@ describe('choosing among several wallets', () => {
     p.close();
   });
 
+  test('declining the lone wallet opens the chooser next time, WalletConnect included', async () => {
+    // One click stays one click. But someone who dismissed their only
+    // extension's prompt may want a phone wallet instead, and had no way to
+    // reach one.
+    const chain = new MockChain();
+    const p = await loadPage({ chain });
+    chain.rejectNext = Object.assign(Error('User rejected the request'), { code: 4001 });
+    p.click('swap');
+    await p.settle();
+    assert.ok(!open(p), 'the first try is still one click');
+    assert.equal(p.text('stat'), '');
+    p.click('swap');
+    await p.settle();
+    assert.ok(open(p), 'the second try offers a choice');
+    assert.deepEqual(rows(p), ['Browser wallet', 'WalletConnect']);
+    p.click(p.$('wkList').querySelector('.tkr'));
+    await p.settle();
+    assert.match(p.text('addr'), /0x/, 'the browser wallet still connects from the chooser');
+    p.close();
+  });
+
   test('backing out of the chooser connects nothing', async () => {
     const chain = new MockChain();
     const p = await loadPage({ chain });

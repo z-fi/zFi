@@ -1,0 +1,561 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>zSwap Endpoints Admin</title>
+<style>
+  :root { color-scheme: light dark; --bg:#0b0d10; --fg:#e6e8eb; --mut:#8b949e; --line:#232a31;
+          --ok:#3fb950; --bad:#f85149; --warn:#d29922; --acc:#58a6ff; }
+  @media (prefers-color-scheme: light) {
+    :root { --bg:#fff; --fg:#14171a; --mut:#57606a; --line:#d8dee4; --ok:#1a7f37; --bad:#cf222e; --warn:#9a6700; --acc:#0969da; }
+  }
+  * { box-sizing:border-box }
+  [hidden] { display:none !important }
+  body { margin:0; background:var(--bg); color:var(--fg); padding:28px 18px; display:flex; justify-content:center;
+         font:14px/1.55 ui-sans-serif,-apple-system,system-ui,sans-serif }
+  main { width:100%; max-width:700px }
+  h1 { font-size:17px; margin:0 0 2px }
+  .sub { color:var(--mut); margin:0 0 22px }
+  section { border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-bottom:14px }
+  h2 { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--mut); margin:0 0 10px; font-weight:600 }
+  h2 code { text-transform:none; font-size:12.5px; color:var(--fg) }
+  dl { display:grid; grid-template-columns:auto 1fr; gap:5px 14px; margin:0 }
+  dt { color:var(--mut) }
+  dd { margin:0; font-family:ui-monospace,Menlo,monospace; font-size:12.5px; word-break:break-all }
+  button { font:inherit; font-weight:600; padding:9px 15px; border-radius:8px; border:1px solid var(--line);
+           background:var(--acc); color:#fff; cursor:pointer }
+  button.ghost { background:transparent; color:var(--fg) }
+  button.danger { background:var(--bad) }
+  button.sm { padding:3px 9px; font-size:12px; font-weight:500; border-radius:6px }
+  button:disabled { opacity:.45; cursor:not-allowed }
+  .row { display:flex; gap:9px; align-items:center; flex-wrap:wrap }
+  .msg { margin-top:11px; padding:9px 11px; border-radius:8px; border:1px solid var(--line); display:none;
+         font-family:ui-monospace,Menlo,monospace; font-size:12px; word-break:break-all; white-space:pre-wrap }
+  .msg.show { display:block }
+  .ok { color:var(--ok); border-color:var(--ok) }
+  .bad { color:var(--bad); border-color:var(--bad) }
+  .warn { color:var(--warn); border-color:var(--warn) }
+  .hint { color:var(--mut); font-size:12.5px; margin-top:9px }
+  a { color:var(--acc) }
+  input.addr, textarea.addr { width:100%; font-family:ui-monospace,Menlo,monospace; font-size:11.5px; padding:6px 8px;
+               background:transparent; color:var(--fg); border:1px solid var(--line); border-radius:6px }
+  .row input.addr { flex:1 1 240px; width:auto }
+  textarea.addr { min-height:96px; resize:vertical; margin-top:8px }
+  summary { color:var(--mut); font-size:12.5px; cursor:pointer; margin-top:12px }
+  .state { font-size:12.5px; margin:0 0 10px }
+  ol.ents { list-style:none; margin:0 0 12px; padding:0 }
+  ol.ents li { display:grid; grid-template-columns:2.4em 1fr; gap:4px 8px; margin:0; padding:8px 0;
+               border-top:1px solid var(--line); font-size:12.5px }
+  ol.ents li:last-child { border-bottom:1px solid var(--line) }
+  .idx { color:var(--mut); font-family:ui-monospace,Menlo,monospace; font-size:12px }
+  .url { font-family:ui-monospace,Menlo,monospace; font-size:12px; word-break:break-all }
+  .acts { grid-column:2; display:flex; gap:6px; flex-wrap:wrap; align-items:center }
+  .tag { font-family:ui-monospace,Menlo,monospace; font-size:11px; color:var(--mut) }
+  .tag.ok { color:var(--ok) } .tag.bad { color:var(--bad) } .tag.warn { color:var(--warn) }
+</style>
+
+<main>
+  <h1>zSwap endpoints — curated services</h1>
+  <p class="sub">
+    <code>zEndpoints</code> at <code id="addr">…</code>, on mainnet only. It lists the off-chain
+    endpoints the zSwap page reads — L2 read nodes, wide-range log nodes, the private pool's prover,
+    Bitcoin APIs, the WalletConnect relay — curated on chain. The page merges each list ahead of the
+    values it was built with and falls back to those. A listed endpoint can affect liveness and
+    privacy; it cannot move funds.
+  </p>
+
+  <section>
+    <h2>Wallet</h2>
+    <div class="row" id="wallets"><span class="hint">Looking for wallets…</span></div>
+    <div class="row" style="margin-top:9px">
+      <button id="connect">Connect</button>
+      <button id="reload" class="ghost">Reload</button>
+    </div>
+    <dl style="margin-top:12px">
+      <dt>Owner</dt><dd id="owner">…</dd>
+      <dt>Pending</dt><dd id="pending">…</dd>
+      <dt>You</dt><dd id="me">not connected</dd>
+    </dl>
+    <div class="msg" id="who"></div>
+  </section>
+
+  <p class="hint" style="margin:0 2px 14px">
+    Each list is keyed by <b>service</b> and the <b>chain it serves</b>. Order is failover order:
+    the page tries #0 first. A chain with an empty list inherits the <b>all chains</b> list.
+    Entries the page would skip are flagged. Changes reach a viewer on the page's next read of
+    the contract, which it caches for up to six hours. Probes run from this page's origin, so a
+    node that allows only zSwap's origins can fail here and still work there.
+  </p>
+  <div id="cards"><p class="hint">Reading…</p></div>
+
+  <section>
+    <h2>New list</h2>
+    <div class="row">
+      <input class="addr" id="nSvc" list="svcs" placeholder="service — rpc, logs, tacit, btc, wc, wcpid" spellcheck="false">
+      <input class="addr" id="nChain" placeholder="chain id — 0 for all chains" inputmode="numeric" spellcheck="false">
+    </div>
+    <div class="row" style="margin-top:9px">
+      <input class="addr" id="nUrl" placeholder="first entry" spellcheck="false">
+      <button id="nAdd" disabled>Add</button>
+    </div>
+    <datalist id="svcs"></datalist>
+    <p class="hint">
+      A list exists once something is written to it, and stays in the contract's key set after it
+      is emptied.
+    </p>
+    <div class="msg" id="newmsg"></div>
+  </section>
+
+  <section>
+    <h2>Ownership</h2>
+    <div class="row">
+      <input class="addr" id="newOwner" placeholder="0x… — the address to hand it to" spellcheck="false">
+    </div>
+    <div class="row" style="margin-top:9px">
+      <button id="propose" class="ghost" disabled>Propose</button>
+      <button id="accept" class="ghost" disabled>Accept</button>
+      <button id="cancel" class="ghost" disabled>Cancel offer</button>
+    </div>
+    <p class="hint">
+      Two steps: proposing changes nothing until the named address accepts. Propose the zero
+      address to cancel an offer. There is no renounce — an unowned list could never drop an
+      endpoint that has gone bad.
+    </p>
+    <div class="msg" id="ownmsg"></div>
+  </section>
+</main>
+
+<script>
+const EPS = '0x00000051F365d898132f4ebF345Cd3968e02F288';
+const RPC = 'https://ethereum-rpc.publicnode.com';
+const SEL = { owner:'8da5cb5b', pending:'e30c3978', keys:'307540f6', listAt:'292a5f4b', listOf:'e8edb32f',
+              add:'63a418e3', remove:'aceba3fd', pop:'b87e183d', move:'fd530b5e', setAt:'1dbd5943',
+              set:'3e2e459c', transfer:'f2fde38b', accept:'79ba5097' };
+const ERR = { '30cd7471': 'NotOwner() — this account is not the owner.',
+              'ef3ff4ae': 'BadIndex() — the list is shorter than this page thinks. Reload.',
+              'ff633a38': 'LengthMismatch()' };
+const CHAIN = { 1: 'Ethereum', 8453: 'Base', 4663: 'Robinhood' };
+// The (service, chainId) pairs zSwap reads, in the order it asks for them.
+const READS = [['rpc', 8453], ['rpc', 4663], ['logs', 1], ['tacit', 1], ['btc', 0], ['wc', 0], ['wcpid', 0]];
+const HTTPS = /^https:\/\/\S+$/;
+// The same shape checks zSwap applies before it uses an entry.
+const SERVICE = {
+  rpc:   { rule: HTTPS, probe: 'rpc', fmt: 'https://… with no spaces',
+           desc: 'Read nodes for this chain — https://.' },
+  logs:  { rule: HTTPS, probe: 'rpc', fmt: 'https://… with no spaces',
+           desc: 'Nodes that serve wide eth_getLogs ranges — https://.' },
+  tacit: { rule: /^https:\/\/[\w.-]+(:\d+)?(\/[\w./-]*)?$/, probe: 'tacit', fmt: 'https://host[:port][/path], no query',
+           desc: 'The private pool\'s prover and settle relay — https://. The page uses the first valid entry.' },
+  btc:   { rule: HTTPS, probe: 'btc', fmt: 'https://… with no spaces',
+           desc: 'Esplora-compatible Bitcoin APIs — https://.' },
+  wc:    { rule: /^wss:\/\/[\w.-]+(:\d+)?$/, fmt: 'wss://host[:port], no path',
+           desc: 'The WalletConnect relay — wss://, host only, no path.' },
+  wcpid: { rule: /^[0-9a-f]{32}$/, fmt: '32 lowercase hex characters',
+           desc: 'The WalletConnect project id — 32 lowercase hex characters, not a URL. The page uses the first valid entry.' },
+};
+const OTHER = { rule: /^(https|wss):\/\/\S+$/, fmt: 'https://… or wss://…',
+                desc: 'Not a service zSwap reads today — https:// or wss://.' };
+const TACIT_ASSET = '0x3cba71e1114af183cdeacc6b8457a474d17529fd28704480ca799d0d03126f34';
+
+const $ = id => document.getElementById(id);
+const mk = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
+const zero = a => /^0x0*$/.test(a || '0x');
+const notes = new Map();    // msg element id -> [text, kind], so a re-render keeps them
+const paint = id => {
+  const e = $(id); if (!e) return;
+  const n = notes.get(id);
+  e.textContent = n ? n[0] : '';
+  e.className = 'msg' + (n ? ' show' + (n[1] ? ' ' + n[1] : '') : '');
+};
+const say = (id, text, kind) => { notes.set(id, [text, kind]); paint(id); };
+const hide = id => { notes.delete(id); paint(id); };
+
+let provider = null, account = null, owner = null, pending = null;
+let cards = [];             // { w, chain, name, known, list, inherits }
+const probes = new Map();   // probe key -> [text, kind]
+
+// ---------------------------------------------------------------- abi
+const hex = n => BigInt(n).toString(16).padStart(64, '0');
+const pad = a => a.replace(/^0x/, '').toLowerCase().padStart(64, '0');
+const utf8 = s => Array.from(new TextEncoder().encode(s), b => b.toString(16).padStart(2, '0')).join('');
+const unutf8 = h => new TextDecoder().decode(new Uint8Array((h.match(/../g) || []).map(b => parseInt(b, 16))));
+
+/** A service name as the contract keys it: its bytes, right-padded into a bytes32. */
+const svcWord = name => {
+  const h = utf8(name);
+  if (!h || h.length > 64) throw Error('A service name is 1 to 32 bytes.');
+  return h.padEnd(64, '0');
+};
+/** The name back out of a key, or the raw word when it is not printable ASCII. */
+const svcName = w => {
+  const t = w.replace(/(00)+$/, ''), s = unutf8(t);
+  return t && /^[\x21-\x7e]+$/.test(s) ? s : '0x' + w;
+};
+/** A string: its byte length, then its bytes padded out to whole words. */
+const encStr = s => { const h = utf8(s); return hex(h.length / 2) + h.padEnd(Math.ceil(h.length / 64) * 64, '0'); };
+/** A string[]: its length, one offset per element counted from just past the
+ *  length word, then the elements in order. */
+const encStrs = a => {
+  const tails = a.map(encStr);
+  let off = 32 * a.length;
+  const heads = tails.map(t => { const o = hex(off); off += t.length / 2; return o; });
+  return hex(a.length) + heads.join('') + tails.join('');
+};
+const CALL = {
+  listAt: (w, c)       => '0x' + SEL.listAt + w + hex(c),
+  listOf: (w, c)       => '0x' + SEL.listOf + w + hex(c),
+  add:    (w, c, u)    => '0x' + SEL.add + w + hex(c) + hex(96) + encStr(u),
+  remove: (w, c, i)    => '0x' + SEL.remove + w + hex(c) + hex(i),
+  pop:    (w, c)       => '0x' + SEL.pop + w + hex(c),
+  move:   (w, c, f, t) => '0x' + SEL.move + w + hex(c) + hex(f) + hex(t),
+  setAt:  (w, c, i, u) => '0x' + SEL.setAt + w + hex(c) + hex(i) + hex(128) + encStr(u),
+  set:    (w, c, a)    => '0x' + SEL.set + w + hex(c) + hex(96) + encStrs(a),
+};
+
+const strip = r => { if (!/^0x([0-9a-fA-F]{2})*$/.test(r || '')) throw Error('Return data is not hex.'); return r.slice(2).toLowerCase(); };
+const word = (h, p) => {
+  if (h.length < (p + 32) * 2) throw Error('Return data is too short.');
+  return BigInt('0x' + h.slice(p * 2, p * 2 + 64));
+};
+const num = (h, p) => { const n = word(h, p); if (n > 0xffffffffn) throw Error('Return data is malformed.'); return Number(n); };
+/** A string[] whose length word sits at byte `p`. */
+const decStrs = (h, p) => {
+  const n = num(h, p), out = [];
+  for (let i = 0; i < n; ++i) {
+    const q = p + 32 + num(h, p + 32 + 32 * i), len = num(h, q);
+    if (h.length < (q + 32 + len) * 2) throw Error('Return data is too short.');
+    out.push(unutf8(h.slice((q + 32) * 2, (q + 32 + len) * 2)));
+  }
+  return out;
+};
+const decList = r => { const h = strip(r); return decStrs(h, num(h, 0)); };
+/** keys(): two arrays of equal length, the services then their chain ids. */
+const decKeys = r => {
+  const h = strip(r), a = num(h, 0), b = num(h, 32), n = num(h, a), out = [];
+  if (num(h, b) !== n) throw Error('Return data is malformed.');
+  for (let i = 0; i < n; ++i) out.push({ w: hex(word(h, a + 32 + 32 * i)), chain: word(h, b + 32 + 32 * i) });
+  return out;
+};
+
+// ---------------------------------------------------------------- reads
+async function rpcCall(data, to = EPS) {
+  const body = { jsonrpc: '2.0', id: 1, method: 'eth_call', params: [{ to, data }, 'latest'] };
+  // Reads go to a public node even with no wallet, so this page is useful
+  // read-only — you can audit every list before connecting.
+  const r = await fetch(RPC, { method: 'POST', headers: { 'content-type': 'application/json' },
+                               body: JSON.stringify(body) });
+  const j = await r.json();
+  if (j.error) throw Error(j.error.message || 'call failed');
+  if (j.result === '0x') throw Object.assign(Error('no contract at ' + to), { nocode: true });
+  return j.result;
+}
+
+const defaults = () => READS.map(([s, c]) => ({ w: svcWord(s), chain: BigInt(c), name: s, known: false, list: [], inherits: null }));
+
+async function load() {
+  try {
+    const [o, p, k] = await Promise.all([rpcCall('0x' + SEL.owner), rpcCall('0x' + SEL.pending), rpcCall('0x' + SEL.keys)]);
+    owner = '0x' + o.slice(26);
+    pending = '0x' + p.slice(26);
+    $('owner').textContent = owner;
+    $('pending').textContent = zero(pending) ? 'none' : pending;
+    const written = decKeys(k), next = defaults();
+    for (const x of written) if (!next.some(y => y.w === x.w && y.chain === x.chain)) next.push(x);
+    await Promise.all(next.map(async c => {
+      c.name = svcName(c.w);
+      c.known = written.some(y => y.w === c.w && y.chain === c.chain);
+      c.list = c.known ? decList(await rpcCall(CALL.listAt(c.w, c.chain))) : [];
+      c.inherits = c.chain && !c.list.length ? decList(await rpcCall(CALL.listOf(c.w, c.chain))) : null;
+    }));
+    cards = next;
+    checkWho();
+  } catch (e) {
+    if (!e.nocode) return say('who', 'Could not read the contract: ' + e.message, 'bad');
+    owner = pending = null;
+    $('owner').textContent = $('pending').textContent = '—';
+    cards = defaults(); checkWho();
+    say('who', 'No contract at this address yet. These are the lists zSwap reads; each will show here once it is deployed.', 'warn');
+  }
+}
+
+const chainLabel = c => c === 0n ? 'all chains (fallback)' : CHAIN[String(c)] ? `${CHAIN[String(c)]} (${c})` : `chain ${c}`;
+const spec = name => SERVICE[name] || OTHER;
+
+/** Why a pair zSwap does not read as-is deserves a second look, or ''. */
+const caveat = (name, chain) => {
+  if (READS.some(([s, c]) => s === name && BigInt(c) === chain)) return '';
+  if (name === 'rpc' && chain === 1n) return 'zSwap reads Ethereum\'s own nodes from zRpcList, not from here.';
+  if (name === 'rpc' && chain === 0n) return 'This is the fallback for every L2 with no read nodes of its own — a node serves one chain, so this is almost never right.';
+  if (chain === 0n && READS.some(([s]) => s === name)) return '';
+  return 'zSwap does not read this pair today.';
+};
+
+function render() {
+  const box = $('cards'); box.innerHTML = '';
+  const mine = isOwner();
+  for (const c of cards) box.append(card(c, mine));
+  for (const c of cards) paint(msgId(c));
+  paintProbes();
+}
+
+const msgId = c => `m-${c.w}-${c.chain}`;
+
+function card(c, mine) {
+  const sv = spec(c.name), mid = msgId(c), n = c.list.length;
+  const btn = (text, onclick, disabled, className = 'ghost sm') => mk('button', { className, textContent: text, onclick, disabled });
+  const s = mk('section');
+  s.append(mk('h2', {}, mk('code', { textContent: c.name }), ' · ' + chainLabel(c.chain)));
+  s.append(mk('p', { className: 'hint', style: 'margin:0 0 6px', textContent: sv.desc }));
+  const cv = caveat(c.name, c.chain);
+  if (cv) s.append(mk('p', { className: 'tag warn', style: 'margin:0 0 6px', textContent: cv }));
+
+  const empty = c.chain === 0n
+    ? 'the page uses its built-in values wherever a chain has no list of its own.'
+    : c.inherits && c.inherits.length
+      ? `this chain inherits the fallback's ${c.inherits.length} entr${c.inherits.length === 1 ? 'y' : 'ies'}.`
+      : 'no fallback either, so the page uses its built-in values.';
+  s.append(mk('p', { className: 'state', textContent: !c.known ? 'Never written — ' + empty
+    : !n ? 'Empty — ' + empty : `${n} entr${n === 1 ? 'y' : 'ies'}, tried in this order.` }));
+
+  const ol = mk('ol', { className: 'ents' });
+  c.list.forEach((u, i) => {
+    const valid = sv.rule.test(u);
+    const li = mk('li', {}, mk('span', { className: 'idx', textContent: '#' + i }),
+      mk('div', {}, mk('div', { className: 'url', textContent: u }),
+        valid ? '' : mk('div', { className: 'tag bad', textContent: 'zSwap skips this entry — expected ' + sv.fmt })));
+    const edIn = mk('input', { className: 'addr', value: u, spellcheck: false });
+    const ed = mk('div', { className: 'acts', hidden: true }, edIn,
+      btn('Replace', () => {
+        const v = edIn.value.trim();
+        if (v === u) return say(mid, 'No change.', 'warn');
+        const bad = refuse(sv, v, c.list.filter((_, j) => j !== i));
+        if (bad) return say(mid, bad, 'bad');
+        sendOp(c, CALL.setAt(c.w, c.chain, i, v), mid);
+      }, !mine, 'sm'),
+      btn('Cancel', () => { ed.hidden = true; }, false));
+    const acts = mk('div', { className: 'acts' },
+      btn('↑', () => sendOp(c, CALL.move(c.w, c.chain, i, i - 1), mid), !mine || i === 0),
+      btn('↓', () => sendOp(c, CALL.move(c.w, c.chain, i, i + 1), mid), !mine || i === n - 1),
+      btn('replace', () => { ed.hidden = !ed.hidden; if (!ed.hidden) edIn.focus(); }, !mine),
+      btn('remove', () => confirm(`Remove #${i} from ${c.name} · ${chainLabel(c.chain)}?\n\n${u}`)
+        && sendOp(c, CALL.remove(c.w, c.chain, i), mid), !mine, 'danger sm'));
+    if (sv.probe && /^https:\/\//.test(u)) {
+      const pk = `${c.name}|${c.chain}|${u}`;
+      const out = mk('span', { className: 'tag' });
+      out.dataset.probe = pk;
+      acts.append(btn('probe', () => probe(pk, sv.probe, u, c.chain), false), out);
+    }
+    li.append(acts, ed);
+    ol.append(li);
+  });
+  if (n) s.append(ol);
+
+  const addIn = mk('input', { className: 'addr', placeholder: 'new entry — ' + sv.fmt, spellcheck: false });
+  s.append(mk('div', { className: 'row' }, addIn,
+    btn('Add', () => {
+      const v = addIn.value.trim(), bad = refuse(sv, v, c.list);
+      if (bad) return say(mid, bad, 'bad');
+      send(CALL.add(c.w, c.chain, v), mid);
+    }, !mine, ''),
+    btn('Pop last', () => confirm(`Drop the last entry of ${c.name} · ${chainLabel(c.chain)}?\n\n${c.list[n - 1]}`)
+      && sendOp(c, CALL.pop(c.w, c.chain), mid), !mine || !n, 'ghost')));
+
+  const ta = mk('textarea', { className: 'addr', value: c.list.join('\n'), spellcheck: false,
+                              placeholder: 'one entry per line; empty clears the list' });
+  s.append(mk('details', {}, mk('summary', { textContent: 'Replace the whole list' }), ta,
+    mk('div', { className: 'row', style: 'margin-top:9px' }, btn('Set list', () => {
+      const next = ta.value.split('\n').map(x => x.trim()).filter(Boolean);
+      const bad = next.filter(v => !sv.rule.test(v));
+      if (bad.length) return say(mid, 'zSwap would skip ' + (bad.length === 1 ? 'this entry' : 'these entries')
+        + ' — expected ' + sv.fmt + ':\n' + bad.join('\n'), 'bad');
+      if (new Set(next).size !== next.length) return say(mid, 'The list repeats an entry.', 'bad');
+      if (next.join('\n') === c.list.join('\n')) return say(mid, 'No change.', 'warn');
+      const label = `${c.name} · ${chainLabel(c.chain)}`;
+      if (!confirm(next.length ? `Replace ${label} with these ${next.length} entries?\n\n${next.join('\n')}`
+        : `Clear ${label}? ${c.chain ? 'This chain will inherit the all-chains list.'
+          : 'Chains with no list of their own fall back to the page\'s built-in values.'}`)) return;
+      send(CALL.set(c.w, c.chain, next), mid);
+    }, !mine, ''))));
+
+  s.append(mk('div', { className: 'msg', id: mid }));
+  return s;
+}
+
+/** Why an entry cannot be written, or ''. */
+function refuse(sv, v, others) {
+  if (!v) return 'Nothing to write.';
+  if (!sv.rule.test(v)) return 'zSwap would skip that entry — expected ' + sv.fmt + '.';
+  return others.includes(v) ? 'That entry is already in the list.' : '';
+}
+
+// ---------------------------------------------------------------- probes
+function paintProbes() {
+  for (const e of document.querySelectorAll('[data-probe]')) {
+    const r = probes.get(e.dataset.probe);
+    e.textContent = r ? r[0] : '';
+    e.className = 'tag' + (r ? ' ' + r[1] : '');
+  }
+}
+
+async function probe(pk, kind, u, chain) {
+  probes.set(pk, ['probing…', 'warn']); paintProbes();
+  const t0 = performance.now(), ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 8000);
+  const ms = () => Math.round(performance.now() - t0) + ' ms';
+  const base = u.replace(/\/$/, ''), signal = ctl.signal;
+  let res;
+  try {
+    if (kind === 'rpc') {
+      const r = await fetch(u, { method: 'POST', headers: { 'content-type': 'application/json' }, signal,
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_chainId', params: [] }) });
+      const t = ms(), j = await r.json();
+      if (!/^0x[0-9a-f]+$/i.test(j.result || '')) throw Error(j.error && j.error.message || 'HTTP ' + r.status);
+      const got = BigInt(j.result);
+      res = chain && got !== chain ? [`fail · serves chain ${got}, not ${chain} · ${t}`, 'bad'] : [`ok · chain ${got} · ${t}`, 'ok'];
+    } else if (kind === 'btc') {
+      const r = await fetch(base + '/blocks/tip/height', { signal });
+      const t = ms(), h = (await r.text()).trim();
+      if (!r.ok || !/^\d+$/.test(h)) throw Error('HTTP ' + r.status);
+      res = [`ok · tip ${h} · ${t}`, 'ok'];
+    } else {
+      // Any answer at all means the prover is up and lets this origin in.
+      const r = await fetch(base + '/confidential/quote?asset=' + TACIT_ASSET, { signal });
+      res = [`ok · HTTP ${r.status} · ${ms()}`, 'ok'];
+    }
+  } catch (e) {
+    const why = e.name === 'AbortError' ? 'timed out' : e instanceof TypeError ? 'no answer (network or CORS)' : e.message;
+    res = [`fail · ${why} · ${ms()}`, 'bad'];
+  }
+  clearTimeout(timer);
+  probes.set(pk, res); paintProbes();
+}
+
+// ---------------------------------------------------------------- who
+const isOwner = () => !!(account && owner && account.toLowerCase() === owner.toLowerCase());
+
+function checkWho() {
+  const mine = isOwner();
+  const isPending = account && pending && account.toLowerCase() === pending.toLowerCase();
+  $('propose').disabled = !mine;
+  $('cancel').disabled = !mine || zero(pending);
+  $('accept').disabled = !isPending;
+  $('nAdd').disabled = !mine;
+  if (owner) {
+    if (!account) say('who', 'Read-only. Connect the owner to change anything.', 'warn');
+    else if (mine) say('who', 'You are the owner.', 'ok');
+    else if (isPending) say('who', 'Ownership has been offered to you. Accept it below.', 'warn');
+    else say('who', 'This account is not the owner — every write will revert.', 'bad');
+  }
+  render();
+}
+
+// ---------------------------------------------------------------- writes
+const why = e => {
+  const blob = JSON.stringify((e && e.data) || '') + ' ' + ((e && e.message) || '');
+  const hit = Object.keys(ERR).find(s => blob.includes(s));
+  return hit ? ERR[hit] : (e && e.message) || String(e);
+};
+
+async function send(data, msgEl) {
+  hide(msgEl);
+  const id = await provider.request({ method: 'eth_chainId' });
+  if (parseInt(id, 16) !== 1) {
+    try { await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x1' }] }); }
+    catch { return say(msgEl, 'This contract is on Ethereum. Switch your wallet to mainnet.', 'bad'); }
+  }
+  try {
+    // Simulate first: a revert here is almost always "not the owner", and it
+    // is much cheaper to learn that before signing.
+    await provider.request({ method: 'eth_call', params: [{ from: account, to: EPS, data }, 'latest'] });
+  } catch (e) { return say(msgEl, 'It would revert: ' + why(e), 'bad'); }
+  try {
+    const tx = await provider.request({ method: 'eth_sendTransaction',
+      params: [{ from: account, to: EPS, data }] });
+    say(msgEl, 'Sent ' + tx + '\nWaiting for it to be mined…', 'warn');
+    for (let i = 0; i < 120; i++) {
+      await new Promise(r => setTimeout(r, 2500));
+      const r = await provider.request({ method: 'eth_getTransactionReceipt', params: [tx] });
+      if (r) {
+        if (r.status === '0x0') return say(msgEl, 'Reverted on chain: ' + tx, 'bad');
+        say(msgEl, 'Done — ' + tx, 'ok');
+        return load();
+      }
+    }
+    say(msgEl, 'Still pending: ' + tx, 'warn');
+  } catch (e) { say(msgEl, e.message || String(e), 'bad'); }
+}
+
+/** An op that names a position: only send it against the list as this page shows it. */
+async function sendOp(c, data, msgEl) {
+  hide(msgEl);
+  try {
+    const now = decList(await rpcCall(CALL.listAt(c.w, c.chain)));
+    if (JSON.stringify(now) !== JSON.stringify(c.list)) {
+      say(msgEl, 'The list changed since this page read it. Reloaded — check it and try again.', 'warn');
+      return load();
+    }
+  } catch (e) { return say(msgEl, 'Could not re-read the list: ' + e.message, 'bad'); }
+  send(data, msgEl);
+}
+
+$('nAdd').onclick = () => {
+  const name = $('nSvc').value.trim(), cs = $('nChain').value.trim(), v = $('nUrl').value.trim();
+  if (!/^[\x21-\x7e]{1,32}$/.test(name)) return say('newmsg', 'A service name is 1 to 32 printable ASCII characters.', 'bad');
+  if (!/^\d{1,20}$/.test(cs)) return say('newmsg', 'The chain id is a whole number; 0 means all chains.', 'bad');
+  const w = svcWord(name), chain = BigInt(cs), have = cards.find(c => c.w === w && c.chain === chain);
+  const bad = refuse(spec(name), v, have ? have.list : []);
+  if (bad) return say('newmsg', bad, 'bad');
+  const cv = caveat(name, chain);
+  if (cv && !confirm(`${name} · ${chainLabel(chain)}: ${cv}\n\nWrite it anyway?`)) return;
+  send(CALL.add(w, chain, v), 'newmsg');
+};
+$('propose').onclick = () => {
+  const to = $('newOwner').value.trim();
+  if (!/^0x[0-9a-fA-F]{40}$/.test(to)) return say('ownmsg', 'That is not an address.', 'bad');
+  if (!confirm('Offer ownership to ' + to + '?\n\nNothing changes until they accept.')) return;
+  send('0x' + SEL.transfer + pad(to), 'ownmsg');
+};
+$('cancel').onclick = () => {
+  if (!confirm('Withdraw the pending offer?')) return;
+  send('0x' + SEL.transfer + pad('0x' + '0'.repeat(40)), 'ownmsg');
+};
+$('accept').onclick = () => send('0x' + SEL.accept, 'ownmsg');
+
+// ---------------------------------------------------------------- wallet
+const found = [];
+addEventListener('eip6963:announceProvider', e => {
+  if (found.some(p => p.info.uuid === e.detail.info.uuid)) return;
+  found.push(e.detail); paintWallets();
+});
+dispatchEvent(new Event('eip6963:requestProvider'));
+
+function paintWallets() {
+  const box = $('wallets'); box.innerHTML = '';
+  const list = found.length ? found
+    : (window.ethereum ? [{ info: { name: 'Injected wallet' }, provider: window.ethereum }] : []);
+  if (!list.length) { box.innerHTML = '<span class="hint">No wallet found.</span>'; return; }
+  for (const w of list) {
+    const b = document.createElement('button');
+    b.className = 'ghost'; b.textContent = w.info.name;
+    b.onclick = () => connect(w.provider);
+    box.append(b);
+  }
+}
+async function connect(p) {
+  provider = p || (found[0] && found[0].provider) || window.ethereum;
+  if (!provider) return say('who', 'No wallet found.', 'bad');
+  try {
+    const a = await provider.request({ method: 'eth_requestAccounts' });
+    account = a[0];
+    $('me').textContent = account;
+    provider.on && provider.on('accountsChanged', () => location.reload());
+    provider.on && provider.on('chainChanged', () => location.reload());
+    checkWho();
+  } catch (e) { say('who', e.message || String(e), 'bad'); }
+}
+$('connect').onclick = () => connect();
+$('reload').onclick = () => load();
+
+$('addr').textContent = EPS;
+$('svcs').append(...Object.keys(SERVICE).map(s => mk('option', { value: s })));
+paintWallets();
+load();
+</script>

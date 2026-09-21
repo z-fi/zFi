@@ -5,6 +5,7 @@ import path from "node:path";
 import {fileURLToPath} from "node:url";
 import {
   AbiCoder,
+  ParamType,
   Interface,
   getAddress,
   getCreate2Address,
@@ -12,6 +13,9 @@ import {
 } from "ethers";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const zEndpointsSeeds = JSON.parse(
+  fs.readFileSync(path.join(ROOT, "deploy", "zEndpoints.seeds.json"), "utf8"),
+);
 const DEPLOY = path.join(ROOT, "deploy");
 const FACTORY = "0x00000000004473e1f31C8266612e7FD5504e6f2a";
 const WETH = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
@@ -49,6 +53,8 @@ const SOURCES = {
   V4QuoteLens: "src/V4QuoteLens.sol",
   V4Port: "src/forwarders/V4Port.sol",
   zQuoterV4: "src/zQuoterV4.sol",
+  zEndpoints: "src/utils/zEndpoints.sol",
+  zGuard: "src/utils/zGuard.sol",
   PrecisionPoolFactory: "src/pools/PrecisionPoolFactory.sol",
   PrecisionRoute: "src/pools/PrecisionRoute.sol",
   PrecisionZap: "src/pools/PrecisionZap.sol",
@@ -99,6 +105,8 @@ const OPTIMIZER_RUNS = {
   V4QuoteLens: 9_999_999,
   V4Port: 9_999_999,
   zQuoterV4: 9_999_999,
+  zEndpoints: 9_999_999,
+  zGuard: 9_999_999,
   PrecisionPoolFactory: 200,
   PrecisionRoute: 200,
   PrecisionZap: 200,
@@ -243,6 +251,27 @@ const specs = [
   // Reads everything through StateView, so it stays `view` and callers keep
   // their view-ness. No constructor arguments to get wrong.
   {name: "zQuoterV4", args: []},
+  // The router-multicall guard: deadline and end-to-end floor legs. No
+  // constructor, so the same SafeSummoner calldata lands one address on 1,
+  // 8453 and 4663, which is the one the page pins as GUARD.
+  {name: "zGuard", args: []},
+  // The on-chain endpoint roster. Its constructor takes the owner and the seven
+  // seeded lists verbatim, so the spec reads deploy/zEndpoints.seeds.json rather
+  // than restating them: if that file and the mined address ever disagree, the
+  // reproduction fails here instead of at a deploy nobody can take back. The
+  // service key is the list's name right-padded into a bytes32, which is how
+  // the page builds it and how the contract stores it.
+  {
+    name: "zEndpoints",
+    args: [
+      zEndpointsSeeds.owner,
+      zEndpointsSeeds.seeds.map(g => [
+        "0x" + Buffer.from(g.service, "utf8").toString("hex").padEnd(64, "0"),
+        BigInt(g.chainId),
+        g.urls,
+      ]),
+    ],
+  },
 ];
 
 let failed = false;
@@ -279,8 +308,10 @@ for (const {name, args} of specs) {
       throw Error(`constructor expects ${inputs.length} argument(s), manifest has ${args.length}`);
     }
 
+    // ParamType rather than `input.type`: a struct argument's `type` is the bare
+    // string "tuple[]", which carries none of the component types the coder needs.
     const encodedArgs = AbiCoder.defaultAbiCoder().encode(
-      inputs.map((input) => input.type),
+      inputs.map((input) => ParamType.from(input)),
       args,
     );
     const creation = bytecode + encodedArgs.slice(2);

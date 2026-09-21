@@ -45,6 +45,8 @@ const MANIFEST = path.join(L2DIR, "manifest.json");
 const SAFE_SUMMONER = "0x00000000004473e1f31C8266612e7FD5504e6f2a";
 const CREATEX = "0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed";
 const EXECUTOR = "0x25Fc36455aa30D012bbFB86f283975440D7Ee8Db";
+const L2_QUOTER = "0x000000bd2DB80567c23E353ca95a251c573cBf9B";
+const ZROUTER = "0x000000000000FB114709235f1ccBFfb925F600e4";
 
 export const CHAINS = {
   // Mainnet is in this table for the entries that opt into it (see `chains` on a
@@ -65,6 +67,10 @@ export const CHAINS = {
     weth: "0x4200000000000000000000000000000000000006",
     v4Quoter: "0x0d5e0F971ED27FBfF6c2837bf31316121532048D",
     v4PoolManager: "0x498581fF718922c3f8e6A244956aF099B2652b2b",
+    // WETH and USDC. Every extra hub multiplies the quotes a route makes: three
+    // Base hubs build in 35-75M gas and five in 100-350M, past the 50M many nodes
+    // cap eth_call at, for the same routes these two find in 4-6M.
+    hubs3: ["0x4200000000000000000000000000000000000006", "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"],
   },
   4663: {
     name: "Robinhood",
@@ -72,6 +78,9 @@ export const CHAINS = {
     weth: "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
     v4Quoter: "0x8Dc178eFB8111BB0973Dd9d722ebeFF267c98F94",
     v4PoolManager: "0x8366a39CC670B4001A1121B8F6A443A643e40951",
+    // WETH and USDG. The quoter itself carries WETH alone, and a three-hop route
+    // needs two hubs distinct from both ends.
+    hubs3: ["0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73", "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168"],
   },
 };
 
@@ -92,6 +101,14 @@ export const REPLAY = [
   "PrecisionPoolPolicy",
   "SwapboardView",
   "FloorboardView",
+  // The coin launcher binds only the factory and its treasury, and the treasury
+  // is the FeeSplitter replayed just before it, so all three land at their
+  // mainnet addresses. Its tithe constants name mainnet's BETH burner and DAO:
+  // off mainnet the tenth is sent to that address with no receipt minted (see
+  // deploy/L2Mirror.md). The lens refuses a launcher with no code, so it is last.
+  "FeeSplitter",
+  "PrecisionLauncher",
+  "PrecisionLauncherLens",
 ];
 
 // Same tables as check-create2-artifacts.mjs: source path and the pinned
@@ -106,6 +123,7 @@ const SOURCES = {
   SwapbolL2: "src/forwarders/SwapbolL2.sol",
   PrecisionRouteL2: "src/pools/PrecisionRouteL2.sol",
   V4QuoteLensL2: "src/V4QuoteLensL2.sol",
+  zQuoter3HopL2: "src/zQuoter3HopL2.sol",
 };
 const OPTIMIZER_RUNS = {
   Swapboard: 200,
@@ -118,6 +136,8 @@ const OPTIMIZER_RUNS = {
   // constraint here - the whole contract is 3.3 KB - and there is no
   // compilation restriction to keep in step.
   V4QuoteLensL2: 9_999_999,
+  // The default, like V4QuoteLensL2: well under EIP-170 and unrestricted.
+  zQuoter3HopL2: 9_999_999,
 };
 
 // Constructor arguments per chain. `weth` is the chain's; every other address
@@ -141,6 +161,10 @@ const argsFor = (name, chainId, addr) => {
     // the wrong chain fails at deployment instead of returning (0, 0) forever.
     case "V4QuoteLensL2":
       return [CHAINS[chainId].v4Quoter, CHAINS[chainId].v4PoolManager];
+    // The chain's own quoter and router (one address each on every chain), its
+    // WETH, and the hubs a three-hop route may pass through.
+    case "zQuoter3HopL2":
+      return [L2_QUOTER, ZROUTER, weth, CHAINS[chainId].hubs3];
     default:
       throw Error(`no constructor shape for ${name}`);
   }
@@ -260,7 +284,11 @@ async function deploy(chainId) {
   const p = provider(chainId);
   const wallet = new Wallet(key, p);
   const m = readManifest();
-  if (wallet.address.toLowerCase() !== m.deployer.toLowerCase()) {
+  const rows = await plan(chainId);
+  // Only a CREATE3 salt is tied to its sender. A replay's address is (salt,
+  // initcode) alone, so any funded key can send the replays once the CREATE3
+  // set is live.
+  if (rows.some((r) => !r.live && r.kind === "create3") && wallet.address.toLowerCase() !== m.deployer.toLowerCase()) {
     throw Error(`the CREATE3 salts are permissioned to ${m.deployer}, not ${wallet.address}`);
   }
   const createx = new Contract(CREATEX, [

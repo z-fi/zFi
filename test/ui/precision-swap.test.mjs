@@ -401,3 +401,83 @@ describe('precision as a quote source', () => {
     p.close();
   });
 });
+
+describe('on an L2', () => {
+  test('a creator coin on Base trades through its own pool, via PrecisionRouteL2', async () => {
+    const COIN = '0x00000000000000000000000000000000000c0a01';
+    const COIN_POOL = '0x00000000000000000000000000000000000b0001';
+    const ROUTE_L2 = '000000d14e24e5fc8965bcde58f21f704c944999';
+    const ROUTE_MAINNET = '0000007be74558a1f8c9045301c6f44c8ed0c9eb';
+    const chain = new MockChain({ chainId: '0x2105' });
+    chain.setNative(A.ACCOUNT, 10n * ETH);
+    chain.setToken(COIN, { symbol: 'ZCAT', decimals: 18, name: 'Zero Cat' });
+    chain.quoteHandler = fixedRateQuoter({ rate: 0n });
+    chain.setLaunched([{ pool: COIN_POOL, token: COIN, reserve0: 15n * ETH }]);
+    chain.precisionQuote = { pool: COIN_POOL, out: 5000n * ETH, small: 50n * ETH, fee: 10000, pair: [A.ZERO, COIN] };
+    chain.setPools(A.ZERO, COIN, [{ pool: COIN_POOL, hook: A.ZERO, liquidity: 10n ** 20n }]);
+    const p = await loadPage({ chain });
+    await p.connect();
+    assert.equal(p.window.eval('CHAIN_ID'), 8453);
+    p.pickToken('fromSel', 'ETH');
+    p.pickToken('toSel', 'ZCAT');
+    await p.typeAmount('amt', '1');
+    assert.equal(p.value('outAmt'), '5000');
+    assert.match(p.text('rate'), /Precision/, 'the coin\'s own pool is the venue');
+
+    p.click('swap');
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'swap' });
+    await p.settle();
+    const tx = p.chain.lastSent;
+    assert.equal(tx.to.toLowerCase(), A.ZROUTER.toLowerCase(), 'the router, as on mainnet');
+    const hex = tx.data.toLowerCase();
+    assert.ok(hex.includes(COIN_POOL.slice(2)), 'the pool is in the path');
+    assert.ok(hex.includes(ROUTE_L2), 'executed by PrecisionRouteL2');
+    assert.ok(!hex.includes(ROUTE_MAINNET), 'not by mainnet PrecisionRoute');
+    p.close();
+  });
+});
+
+/**
+ * Nothing on a Precision route checks a deadline: not zRouter.snwap, not
+ * PrecisionRoute, not the pool. zGuard runs as its own zero-amount leg ahead
+ * of the route, reached the way every executor is, and returns any ether it is
+ * handed to the router. The page adds it only where the guard has code, so the
+ * page works the same before and after the guard is deployed.
+ */
+describe('the deadline leg', () => {
+  const guarded = async () => {
+    const p = await setup({ precision: { pool: POOL, out: 3100n * USDC, fee: 3000 } });
+    const guard = p.window.eval('GUARD').toLowerCase();
+    p.chain.code.set(guard, '0x6080');
+    return { p, guard };
+  };
+
+  test('leads a native Precision swap, returning its ether to the router', async () => {
+    const { p, guard } = await guarded();
+    await p.typeAmount('amt', '1');
+    p.click('swap');
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'swap' });
+    const tx = p.chain.lastSent;
+    assert.equal(selectorOf(tx.data), SEL.MULTICALL, 'the route now rides in a multicall');
+    assert.equal(BigInt(tx.value), ETH, 'the value is still the input');
+    const hex = tx.data.toLowerCase();
+    const at = hex.indexOf(guard.slice(2));
+    const dl = hex.indexOf('10c2e3cd');
+    assert.ok(at > 0 && dl > at, 'a snwap leg names the guard, calling deadline(uint256,address)');
+    assert.ok(dl < hex.indexOf('5d6498e1'), 'ahead of the route');
+    const by = BigInt('0x' + hex.slice(dl + 8, dl + 72));
+    const now = BigInt(Math.floor(Date.now() / 1000));
+    assert.ok(by > now && by <= now + 700n, 'a deadline minutes away, not open-ended');
+    assert.equal('0x' + hex.slice(dl + 72 + 24, dl + 136), A.ZROUTER.toLowerCase(), 'ether goes back to the router');
+    p.close();
+  });
+
+  test('is left out where the guard has no code', async () => {
+    const p = await setup({ precision: { pool: POOL, out: 3100n * USDC, fee: 3000 } });
+    await p.typeAmount('amt', '1');
+    p.click('swap');
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'swap' });
+    assert.ok(!p.chain.lastSent.data.toLowerCase().includes('10c2e3cd'));
+    p.close();
+  });
+});

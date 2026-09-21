@@ -278,6 +278,28 @@ describe('withdrawing', () => {
     p.close();
   });
 
+  test('the degraded exit is bound to what its own simulation pays', async () => {
+    // Zero minimums leave an exit that waits in the mempool open to a pool
+    // drained just before it lands. The lossy call's eth_call already says
+    // what it pays right now; that, less slippage, is the bound.
+    const p = await setup();
+    p.chain.revertOn(POOL_A, SEL.REMOVE, 'execution reverted');
+    const d = p.chain.dispatch.bind(p.chain);
+    p.chain.dispatch = (m, a) => m === 'eth_call' && (a[0].to || '').toLowerCase() === POOL_A.toLowerCase()
+      && a[0].data.slice(2, 10) === SEL.REMOVE_LOSSY
+      ? Promise.resolve('0x' + (10n ** 18n).toString(16).padStart(64, '0') + (3000n * 10n ** 6n).toString(16).padStart(64, '0'))
+      : d(m, a);
+    p.queueConfirm(true);
+    await p.waitFor(() => btn(p, 'w'), { label: 'withdraw button' });
+    p.click(btn(p, 'w'));
+    await p.waitFor(() => lossySent(p).length, { label: 'lossy withdrawal' });
+    const body = '0x' + lossySent(p).at(-1).data.replace(/^0x/, '').slice(8);
+    const slip = BigInt(Math.round(p.window.eval('slipPct()') * 100));
+    assert.equal(word(body, 1), 10n ** 18n - 10n ** 18n * slip / 10000n);
+    assert.equal(word(body, 2), 3000n * 10n ** 6n - 3000n * 10n ** 6n * slip / 10000n);
+    p.close();
+  });
+
   test('offers the degraded exit when the strict one is refused', async () => {
     const p = await setup();
     p.chain.revertOn(POOL_A, SEL.REMOVE, 'execution reverted');
@@ -291,9 +313,9 @@ describe('withdrawing', () => {
     assert.equal(tx.to.toLowerCase(), POOL_A.toLowerCase());
     const body = '0x' + tx.data.replace(/^0x/, '').slice(8);
     assert.equal(word(body, 0), 10n ** 20n, 'the whole position');
-    // Minimums of zero, deliberately: the lossy path bounds what LEAVES the
-    // pool, which on a short pool is below the pro-rata claim, so carrying the
-    // strict path's bound here would revert on exactly the pools this escapes.
+    // Minimums of zero here only because this pool's simulation returns no
+    // amounts. The strict path's bound is never carried over: on a short pool
+    // what leaves is below the pro-rata claim, and it would revert.
     assert.equal(word(body, 1), 0n);
     assert.equal(word(body, 2), 0n);
     assert.equal(wordAddr(body, 3).toLowerCase(), A.ACCOUNT.toLowerCase());
@@ -400,6 +422,24 @@ describe('adding', () => {
     p.close();
   });
 
+
+  test('a wallet that batches approves and adds in one step', async () => {
+    const p = await setup();
+    p.chain.capabilities = { '0x1': { atomic: { status: 'supported' } } };
+    const box = await openAdd(p);
+    const [i0, i1] = box.querySelectorAll('.lqin');
+    typeInto(p, i0, '1');
+    typeInto(p, i1, '3000');
+    await p.waitFor(() => box.querySelector('[data-act="ac"]').disabled === false,
+      { label: 'preview', timeout: 6000 });
+    p.click(box.querySelector('[data-act="ac"]'));
+    await p.waitFor(() => p.chain.batches.length === 1, { label: 'one batch', timeout: 6000 });
+    const calls = p.chain.batches[0].calls;
+    assert.equal(calls.length, 2, 'the approval and the add');
+    assert.equal(calls[0].to.toLowerCase(), A.USDC.toLowerCase());
+    assert.equal(calls[1].to.toLowerCase(), POOL_A.toLowerCase());
+    p.close();
+  });
 
   test('approves the full amount offered, then adds with minLP below the preview', async () => {
     const p = await setup();

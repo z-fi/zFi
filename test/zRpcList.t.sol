@@ -17,6 +17,12 @@ import {zRpcList} from "../src/utils/zRpcList.sol";
 ///         handing the keys on takes two steps so a typo cannot freeze the
 ///         roster forever.
 contract zRpcListTest is Test {
+    /// The wrapper's chunk arity. Named rather than written twice as a literal
+    /// below: at a new arity those two lines would still compile and still pass
+    /// while building a page of the wrong shape, and nothing else in the tree
+    /// scans this file for the count.
+    uint256 constant CHUNKS = 24;
+
     /// The seed curation this version ships, pinned here rather than imported:
     /// the strings live in zSwap's source as private constants, and the pin is
     /// what makes changing them a conscious, page-visible act.
@@ -40,8 +46,8 @@ contract zRpcListTest is Test {
     }
 
     function _newZSwap() internal returns (zSwap) {
-        address[20] memory p;
-        for (uint256 k; k < 20; ++k) {
+        address[CHUNKS] memory p;
+        for (uint256 k; k < CHUNKS; ++k) {
             p[k] = _writeChunk(bytes.concat(bytes32(uint256(k))));
         }
         return new zSwap(admin, address(0), p);

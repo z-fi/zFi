@@ -6,6 +6,7 @@ import {PrecisionPool} from "../src/pools/PrecisionPool.sol";
 import {PrecisionPoolFactory} from "../src/pools/PrecisionPoolFactory.sol";
 import {PrecisionPoolLens} from "../src/pools/PrecisionPoolLens.sol";
 import {PrecisionRoute} from "../src/pools/PrecisionRoute.sol";
+import {zGuard} from "../src/utils/zGuard.sol";
 
 interface IERC20 {
     function balanceOf(address) external view returns (uint256);
@@ -331,6 +332,74 @@ contract PrecisionPoolMultihopTest is Test {
         assertEq(address(router).balance, 0, "kept the output");
     }
 
+    /// @dev zGuard on the live router: a deadline leg ahead of the one-leg
+    /// native route. The guard is handed the transaction's ether and returns
+    /// it, so the route still sees msg.value == amountIn.
+    function test_GuardedNativeRouteSettlesAndExpires() public {
+        PrecisionRoute router = new PrecisionRoute(factory, EXEC);
+        zGuard guard = new zGuard();
+        address[] memory pools = new address[](2);
+        pools[0] = address(ethUsdc);
+        pools[1] = address(usdcWbtc);
+        bytes[] memory legs = new bytes[](2);
+        legs[1] = abi.encodeCall(ISnwap.snwap, (address(0), 1 ether, user, WBTC, 1, address(router),
+            abi.encodeCall(PrecisionRoute.route, (pools, address(0), WBTC, 1 ether, 0, user))));
+
+        legs[0] = abi.encodeCall(ISnwap.snwap, (address(0), 0, user, address(0), 0, address(guard),
+            abi.encodeCall(zGuard.deadline, (block.timestamp - 1, ZROUTER))));
+        vm.prank(user);
+        vm.expectRevert(zGuard.Expired.selector);
+        ISnwap(ZROUTER).multicall{value: 1 ether}(legs);
+
+        uint256 before = IERC20(WBTC).balanceOf(user);
+        uint256 held = ZROUTER.balance;
+        legs[0] = abi.encodeCall(ISnwap.snwap, (address(0), 0, user, address(0), 0, address(guard),
+            abi.encodeCall(zGuard.deadline, (block.timestamp + 600, ZROUTER))));
+        vm.prank(user);
+        ISnwap(ZROUTER).multicall{value: 1 ether}(legs);
+        assertGt(IERC20(WBTC).balanceOf(user) - before, 0, "the guarded route settled");
+        assertEq(ZROUTER.balance, held, "the router kept none of the ether");
+        assertEq(address(router).balance, 0, "the route kept none of the ether");
+    }
+
+    /// @dev The ERC-20 bundle the page builds, guarded end to end: deadline,
+    /// snapshot, checkpoint, route with NO per-leg minimum, then one floor.
+    function test_GuardedErc20RouteIsBoundByOneFloor() public {
+        PrecisionRoute router = new PrecisionRoute(factory, EXEC);
+        zGuard guard = new zGuard();
+        address[] memory pools = new address[](1);
+        pools[0] = address(usdcWbtc);
+        uint256 amountIn = 10_000e6;
+        bytes memory call_ = abi.encodeCall(PrecisionRoute.route, (pools, USDC, WBTC, amountIn, 0, user));
+        vm.prank(user);
+        IERC20(USDC).approve(ZROUTER, type(uint256).max);
+
+        uint256 before = IERC20(WBTC).balanceOf(user);
+        bytes[] memory legs = new bytes[](5);
+        legs[0] = abi.encodeCall(ISnwap.snwap, (address(0), 0, user, address(0), 0, address(guard),
+            abi.encodeCall(zGuard.deadline, (block.timestamp + 600, ZROUTER))));
+        legs[1] = abi.encodeCall(ISnwap.snwap, (address(0), 0, user, address(0), 0, address(guard),
+            abi.encodeCall(zGuard.snap, (WBTC, user, ZROUTER))));
+        legs[2] = abi.encodeCall(ISnwap.snwap, (address(0), 0, user, address(0), 0, address(router),
+            abi.encodeCall(PrecisionRoute.checkpoint, (USDC, keccak256(call_), user))));
+        legs[3] = abi.encodeCall(ISnwap.snwap, (USDC, amountIn, user, WBTC, 0, address(router), call_));
+
+        uint256 snapshot = vm.snapshotState();
+        legs[4] = abi.encodeCall(ISnwap.snwap, (address(0), 0, user, address(0), 0, address(guard),
+            abi.encodeCall(zGuard.floor, (WBTC, user, type(uint128).max, ZROUTER))));
+        vm.prank(user);
+        vm.expectRevert();
+        ISnwap(ZROUTER).multicall(legs);
+        vm.revertToState(snapshot);
+
+        legs[4] = abi.encodeCall(ISnwap.snwap, (address(0), 0, user, address(0), 0, address(guard),
+            abi.encodeCall(zGuard.floor, (WBTC, user, 1, ZROUTER))));
+        vm.prank(user);
+        ISnwap(ZROUTER).multicall(legs);
+        assertGt(IERC20(WBTC).balanceOf(user) - before, 0, "the guarded route settled");
+        assertEq(IERC20(USDC).balanceOf(address(router)), 0, "the route kept none of the input");
+    }
+
     /// @dev Calldata cannot point a hop at something the factory never made.
     function test_RouteExecutorRejectsUnknownPools() public {
         PrecisionRoute router = new PrecisionRoute(factory, EXEC);
@@ -384,6 +453,38 @@ contract PrecisionPoolMultihopTest is Test {
         assertEq(address(router).balance, 0, "kept ETH");
         assertEq(IERC20(USDC).balanceOf(address(router)), 0, "kept USDC");
         assertEq(ethUsdc.balanceOf(address(router)), 0, "kept LP shares");
+    }
+
+    /// @dev The native zap the page sends, behind a zGuard deadline leg: the
+    /// guard is handed the transaction's ether and returns it, so zapIn still
+    /// sees its full msg.value, and nothing is left in the router, the guard
+    /// or the route.
+    function test_GuardedNativeZapMintsAndStrandsNothing() public {
+        PrecisionRoute router = new PrecisionRoute(factory, EXEC);
+        zGuard guard = new zGuard();
+        uint256 before = ethUsdc.balanceOf(user);
+        uint256 rHeld = ZROUTER.balance;
+        uint256 gHeld = address(guard).balance;
+        bytes[] memory legs = new bytes[](2);
+        legs[1] = abi.encodeCall(ISnwap.snwap, (address(0), 2 ether, user, address(ethUsdc), 1, address(router),
+            abi.encodeCall(PrecisionRoute.zapIn, (address(ethUsdc), address(0), 2 ether, 1 ether, 0, user, user))));
+
+        legs[0] = abi.encodeCall(ISnwap.snwap, (address(0), 0, user, address(0), 0, address(guard),
+            abi.encodeCall(zGuard.deadline, (block.timestamp - 1, ZROUTER))));
+        vm.prank(user);
+        vm.expectRevert(zGuard.Expired.selector);
+        ISnwap(ZROUTER).multicall{value: 2 ether}(legs);
+
+        legs[0] = abi.encodeCall(ISnwap.snwap, (address(0), 0, user, address(0), 0, address(guard),
+            abi.encodeCall(zGuard.deadline, (block.timestamp + 1800, ZROUTER))));
+        vm.prank(user);
+        ISnwap(ZROUTER).multicall{value: 2 ether}(legs);
+        assertGt(ethUsdc.balanceOf(user) - before, 0, "LP shares minted behind the guard");
+        assertEq(ZROUTER.balance, rHeld, "the router kept none of the ether");
+        assertEq(address(guard).balance, gHeld, "the guard kept none of the ether");
+        assertEq(address(router).balance, 0, "the route kept no ether");
+        assertEq(IERC20(USDC).balanceOf(address(router)), 0, "the route kept no USDC");
+        assertEq(ethUsdc.balanceOf(address(router)), 0, "the route kept no LP shares");
     }
 
     /// @dev A route sized past what the tightest band on the path can take.

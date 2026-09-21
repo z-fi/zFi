@@ -13,13 +13,16 @@ after(closeAllPages);
 const ETH = 10n ** 18n;
 const USDC = 10n ** 6n;
 
-async function setup(prep = () => {}) {
+async function setup(prep = () => {}, opts = {}) {
   const chain = new MockChain();
   chain.setNative(A.ACCOUNT, 10n * ETH);
   chain.setErc20(A.USDC, A.ACCOUNT, 5_000n * USDC);
   chain.quoteHandler = fixedRateQuoter({ rate: 3000n * ETH });
   prep(chain);
-  const p = await loadPage({ chain });
+  // A tipped transfer's id is remembered locally while it is still pending, so
+  // the reclaim row can still find it after SLOW has dropped it from both lists.
+  const storage = opts.tipsSeen ? { 'zswap:tip:1': JSON.stringify(opts.tipsSeen) } : {};
+  const p = await loadPage({ chain, storage });
   await p.connect();
   p.click('tabSend');
   await p.settle();
@@ -269,7 +272,7 @@ describe('time-locked sends', () => {
  */
 describe('keeper tip', () => {
   // 1 gwei (the harness default) x the page's 180k claim budget.
-  const TIP = 180_000n * 10n ** 9n;
+  const TIP = 2n * 180_000n * 10n ** 9n;
 
   /** A tipped ETH lock, ready to submit. */
   async function tipped(p, amount = '2', delay = '86400') {
@@ -300,7 +303,7 @@ describe('keeper tip', () => {
     assert.equal(p.text('tipNote'), '', 'an unticked box costs nothing and says nothing');
     p.click('tipCk');
     await p.settle();
-    assert.match(p.text('tipNote'), /tip ≈ 0\.00018 ETH/,
+    assert.match(p.text('tipNote'), /tip ≈ 0\.00036 ETH/,
       'the quote must name the cost before it is signed');
     p.close();
   });
@@ -555,11 +558,31 @@ describe('recovery paths', () => {
     p.close();
   });
 
-  test('a tip nobody spent is offered back once the transfer has settled', async () => {
+  // SLOW removes a transfer from the sender's outbound set the instant it is
+  // claimed, and deletes its pending record in the same block, so "outbound AND
+  // no pending record" is a state the contract cannot produce -- the reclaim row
+  // is only reachable because the id was written down while the transfer was
+  // still live. That is what this pair checks: first that a live tipped transfer
+  // is remembered, then that the row appears once the transfer is gone.
+  test('a live tipped transfer is remembered, so its tip survives the claim', async () => {
     const p = await setup(c => {
-      c.slowOut = [2n];          // settled: pendingTransfers reads back zero
-      c.slowTips.set('2', 10n ** 15n);
+      c.slowOut = [7n];
+      c.slowPending.set('7', { timestamp: BigInt(Math.floor(Date.now() / 1000)), id: 0n, amount: ETH });
+      c.slowTips.set('7', 10n ** 15n);
     });
+    await p.waitFor(() => /\d/.test(p.$('pos').textContent), { label: 'the position list' });
+    await p.settle();
+    const kept = JSON.parse(p.window.localStorage['zswap:tip:1'] || '[]');
+    assert.deepEqual(kept, ['7'], 'the id is written down while the transfer is still pending');
+    p.close();
+  });
+
+  test('a tip nobody spent is offered back once the transfer is gone', async () => {
+    const p = await setup(c => {
+      // The recipient claimed directly: the id is in neither list any more, and
+      // only the local record can still reach refundTip.
+      c.slowTips.set('2', 10n ** 15n);
+    }, { tipsSeen: ['2'] });
     await p.waitFor(() => p.$('pos').textContent.includes('Keeper tip'), { label: 'stale tip' });
     p.click(btn(p, 'Reclaim tip'));
     await p.waitFor(() => p.chain.sent.length > 0, { label: 'refund tx' });
@@ -576,9 +599,9 @@ describe('recovery paths', () => {
 /**
  * SLOW is one address on Ethereum, Base and Robinhood — the same bytecode at
  * 0x000000006513B7821171C8447ec7ECdfa3b956Fd on all three — so the lock is not
- * a mainnet feature the other two chains fall back out of. What does not travel
- * is the keeper: the tip gate is deployed everywhere, but only mainnet has a
- * bot watching it, and a tip nobody will ever claim is worse than no tip.
+ * a mainnet feature the other two chains fall back out of. The keeper watches
+ * all three, so the tip travels too, but its price does not: each chain quotes
+ * from its own gas, and on an L2 that means the L1 data fee as well.
  */
 describe('SLOW on the other chains', () => {
   const BASE = '0x2105', RH = '0x1237';
@@ -616,11 +639,15 @@ describe('SLOW on the other chains', () => {
       p.close();
     });
 
-    test(`${name} does not sell a keeper tip nobody is running`, async () => {
+    test(`${name} offers the keeper tip, priced for this chain`, async () => {
       const p = await onChain(hex);
       p.select('dly', '86400');
       await p.settle();
-      assert.equal(p.visible('tipL'), false, 'no keeper watches this chain, so nothing is offered');
+      assert.equal(p.visible('tipL'), true, 'a keeper watches this chain, so the tip is offered');
+      p.click('tipCk');
+      await p.waitFor(() => /tip ≈/.test(p.text('tipNote')), { label: 'the tip estimate' });
+      assert.match(p.text('tipNote'), /tip ≈ [\d.]+ ETH/,
+        'the quote must name the cost before it is signed');
       p.close();
     });
 

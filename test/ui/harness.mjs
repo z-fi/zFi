@@ -26,6 +26,9 @@ import { AbiCoder, keccak256, toUtf8Bytes } from 'ethers';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const HTML_PATH = path.join(ROOT, process.env.ZSWAP_HTML || 'zSwap.html');
+// The confidential pool's deploy block, as the page pins it. The page scans no
+// earlier, so a mock chain has to run past it or there is no window at all.
+export const CP_BLOCK = Number(fs.readFileSync(HTML_PATH, 'utf8').match(/CP_BLOCK=(\d+)/)[1]);
 
 const coder = AbiCoder.defaultAbiCoder();
 
@@ -51,6 +54,8 @@ export const A = {
   USDT: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
   WBTC: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599',
   ZQUOTER: '0x000000bd2db80567c23e353ca95a251c573cbf9b',
+  // The L2 three-hop companion. Answers the same selector with the same shape.
+  Z3H: '0x000000f584434f81fc115b1a59243a4287db08be',
   ZROUTER: '0x000000000000FB114709235f1ccBFfb925F600e4',
   PERMIT2: '0x000000000022D473030F116dDEE9F6B43aC78BA3',
   MC3: '0xcA11bde05977b3631167028862bE2a173976CA11',
@@ -837,6 +842,11 @@ export class MockChain {
       }
       case 'eth_blockNumber': return this.blockNumber;
       case 'eth_gasPrice': return '0x' + this.gasPrice.toString(16);
+      // Opt-in: `baseFees` (wei, oldest first) is what eth_feeHistory reports.
+      // Unset, the node refuses the method, as some public endpoints do.
+      case 'eth_feeHistory':
+        if (!this.baseFees) throw Object.assign(new Error('method not supported'), { code: -32601 });
+        return { oldestBlock: this.blockNumber, baseFeePerGas: this.baseFees.map(b => '0x' + b.toString(16)), gasUsedRatio: [] };
       case 'eth_getBalance': return '0x' + this.balanceOf(A.ZERO, params[0]).toString(16);
       // A node answering eth_getCode with something that is not well-formed
       // hex — null, a number, a truncated string. Callers that read "no code"
@@ -844,6 +854,14 @@ export class MockChain {
       case 'eth_getCode':
         if (this.codeRaw !== undefined) return this.codeRaw;
         return this.code.get((params[0] || '').toLowerCase()) ?? '0x';
+      // Contract storage, for pages that anchor what they rebuild from logs to
+      // the chain. Off unless a test opts in with chain.storage, so a page
+      // falls back exactly as it would against a node that refuses the call.
+      case 'eth_getStorageAt': {
+        if (!this.storage) throw Object.assign(new Error('method not supported'), { code: -32601 });
+        const key = (params[0] || '').toLowerCase() + ':' + BigInt(params[1] || 0).toString(16);
+        return this.storage.get(key) ?? '0x' + '0'.repeat(64);
+      }
       case 'eth_getLogs': {
         const f = params[0] || {};
         const addr = (f.address || '').toLowerCase();
@@ -852,6 +870,8 @@ export class MockChain {
         return this.logs.filter(l => (!addr || (l.address || '').toLowerCase() === addr)
           && (!want || want.includes((l.topics[0] || '').toLowerCase())));
       }
+      case 'eth_getTransactionByHash':
+        return (this.txs && this.txs.get(String(params[0] || '').toLowerCase())) || null;
       case 'eth_estimateGas': return '0x' + BigInt(this.estimateGas).toString(16);
       case 'personal_sign': {
         if (this.rejectNext) { const e = this.rejectNext; this.rejectNext = null; throw e; }
@@ -1008,8 +1028,23 @@ export class MockChain {
     // A plain value transfer pre-flights as a call with no calldata at all.
     if (!data) return '0x';
 
+    /* L1 data-fee oracles, opt-in. `l1FeeUpper` answers Base's GasPriceOracle
+       getL1FeeUpperBound; `l1Component = {gas, baseFee}` answers Arbitrum's
+       NodeInterface gasEstimateL1Component. Unset, both revert as a chain without
+       them would. */
+    if (to === '0x420000000000000000000000000000000000000f' && sel === 'f1c7a58b') {
+      if (this.l1FeeUpper === undefined) throw Error('execution reverted');
+      return '0x' + u256(this.l1FeeUpper);
+    }
+    if (to === '0x00000000000000000000000000000000000000c8' && sel === '77d488a2') {
+      if (!this.l1Component) throw Error('execution reverted');
+      return '0x' + u256(this.l1Component.gas) + u256(this.l1Component.baseFee) + u256(0n);
+    }
+
     if (to === A.MC3.toLowerCase() && sel === SEL.AGG3) return this.aggregate3(data, block);
-    if (to === A.ZQUOTER.toLowerCase()) return this.quote(sel, data);
+    // Multicall3.getCurrentBlockTimestamp(), so a batch can carry the clock.
+    if (to === A.MC3.toLowerCase() && sel === '0f28c97d') return '0x' + u256(BigInt(this.blockTime));
+    if (to === A.ZQUOTER.toLowerCase() || to === A.Z3H.toLowerCase()) return this.quote(sel, data);
     if (to === A.SBVIEW.toLowerCase()) return this.lens(sel, data);
     if (to === A.FLOORVIEW.toLowerCase()) return this.floorLens(sel, data);
     // The board's OWN storage, which the page reads back before sending as a
@@ -1706,6 +1741,22 @@ export class MockChain {
       if (!a) return '0x' + addrWord(A.ZERO);
       return '0x' + addrWord(a);
     }
+    // text(bytes32 node, string key): `texts` is keyed "name|key", so a test
+    // states the record the way its owner would publish it.
+    if (sel === '59d1d43c') {
+      const [node, key] = coder.decode(['bytes32', 'string'], body);
+      const hit = [...(this.texts || new Map()).entries()].find(([k]) => {
+        const [n, kk] = k.split('|'); return kk === key && ensNamehash(n).toLowerCase() === String(node).toLowerCase();
+      });
+      return encodeString(hit ? hit[1] : '');
+    }
+    // setText(uint256 tokenId, string key, string value), as the name's owner.
+    if (sel === '3fb24782') {
+      const [id, key, value] = coder.decode(['uint256', 'string', 'string'], body);
+      const name = [...this.names.keys()].find(n => BigInt(ensNamehash(n)) === id);
+      if (name) (this.texts ||= new Map()).set(name + '|' + key, value);
+      return '0x';
+    }
     if (sel === SEL.NS_REV) {
       const n = this.reverse.get(wordAddr(body, 0).toLowerCase());
       if (!n) throw Error('no reverse record');
@@ -1736,6 +1787,14 @@ export class MockChain {
       return null;
     };
     if (sel === SEL.ENS_EADDR) return '0x' + addrWord(byNode(wordHex(body, 0)) || A.ZERO);
+    // text(bytes32 node, string key), read from the same `texts` map as WNS.
+    const textOf = (node, key) => {
+      const hit = [...(this.texts || new Map()).entries()].find(([k]) => {
+        const [n, kk] = k.split('|'); return kk === key && ensNamehash(n).toLowerCase() === String(node).toLowerCase();
+      });
+      return hit ? hit[1] : '';
+    };
+    if (sel === '59d1d43c') { const [node, key] = coder.decode(['bytes32', 'string'], body); return encodeString(textOf(node, key)); }
     if (sel === SEL.ENS_ENAME) {
       for (const [addr, name] of this.ensRevNames)
         for (const suffix of ['.addr.reverse', '.80002105.reverse'])
@@ -1749,6 +1808,10 @@ export class MockChain {
       const [dns, inner] = coder.decode(['bytes', 'bytes'], body);
       const name = dnsDecode(dns);
       const a = this.ensNames.get(name) || A.ZERO;
+      if (strip(inner).slice(0, 8) === '59d1d43c') {
+        const [node, key] = coder.decode(['bytes32', 'string'], '0x' + strip(inner).slice(8));
+        return coder.encode(['bytes'], [encodeString(textOf(node, key))]);
+      }
       if (strip(inner).slice(0, 8) !== SEL.ENS_EADDR) return coder.encode(['bytes'], ['0x']);
       return coder.encode(['bytes'], ['0x' + addrWord(a)]);
     }
@@ -2063,24 +2126,31 @@ export async function loadPage(opts = {}) {
           return { ok: true, status: 200, json: async () => res };
         }
         const body = JSON.parse(init.body);
-        (chain.httpLog ||= []).push({ url: String(url), method: body.method });
         const mode = chain.fetchMode || 'ok';
         const fail = mode !== 'ok' || (chain.failNext > 0 && (chain.failNext--, true));
+        const remote = Object.entries(chain.remotes || {}).find(([frag]) => String(url).includes(frag));
+        const target = remote ? remote[1] : chain;
+        const answer = async c => {
+          try {
+            const result = await target.request({ method: c.method, params: c.params || [] });
+            return { jsonrpc: '2.0', id: c.id, result: result === undefined ? null : result };
+          } catch (e) {
+            return { jsonrpc: '2.0', id: c.id, error: { code: e && e.code !== undefined ? e.code : -32000, message: e.message || 'failed' } };
+          }
+        };
+        // A JSON-RPC batch is one request carrying several calls. Each call is
+        // logged on its own, so a count by method reads the same either way.
+        const calls = Array.isArray(body) ? body : [body];
+        for (const c of calls) (chain.httpLog ||= []).push({ url: String(url), method: c.method, ...(Array.isArray(body) ? { batch: body.length } : {}) });
         if (fail) {
           if (mode === 'http429') return { ok: false, status: 429, json: async () => ({}) };
           throw new Error('connection refused');
         }
-        let result, error = null;
-        const remote = Object.entries(chain.remotes || {}).find(([frag]) => String(url).includes(frag));
-        const target = remote ? remote[1] : chain;
-        try { result = await target.request({ method: body.method, params: body.params || [] }); }
-        catch (e) { error = { code: e && e.code !== undefined ? e.code : -32000, message: e.message || 'failed' }; }
-        return {
-          ok: true, status: 200,
-          json: async () => error
-            ? { jsonrpc: '2.0', id: body.id, error }
-            : { jsonrpc: '2.0', id: body.id, result: result === undefined ? null : result },
-        };
+        if (Array.isArray(body) && chain.noBatch)
+          return { ok: true, status: 200, json: async () => ({ jsonrpc: '2.0', id: null, error: { code: -32600, message: 'batch not supported' } }) };
+        const out = [];
+        for (const c of calls) out.push(await answer(c));
+        return { ok: true, status: 200, json: async () => (Array.isArray(body) ? out : out[0]) };
       };
 
       if (!opts.walletless) {
@@ -2164,8 +2234,13 @@ export async function loadPage(opts = {}) {
       // The default value a prompt is opened with is recorded too: the private
       // bridge hands a payment request to the user that way, and a test has to
       // read it back to pay it.
-      window.prompt = (q, d) => { asked.prompt.push(q); (window.__promptDefaults ||= []).push(d); return prompts.length ? prompts.shift() : null; };
-      window.confirm = q => { asked.confirm.push(q); return confirms.length ? confirms.shift() : false; };
+      // A person takes time to decline. A null or false that comes back at
+      // once is how a browser that blocks dialogs answers, and the page then
+      // asks in its own dialog instead - so the stubs decline at human speed.
+      const human = () => { const t = Date.now(); while (Date.now() - t < 45); };
+      window.__human = human;
+      window.prompt = (q, d) => { asked.prompt.push(q); (window.__promptDefaults ||= []).push(d); const v = prompts.length ? prompts.shift() : null; if (v == null) human(); return v; };
+      window.confirm = q => { asked.confirm.push(q); const v = confirms.length ? confirms.shift() : false; if (!v) human(); return v; };
       window.alert = () => {};
 
       const copied = [];
@@ -2208,6 +2283,10 @@ export async function loadPage(opts = {}) {
           value: { getRandomValues: fixed }, configurable: true, writable: true,
         });
       }
+
+      // Anything a test must install before the page's first line runs - a
+      // relay socket for a WalletConnect session the page resumes at load.
+      if (opts.beforeParse) opts.beforeParse(window);
     },
   });
 
@@ -2272,10 +2351,13 @@ export async function loadPage(opts = {}) {
     throw Error(`waitFor timed out (${timeout}ms): ${label}${lastErr ? ` — last error: ${lastErr.message}` : ''}`);
   };
   /** Wait for the page to go quiet: no in-flight RPC and no pending microtasks. */
+  // Reads can also wait a tick in the page's own batch queue before they
+  // reach the chain, so an empty chain is not yet a settled page.
+  const queued = () => { try { return !!window.eval('typeof nq!=="undefined"&&nq&&nq.length'); } catch { return false; } };
   page.settle = async () => {
     for (let i = 0; i < 400; i++) {
       await tick();
-      if (chain.inFlight === 0) { await tick(); if (chain.inFlight === 0) return; }
+      if (chain.inFlight === 0 && !queued()) { await tick(); if (chain.inFlight === 0 && !queued()) return; }
     }
     throw Error(`settle timed out with ${chain.inFlight} request(s) in flight`);
   };

@@ -10,7 +10,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AbiCoder, keccak256, concat } from 'ethers';
 import {
-  A, SEL, MockChain, loadPage, closeAllPages, fixedRateQuoter, encodeSingleHop, word, wordAddr,
+  A, SEL, MockChain, loadPage, closeAllPages, fixedRateQuoter, encodeSingleHop, word, wordAddr, CP_BLOCK,
 } from './harness.mjs';
 
 after(closeAllPages);
@@ -18,6 +18,7 @@ after(closeAllPages);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const F = JSON.parse(fs.readFileSync(path.join(ROOT, 'test', 'fixtures', 'confidential.json'), 'utf8'));
 const coder = AbiCoder.defaultAbiCoder();
+const B0 = CP_BLOCK + 0x100;
 const ETH = 10n ** 18n;
 const BASE = '0x2105';
 const u256 = v => BigInt(v).toString(16).padStart(64, '0');
@@ -34,7 +35,7 @@ const registryRow = (s, a, o = {}) => ({
 // The confidential pool, as the private-bridge suite serves it.
 const POOL = F.pool, ROUTER = F.router, IMPL = F.executorImpl;
 const PV = {
-  IMPL: '93228617', ASSETS: '9fda5b66', NEXT: '0be4f422', DEPOSIT: '7da9874f', WRAP: '859a9cee',
+  IMPL: '93228617', ASSETS: '9fda5b66', NEXT: '0be4f422', DEPOSIT: '7da9874f', WRAP: '8be3ad21',
   OTHER: '7f46ddb2', BRIDGE: 'e78cea92', ESCROW: '2bf0cda2', ACTIVATE: '1699fd5b', RECLAIM: '02edf635',
   EXIT: 'acad0634', SUBFEE: 'a66b327d', SETTLE: '717fd7f2',
 };
@@ -49,15 +50,15 @@ const INIT_HASH = keccak256('0x602d5f8160095f39f35f5f365f5f37365f73' + IMPL.slic
 const escrowForCall = data => '0x' + keccak256(concat(['0xff', ROUTER, keccak256('0x' + data.slice(10)), INIT_HASH])).slice(26);
 
 function withPool(chain) {
-  chain.blockNumber = '0x18b64a3';
+  chain.blockNumber = '0x' + (B0 + 0x8).toString(16);
   chain.gasPrice = 10n ** 8n;
   chain.setNative(A.ACCOUNT, 10n * ETH);
   chain.answer(ROUTER, PV.IMPL, '0x' + addrWord(IMPL));
   chain.answer(POOL, PV.ASSETS, '0x' + u256(1) + u256(0) + u256(10n ** 10n) + F.ethAssetId.slice(2) + u256(0) + u256(18));
   chain.answer(POOL, PV.NEXT, () => '0x' + u256(chain.nextLeaf ?? 0));
   chain.answer(POOL, PV.DEPOSIT, '0x' + u256(0));
-  for (const s of [PV.WRAP, PV.ACTIVATE, PV.RECLAIM, PV.EXIT]) chain.answer(ROUTER, s, '0x');
-  chain.answer(POOL, PV.SETTLE, '0x');
+  for (const s of [PV.ACTIVATE, PV.RECLAIM, PV.EXIT]) chain.answer(ROUTER, s, '0x');
+  for (const s of [PV.WRAP, PV.SETTLE]) chain.answer(POOL, s, '0x');
   chain.answer(BASE_BRIDGE, PV.OTHER, '0x' + addrWord('0x4200000000000000000000000000000000000010'));
   chain.answer(RH_INBOX, PV.BRIDGE, '0x' + addrWord('0xDf8755334ce7A73cCF6b581C02eA649AE3E864b3'));
   chain.answer(RH_INBOX, PV.SUBFEE, '0x' + u256(F.robinhood.sub));
@@ -74,11 +75,11 @@ function withPool(chain) {
 }
 
 const wrapLog = (id, amount) => ({
-  address: POOL, blockNumber: '0x18b649f', logIndex: '0x0',
+  address: POOL, blockNumber: '0x' + (B0 + 0x4).toString(16), logIndex: '0x0',
   topics: [T_WRAP, id, F.ethAssetId], data: '0x' + u256(amount),
 });
 const leavesLog = (first, leaves, memos) => ({
-  address: POOL, blockNumber: '0x18b64a0', logIndex: '0x0',
+  address: POOL, blockNumber: '0x' + (B0 + 0x5).toString(16), logIndex: '0x0',
   topics: [T_LEAVES, '0x' + u256(first)],
   data: coder.encode(['bytes32[]', 'bytes[]'], [leaves, memos]),
 });
@@ -107,7 +108,7 @@ async function pvUnlock(p) {
 async function pvDeposit(p) {
   p.type('pvAmt', '0.01');
   p.click('pvGo');
-  await p.waitFor(() => p.chain.sentTo(ROUTER).length === 1, { label: 'the deposit to be sent' });
+  await p.waitFor(() => p.chain.sentTo(POOL).length === 1, { label: 'the deposit to be sent' });
   await p.waitFor(() => p.window.__relayPosts.length === 1, { label: 'the wrap to reach the relay' });
 }
 function pvSettle(p) {
@@ -279,8 +280,8 @@ describe('private bridge notes', () => {
     await p.waitFor(() => /Recovered/.test(p.text('stat')), { label: 'the recovery' });
     await p.settle();
     const list = p.text('pvList');
-    assert.match(list, /0\.01 ETH/, 'the first deposit is listed');
-    assert.match(list, /0\.02 ETH/, 'and so is the second, at the same index');
+    assert.match(list, /0\.01 tETH/, 'the first deposit is listed');
+    assert.match(list, /0\.02 tETH/, 'and so is the second, at the same index');
     p.close();
   });
 
@@ -295,7 +296,7 @@ describe('private bridge notes', () => {
 
     // Tab B opens on the same notes, then shares tab A's storage from here on.
     const b = await pvOpen({ storage: { ...store } });
-    await b.waitFor(() => /0\.01 ETH/.test(b.text('pvList')), { label: 'tab B to list the note' });
+    await b.waitFor(() => /0\.01 tETH/.test(b.text('pvList')), { label: 'tab B to list the note' });
     b.window.__shared = store;
     b.window.eval('LS=window.__shared');
 
@@ -328,10 +329,10 @@ describe('private bridge notes', () => {
     await pvUnlock(p);
     p.type('pvAmt', '0.01');
     p.click('pvGo');
-    await p.waitFor(() => p.chain.sentTo(ROUTER).length === 1 || /Error/.test(p.text('stat')), { label: 'the deposit' });
+    await p.waitFor(() => p.chain.sentTo(POOL).length === 1 || /Error/.test(p.text('stat')), { label: 'the deposit' });
     assert.doesNotMatch(p.text('stat'), /Not enough ETH/);
-    assert.equal(p.chain.sentTo(ROUTER).length, 1, 'the deposit is sent from an ETH balance that covers it');
-    assert.equal(BigInt(p.chain.sentTo(ROUTER)[0].value), ETH / 100n);
+    assert.equal(p.chain.sentTo(POOL).length, 1, 'the deposit is sent from an ETH balance that covers it');
+    assert.equal(BigInt(p.chain.sentTo(POOL)[0].value), ETH / 100n);
     p.close();
   });
 });

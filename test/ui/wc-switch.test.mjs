@@ -39,6 +39,7 @@ async function wcPeer(p, { chains = [1, 8453], account = A.ACCOUNT } = {}) {
 
   const onSession = async message => {
     const m = U.decode(peer.sKey, message);
+    if (m?.method) (peer.seen ||= []).push(m.method);
     if (!m || m.method !== 'wc_sessionRequest') return;
     const { request, chainId } = m.params;
     peer.requests.push({ method: request.method, chainId, params: request.params });
@@ -50,13 +51,13 @@ async function wcPeer(p, { chains = [1, 8453], account = A.ACCOUNT } = {}) {
   };
 
   class RelaySocket {
-    constructor() { peer.sock = this; w.setTimeout(() => this.onopen?.(), 0); }
+    constructor() { peer.sock = this; peer.opens = (peer.opens || 0) + 1; w.setTimeout(() => this.onopen?.(), 0); }
     close() {}
     send(raw) {
       const m = JSON.parse(raw);
       if (!m.method) return;
       toPage({ id: m.id, jsonrpc: '2.0', result: m.method === 'irn_subscribe' ? 'sub' : true });
-      if (m.method === 'irn_subscribe') peer.topics.add(m.params.topic);
+      if (m.method === 'irn_subscribe') { peer.topics.add(m.params.topic); (peer.subs ||= []).push(m.params.topic); }
       if (m.method !== 'irn_publish') return;
       if (m.params.topic === peer.sTopic) onSession(m.params.message);
       else peer.held.push(m.params);
@@ -84,6 +85,7 @@ async function wcPeer(p, { chains = [1, 8453], account = A.ACCOUNT } = {}) {
         methods: ['eth_sendTransaction', 'personal_sign', 'eth_signTypedData_v4'],
         events: ['chainChanged', 'accountsChanged'] } } } });
   };
+  peer.send = toSession;
   peer.event = (name, data) => toSession({ id: rid++, method: 'wc_sessionEvent',
     params: { chainId: 'eip155:1', event: { name, data } } });
   peer.update = cs => toSession({ id: rid++, method: 'wc_sessionUpdate',
@@ -117,6 +119,109 @@ const pickNet = async (p, name) => {
   assert.ok(row, `no ${name} row`);
   p.click(row);
 };
+
+// A relay that answers every call and delivers nothing, installed before the
+// page runs so a session it resumes at load has somewhere to go.
+const quietRelay = log => w => {
+  Object.defineProperty(w.crypto, 'subtle', { value: subtle, configurable: true });
+  w.WebSocket = class {
+    constructor() { w.setTimeout(() => this.onopen?.(), 0); }
+    close() {}
+    send(raw) {
+      const m = JSON.parse(raw);
+      if (!m.method) return;
+      if (m.method === 'irn_subscribe') log.push(m.params.topic);
+      if (m.method === 'irn_publish') (log.published ||= []).push(m.params);
+      w.setTimeout(() => this.onmessage?.({ data: JSON.stringify({ id: m.id, jsonrpc: '2.0', result: true }) }), 0);
+    }
+  };
+};
+
+/**
+ * The session's keys used to live only in memory, so every refresh - and every
+ * reload a chain or account change forces - meant scanning a new code. The
+ * session is kept until it expires or either side ends it.
+ */
+describe('a WalletConnect session across a reload', () => {
+  test('is kept when it settles, and resumed at load without a new pairing', async () => {
+    const { p } = await connectWc();
+    const saved = p.window.localStorage.getItem('zswap:wcs');
+    assert.ok(JSON.parse(saved || 'null')?.t, 'the settled session is kept');
+    assert.equal(p.window.localStorage.getItem('zswap:wk'), 'wc');
+    const topic = JSON.parse(saved).t;
+    p.close();
+
+    const subs = [];
+    const chain = new MockChain();
+    chain.setNative(A.ACCOUNT, 10n * ETH);
+    const q = await loadPage({ chain, walletless: true, hash: null,
+      storage: { 'zswap:wcs': saved, 'zswap:wk': 'wc' }, beforeParse: quietRelay(subs) });
+    await q.waitFor(() => /1111/.test(q.text('addr')), { label: 'the resumed session' });
+    assert.ok(subs.includes(topic), 'the page listens on the kept session topic');
+    assert.ok(q.$('wkWrap').classList.contains('hide'), 'no pairing code was needed');
+    q.window.eval(`rpc("personal_sign",["0x00","${A.ACCOUNT}"]).catch(()=>{})`);
+    const pub = await q.waitFor(() => (subs.published || []).find(x => x.topic === topic), { label: 'a request on the session' });
+    const U = q.window.eval('WCU');
+    const body = U.decode(U.unhex(JSON.parse(saved).k), pub.message);
+    assert.equal(body?.params?.request?.method, 'personal_sign', 'the kept key still speaks to the wallet');
+    q.close();
+  });
+
+  test('an expired session is dropped, not resumed', async () => {
+    const subs = [];
+    const expired = JSON.stringify({ t: 'ab'.repeat(32), k: 'cd'.repeat(32), a: [`eip155:1:${A.ACCOUNT}`],
+      m: ['eth_sendTransaction'], c: 1, x: Math.floor(Date.now() / 1e3) - 60 });
+    const q = await loadPage({ chain: new MockChain(), walletless: true, hash: null,
+      storage: { 'zswap:wcs': expired, 'zswap:wk': 'wc' }, beforeParse: quietRelay(subs) });
+    await q.settle();
+    assert.equal(q.text('addr'), 'Connect');
+    assert.equal(subs.length, 0, 'nothing was asked of the relay');
+    assert.equal(q.window.localStorage.getItem('zswap:wcs'), null, 'and the stale keys are gone');
+    q.close();
+  });
+
+  test('the wallet ending the session forgets it', async () => {
+    const { p, peer } = await connectWc();
+    peer.send({ id: 77, method: 'wc_sessionDelete', params: { code: 6000, message: 'bye' } });
+    await p.waitFor(() => /ended the session/.test(p.text('stat')), { label: 'the session end' });
+    assert.equal(p.window.localStorage.getItem('zswap:wcs'), null);
+    await p.waitFor(() => p.reloads() > 0, { label: 'the page to drop the dead account' });
+    p.close();
+  });
+
+  test('a dropped relay socket reconnects and listens again, keeping the session', async () => {
+    const { p, peer } = await connectWc();
+    const topic = peer.sTopic;
+    const before = peer.subs.filter(t => t === topic).length;
+    peer.sock.onclose?.({ code: 1006 });
+    await p.waitFor(() => peer.opens === 2 && peer.subs.filter(t => t === topic).length > before,
+      { label: 'the relay to come back', timeout: 5000 });
+    await p.settle();
+    assert.doesNotMatch(p.text('stat'), /dropped/);
+    assert.match(p.text('addr'), /1111/);
+    p.close();
+  });
+});
+
+describe('ending a WalletConnect session', () => {
+  test('disconnecting forgets the kept session', async () => {
+    const { p } = await connectWc();
+    p.click('addr');
+    await p.waitFor(() => p.reloads() > 0, { label: 'the reload' });
+    assert.equal(p.window.localStorage.getItem('zswap:wcs'), null);
+    p.close();
+  });
+
+  // The session lives in the page's memory, so a disconnect that only reloads
+  // leaves the wallet listing a connection nothing will ever answer again.
+  test('disconnecting tells the wallet the session is over', async () => {
+    const { p, peer } = await connectWc();
+    p.click('addr');
+    await p.waitFor(() => p.reloads() > 0, { label: 'the reload' });
+    assert.ok((peer.seen || []).includes('wc_sessionDelete'), 'the wallet must hear the session end');
+    p.close();
+  });
+});
 
 describe('a WalletConnect network switch', () => {
   test('moves the page and the session in place, and the next send is aimed at the new chain', async () => {

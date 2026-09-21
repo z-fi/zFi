@@ -55,6 +55,25 @@ const syms = p => [...p.$('toSel').options].map(o => o.textContent);
 const groups = p => [...p.$('toSel').querySelectorAll('optgroup')].map(g => g.label);
 
 describe('launched coins are findable', () => {
+  test('on Base too, from its own factory, before the curated list has any Base rows', async () => {
+    // The launcher sits at one address on every chain, so the scan is the same
+    // call aimed at the connected chain's factory. A registry with nothing for
+    // this chain leaves the built-in tokens standing, and the coins beside them.
+    const rows = [row('ETH', A.ZERO, { p: 'Native' }), row('USDC', A.USDC, { d: 6 })];
+    const chain = new MockChain({ chainId: '0x2105' });
+    chain.registry = rows;
+    chain.conviction = rows.map((_, i) => i + 1);
+    chain.setToken(COIN_A, { symbol: 'ZCAT', decimals: 18, name: 'Zero Cat' });
+    chain.setLaunched([{ pool: POOL_A, token: COIN_A }]);
+    const p = await loadPage({ chain });
+    await p.settle();
+    assert.equal(p.window.eval('CHAIN_ID'), 8453);
+    assert.ok(syms(p).includes('ZCAT'), `not in the Base picker: ${JSON.stringify(syms(p))}`);
+    assert.ok(groups(p).some(x => /Launched on zSwap/.test(x)), 'no launched group on Base');
+    assert.ok(syms(p).includes('USDC'), 'the built-in Base tokens stand in for the curated rows');
+    p.close();
+  });
+
   test('appear in the picker without being listed', async () => {
     const p = await open_({ connect: true });
     assert.ok(syms(p).includes('ZCAT'), 'a launched coin is missing from the picker');

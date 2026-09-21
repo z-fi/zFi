@@ -49,7 +49,7 @@ describe('a wallet on Base', () => {
     assert.equal(w.eval('STORE()'), 'zswap:custom:8453', 'custom tokens are kept per chain');
     assert.match(w.eval('txLink("0x" + "ab".repeat(32), "Done")'), /basescan\.org\/tx\//, 'tx links go to the chain\'s explorer');
     assert.match(w.eval('escan("' + MOON + '")'), /basescan\.org\/token\//);
-    assert.equal(p.visible('ln'), false, 'launch mode is withheld where the launcher is not deployed');
+    assert.equal(p.visible('ln'), true, 'coins launch on Base through the replayed launcher');
     assert.equal(p.visible('wn'), false, 'names are registered on mainnet only');
     p.close();
   });
@@ -275,9 +275,12 @@ describe('switching the wallet between chains', () => {
     const p = await onBase();
     await p.settle();
     p.chain.addSelects = false;
-    p.chain.failOn = {
-      wallet_switchEthereumChain: Object.assign(Error('Unrecognized chain ID'), { code: 4902 }),
-    };
+    // Every switch is refused, including the one the page retries after the
+    // add: this wallet never selects the new chain at all.
+    const dispatch = p.chain.dispatch.bind(p.chain);
+    p.chain.dispatch = (m, a) => m === 'wallet_switchEthereumChain'
+      ? Promise.reject(Object.assign(Error('Unrecognized chain ID'), { code: 4902 }))
+      : dispatch(m, a);
     await pickRow(p, 'Robinhood');
     assert.equal(p.window.eval('CHAIN_ID'), 8453,
       'the page must not claim a chain the wallet never selected');
