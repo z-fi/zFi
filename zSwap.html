@@ -235,6 +235,14 @@ margin-top:.55em;padding-top:.55em;border-top:1px solid var(--e);color:var(--f)}
 .mkd{display:block;font-size:.72em;line-height:1.55;color:var(--m);margin:.3em 0}
 .mkd:empty{display:none}
 #mkT{text-transform:none;letter-spacing:0;font-size:.82em;color:var(--f)}
+#mkChips{align-items:center}
+#mkSort{margin-left:auto;appearance:none;-webkit-appearance:none;border:0;background:transparent;color:var(--m);font:inherit;font-size:.68em;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;padding:.35em 0;text-align:right;outline:0}
+#mkSort:hover,#mkSort:focus-visible{color:var(--f)}
+.mkq{display:block;width:100%;box-sizing:border-box;margin:0 0 -1px;padding:.7em .8em;border:1px solid var(--e);background:transparent;color:var(--f);font:inherit;font-size:.8em;line-height:1.45;min-height:4.3em;resize:vertical;outline:0;transition:border-color .15s}
+.mkq:focus{border-color:var(--f);position:relative;z-index:1}
+.mkq::placeholder{color:var(--ph)}
+#mkResEl{text-align:right;margin:.35em .1em .55em}
+#mkAdv{margin-top:.7em}
 .lnu{display:flex;align-items:baseline;gap:.3em;color:var(--m);flex:0 1 auto;min-width:0}
 .lnu input{width:7em;flex:0 1 7em;min-width:0}
 .lnu i{font-style:normal;min-width:2.6em}
@@ -421,7 +429,7 @@ background:var(--e);margin:.5em auto .1em}
 <div id="mkPanel" class="hide">
 <div class="hdr lnhdr"><small>Markets</small><small id="mkSub"></small></div>
 <input id="mkFind" class="rcpt" aria-label="Search markets" placeholder="Search markets" autocomplete="off" spellcheck="false">
-<div class="bkf" id="mkChips"><button type="button" class="bkc on" data-f="open">Open</button><button type="button" class="bkc" data-f="done">Settled</button><button type="button" class="bkc" data-f="mine">Mine</button><button type="button" class="bkc on" data-s="pot">Liquidity</button><button type="button" class="bkc" data-s="new">New</button><button type="button" class="bkc" data-s="end">Ending</button></div>
+<div class="bkf" id="mkChips"><button type="button" class="bkc on" data-f="open">Open</button><button type="button" class="bkc" data-f="done">Settled</button><button type="button" class="bkc" data-f="mine">Mine</button><select id="mkSort" aria-label="Sort markets"><option value="pot">Liquidity ▾</option><option value="new">Newest ▾</option><option value="end">Ending soon ▾</option></select></div>
 <div id="mkList"></div>
 <div id="mkDet" class="hide">
 <div class="lngap" id="mkT"></div>
@@ -432,14 +440,17 @@ background:var(--e);margin:.5em auto .1em}
 </div>
 <div id="mkForm" class="hide">
 <div class="lngap">New market</div>
-<label class="dly">Question<input id="mkDesc" maxlength="1024" placeholder="Will ETH close above $5k on Dec 31?" autocomplete="off"></label>
-<label class="dly" title="Settles the market. An address, or a .eth / .wei / .gwei name.">Resolver<input id="mkRes" placeholder="0x or name — defaults to you" autocomplete="off" spellcheck="false"></label>
+<textarea id="mkDesc" class="mkq" maxlength="1024" rows="2" aria-label="Question" placeholder="A yes / no question, e.g. Will ETH close above $5k on Dec 31?"></textarea>
+<label class="dly" title="Settles the market. An address, or a .eth / .wei / .gwei name.">Resolver<input id="mkRes" placeholder="you, 0x or name" autocomplete="off" spellcheck="false"></label>
 <small id="mkResEl" class="mkd"></small>
 <label class="dly">Pot in<select id="mkAsset"></select></label>
-<label class="dly">Closes<select id="mkClose"><option value="86400">in a day</option><option value="604800" selected>in a week</option><option value="2592000">in a month</option><option value="7776000">in 3 months</option><option value="0">at…</option></select><input id="mkAt" type="datetime-local" class="hide" aria-label="Close at"></label>
+<label class="dly">Closes<select id="mkClose"><option value="86400">in a day</option><option value="604800" selected>in a week</option><option value="2592000">in a month</option><option value="7776000">in 3 months</option><option value="0">at…</option></select></label>
+<input id="mkAt" type="datetime-local" class="rcpt hide" aria-label="Close at">
+<details id="mkAdv"><summary>Advanced<em id="mkAdvS"></em></summary>
 <label class="dly" title="Lets the resolver end trading early, once the answer is known.">Early close<input id="mkCan" type="checkbox" checked></label>
 <label class="dly" title="Holders may sell back before close at par less this tax, which stays in the pot. 0 makes bets final.">Exit tax %<input id="mkExit" type="number" min="0" max="50" step="0.5" value="0"></label>
 <label class="dly" title="Later bets mint fewer shares, ramping from 0 now to this tax at close. It stays in the pot for earlier bettors.">Late tax %<input id="mkLate" type="number" min="0" max="50" step="0.5" value="0"></label>
+</details>
 </div>
 <small id="mkNote" role="status" aria-live="polite"></small>
 </div>
@@ -8182,7 +8193,7 @@ const all=(cs.length?await mc3Deep(cs):[]).flatMap(h=>h?mkDec(h):[]);await mkPos
 if(mkWant){const w=mkWant.toLowerCase();mkWant="";mkSel=all.find(m=>String(m.id)===w||toHex(m.id)===w)||mkSel;if(mkSel){mkF=mkLive(mkSel)?"open":"done";mkChipPaint()}}
 else if(mkSel)mkSel=all.find(m=>m.id===mkSel.id)||null;
 mkNote.textContent="";mkPaintList();mkDetPaint()}catch{if(my===mkSeq)mkNote.textContent="Could not load markets — retrying."}};
-const mkChipPaint=()=>{for(const c of mkChips.children)c.classList.toggle("on",c.dataset.f?c.dataset.f===mkF:c.dataset.s===mkS)};
+const mkChipPaint=()=>{for(const c of mkChips.querySelectorAll("[data-f]"))c.classList.toggle("on",c.dataset.f===mkF);mkSort.value=mkS};
 const mkRow=m=>{const t=mkTok(m.a),p=mkPct(m),me=mkPos[m.id];
 return`<div class="lqrow mkr${mkSel&&mkSel.id===m.id?" on":""}" data-k="${m.id}" role="button" tabindex="0"><div class="lqband">${safeSym(m.d,140)}${m.d.length>140?"…":""}</div><div class="mkbar"><i style="width:${p}%"></i></div><div class="lqmeta"><span>YES ${p}%</span><span>${sigAmt(m.p,t.dec,4)} ${safeSym(t.sym)}</span><span>${mkWhen(m)}</span>${me?`<span class="lqtag">${m.s&&me.c?"claim":"yours"}</span>`:""}</div></div>`};
 const mkPaintList=()=>{if(!mkMode)return;const me=(account||"").toLowerCase(),q=mkFind.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -8245,16 +8256,19 @@ if(on){loadEthUsd();mkLoad();mkTimer=setInterval(()=>{if(!document.hidden&&mkMod
 fcSync()}
 mk.onclick=()=>{sBlip();mkSet(!mkMode);if(!mkMode)update()};
 mkAsset.innerHTML=MK_AS.map(t=>`<option value="${t.addr}">${t.sym}</option>`).join("");
-mkChips.onclick=e=>{const b=e.target.closest("button");if(!b)return;sBlip();if(b.dataset.f)mkF=b.dataset.f;else mkS=b.dataset.s;mkChipPaint();mkPaintList()};
+mkChips.onclick=e=>{const b=e.target.closest("button[data-f]");if(!b)return;sBlip();mkF=b.dataset.f;mkChipPaint();mkPaintList()};
+mkSort.onchange=()=>{mkS=mkSort.value;mkPaintList()};
+const mkAdvSync=()=>{mkAdvS.textContent=[mkCan.checked&&"early close",+mkExit.value&&"exit "+ +mkExit.value+"%",+mkLate.value&&"late "+ +mkLate.value+"%"].filter(Boolean).join(" · ")||"final bets, no early close"};
+mkCan.onchange=mkExit.oninput=mkLate.oninput=mkAdvSync;mkAdvSync();
 mkFind.oninput=()=>mkPaintList();
 mkList.onclick=e=>{const r=e.target.closest(".mkr");if(!r)return;sBlip();const m=mkAll.find(x=>String(x.id)===r.dataset.k);mkSel=m&&!(mkSel&&mkSel.id===m.id)?m:null;mkForm.classList.add("hide");mkGo.textContent="New market";mkPaintList();mkDetPaint()};
 mkList.onkeydown=e=>{if(e.key==="Enter")mkList.onclick(e)};
 mkAmt.oninput=mkPay.onchange=()=>{clearTimeout(mkAmt._t);mkAmt._t=setTimeout(mkQuote,250)};
 mkClose.onchange=()=>mkAt.classList.toggle("hide",mkClose.value!=="0");
 mkRes.oninput=()=>{clearTimeout(mkRes._t);const v=mkRes.value.trim(),my=++mkRvSeq;
-if(!v)return mkResEl.textContent=account?`Defaults to you — ${account.slice(0,6)}…${account.slice(-4)}`:"Defaults to you";
+if(!v){mkResEl.textContent=account?`Defaults to you — ${account.slice(0,6)}…${account.slice(-4)}`:"Defaults to you";if(account)nameRev(account).then(n=>{if(n&&my===mkRvSeq)mkResEl.textContent="Defaults to you — "+safeSym(n,48)}).catch(()=>{});return}
 const e=rcErr(v);if(e)return mkResEl.textContent=e;mkResEl.textContent="resolving…";
-mkRes._t=setTimeout(()=>rcvOf(v).then(a=>{if(my===mkRvSeq)mkResEl.textContent=a?"→ "+a:"Name not registered"},x=>{if(my===mkRvSeq)mkResEl.textContent=x.message}),250)};
+mkRes._t=setTimeout(()=>rcvOf(v).then(a=>{if(my===mkRvSeq)mkResEl.textContent=a?`→ ${a.slice(0,6)}…${a.slice(-4)}`:"Name not registered"},x=>{if(my===mkRvSeq)mkResEl.textContent=x.message}),250)};
 mkActs.onclick=async e=>{const b=e.target.closest("button[data-a]");if(!b||!mkSel||mkBusy)return;if(!account)return void connect();
 const a=b.dataset.a,m=mkSel,me=mkPos[m.id]||{},I=encUint(m.id),T=d=>({from:account,to:PM,data:d,value:"0x0"});
 if(/^(r[yn]|void|close)$/.test(a)&&!b.dataset.c){b.dataset.c=1;b.textContent="Confirm: "+b.textContent;return}
