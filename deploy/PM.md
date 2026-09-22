@@ -21,6 +21,8 @@ stay in the pot:
 | initcode hash | `0xd17fd2a7e6f05f978626c6f0f101c00fc8d89256c1003daaa044691add47cecd` |
 | creation / runtime | 15,690 B / 15,664 B |
 | compiler | solc 0.8.37, via_ir, optimizer 9,999,999 runs, evm prague |
+| deployed | block 26,033,835, tx `0xf3968a3f7d1163463619c0b00f24044796e5cd8525110c1662bd6ceb8fc7cbb3`; runtime byte-identical to the artifact |
+| verified | Sourcify exact match (creation and runtime) |
 
 There are no constructor arguments. `WSTETH`, `ZROUTER`
 (`0x000000000000FB114709235f1ccBFfb925F600e4`) and `PERMIT2` are compile-time
