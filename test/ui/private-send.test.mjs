@@ -228,6 +228,23 @@ describe('private sends', () => {
     p.close();
   });
 
+  test('a relay that cannot answer does not keep a settled split from landing', async () => {
+    const p = await open(withNote(poolChain()));
+    await ready(p);
+    useStream(p, S.xfer.tag);
+    p.queuePrompt('0.0025');
+    p.click(p.$('pvList').querySelector('button[data-a="split"]'));
+    await p.waitFor(() => posts(p).some(x => x.type === 'transfer'), { label: 'the split to reach the relay', ...SLOW });
+    // The relay goes dark after the submit: its status endpoint throws from here on.
+    Object.defineProperty(p.chain.relay, 'status', { configurable: true, get() { throw Error('relay down'); } });
+    settleOn(p.chain, { nullifiers: [F.nullifier], leaves: S.xfer.op.outputs.map(o => leafOf(o)), memos: S.xfer.memos });
+    // The chain is the source of truth, so both halves still arrive.
+    await until(p, () => /Shielded 0\.0099 tETH/.test(p.text('pvList')), 'the halves, from the chain alone');
+    assert.match(p.text('pvList'), /0\.0025 tETH/);
+    assert.match(p.text('pvList'), /0\.0074 tETH/);
+    p.close();
+  });
+
   test('a payment locked to this key through a relayer batch shows as incoming, and the claim is Tacit\'s', async () => {
     const chain = withNote(poolChain());
     // Three locks batched through TacitRelayer; the middle one failed inside the batch and never landed, so
