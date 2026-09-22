@@ -78,7 +78,7 @@
  },
  {
   "id": "3718177199436581777268575498026466751093263122",
-  "json": "{\"i\":\"3718177199436581777268575498026466751093263122\",\"c\":1,\"k\":\"eip155\",\"p\":\"ERC-20\",\"x\":true,\"o\":false,\"f\":false,\"a\":\"0x00a6ba94bbb5474725515de88fe04f854f2dcb12\",\"n\":\"zOrg Shares\",\"s\":\"ZORG\",\"d\":18,\"t\":\"#ffffff\",\"r\":992000,\"u\":\"https://zorg.wei.domains\",\"au\":\"\",\"l\":\"data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgdmlld0JveD0iMCAwIDQwMCA0MDAiPjxzdHlsZT4uem9yZy1iZ3tmaWxsOiNmZmZ9LnpvcmctZmd7ZmlsbDojMDAwfUBtZWRpYShwcmVmZXJzLWNvbG9yLXNjaGVtZTpkYXJrKXsuem9yZy1iZ3tmaWxsOiMwMDB9LnpvcmctZmd7ZmlsbDojZmZmfX08L3N0eWxlPjxjbGlwUGF0aCBpZD0iem9yZy1jbGlwIj48Y2lyY2xlIGN4PSIyMDAiIGN5PSIyMDAiIHI9IjIwMCIvPjwvY2xpcFBhdGg+PGcgY2xpcC1wYXRoPSJ1cmwoI3pvcmctY2xpcCkiPjxyZWN0IGNsYXNzPSJ6b3JnLWJnIiB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIvPjxwYXRoIGNsYXNzPSJ6b3JnLWZnIiBkPSJNLTYwLTIwTDQ2MC0yMEw0NjAgOTBMODAgMzEwTDQ2MCAzMTBMNDYwIDQyMEwtNjAgNDIwTC02MCAzMTBMMzIwIDkwTC02MCA5MFoiLz48L2c+PC9zdmc+\",\"desc\":\"zOrg governance shares. Bonded with zOrgz to direct conviction toward existing TokenList entries.\",\"e\":[],\"v\":true}"
+  "json": "{\"i\":\"3718177199436581777268575498026466751093263122\",\"c\":1,\"k\":\"eip155\",\"p\":\"ERC-20\",\"x\":true,\"o\":false,\"f\":false,\"a\":\"0x00a6ba94bbb5474725515de88fe04f854f2dcb12\",\"n\":\"Z Shares\",\"s\":\"Z\",\"d\":18,\"t\":\"#ffffff\",\"r\":992000,\"u\":\"https://zorg.wei.domains\",\"au\":\"\",\"l\":\"data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgdmlld0JveD0iMCAwIDQwMCA0MDAiPjxzdHlsZT4uem9yZy1iZ3tmaWxsOiNmZmZ9LnpvcmctZmd7ZmlsbDojMDAwfUBtZWRpYShwcmVmZXJzLWNvbG9yLXNjaGVtZTpkYXJrKXsuem9yZy1iZ3tmaWxsOiMwMDB9LnpvcmctZmd7ZmlsbDojZmZmfX08L3N0eWxlPjxjbGlwUGF0aCBpZD0iem9yZy1jbGlwIj48Y2lyY2xlIGN4PSIyMDAiIGN5PSIyMDAiIHI9IjIwMCIvPjwvY2xpcFBhdGg+PGcgY2xpcC1wYXRoPSJ1cmwoI3pvcmctY2xpcCkiPjxyZWN0IGNsYXNzPSJ6b3JnLWJnIiB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIvPjxwYXRoIGNsYXNzPSJ6b3JnLWZnIiBkPSJNLTYwLTIwTDQ2MC0yMEw0NjAgOTBMODAgMzEwTDQ2MCAzMTBMNDYwIDQyMEwtNjAgNDIwTC02MCAzMTBMMzIwIDkwTC02MCA5MFoiLz48L2c+PC9zdmc+\",\"desc\":\"Governance and ownership shares of the zFi protocol and its onchain dapps, including zSwap. Bond with zOrgz to rank TokenList entries by conviction vote. Under a buyback program from coins launched and listed on zFi.\",\"e\":[],\"v\":true}"
  },
  {
   "id": "1334160193485309697971829933264346612480800613613",
@@ -213,7 +213,7 @@
   // measured, so ~3120/64665. The others are plausible stand-ins - the
   // simulation only has to be self-consistent, not accurate.
   USD[A.FWA] = 0.0483;
-  USD["0x00a6ba94bbb5474725515de88fe04f854f2dcb12"] = 0.012;  // ZORG
+  USD["0x00a6ba94bbb5474725515de88fe04f854f2dcb12"] = 0.012;  // Z
   USD["0xe9b1cfea55baa219e34301f2f31b9fd0921664ed"] = 0.35;   // ZAMM
   USD["0x00000000008835cef3e0d2333695f288ee6b63a6"] = 24;     // zzz  (0 dec)
   USD["0x0000000000696760e15f265e828db644a0c242eb"] = 6.5;    // WEI  (0 dec)
@@ -9153,11 +9153,11 @@ finally{--busy}
     // stops conviction from moving it afterwards - so starting before the list
     // lands would pre-empt the ranking and then restore the pre-empted pair,
     // and the preview would contradict production while looking deliberate.
-    // ZORG is registry-only: its presence means the curated list is in.
+    // Z is registry-only: its presence means the curated list is in.
     await wait(function () {
       var sel = document.getElementById("toSel");
       for (var i = 0; i < sel.options.length; i++) {
-        if (sel.options[i].textContent === "ZORG") return true;
+        if (sel.options[i].textContent === "Z") return true;
       }
       return false;
     }, 8000);

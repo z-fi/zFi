@@ -137,7 +137,7 @@ abstract contract PostDeployListings {
             992_000,
             ZORG_LOGO,
             "https://zorg.wei.domains",
-            "zOrg governance shares. Bonded with zOrgz to direct conviction toward existing TokenList entries.",
+            "Governance and ownership shares of the zFi protocol and its onchain dapps, including zSwap. Bond with zOrgz to rank TokenList entries by conviction vote. Under a buyback program from coins launched and listed on zFi.",
             false,
             TokenList.Standard.ERC20
         );

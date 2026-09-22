@@ -56,7 +56,7 @@ letter-spacing:.04em;white-space:nowrap;margin-right:.15em}
 .panel input::placeholder{color:var(--ph);opacity:1}
 .pill{display:inline-flex;align-items:center;gap:.4em;min-width:0;max-width:100%;cursor:pointer}
 .pill:hover,.pill:focus-within{color:var(--f)}
-.panel select,.dly select,#pvAssetB{appearance:none;-webkit-appearance:none;border:0;background:transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5'%3E%3Cpath d='M0 0h8L4 5z' fill='%23999'/%3E%3C/svg%3E") no-repeat right 0 center;padding:0 .85em 0 0;min-width:0;max-width:min(8em,100%);font-size:.9em;font-weight:600;color:var(--f);letter-spacing:.02em;cursor:pointer;text-overflow:ellipsis}
+.panel select,.dly select,#pvAssetB,#mkAssetB,#mkPayB{appearance:none;-webkit-appearance:none;border:0;background:transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5'%3E%3Cpath d='M0 0h8L4 5z' fill='%23999'/%3E%3C/svg%3E") no-repeat right 0 center;padding:0 .85em 0 0;min-width:0;max-width:min(8em,100%);font-size:.9em;font-weight:600;color:var(--f);letter-spacing:.02em;cursor:pointer;text-overflow:ellipsis}
 .panel select:focus{outline:0}
 option,optgroup{background-color:var(--b);color:var(--f)}
 svg{vertical-align:middle;flex-shrink:0}
@@ -169,8 +169,10 @@ vertical-align:.1em;line-height:1;text-decoration:none;margin-left:.5em}
 .o a.tg.w{color:var(--w)}
 .dly{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:.4em .6em;font-size:.75em;color:var(--m);margin-top:-1px;padding:.7em .8em;border:1px solid var(--e);transition:border-color .15s}
 .dly select{font-size:1em;max-width:min(12em,100%)}
-#pvAssetB{display:inline-flex;align-items:center;gap:.5em;font-family:inherit;font-size:1em;max-width:none}
-#pvAssetB img{width:16px;height:16px;border-radius:50%;flex:none}
+#pvAssetB,#mkAssetB,#mkPayB{display:inline-flex;align-items:center;gap:.5em;font-family:inherit;font-size:1em;max-width:none}
+#pvAssetB img,#mkAssetB img,#mkPayB img,#mkAssetB svg,#mkPayB svg{width:16px;height:16px;border-radius:50%;flex:none}
+#mkAssetB,#mkPayB{color:var(--f);cursor:pointer;font-weight:600}
+#mkPayB:disabled{cursor:default;background-image:none;padding-right:0}
 #pvTo{flex:1 1 11em;width:auto}
 #lnArtNote{color:var(--m);font-variant-numeric:tabular-nums}
 #lnArtNote.set{color:var(--f)}
@@ -371,7 +373,13 @@ background:var(--e);margin:.5em auto .1em}
 #tkFind{padding:.85em .9em;font-size:16px}.rcpt,.meta input,.dly input,.lqin{font-size:16px}.lnbtn{padding:.6em .8em}.p button,.o button,.lqbtn{padding:.6em .8em}.chtf button{padding:.5em}
 .tabs button{padding:.95em .5em}
 .dly{padding:.4em .8em}
-.dly select,#pvAssetB,.dly input:not([type=checkbox]),.dly a{padding-top:.7em;padding-bottom:.7em}
+.dly select,#pvAssetB,#mkAssetB,#mkPayB,.dly input:not([type=checkbox]),.dly a{padding-top:.7em;padding-bottom:.7em}
+.mkq{font-size:16px}
+#mkChips .bkc{padding:.75em .85em}
+#mkSort{padding:.75em 0 .75em .6em}
+#mkAdv>summary{padding:1em .8em}
+#mkList{max-height:60dvh}
+.mkr{padding:.8em .8em}
 #slipL{padding:1em 0;margin:-1em .15em -1em 0}
 #foot a,.docsmore a,.o i a{padding:1.15em .35em;margin:0 -.35em}
 #bal a,#bal1 a{padding:1.15em .1em}
@@ -442,7 +450,7 @@ background:var(--e);margin:.5em auto .1em}
 <div id="mkDet" class="hide">
 <div class="lngap" id="mkT"></div>
 <small id="mkInfo" class="mkd"></small>
-<label class="dly" id="mkAmtL">Amount<input id="mkAmt" inputmode="decimal" placeholder="0.0" autocomplete="off"><select id="mkPay" aria-label="Pay with"></select></label>
+<label class="dly" id="mkAmtL">Amount<input id="mkAmt" inputmode="decimal" placeholder="0.0" autocomplete="off"><select id="mkPay" class="hide" aria-label="Pay with"></select><button type="button" id="mkPayB" aria-haspopup="dialog" aria-label="Pay with"></button></label>
 <small id="mkQ" class="mkd"></small>
 <div class="lqacts" id="mkActs"></div>
 </div>
@@ -451,7 +459,7 @@ background:var(--e);margin:.5em auto .1em}
 <textarea id="mkDesc" class="mkq" maxlength="1024" rows="2" aria-label="Question" placeholder="A yes / no question, e.g. Will ETH close above $5k on Dec 31?"></textarea>
 <label class="dly" title="Settles the market. An address, or a .eth / .wei / .gwei name.">Resolver<input id="mkRes" placeholder="you, 0x or name" autocomplete="off" spellcheck="false"></label>
 <small id="mkResEl" class="mkd"></small>
-<label class="dly">Pot in<select id="mkAsset"></select></label>
+<label class="dly">Pot in<select id="mkAsset" class="hide" aria-label="Pot asset"></select><button type="button" id="mkAssetB" aria-haspopup="dialog" aria-label="Pot asset"></button></label>
 <label class="dly">Closes<select id="mkClose"><option value="86400">in a day</option><option value="604800" selected>in a week</option><option value="2592000">in a month</option><option value="7776000">in 3 months</option><option value="0">at…</option></select></label>
 <input id="mkAt" type="datetime-local" class="rcpt hide" aria-label="Close at">
 <details id="mkAdv"><summary>Advanced<em id="mkAdvS"></em></summary>
@@ -8177,7 +8185,7 @@ stat.textContent="";pvNote.textContent="";
 clearInterval(pvTimer);
 if(on){pvTimer=setInterval(()=>{if(document.hidden||!pvMode)return;pvRefresh()},8000);pvWake()}
 fcSync();shieldSync()}
-const PM="0x0000003b32cDD39bc950e56093df98aF220aB5C5",MK_WST="0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0",MK_AS=[[ZERO,"ETH",18],[MK_WST,"wstETH",18],["0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48","USDC",6],["0x6440f144b7e50d6a8439336510312d2f54beb01d","BOLD",18],["0x23cacffac2674514a6d4f6cd420b4cc2ac921564","tacUSD",18]].map(([addr,sym,dec])=>({addr,sym,dec}));
+const PM="0x0000003b32cDD39bc950e56093df98aF220aB5C5",MK_WST="0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0",MK_AS=[[ZERO,"ETH",18,ETH_ICON,"ether"],[MK_WST,"wstETH",18,WSTETH_ICON,"staked ether, earns yield"],["0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48","USDC",6,USDC_ICON,"dollar"],["0x6440f144b7e50d6a8439336510312d2f54beb01d","BOLD",18,BOLD_ICON,"dollar"],["0x23cacffac2674514a6d4f6cd420b4cc2ac921564","tacUSD",18,"","Tacit dollar"]].map(([addr,sym,dec,icon,sub])=>({addr,sym,dec,icon,sub}));
 let mkMode=false,mkSeq=0,mkQSeq=0,mkRvSeq=0,mkAll=[],mkPos={},mkMeta={},mkSel=null,mkF="open",mkS="pot",mkTimer=0,mkBusy=0,mkQv=null,mkWant="";
 const mkTok=a=>MK_AS.find(t=>t.addr===a)||TOKENS.find(t=>t.addr.toLowerCase()===a)||mkMeta[a]||(mkMeta[a]={addr:a,sym:a.slice(0,8),dec:18},tokMeta(a).then(t=>{mkMeta[a]={addr:a,sym:t.sym,dec:+t.dec||0};mkPaintList();mkDetPaint()}).catch(()=>{}),mkMeta[a]);
 const mkDec=h=>{h=strip0x(h);const n=i=>BigInt("0x"+(h.slice(i,i+64)||"0")),o=Number(n(0))*2,len=Number(n(o)),r=[];
@@ -8215,7 +8223,7 @@ mkT.textContent=m.d;
 mkInfo.innerHTML=`Pot ${sigAmt(m.p,t.dec,6)} ${S} · YES pays ${X(m.y)} · NO pays ${X(m.n)}<br>${m.s?mkWhen(m):live?"Closes "+new Date(m.c*1e3).toLocaleString():"Closed — awaiting the resolver"} · resolver <span id="mkRv">${m.r.slice(0,6)}…${m.r.slice(-4)}</span>${m.f?` · fee ${m.f/100}%`:""}${m.x?` · exit tax ${m.x/100}%`:" · bets final"}${m.l?` · late tax to ${m.l/100}%`:""}${me.y||me.n?`<br>You hold ${sigAmt(me.y,t.dec,6)} YES · ${sigAmt(me.n,t.dec,6)} NO`:""}`;
 nameRev(m.r).then(n=>{if(n&&mkSel===m)mkRv.textContent=safeSym(n,48)}).catch(()=>{});
 mkAmtL.classList.toggle("hide",!live);
-if(mkPay._k!==String(m.id)){mkPay._k=String(m.id);mkPay.innerHTML=(m.a===ZERO?[ZERO]:m.a===MK_WST?[ZERO,MK_WST]:[m.a]).map(a=>`<option value="${a}">${safeSym(mkTok(a).sym)}</option>`).join("");mkAmt.value="";mkQ.textContent="";mkQv=null}
+if(mkPay._k!==String(m.id)){mkPay._k=String(m.id);mkPay.innerHTML=(m.a===ZERO?[ZERO]:m.a===MK_WST?[ZERO,MK_WST]:[m.a]).map(a=>`<option value="${a}">${safeSym(mkTok(a).sym)}</option>`).join("");mkAmt.value="";mkQ.textContent="";mkQv=null;mkPayB.disabled=mkPay.options.length<2;mkIco(mkPayB,mkTok(mkPay.value))}
 const B=(a,l)=>`<button type="button" class="lqbtn" data-a="${a}">${l}</button>`;
 let h=live?B("yes","Buy YES")+B("no","Buy NO"):"";
 if(live&&m.x){if(me.y)h+=B("xy","Sell YES");if(me.n)h+=B("xn","Sell NO")}
@@ -8263,29 +8271,36 @@ clearInterval(mkTimer);
 if(on){loadEthUsd();mkLoad();mkTimer=setInterval(()=>{if(!document.hidden&&mkMode&&!mkBusy)mkLoad()},30000)}
 fcSync()}
 mk.onclick=()=>{sBlip();mkSet(!mkMode);if(!mkMode)update()};
+const mkIco=(b,t)=>{b.textContent="";if(t.icon){const im=new Image(16,16);im.src=t.icon;im.alt="";b.append(im)}else{const sp=document.createElement("span");sp.innerHTML=genIcon(t.sym);b.append(sp.firstChild)}b.append(safeSym(t.sym))};
+const mkPickA=async(sel,as,hdr)=>{sBlip();const c=await wkPick(as.map(a=>{const t=mkTok(a);return{name:safeSym(t.sym),sub:t.sub||"",icon:t.icon||"",svg:t.icon?"":genIcon(t.sym),on:a===sel.value,id:a}}),hdr);if(c&&c.id!==sel.value){sel.value=c.id;sel.dispatchEvent(new Event("change",{bubbles:true}))}};
 mkAsset.innerHTML=MK_AS.map(t=>`<option value="${t.addr}">${t.sym}</option>`).join("");
+mkAsset.onchange=()=>mkIco(mkAssetB,mkTok(mkAsset.value));mkAsset.onchange();
+mkAssetB.onclick=()=>mkPickA(mkAsset,MK_AS.map(t=>t.addr),"Pot in");
+mkPayB.onclick=()=>{if(!mkPayB.disabled)mkPickA(mkPay,[...mkPay.options].map(o=>o.value),"Pay with")};
 mkChips.onclick=e=>{const b=e.target.closest("button[data-f]");if(!b)return;sBlip();mkF=b.dataset.f;mkChipPaint();mkPaintList()};
-mkSort.onchange=()=>{mkS=mkSort.value;mkPaintList()};
+mkSort.onchange=()=>{sBlip();mkS=mkSort.value;mkPaintList()};
 const mkAdvSync=()=>{mkAdvS.textContent=[mkCan.checked&&"early close",+mkExit.value&&"exit "+ +mkExit.value+"%",+mkLate.value&&"late "+ +mkLate.value+"%"].filter(Boolean).join(" · ")||"final bets, no early close"};
 mkCan.onchange=mkExit.oninput=mkLate.oninput=mkAdvSync;mkAdvSync();
 mkFind.oninput=()=>mkPaintList();
-mkList.onclick=e=>{const r=e.target.closest(".mkr");if(!r)return;sBlip();const m=mkAll.find(x=>String(x.id)===r.dataset.k);mkSel=m&&!(mkSel&&mkSel.id===m.id)?m:null;mkForm.classList.add("hide");mkGo.textContent="New market";mkPaintList();mkDetPaint()};
+mkList.onclick=e=>{const r=e.target.closest(".mkr");if(!r)return;sBlip();const m=mkAll.find(x=>String(x.id)===r.dataset.k);mkSel=m&&!(mkSel&&mkSel.id===m.id)?m:null;mkForm.classList.add("hide");mkGo.textContent="New market";mkPaintList();mkDetPaint();if(mkSel)mkDet.scrollIntoView?.({block:"nearest",behavior:"smooth"})};
 mkList.onkeydown=e=>{if(e.key==="Enter")mkList.onclick(e)};
-mkAmt.oninput=mkPay.onchange=()=>{clearTimeout(mkAmt._t);mkAmt._t=setTimeout(mkQuote,250)};
-mkClose.onchange=()=>mkAt.classList.toggle("hide",mkClose.value!=="0");
+mkAmt.oninput=()=>{clearTimeout(mkAmt._t);mkAmt._t=setTimeout(mkQuote,250)};
+mkPay.onchange=()=>{mkIco(mkPayB,mkTok(mkPay.value));mkAmt.oninput()};
+mkClose.onchange=()=>{sBlip();mkAt.classList.toggle("hide",mkClose.value!=="0")};
+mkAdv.ontoggle=()=>sBlip();
 mkRes.oninput=()=>{clearTimeout(mkRes._t);const v=mkRes.value.trim(),my=++mkRvSeq;
 if(!v){mkResEl.textContent=account?`Defaults to you — ${account.slice(0,6)}…${account.slice(-4)}`:"Defaults to you";if(account)nameRev(account).then(n=>{if(n&&my===mkRvSeq)mkResEl.textContent="Defaults to you — "+safeSym(n,48)}).catch(()=>{});return}
 const e=rcErr(v);if(e)return mkResEl.textContent=e;mkResEl.textContent="resolving…";
 mkRes._t=setTimeout(()=>rcvOf(v).then(a=>{if(my===mkRvSeq)mkResEl.textContent=a?`→ ${a.slice(0,6)}…${a.slice(-4)}`:"Name not registered"},x=>{if(my===mkRvSeq)mkResEl.textContent=x.message}),250)};
 mkActs.onclick=async e=>{const b=e.target.closest("button[data-a]");if(!b||!mkSel||mkBusy)return;if(!account)return void connect();
 const a=b.dataset.a,m=mkSel,me=mkPos[m.id]||{},I=encUint(m.id),T=d=>({from:account,to:PM,data:d,value:"0x0"});
-if(/^(r[yn]|void|close)$/.test(a)&&!b.dataset.c){b.dataset.c=1;b.textContent="Confirm: "+b.textContent;return}
+if(/^(r[yn]|void|close)$/.test(a)&&!b.dataset.c){sBlip();b.dataset.c=1;b.textContent="Confirm: "+b.textContent;return}
 sBlip();mkBusy=1;b.disabled=true;
 try{if(a==="yes"||a==="no")await mkBuy(a==="yes");
 else await mkSend(T({xy:"0x0fc95438"+I+encBool(true)+encUint(me.y||0)+encAddr(account),xn:"0x0fc95438"+I+encBool(false)+encUint(me.n||0)+encAddr(account),claim:"0xddd5e1b2"+I+encAddr(account),close:"0xae418095"+I,ry:"0x52a34b05"+I+encBool(true),rn:"0x52a34b05"+I+encBool(false),void:"0x5ea2145b"+I,fees:"0xf2555278"+encAddr(m.a)+encAddr(account)}[a]),{xy:"Selling…",xn:"Selling…",claim:"Claiming…",fees:"Withdrawing…"}[a]||"Settling…")}
 catch(x){err(x)}finally{mkBusy=0;b.disabled=false;mkDetPaint()}};
 mkGo.onclick=async()=>{if(mkGo.disabled)return;sBlip();
-if(mkForm.classList.contains("hide")){mkSel=null;mkPaintList();mkDetPaint();mkForm.classList.remove("hide");mkGo.textContent="Create market";mkRes.oninput();return}
+if(mkForm.classList.contains("hide")){mkSel=null;mkPaintList();mkDetPaint();mkForm.classList.remove("hide");mkGo.textContent="Create market";mkRes.oninput();mkForm.scrollIntoView?.({block:"nearest",behavior:"smooth"});return}
 if(!account)return void connect();
 mkGo.disabled=true;
 try{const d=mkDesc.value.trim(),db=new TextEncoder().encode(d);if(!d)throw Error("Write the question first.");if(db.length>1024)throw Error("That question is too long.");
@@ -9175,7 +9190,7 @@ const u=(location.origin&&location.origin!=="null"?location.origin+location.path
 try{await navigator.clipboard.writeText(u);stat.textContent="Link copied";setTimeout(()=>{if(stat.textContent==="Link copied")stat.textContent=""},2e3)}
 catch{stat.textContent=u}
 };
-tabSwap.onclick=()=>{sBlip();setTab("swap")};
+tabSwap.onclick=()=>{sBlip();if(lnMode)lnSet(false);if(wnMode)wnSet(false);if(pvMode)pvSet(false);if(mkMode)mkSet(false);setTab("swap")};
 tabSend.onclick=()=>{sBlip();setTab("send")};
 {const TABS=[tabSwap,tabSend,tabBook],NAMES=["swap","send","book"];
 for(const el of TABS)el.addEventListener("keydown",e=>{

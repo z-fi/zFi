@@ -68,8 +68,8 @@ function pmChain({ held = {} } = {}) {
   return c;
 }
 
-async function openMarkets(chain, hash) {
-  const p = await loadPage({ chain, ...(hash ? { hash } : {}) });
+async function openMarkets(chain, hash, extra = {}) {
+  const p = await loadPage({ chain, ...(hash ? { hash } : {}), ...extra });
   await p.connect();
   if (!p.$('mkPanel').classList.contains('hide')) return p;
   p.click('mk');
@@ -272,5 +272,45 @@ test('markets mode', async (t) => {
     assert.equal(calls[1].to.toLowerCase(), PM);
     assert.equal(calls[1].data.slice(2, 10), '28ccbb45', 'bet');
     assert.equal(chain.signed.length, 0);
+  });
+
+  await t.test('the Swap tab leaves Markets for a plain swap', async () => {
+    const p = await openMarkets(pmChain());
+    p.click('tabSwap');
+    await p.settle();
+    assert.ok(p.$('mkPanel').classList.contains('hide'), 'markets panel dismissed');
+    assert.equal(p.$('mk').getAttribute('aria-pressed'), 'false');
+    assert.ok(!p.$('swap').classList.contains('hide'), 'the swap button is back');
+    assert.ok(p.visible('rcvPanel'), 'the receive panel is back');
+  });
+
+  await t.test('picks the pot asset from an icon list', async () => {
+    const p = await openMarkets(pmChain());
+    p.click('mkGo');
+    assert.match(p.$('mkAssetB').textContent, /ETH/);
+    assert.ok(p.$('mkAssetB').querySelector('img'), 'the asset button carries its icon');
+    p.click('mkAssetB');
+    await p.waitFor(() => !p.$('wkWrap').classList.contains('hide'), { label: 'asset dialog' });
+    const rowsA = [...p.$('wkList').querySelectorAll('.tkr')];
+    assert.equal(rowsA.length, 5);
+    assert.ok(rowsA.every((r) => r.firstChild.nodeName === 'IMG' || r.firstChild.classList?.contains('wki')), 'every asset row leads with an icon');
+    rowsA.find((r) => /BOLD/.test(r.textContent)).click();
+    await p.settle();
+    assert.equal(p.$('mkAsset').value, BOLD);
+    assert.match(p.$('mkAssetB').textContent, /BOLD/);
+  });
+
+  await t.test('a bet chimes when the wallet accepts it and again when it lands', async () => {
+    const chain = pmChain();
+    const p = await openMarkets(chain, undefined, { chime: true });
+    await pick(p, RAIN);
+    p.type('mkAmt', '1');
+    await p.waitFor(() => /Wins/.test(p.$('mkQ').textContent), { label: 'quote' });
+    const before = p.window.__chime.voices.length;
+    act(p, 'yes').click();
+    await p.waitFor(() => chain.sentTo(PM).length === 1, { label: 'bet sent' });
+    const notes = () => p.window.__chime.voices.slice(before).map((v) => v.map((n) => Math.round(n.f ?? n)).join(','));
+    await p.waitFor(() => notes().some((n) => n === '392,494,587,784'), { label: 'confirmed chime' });
+    assert.ok(notes().includes('392,587'), 'the accepted chime came first');
   });
 });
