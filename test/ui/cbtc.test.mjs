@@ -278,6 +278,48 @@ describe('borrowing cUSD against the cBTC note', () => {
     p.close();
   });
 
+  // The loan is kept before it is sent, so a lost answer never loses its keys; only the relay's own refusal takes it back.
+  const borrowWith = async answer => {
+    const chain = cbtcChain();
+    engine(chain);
+    chain.logs.push({ address: POOL, blockNumber: '0x' + (B0 + 0x5).toString(16), logIndex: '0x0', topics: [T_LEAVES, '0x' + u256(0)],
+      data: coder.encode(['bytes32[]', 'bytes[]'], [[D.cbtcLeaf, F.otherLeaf], ['0x', '0x']]) });
+    chain.answer(POOL, SEL.NEXT, '0x' + u256(2));
+    const p = await loadPage({ chain, storage: withNote() });
+    const inner = p.window.fetch;
+    let asked = 0;
+    p.window.fetch = async (url, init) => (String(url).includes('/confidential/submit') && init && /cdpmint/.test(init.body) ? (asked++, answer()) : inner(url, init));
+    await p.connect();
+    p.click('pv');
+    await p.settle();
+    await p.waitFor(() => p.$('pvList').querySelector('button[data-a="borrow"]'), { label: 'the borrow action on the cBTC note', ...SLOW });
+    p.queuePrompt('30');
+    p.click(p.$('pvList').querySelector('button[data-a="borrow"]'));
+    await p.waitFor(() => asked && !/Building the loan/.test(p.text('stat')), { label: 'the loan attempt to finish', ...SLOW });
+    await p.settle();
+    const cdps = JSON.parse(p.window.localStorage['zswap:cpc:' + fp] || '[]');
+    const cusd = JSON.parse(p.window.localStorage['zswap:cpn:' + fp]).filter(n => n.s === D.debtNk);
+    return { p, cdps, cusd };
+  };
+
+  test('a loan the relay refuses leaves no position and no cUSD note behind', async () => {
+    const { p, cdps, cusd } = await borrowWith(async () => ({ ok: false, status: 400, json: async () => ({ error: 'bad op' }) }));
+    assert.match(p.text('stat'), /bad op/);
+    assert.equal(cdps.length, 0, 'no position the engine never opened');
+    assert.equal(cusd.length, 0, 'no cUSD note the pool never minted');
+    assert.doesNotMatch(p.text('pvList'), /cUSD against/);
+    p.close();
+  });
+
+  test('a loan whose answer never comes back keeps its position and cUSD note', async () => {
+    const { p, cdps, cusd } = await borrowWith(async () => { throw Object.assign(new Error('aborted'), { name: 'AbortError' }); });
+    assert.match(p.text('stat'), /did not answer/);
+    assert.equal(cdps.length, 1, 'the relay may have taken it, so the position stays');
+    assert.equal(cdps[0].leaf, D.positionLeaf);
+    assert.equal(cusd.length, 1, 'and so does the debt note\'s key');
+    p.close();
+  });
+
   test('a wiped browser finds the position again from the engine\'s CdpMinted event', async () => {
     const chain = cbtcChain();
     chain.logs.push({ address: ENGINE, blockNumber: '0x' + (B0 + 0x6).toString(16), logIndex: '0x0',

@@ -349,6 +349,23 @@ describe('private sends', () => {
     p.close();
   });
 
+  test('two pool syncs at once read each new block range once, and record each spend once', async () => {
+    const p = await open(withNote(poolChain()));
+    await ready(p);
+    await p.settle();
+    const nu = '0x' + 'ab'.repeat(32);
+    settleOn(p.chain, { nullifiers: [nu], leaves: ['0x' + 'cd'.repeat(32)], memos: ['0x' + '22'.repeat(169)] });
+    const from = p.chain.log.length;
+    await p.window.eval('Promise.all([cpSync(true),cpSync(true)])');
+    const pool = POOL.toLowerCase();
+    const reads = p.chain.log.slice(from).filter(x => x.method === 'eth_getLogs' && JSON.stringify(x.params).toLowerCase().includes(pool)).map(x => x.params[0].fromBlock);
+    assert.ok(reads.length > 0, 'the new settle is read');
+    assert.equal(new Set(reads).size, reads.length, 'the second sync starts where the first ended');
+    assert.equal(p.window.eval('cpPool.spent').filter(x => x === nu).length, 1, 'the spend is recorded once');
+    await p.settle();
+    p.close();
+  });
+
   test('withdrawing part of a note is Tacit\'s send-and-unwrap, and the rest stays shielded as change', async () => {
     const p = await open(withNote(poolChain()));
     await ready(p);

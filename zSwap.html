@@ -359,7 +359,7 @@ background:var(--e);margin:.5em auto .1em}
 .invq{padding:10px 11px;margin:-10px -6px;opacity:1}
 .invm,.invsh{padding:10px 3px;margin:-10px -1px}}
 @media(pointer:coarse) and (max-width:24em){
-.meta{gap:.3em .12em}.mtl{gap:.12em}#th,#lk,#lq,#ln,#wn,#pv{width:32px;height:32px}#slip{width:2em}}.dlgm{white-space:pre-wrap;text-align:left;max-height:50vh;overflow:auto}.dlgt{width:100%;box-sizing:border-box;font:inherit;font-size:.8em;word-break:break-all}.dlgr{display:flex;gap:1.2em;justify-content:flex-end;margin-top:.5em}</style>
+.meta{gap:.3em .12em}.mtl{gap:.12em}#th,#lk,#lq,#ln,#wn,#pv{width:32px;height:32px}#slip{width:2em}}.dlgm{white-space:pre-wrap;text-align:left;max-height:50vh;overflow:auto}.dlgt{width:100%;box-sizing:border-box;font:inherit;font-size:.8em;word-break:break-all}@media(pointer:coarse){.dlgt{font-size:16px}}.dlgr{display:flex;gap:1.2em;justify-content:flex-end;margin-top:.5em}</style>
 <script>const H=document.documentElement;let LS,SS;try{LS=localStorage||{}}catch{LS={}}try{SS=sessionStorage}catch{SS={getItem(){return null},setItem(){},removeItem(){}}}if(LS.t?LS.t=='d':matchMedia('(prefers-color-scheme:dark)').matches)H.className='d'</script>
 <button id="sd" title="Sound" aria-label="Toggle sound"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5v5h3.5L12 18V6L7.5 9.5H4z"/><path id="sdw" d="M15.5 9a4 4 0 0 1 0 6"/><path id="sdx" d="M16 9.5l4 4m0-4l-4 4"/></svg></button>
 <span id="net" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false" title="Network"></span>
@@ -550,7 +550,7 @@ gasFloor:100000000n,icon:CHAIN_ICON_BASE,rpcs:["https://base-rpc.publicnode.com"
 4663:{name:"Robinhood",slowTip:true,sweep4:false,curve:5,fill:"0x03d95ecAF7B2Ab6027b8541b19Cb0Ce5CEd9bC74",exec:"0x1434A2579DE1009aA12b7064A161E53a5be2C030",slvId:"4663",slvSlug:"robinhood",sources:["UniV2","Sushi","zAMM","UniV3","UniV4","Curve","Lido","Wrap","Precision"],v4port:"0x508ad1b0ae31FaF295c5af8C5c2bE9e33E0D19C4",
 wrapped:"0x0bd7d308f8e1639fab988df18a8011f41eacad73",explorer:"https://robinscan.io",hubs:["0x0bd7d308f8e1639fab988df18a8011f41eacad73","0x5fc5360d0400a0fd4f2af552add042d716f1d168"],
 money:["0x5fc5360d0400a0fd4f2af552add042d716f1d168"],gasFloor:1500000000n,
-icon:CHAIN_ICON_RH,rpcs:["https://rpc.mainnet.chain.robinhood.com","https://robinhood-rpc.publicnode.com"]},
+icon:CHAIN_ICON_RH,rpcs:["https://robinhood-rpc.publicnode.com","https://rpc.mainnet.chain.robinhood.com"]},
 };
 const MB={sb:"0x000000dA7bb4B2A9E3e80e9A4D4157E26CA6189b",s1:"0x000000fF3D7A2d373615141d7489Ca66683DbecF",sw:"0x00000087A6dc5071779Ed1F8274A39230768B976",du:"0x000000a213b430D14Bae6062c176289B05e04489",ob:"0x000000e6c7a12C80525ee74e7434aAb919447D95",fl:"0x00000080198137F790DA4C52bb902cf87c276748",pr:"0x0000007Be74558A1F8c9045301c6F44C8eD0c9eB",la:"0x0000002fC8E77585A008Aa45d78A71ad36293aEe"};
 const L2B={sb:"0x0000001330435808A906432449D233d482Bc9b60",sw:"0x000000015d9428959A495E31A6999E1C61C64F00",du:"0x000000fa42d555173395323b2956e9c42EFaEFf2",ob:"0x0000007a1c93d42dD739E8d6cA9Dabf330934970",fl:"0x000000AC7d32e802B003a31F790eb28Ed3294Bac",pr:"0x000000D14E24e5FC8965bcDE58f21f704C944999",la:"0x0000002fC8E77585A008Aa45d78A71ad36293aEe"};
@@ -2924,6 +2924,7 @@ const g=lqReserveGas();
 try{reserve=await gasNow()*g*2n}catch{}
 if(reserve<=0n)reserve=gasFloor()*g;
 }
+if(TOKENS[toSel.value]!==t)return;
 const max=toBalance>reserve?toBalance-reserve:0n;
 if(lqFillMax(t,max))return;
 outAmt.value=formatUnits(max,t.dec);
@@ -4614,7 +4615,7 @@ bookOrder(rows).forEach(i=>{
 const r=rows[i],[a,bg]=legs[i]||[];
 if(!a||!bg)return;
 const mine=r.maker.toLowerCase()===me();
-const expired=!!(r.exp&&now>r.exp);
+const expired=!!(r.exp&&(r.floor?now>=r.exp:now>r.exp));
 const tags=(expired?'<span class="tg w" title="This order has lapsed and can no longer be filled, but its escrow is still held by the board. Reclaim returns it to you.">expired</span>':"")
 +(r.nA||r.nB||r.isNFT?'<span class="tg">NFT</span>':"")
 +(r.v2&&!r.pf&&!r.nA&&!r.nB?'<span class="tg">AON</span>':"")
@@ -5017,7 +5018,7 @@ const rlDurable=()=>{try{return LS===localStorage}catch{return false}};
 const rlSave=v=>{if(!rlDurable())return false;
 const ok=v.filter(rlOk);
 const own=ok.filter(i=>i.o),rest=ok.filter(i=>!i.o);
-const keep=own.slice(-40).concat(rest.slice(-(40-Math.min(own.length,40))));
+const keep=own.slice(-40).concat(rest.slice(rest.length-(40-Math.min(own.length,40))));
 try{LS[RL_KEY+CHAIN_ID]=JSON.stringify(keep);return LS[RL_KEY+CHAIN_ID]!==undefined}catch{return false}};
 const RL_STRIDE=9000,RL_STEPS=45;
 const rlGet=async(from,to)=>{
@@ -6572,7 +6573,7 @@ const pct=cap>0n?Number(cbSold*1000n/cap)/10:0;
 const goal=cap>0n&&price>0n?cap*price/CONE:0n;
 const head=goal>0n
 ?`<span>${trimAmt(cbSold*price/CONE,18)} of ${trimAmt(goal,18)} ETH backed</span>`
-+`<span>${open?days+" days left":"closed"}${cbDrawn>0?" · "+cbDrawn+"% released":""}</span>`
++`<span>${open?(dl?days+" days left":"open"):"closed"}${cbDrawn>0?" · "+cbDrawn+"% released":""}</span>`
 :"";
 const bar=goal>0n
 ?`<div class="lqbar fill" style="--at:${Math.max(0,Math.min(100,pct)).toFixed(1)}%" aria-hidden="true"><b></b></div>`
@@ -6862,7 +6863,7 @@ stat.innerHTML=`${safeSym(sym)} is raising at `
 +` · ${trimNum(+formatUnits(t.goal,18))} ETH over ${trimNum(Number(t.secs)/86400)} days`
 +` · backers can burn back for whatever you have not drawn`;
 }
-let lnMode=false,lnArtBytes=null,lnArtMime=0;
+let lnMode=false,lnArtBytes=null,lnArtMime=0,lnArtSeq=0;
 function lnSet(on){
 if(on&&PLAUNCH===ZERO)return;
 if(on)cbDisarm();
@@ -6944,8 +6945,10 @@ lnArt.onchange=async()=>{
 const f=lnArt.files&&lnArt.files[0];
 if(!f)return;
 lnArtNote.textContent="reading…";
+const my=++lnArtSeq;
 try{
 const r=await lnPrepare(f);
+if(my!==lnArtSeq)return;
 lnArtBytes=r.bytes;lnArtMime=r.mime;
 lnArtNote.textContent=`${(r.bytes.length/1024).toFixed(1)} KB`;
 lnArtNote.classList.add("set");
@@ -6953,6 +6956,7 @@ let b64="";for(const x of r.bytes)b64+=String.fromCharCode(x);
 lnPrev.src="data:"+MIME_NAME[r.mime]+";base64,"+btoa(b64);
 lnPrev.classList.add("set");
 }catch(e){
+if(my!==lnArtSeq)return;
 lnArtBytes=null;lnArtNote.classList.remove("set");lnPrev.classList.remove("set");
 lnArtNote.textContent="none";stat.textContent=e.message||String(e);
 }
@@ -7139,7 +7143,7 @@ const cpHex=b=>{let s="";for(const x of b)s+=x.toString(16).padStart(2,"0");retu
 let CP_RELAY="https://api.tacit.finance";
 const CP_POOL="0x000000000Ed1eabD231Be41d93b719056F7febFC",CP_ROUTER="0x000000005dA3E3B73726af3c774Deeb9472D4992",
 CP_ETH="0x3cba71e1114af183cdeacc6b8457a474d17529fd28704480ca799d0d03126f34",CP_SCALE=10000000000n,CP_BLOCK=25998736,
-CP_LOGS=["https://mainnet.gateway.tenderly.co","https://eth.drpc.org"],
+CP_LOGS=["https://mainnet.gateway.tenderly.co","https://rpc.mevblocker.io","https://gateway.tenderly.co/public/mainnet","https://eth.api.onfinality.io/public"],
 CP_NI="0x00000000000000000000000000000000000000C8",CP_KEY="zswap:cpk:",CP_NOTES="zswap:cpn:",CP_CACHE="zswap:cppool";
 const CP_L2={8453:{bridge:"0x3154Cf16ccdb4C6d922629664174b904d80F2C35",peer:"0x4200000000000000000000000000000000000010",gas:1200000n},
 4663:{inbox:"0x1A07cc4BD17E0118BdB54D70990D2158AbAD7a2D",peer:"0xDf8755334ce7A73cCF6b581C02eA649AE3E864b3",gas:1000000n}};
@@ -7238,7 +7242,7 @@ try{const r=await fetch((base||cpRelayBase())+path,body?{method:"POST",headers:{
 if(raw){const t=r.text?await r.text():JSON.stringify(await r.json());if(!r.ok)throw Error(String(t).slice(0,160)||"The node answered "+r.status+".");return{text:String(t).trim()}}
 let j=null;try{j=await r.json()}catch{}
 if(r.status===404&&!body)return{status:"unknown"};
-if(!r.ok)throw Error((j&&j.error)||"The relay answered "+r.status+".");
+if(!r.ok)throw Object.assign(Error((j&&j.error)||"The relay answered "+r.status+"."),{rej:r.status<500});
 return j||{}}
 catch(e){if(e&&e.name==="AbortError")throw Error("The relay did not answer.");
 if(e instanceof TypeError)throw Error("The relay could not be reached from this page.");throw e}
@@ -7415,8 +7419,9 @@ const debt=parseUnits(s,8);if(debt<=0n||debt>max)throw Error("Borrow more than z
 await cpScanCdps().catch(()=>0);const cdps=cpLoadCdps(),i=cdps.reduce((m,p)=>Math.max(m,p.i+1),0),{root,path}=cpTree(c.leaves,li),rate="0x"+(w(rt)||10n**27n).toString(16).padStart(64,"0"),X=cdpBuildOp(k,li,root,path,debt,rate,i),self=pvPath.value==="self";
 const memo=cpSeal(cpPub,{value:debt,blinding:X.S.blind,secret:X.S.nk,owner:X.S.dOwner,asset:CP_CUSD},cpRandom());
 const p={i,v:String(debt),cv:String(k.value),c:n.b,rate,leaf:cdpLeaf(debt,rate,X.S.owner,X.S.nonce,[[k.asset,k.value]]),memo,at:Math.floor(Date.now()/1000)};cdps.push(p);cpSaveCdps(cdps);
-if(!cpNotes.some(x=>x.s===X.S.nk)){cpNotes.push({i:-1,v:String(debt),a:CP_CUSD,s:X.S.nk,b:"0x"+X.S.blind.toString(16).padStart(64,"0"),at:p.at});cpSaveNotes()}
-const j=await relayFetch(CSUB,{type:"cdpmint",op:X.op,memos:[memo],mode:self?"prove":"settle"});if(!j.jobId)throw Error("The relay did not take the loan.");
+const nn=cpNotes.some(x=>x.s===X.S.nk)?null:{i:-1,v:String(debt),a:CP_CUSD,s:X.S.nk,b:"0x"+X.S.blind.toString(16).padStart(64,"0"),at:p.at};if(nn){cpNotes.push(nn);cpSaveNotes()}
+const undo=()=>{const q=cpLoadCdps().filter(x=>x.leaf!==p.leaf);cpSaveCdps(q);const ix=cpNotes.indexOf(nn);if(ix>=0){cpNotes.splice(ix,1);cpSaveNotes(true)}};
+let j;try{j=await relayFetch(CSUB,{type:"cdpmint",op:X.op,memos:[memo],mode:self?"prove":"settle"})}catch(e){if(e&&e.rej)undo();throw e}if(!j.jobId){undo();throw Error("The relay did not take the loan.")}
 p.job=j.jobId;p.js=j.status||"pending";p.rb=cpRelayBase();p.self=self?1:0;cpSaveCdps(cdps);stat.textContent=self?"Proving the loan. Press settle when it appears.":"The relay is opening the position; the cUSD lands in a minute or two."};
 const cpCdpPoll=async p=>{const st=await relayFetch("/confidential/status?id="+encodeURIComponent(p.job),null,p.rb);p.js=st.status||"unknown";const pr=st.proof||st.proofBytes;
 if(st.status==="proven"&&/^0x[0-9a-fA-F]+$/.test(st.publicValues||"")&&/^0x[0-9a-fA-F]+$/.test(pr||"")&&st.publicValues.toLowerCase().includes(strip0x(p.leaf))){p.pv=st.publicValues;p.pr=pr}};
@@ -7500,7 +7505,7 @@ for(let i=0;i<136;i+=32){const k=sha2(cpCat(ss,[i/32]));for(let j=0;j<32&&i+j<13
 const v=big(pl.slice(0,8)),bl=big(pl.slice(8,40)),sec="0x"+cpHex(pl.slice(40,72)),as="0x"+cpHex(pl.slice(72,104)),ow="0x"+cpHex(pl.slice(104,136));
 if(!v||!bl||cpOwner(sec)!==ow)return null;const{cx,cy}=cpXY(cpCommit(v,bl));return cpLeaf(cx,cy,ow,as)===String(lf).toLowerCase()?{v,bl,sec,as}:null}catch{return null}};
 const cpArr=(d,off)=>{const n=Number(BigInt("0x"+cpWord(d,off)||"0x0")),o=[];for(let i=0;i<n;i++)o.push("0x"+cpWord(d,off+1+i));return o};
-let cpRet=0;const cpSync=async(force,nu)=>{
+let cpRet=0,cpSyncQ=Promise.resolve();const cpSync=(force,nu)=>{const p=cpSyncQ.then(()=>cpSync0(force,nu));cpSyncQ=p.catch(()=>{});return p};const cpSync0=async(force,nu)=>{
 if(!force&&cpPool&&Date.now()-cpSyncAt<60000)return cpPool;
 let c=cpPool;if(!c)try{c=JSON.parse(LS[CP_CACHE]||"null")}catch{}
 if(!c||c.pool!==CP_POOL||c.v!==3||![c.leaves,c.memos,c.spent,c.wraps,c.lk,c.lm,c.ln,c.ls,c.q,c.tx].every(Array.isArray)||!(c.to>=CP_BLOCK))c={v:3,pool:CP_POOL,to:CP_BLOCK-1,leaves:[],memos:[],spent:[],wraps:[],lk:[],lm:[],ln:[],ls:[],q:[],tx:[]};
@@ -7519,7 +7524,7 @@ else if(t===CP_T_WRAP&&l.topics[2])c.wraps.push([l.topics[1].toLowerCase(),"0x"+
 c.to=head}
 const next=Number(BigInt(await cfgRead(C,[{to:CP_POOL,data:"0x"+SEL_CPNEXT},toHex(head)])||"0x0"));
 if(c.leaves.length<next||c.leaves.slice(0,next).some(x=>!x)){
-if(cached){cpPool=null;try{delete LS[CP_CACHE]}catch{}return cpSync(true,nu)}
+if(cached){cpPool=null;try{delete LS[CP_CACHE]}catch{}return cpSync0(true,nu)}
 throw Error("The pool's history came back incomplete.")}
 await cpLockQ(c);await cpLockChk(c,head);if(nu)await cpNuChk(c);cpPool=c;cpSyncAt=Date.now();try{LS[CP_CACHE]=JSON.stringify(c)}catch{try{delete LS[CP_CACHE]}catch{}}return c};
 const cpLadder=v=>{let x=BigInt(v);if(x<=0n)return 0n;const d=x.toString().length;if(d<=2)return x;const s=10n**BigInt(d-2);return(x+s-1n)/s*s};
@@ -7907,7 +7912,7 @@ let o=0;for(const n of cpNotes){if(n.p||n.ex)continue;const s=cpStatus(n).s,a=n.
 for(const L of cpInbox)if(L.st!=="claimed"&&!L.cj&&Date.now()/1e3<=+L.dl)inc[L.a]=(inc[L.a]||0n)+BigInt(L.v);
 const x=F(r),y=F(inc),m=Object.keys(cnt).filter(a=>cnt[a]>1).map(a=>`<button type="button" class="fclink" data-a="merge" data-as="${a}">merge ${(cpAs(a)||{sym:"?"}).sym}</button>`).join("");
 return x||y||o?`<div class="cpr"><span>Shielded <b>${x||"0"}</b>${y?" · incoming "+y:""}${o?` · ${o} other Tacit note${o>1?"s":""} (LP or farm), on tacit.finance`:""}</span><span>${m}</span></div>`:""};
-const cpFind=async full=>{const c=await cpSync(!!full),m={},own=id=>cpNotes.some(n=>!n.p&&cpNoteOf(n).dep===id),z=()=>++q%16?0:new Promise(r=>setTimeout(r)),cu=cpCur(),N=64+cpNotes.concat(cpSends.map(S=>({i:S.di}))).reduce((x,n)=>Number.isInteger(n.i)&&n.i>=0?Math.max(x,n.i+1):x,0);let f=0,q=0;
+let cpFindQ=Promise.resolve();const cpFind=full=>{const p=cpFindQ.then(()=>cpFind0(full));cpFindQ=p.catch(()=>{});return p};const cpFind0=async full=>{const c=await cpSync(!!full),m={},own=id=>cpNotes.some(n=>!n.p&&cpNoteOf(n).dep===id),z=()=>++q%16?0:new Promise(r=>setTimeout(r)),cu=cpCur(),N=64+cpNotes.concat(cpSends.map(S=>({i:S.di}))).reduce((x,n)=>Number.isInteger(n.i)&&n.i>=0?Math.max(x,n.i+1):x,0);let f=0,q=0;
 for(const[id,amt,as]of c.wraps){const A=cpAs(as),wei=BigInt(amt),h=cpFp+id,dn=cpK[h]||0;if(!A||wei%A.scale||dn>=N||own(id))continue;const v=wei/A.scale,a=A.id,g="t"+cpFp+a,mk=a+v+"/"+dn;
 const t=cpK[g]||(cpK[g]=[]);for(let i=t.length;i<N;i++){const d=cpDerive(cpSeed,i,a);t[i]=[cpOwner(d.secret),pmul(GP,d.blinding)];await z()}
 if(!m[mk]){m[mk]={};const V=pmul(cpH,v);for(let i=N;i-->dn;){const{cx,cy}=cpXY(padd(V,t[i][1]));m[mk][cpDepId(v,cpDepCommit(cx,cy,t[i][0]),a)]=i;await z()}}
@@ -8106,7 +8111,7 @@ cpDropOut("x"+strip0x(cpNoteOf(n).nu).slice(0,12));delete n.ex;cpSaveNotes(1);cp
 if(a==="rescue"){const r=cpRescue(n.s?BigInt(n.s):n.i);await ask("Rescue key for "+r.addr+". A reclaim of this exit pays that address on Ethereum; import the key into any wallet to spend it.",r.key);return}
 if(a==="split")return pvRun(()=>cpSplit(n),"Building the split…");
 if(a==="borrow")return pvRun(()=>cpCdpOpen(n),"Building the loan…");
-if(a==="exit"){if(pvAct.value!=="out"&&!n.ex){const A=cpAs(cpNoteOf(n).asset)||cpSel();pvAsset.value=A.id;pvAssetPaint();pvAct.value="out";pvActSync();cpPaint();pvAmt.value=cpFmt(n.v,A);stat.textContent="Choose where it arrives, then press Withdraw.";pvTo.focus();return}return pvRun(()=>cpExit(n),"Building the exit…")}
+if(a==="exit"){if(pvAct.value!=="out"&&!n.ex){const A=cpAs(cpNoteOf(n).asset)||cpSel();pvAsset.value=A.id;pvAssetPaint();pvAct.value="out";pvActSync();cpPaint();pvAmt.value=f0(BigInt(n.v)*A.scale,A.dec);stat.textContent="Choose where it arrives, then press Withdraw.";pvTo.focus();return}return pvRun(()=>cpExit(n),"Building the exit…")}
 if(a==="send")return pvRun(()=>cpSelfSend(n),"Sending the exit…");
 if(a==="activate")return pvRun(()=>cpActivate(n),"Activating…");
 if(a==="reclaim")return pvRun(()=>cpReclaim(n),"Reclaiming…")};
@@ -8420,18 +8425,18 @@ return out};
 const chPair=()=>{const f=TOKENS[fromSel.value],t=TOKENS[toSel.value];
 if(!f||!t||f.addr===t.addr)return null;
 return f.addr.toLowerCase()<t.addr.toLowerCase()?[f,t]:[t,f]};
-let chLoading="";
+let chLoading="",chLoadSeq=0;
 async function loadChart(){
 const p0=chPair();
 const k0=chPairKey(p0);
-if(k0&&chLoading===k0)return;
+if(k0&&chLoading===k0&&chLoadSeq===chSeq)return;
 chBars=null;chPools=null;
 const p=p0;
 if(tab!=="swap"||!p){syncChartUI();return}
 const my=++chSeq,key=k0;
 const hit=chCache[key];
 if(hit&&Date.now()-hit.at<30000){chBars=hit.bars;chPools=hit.pools;syncChartUI();return}
-chLoading=key;
+chLoading=key;chLoadSeq=my;
 try{
 if(!await hasCode(PPLENS))return syncChartUI();
 const marketsFor=async pair=>{
@@ -8481,7 +8486,7 @@ const live=set=>set.filter(d=>d&&d.some(Boolean)).length;
 chPools=chBars?{[FINE]:live(fine),[COARSE]:live(coarse)}:null;
 chKeep(key,{at:Date.now(),bars:chBars,pools:chPools,pair:eff===p?null:eff});
 }catch{chBars=null;chPools=null}
-finally{if(chLoading===k0)chLoading=""}
+finally{if(chLoadSeq===my)chLoading=""}
 if(my===chSeq)syncChartUI();
 }
 const chPoolsAt=step=>chPools&&chPools[step]||0;
