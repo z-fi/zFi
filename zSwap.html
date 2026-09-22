@@ -175,10 +175,11 @@ vertical-align:.1em;line-height:1;text-decoration:none;margin-left:.5em}
 #lnArtNote{color:var(--m);font-variant-numeric:tabular-nums}
 #lnArtNote.set{color:var(--f)}
 .lnbtn{font:inherit;font-size:.85em;letter-spacing:.08em;text-transform:uppercase;color:var(--f);background:transparent;border:1px solid var(--e);padding:.4em .7em;cursor:pointer;transition:border-color .15s}.wnbtn{display:block;width:100%;box-sizing:border-box;font:inherit;font-size:.75em;color:var(--f);background:var(--b);border:1px solid var(--e);padding:.65em .8em;margin-top:.5em;cursor:pointer;text-align:center;transition:border-color .15s,color .15s}.wnbtn:hover{border-color:var(--f)}.wnbtn.mut{color:var(--m);cursor:default;border-color:transparent}.wnbtn.mut:hover{border-color:transparent}
-#adEl{display:block;text-align:center;color:var(--m);font-size:.72em;letter-spacing:.03em;margin-top:.9em}
-#adEl .adic{vertical-align:middle;margin:-2px .45em 0 0;border-radius:50%}
-#adEl b{color:var(--f);font-weight:600}
+#adEl,#pfEl{display:block;text-align:center;color:var(--m);font-size:.72em;letter-spacing:.03em;margin-top:.9em}
+#adEl .adic,#pfEl .adic,.pfh .adic{vertical-align:middle;margin:-2px .45em 0 0;border-radius:50%}
+#adEl b,#pfEl b{color:var(--f);font-weight:600}
 #fcEl{display:block;text-align:center;color:var(--m);font-size:.72em;letter-spacing:.03em;margin-top:.9em}
+.pfb{margin-top:.5em;padding-top:.45em;border-top:1px dashed var(--e)}.pfh{font-size:.72em;letter-spacing:.03em}.pfo{font:inherit;font-size:.75em;background:transparent;color:var(--f);border:1px solid var(--e)}.fmpf{font:inherit;background:none;border:0;padding:0;cursor:pointer;text-decoration:underline dotted var(--m);text-underline-offset:3px}
 .fclink{font:inherit;color:var(--m);background:none;border:0;border-bottom:1px solid var(--e);padding:0 0 .1em;margin-left:.35em;cursor:pointer;letter-spacing:inherit}
 .fclink:hover{color:var(--f);border-color:var(--f)}
 .fclink:disabled{cursor:default;opacity:.6}
@@ -446,7 +447,7 @@ background:var(--e);margin:.5em auto .1em}
 <small id="rcvEl"></small>
 <small id="fcEl" class="hide" role="status" aria-live="polite"></small>
 <small id="cbEl" class="hide" role="status" aria-live="polite"></small>
-<small id="adEl" class="hide" role="status" aria-live="polite"></small>
+<small id="adEl" class="hide" role="status" aria-live="polite"></small><small id="pfEl" class="hide"></small>
 <small id="lnNote" class="hide" role="status" aria-live="polite"></small>
 <button id="lnGo" class="primary hide">Launch</button>
 <button id="wnGo" class="primary hide">Register</button>
@@ -5865,7 +5866,7 @@ if(total>shown.length)lqSub.textContent+=` · showing ${shown.length} of ${total
 +(total>LQ_SCAN?` (first ${LQ_SCAN} scanned)`:"");
 lqRows=shown;
 lqList.innerHTML=shown.map(o=>lqRow(o,t0,t1)).join("")
-+`<button class="lqbtn lqnewtog" id="lqNewTog">Create a new band</button>`;
++`<button class="lqbtn lqnewtog" id="lqNewTog">Create a new band</button>`;pfPaint();pfSync().catch(()=>{});
 lqSyncAmounts();
 }catch(e){
 if(my!==lqSeq)return;
@@ -6263,6 +6264,7 @@ lqSyncAmounts();
 lqNewPreview();
 lqList.querySelector(".lqnew")?.scrollIntoView?.({block:"nearest"});
 return}
+const pb=ev.target.closest("[data-pf]");if(pb)return void pfDo(pb.dataset.pf,pb);
 const b=ev.target.closest("[data-act]");
 if(!b||busy)return;
 const p=chPair(); if(!p)return;
@@ -6287,6 +6289,7 @@ return;
 if(act==="ac"){
 const box=b.closest(".lqadd");
 const ins=box.querySelectorAll(".lqin");
+if(box.querySelector(".pfk:checked")){++busy;b.disabled=true;try{await pfAdd(box,t0,t1)}catch(e){err(e)}finally{--busy;b.disabled=false;loadLq();refreshBalance()}return}
 if(isZap(box)){
 const z=zapSide(box,t0,t1);
 if(z.err){stat.textContent=z.err;return}
@@ -6419,8 +6422,77 @@ const pr=encUint(BigInt(c.proof.length))+c.proof.map(x=>strip0x(x)).join("");
 const data=to===account?"0x2e7ba6ef"+encUint(c.index)+encAddr(account)+encUint(c.amt)+encUint(128n)+pr:"0x4f54d47c"+encUint(c.index)+encUint(c.amt)+encUint(128n)+encAddr(to)+pr;
 ++busy;b.disabled=true;try{await checkWallet();const req={from:account,to:TACAD,data,value:"0x0"};stat.textContent="Claiming "+trimAmt(c.amt,18)+" TAC…";
 await rpc(C,[req,L]);await settle(await sendTx([req]));refreshBalance()}catch(e){await adSync().catch(()=>{});if(adC)err(e)}finally{--busy;b.disabled=false;adSync().catch(()=>{})}};
+const PFARM="0x0000003bF4BA0B21f5e0d35119b337F4d4CF82E0",PFPOOL="0x0155358241411dB868BA714aE7c83A27087e3D6E";
+const pfEl=document.getElementById("pfEl");let pfS=null,pfSeq=0;
+const pfOn=()=>!!pfS&&pfS.fin>nowS()&&pfS.rate>0n,pfMine=()=>!!pfS&&(pfS.st>0n||pfS.ea>0n);
+const pfShow=()=>pfEl.classList.toggle("hide",CHAIN_ID!==1||!(pfOn()||pfMine())||lnMode||lqMode||wnMode||pvMode||mkMode||tab!=="swap");
+const pfPx=()=>{const s=Number(pfS.sp)/1e18;return s>0?1/(s*s):0},pfDay=()=>Number(pfS.rate)*86400/1e18,
+pfVal=sh=>pfS.sup?Number(sh)/Number(pfS.sup)*(Number(pfS.r0)+Number(pfS.r1)*pfPx())/1e18:0,
+pfApr=()=>{const a=pfDay()*365*pfPx()/(pfVal(pfS.tot)+1)*100;return isFinite(a)&&a>0?"~"+Math.round(a).toLocaleString()+"% APR on 1 ETH":""},
+pfHead=()=>[Math.round(pfDay()).toLocaleString()+" TAC/day",pfApr(),"until "+new Date(pfS.fin*1e3).toLocaleDateString(undefined,{month:"short",day:"numeric"})].filter(Boolean),
+pfBtn=(k,t,c="fclink")=>{const x=document.createElement("button");x.type="button";x.className=c;x.dataset.pf=k;x.textContent=t;return x},
+pfIcon=el=>{const k=known(TAC_TOK);if(k&&/^<img /.test(k.icon))el.insertAdjacentHTML("beforeend",sm(k.icon).replace("<img ",'<img class="adic" '))};
+async function pfSync(){const my=++pfSeq,a=account;
+if(CHAIN_ID===1)try{const r=await mc3([{to:PFARM,data:"0x7b0a47ee"},{to:PFARM,data:"0xebe2b12b"},{to:PFARM,data:"0x817b1cd2"},{to:PFPOOL,data:"0x18160ddd"},
+{to:PFPOOL,data:"0x443cb4bc"},{to:PFPOOL,data:"0x5a76f25e"},{to:PFPOOL,data:"0x2af1f249"},
+...(a?[{to:PFARM,data:"0x98807d84"+encAddr(a)},{to:PFARM,data:"0x008cc262"+encAddr(a)},{to:PFPOOL,data:balOf(a)}]:[])]);
+if(my!==pfSeq)return;const w=i=>{try{return BigInt(r[i])}catch{return 0n}};
+pfS=CHAIN_ID===1?{rate:w(0),fin:Number(w(1)),tot:w(2),sup:w(3),r0:w(4),r1:w(5),sp:w(6),st:a?w(7):0n,ea:a?w(8):0n,lp:a?w(9):0n}:null}catch{if(my===pfSeq)pfS=null}
+else pfS=null;
+pfLine();pfPaint();fmPf()}
+function pfLine(){pfEl.textContent="";if(pfS&&(pfOn()||pfMine())){const on=pfOn(),b=document.createElement("b");pfIcon(pfEl);
+b.textContent=on?pfHead()[0]:"ended";pfEl.append("TAC/ETH farm · ",b,on?pfHead().slice(1).map(x=>" · "+x).join(""):" · your stake is still here");
+if(pfS.ea>0n){const e=document.createElement("b");e.textContent=trimAmt(pfS.ea,18)+" TAC";pfEl.append(" · earned ",e)}
+pfEl.append(pfBtn("go",on&&!pfMine()?"Farm":"Open"));if(pfS.ea>0n)pfEl.append(pfBtn("cl","Claim"));
+pfEl.title=on?"Stake liquidity in the TAC/ETH Precision pool to earn TAC by the second. The rate is shared by everyone staked, so it falls as more joins.":"This farm has stopped paying. Your stake and anything earned can be taken out at any time."}
+pfShow()}
+function pfPaint(){const row=[...lqList.querySelectorAll(".lqrow")].find(r=>(r.dataset.pool||"").toLowerCase()===PFPOOL.toLowerCase());if(!row)return;
+let el=row.querySelector(".pfb");const on=!!pfS&&pfOn(),box=row.querySelector(".lqadd"),k=box&&box.querySelector(".pfk");
+if(box&&on&&!k)box.insertAdjacentHTML("afterbegin",'<label class="lqzap"><input type="checkbox" class="pfk" checked> Stake in the farm to earn TAC</label>');
+if(box&&!on&&k)k.parentElement.remove();
+if(!pfS||!(on||pfMine())){if(el)el.remove();return}
+if(!el){el=document.createElement("div");el.className="pfb";row.insertBefore(el,row.querySelector(".lqacts"))}
+el.textContent="";const h=document.createElement("div"),S=pfS;h.className="pfh";pfIcon(h);h.append(on?"Farm · "+pfHead().join(" · "):"Farm ended");el.append(h);
+if(S.st>0n&&S.sup){const m=document.createElement("div");m.className="lqmine";m.textContent="staked "+trimAmt(S.st*S.r0/S.sup,18)+" ETH + "+trimAmt(S.st*S.r1/S.sup,18)+" TAC · earned "+trimAmt(S.ea,18)+" TAC";el.append(m)}
+const acts=document.createElement("div");acts.className="lqacts";
+if(on&&S.lp>0n)acts.append(pfBtn("st","Stake "+trimAmt(S.lp,18)+" LP","lqbtn"));
+if(S.ea>0n)acts.append(pfBtn("cl","Claim","lqbtn"));
+if(S.st>0n){acts.insertAdjacentHTML("beforeend",'<select class="pfo" aria-label="Withdraw as"><option value="both">as ETH + TAC</option><option value="eth">as ETH</option><option value="tac">as TAC</option><option value="lp">as LP</option></select>');acts.append(pfBtn("wd","Withdraw all","lqbtn"))}
+if(acts.childNodes.length)el.append(acts)}
+function fmPf(){pvFarm.querySelector(".fmpf")?.remove();if(!pfS||!pfOn()||pvFarm.classList.contains("hide"))return;
+const c=pfBtn("go","TAC/ETH on zSwap "+pfHead().slice(0,2).join(" · "),"fmc fmpf");pvFarm.insertBefore(c,pvFarm.querySelector("a"))}
+function pfGo(){const e=TOKENS.findIndex(t=>t.addr===ZERO),t=TOKENS.findIndex(x=>x.addr.toLowerCase()===TAC_TOK.toLowerCase());if(e<0||t<0)return;
+fromSel.value=String(e);toSel.value=String(t);fromSel.dataset.prev=fromSel.value;toSel.dataset.prev=toSel.value;pairChosen=true;
+syncDisabled();refreshBalance();loadChart();if(lqMode)loadLq();else lqSet(true)}
+const pfTx=async(data,val,verb)=>settle(await sendWith([],{from:account,to:PFARM,data,value:toHex(val)},verb));
+async function pfTok(tok,amt,plain,withP,val,verb){const dl=BigInt(nowS()+1800),aps=await apSeq(tok,PFARM,amt);
+if(aps.length){const pi=await permitInfo(tok,account);if(pi)try{stat.textContent="Sign approval…";const d=withP(dl,await pmSig(tok,pi,account,amt,dl,PFARM));
+await rpc(C,[{from:account,to:PFARM,data:d,value:toHex(val)},L]);return pfTx(d,val,verb)}catch(e){if(isRejection(e))throw e}}
+return settle(await sendWith(aps,{from:account,to:PFARM,data:plain(dl),value:toHex(val)},verb))}
+const pfSim=async d=>strip0x(await rpc(C,[{from:account,to:PFARM,data:d},L])),pfW=(q,i)=>lessSlip(BigInt("0x"+(q.slice(i*64,i*64+64)||"0")));
+async function pfAdd(box,t0,t1){if(rc.value.trim())return void(stat.textContent="A farm stake is credited to your own wallet — clear the recipient, or untick the farm.");
+await checkWallet();if(isZap(box)){const z=zapSide(box,t0,t1);if(z.err)return void(stat.textContent=z.err);
+const pv=await previewZap(PFPOOL,z.tok.addr,z.amt);if(!pv||!pv.lp)return void(stat.textContent="The pool would refuse this deposit.");const m=lessSlip(pv.lp);
+if(z.tok.addr===ZERO)return pfTx("0x8703a0d8"+encUint(0n)+encUint(m)+encUint(BigInt(nowS()+1800)),z.amt,"Zapping into the farm…");
+return pfTok(TAC_TOK,z.amt,d=>"0x9376f34e"+encUint(z.amt)+encUint(0n)+encUint(m)+encUint(d),(d,s)=>"0x51291e77"+encUint(z.amt)+encUint(0n)+encUint(m)+encUint(d)+s,0n,"Zapping into the farm…")}
+const ins=box.querySelectorAll(".lqin");let a0,a1;try{a0=parseUnits(ins[0].value.trim()||"0",t0.dec);a1=parseUnits(ins[1].value.trim()||"0",t1.dec)}catch{return void(stat.textContent="Invalid amount")}
+if(!a0||!a1)return void(stat.textContent="Enter both amounts, or turn one-sided on.");
+const pv=await previewAdd(PFPOOL,a0,a1);if(!pv)return void(stat.textContent="The pool would refuse this deposit.");const m=lessSlip(pv.lp);
+return pfTok(TAC_TOK,a1,d=>"0x6d15c09b"+encUint(a1)+encUint(m)+encUint(d),(d,s)=>"0xddd9f3fb"+encUint(a1)+encUint(m)+encUint(d)+s,a0,"Adding to the farm…")}
+async function pfDo(k,b){if(busy||!pfS)return;if(k==="go")return pfGo();if(!account)return void(stat.textContent="Connect a wallet first.");
+++busy;b.disabled=true;try{await checkWallet();const S=pfS,dl=encUint(BigInt(nowS()+1800));
+if(k==="cl")await pfTx("0x4e71d92d",0n,"Claiming TAC…");
+else if(k==="st")await pfTok(PFPOOL,S.lp,()=>"0xa694fc3a"+encUint(S.lp),(d,s)=>"0xecd9ba82"+encUint(S.lp)+encUint(d)+s,0n,"Staking…");
+else if(k==="wd"){const o=b.parentElement.querySelector(".pfo")?.value;
+if(o==="lp")await pfTx("0xe9fad8ee",0n,"Withdrawing…");
+else if(o==="both"){const q=await pfSim("0xbccbe38a"+encUint(0n)+encUint(0n)+dl);await pfTx("0xbccbe38a"+encUint(pfW(q,0))+encUint(pfW(q,1))+dl,0n,"Withdrawing…")}
+else{const e=encBool(o==="eth"),q=await pfSim("0x6ae36ea7"+e+encUint(0n)+dl);await pfTx("0x6ae36ea7"+e+encUint(pfW(q,0))+dl,0n,"Withdrawing…")}}
+}catch(e){err(e)}finally{--busy;b.disabled=false;refreshBalance();lqMode?loadLq():pfSync().catch(()=>{})}}
+pfEl.onclick=e=>{const b=e.target.closest("button[data-pf]");if(b){sBlip();pfDo(b.dataset.pf,b)}};
+pvFarm.addEventListener("click",e=>{const b=e.target.closest("button[data-pf]");if(b){sBlip();pfGo()}});
+setInterval(()=>{if(!document.hidden&&CHAIN_ID===1)pfSync().catch(()=>{})},6e4);pfSync().catch(()=>{});
 let fcMineToks=[],fcSeq=0,fcMineSeq=0;
-async function fcMine(){adSync().catch(()=>{});
+async function fcMine(){adSync().catch(()=>{});pfSync().catch(()=>{});
 const my=++fcMineSeq;
 fcMineToks=[];
 if(!account||!LAUNCHED.length||PLAUNCH===ZERO)return fcSync();
@@ -6472,7 +6544,7 @@ fcMine();
 const FC_DUST=10000000000000n;
 let fcTok="",fcOwner="";
 const fcPool={},fcFloorPx={};
-async function fcSync(){try{adShow()}catch{}
+async function fcSync(){try{adShow();pfShow()}catch{}
 const my=++fcSeq;
 const t=TOKENS[toSel.value],f=TOKENS[fromSel.value];
 const cand=[t,f].find(x=>x&&x.addr&&x.addr!==ZERO&&x.std!=="nft");
@@ -8008,11 +8080,11 @@ const E=a===CP_ETH.toLowerCase(),rE=E?rA:rB,rO=E?rB:rA;if(!(rE>0&&rO>0&&sh>0&&is
 cs.forEach((c,i)=>{const o=pl[i],p=c._p;if(!o||!px||!o.sh)return;const st=2*o.rE/1e8*Math.min(1,+p.totalShares/o.sh),apr=+p.tacPerDayForPool*365*px/(st+1)*100;
 if(!isFinite(apr)||apr<=0)return;c.append(" · ~"+Math.round(apr).toLocaleString()+"% APR on 1 ETH");
 c.title="Rewards valued at the TAC/tETH pool price ("+px.toPrecision(3)+" ETH per TAC). "+(+st.toPrecision(3))+" ETH staked here now; the rate falls as more joins."})};
-const fmSync=async()=>{if(CHAIN_ID!==1||Date.now()-(pvFarm._t||0)<6e5)return;pvFarm._t=Date.now();try{const j=await relayFetch("/farm/program?network=mainnet",null,CP_RELAY),e=j.epoch;if(CHAIN_ID!==1||!e||!e.active||j.stale||!Array.isArray(j.pools)||j.pools.length>8)return void pvFarm.classList.add("hide");
+const fmSync=async()=>{if(CHAIN_ID!==1||Date.now()-(pvFarm._t||0)<6e5)return;pvFarm._t=Date.now();try{const j=await relayFetch("/farm/program?network=mainnet",null,CP_RELAY),e=j.epoch;if(CHAIN_ID!==1||!e||!e.active||+e.periodFinish<=nowS()||j.stale||!Array.isArray(j.pools)||j.pools.length>8)return void pvFarm.classList.add("hide");
 const r=j.pools.filter(p=>!p.idle&&/^[\w/]{3,24}$/.test(p.pair||"")&&+p.tacPerDayForPool>=1&&+p.tacPerDayForPool<1e7);if(!r.length)return void pvFarm.classList.add("hide");await cpLoadAssets().catch(()=>{});if(CHAIN_ID!==1)return;
 pvFarm.textContent="";const h=document.createElement("span");h.className="fml";h.textContent="Farms · earn TAC for liquidity"+(+e.periodFinish>nowS()?" · until "+new Date(e.periodFinish*1e3).toLocaleDateString(undefined,{month:"short",day:"numeric"}):"");pvFarm.append(h);for(const p of r){const c=document.createElement("span"),s=p.pair.replace(/cETH/g,"tETH");c.className="fmc";
 for(const x of s.split("/")){const A=cpAssets.find(a=>a.sym===x);if(A&&A.icon){const im=new Image(16,16);im.src=A.icon;im.alt="";c.append(im)}}
-c.append(s+" "+Math.round(+p.tacPerDayForPool)+" TAC/day");c._p=p;c._s=s;pvFarm.append(c)}fmApr(j).catch(()=>{});const a=document.createElement("a");a.href="https://tacit.finance";a.target="_blank";a.rel="noreferrer";a.textContent="add liquidity on tacit.finance";pvFarm.append(a);pvFarm.classList.remove("hide")}catch{pvFarm._t=0}};
+c.append(s+" "+Math.round(+p.tacPerDayForPool)+" TAC/day");c._p=p;c._s=s;pvFarm.append(c)}fmApr(j).catch(()=>{});const a=document.createElement("a");a.href="https://tacit.finance";a.target="_blank";a.rel="noreferrer";a.textContent="add liquidity on tacit.finance";pvFarm.append(a);pvFarm.classList.remove("hide");fmPf()}catch{pvFarm._t=0}};
 const pvDp=()=>{const A=cpSel();return A.dec-String(A.scale).length+1};
 const pvWei=()=>{try{return parseUnits(pvAmt.value||"0",cpSel().dec)}catch{return 0n}};
 const pvShV=A=>cpReady(A.id).reduce((s,n)=>s+BigInt(n.v),0n);

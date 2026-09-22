@@ -185,7 +185,7 @@ describe('Tacit farms', () => {
   });
 
   test('a stale, ended or odd program shows nothing', async () => {
-    for (const bad of [{ ...FARM, stale: true }, { ...FARM, epoch: { active: false } },
+    for (const bad of [{ ...FARM, stale: true }, { ...FARM, epoch: { active: false } }, { ...FARM, epoch: { ...FARM.epoch, periodFinish: 1 } },
       { ...FARM, pools: [{ pair: '<img src=x>', tacPerDayForPool: '5' }] }, { ...FARM, pools: [{ pair: 'TAC/cETH', tacPerDayForPool: 'Infinity' }] }]) {
       const chain = tacitChain();
       chain.lanes[RELAY + '/farm/program'] = bad;

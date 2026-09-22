@@ -66,6 +66,7 @@ const SOURCES = {
   PrecisionLauncher: "src/pools/PrecisionLauncher.sol",
   PrecisionLauncherLens: "src/pools/PrecisionLauncherLens.sol",
   FeeSplitter: "src/pools/FeeSplitter.sol",
+  PrecisionFarm: "src/pools/PrecisionFarm.sol",
 };
 
 // A table key is not always the Solidity contract name. The second Fwabol IS
@@ -112,6 +113,7 @@ const OPTIMIZER_RUNS = {
   PrecisionPoolFactory: 200,
   PrecisionRoute: 200,
   PrecisionZap: 200,
+  PrecisionFarm: 200,
   PrecisionPoolLens: 200,
   PrecisionLiquidityLens: 200,
   ConstantSurchargeHook: 200,
@@ -196,6 +198,17 @@ const specs = [
   // pool policy and the token list, which is what keeps the fee destination a
   // governed decision rather than a redeploy.
   {name: "FeeSplitter", args: [PRECISION_POLICY_OWNER]},
+  // The TAC/ETH full-range band's farm, owned by the governor of Tacit's
+  // confidential-pool farm and running at its TAC/cETH rate (553.8888 TAC/day).
+  {
+    name: "PrecisionFarm",
+    args: [
+      "0x0155358241411dB868BA714aE7c83A27087e3D6E",
+      "0xA1313eb9f3A445606D9583bcAc3ebeB56a858279",
+      "0x006cd14f36f65ecbb29b2519ccbe63a0dc8549f2",
+      6410750000000000n,
+    ],
+  },
   {name: "PrecisionLauncher", args: [artifactAddress("PrecisionPoolFactory"), artifactAddress("FeeSplitter")]},
   {name: "PrecisionLauncherLens", args: [artifactAddress("PrecisionLauncher")]},
   {name: "Swapboard", args: [WETH]},
