@@ -1586,6 +1586,8 @@ return r?retAddr(await bnRead({to:r,data:"0x"+SEL_EADDR+pad32(nd)})):""};
 const bnRev=async a=>{const nd=namehash(strip0x(a).toLowerCase()+"."+BN_COIN+".reverse"),r=await bnRes(nd);
 if(!r)return"";
 try{return decodeString(await bnRead({to:r,data:"0x"+SEL_ENAME+pad32(nd)})||"0x").trim()}catch{return""}};
+const bnText=async n=>{const r=await bnRes(namehash(n));if(!r)return"";
+try{return decodeString(await bnRead({to:r,data:textCall(n)})||"0x")}catch{return""}};
 const nameFwd=n=>/\.gwei$/i.test(n)?nsFwd(GNS,n):/\.wei$/i.test(n)?nsFwd(WNS,n):/\.base\.eth$/i.test(n)?bnFwd(n):/\.eth$/i.test(n)?ensFwd(n):Promise.resolve("");
 const TACIT_KEY="finance.tacit",u8x=t=>[...new TextEncoder().encode(t)].map(b=>b.toString(16).padStart(2,"0")).join(""),
 strArg=t=>{const h=u8x(t);return encUint(h.length/2)+h.padEnd(Math.ceil(h.length/64)*64,"0")};
@@ -1595,7 +1597,7 @@ if(f.exact)return decodeString(await cfgRead(C,[{to:f.r,data:inner},L])||"0x");
 try{return decodeString(decBytes(await cfgRead(C,[{to:f.r,data:"0x"+SEL_ERESOLVE+encResolve(dnsEnc(n),inner)},L])))}catch{return""}};
 const nameText=async n=>/\.gwei$/i.test(n)?decodeString(await cfgRead(C,[{to:GNS,data:textCall(n)},L])||"0x")
 :/\.wei$/i.test(n)?decodeString(await cfgRead(C,[{to:WNS,data:textCall(n)},L])||"0x")
-:/\.eth$/i.test(n)&&!/\.base\.eth$/i.test(n)?ensText(n):"";
+:/\.base\.eth$/i.test(n)?bnText(n):/\.eth$/i.test(n)?ensText(n):"";
 const setTextReq=async n=>{const k=strArg(TACIT_KEY),v=strArg(cpTacAddr(cpSeed)),tail=encUint(96)+encUint(96+k.length/2)+k+v;
 if(/\.g?wei$/i.test(n))return{from:account,to:/\.gwei$/i.test(n)?GNS:WNS,data:"0x3fb24782"+pad32(namehash(n))+tail};
 const f=await ensFind(n);if(!f||!f.exact)throw Error(n+"'s resolver cannot hold records set from here.");
@@ -7946,7 +7948,7 @@ if(!/^tacit1/i.test(t))return cpToPublic(s,lab);
 const h=cpRecip(t);if(!await sure("Send privately to "+lab+"?\n\n"+lab+" → "+n+" → "+t.slice(0,12)+"…"+t.slice(-8)+"\n\nThis address's name publishes a Tacit address, so the payment stays private. Continue only if this is the person you mean to pay."))throw Error("cancelled");return h}
 if(/\.(g?wei|eth)$/i.test(s)&&!/^(0x|tacit1)/i.test(s)){const n=s.toLowerCase();if(!nameOk(n))throw Error("That is not a name.");
 let t;try{t=String(await nameText(n)||"").trim()}catch(e){throw Error(e&&e.offchain?e.message:"Could not read "+n+"'s records right now — try again.")}
-if(!t){const a=await nameFwd(n).catch(()=>"");if(isAddr(a||""))return cpToPublic(a,n);throw Error(n+" has no Tacit address published. Its owner can publish one from zSwap's private panel, or send to their tacit1… address.")}
+if(!t){const a=await nameFwd(n).catch(()=>"");if(isAddr(a||""))return cpToPublic(a,n);throw Error(n+" has no Tacit address published. Its owner can publish one "+(/\.base\.eth$/i.test(n)?"as a finance.tacit record on Base":"from zSwap's private panel")+", or send to their tacit1… address.")}
 if(!/^tacit1/i.test(t))throw Error(n+"'s Tacit record is not a tacit1… address.");
 const h=cpRecip(t);if(!await sure("Send to "+n+"?\n\n"+n+" → "+t.slice(0,12)+"…"+t.slice(-8)+"\n\nThis is the Tacit address the name's owner published. Continue only if it is the person you mean to pay."))throw Error("cancelled");return h}
 return cpRecip(s)};
@@ -8153,10 +8155,16 @@ if(typeof value!=="string")return label;
 const ok=kind==="tx"?/^0x[0-9a-fA-F]{64}$/.test(value):/^0x[0-9a-fA-F]{40}$/.test(value);
 return ok?`<a href="${base}/${kind}/${value}" target="_blank" rel="noreferrer">${label}</a>`:label;
 };
+const pubOk=n=>!!n&&/\.(g?wei|eth)$/i.test(n)&&!/\.base\.eth$/i.test(n);
+let pubName="",pubFor="";
+const pubSync=()=>{const k=account+"|"+cpSeed;if(!account||!cpSeed||pubFor===k)return;pubFor=k;pubName="";
+(async()=>{const n=await nameRev(account).catch(()=>"");if(!pubOk(n)||pubFor!==k)return;
+const t=String(await nameText(n).catch(()=>"")||"").trim();
+if(pubFor===k&&t&&t===cpTacAddr(cpSeed)){pubName=n;cpPaint()}})()};
 const cpSet=(e,h)=>{if(e._h!==h)e.innerHTML=e._h=h},cpPaint=()=>{if(!pvMode)return;
-const on=!!cpSeed;pvHintSync();pvPrevSoon();cpInvGo();
+const on=!!cpSeed;pvHintSync();pvPrevSoon();cpInvGo();pubSync();
 cpSet(pvKey,!account?"Connect a wallet to begin.":!on?"Sign once to unlock your Tacit key: the same key tacit.finance derives from this wallet, with a Bitcoin address of its own.":
-`Key unlocked · your private account for this wallet${cpVer?"":'<button type="button" class="fclink" data-a="verify" title="Sign once to confirm the key saved in this browser is your wallet\'s">verify key</button>'}<span class="pvkr"><i>↓ Get paid</i><span class="pvka"><button type="button" class="fclink pri" data-a="addr" title="Your tacit1 address: anyone can send to it privately">your address</button><button type="button" class="fclink" data-a="request" title="Make a link someone can pay privately">request a payment</button><button type="button" class="fclink" data-a="pub" title="Put your address on your .wei, .gwei or .eth name, so people can pay you by name">publish to name</button></span></span><span class="pvkr"><i>↑ Pay</i><span class="pvka"><button type="button" class="fclink" data-a="pay" title="Paste a payment link someone sent you">pay a request</button></span></span><span class="pvkr"><i></i><span class="pvka"><button type="button" class="fclink" data-a="more" aria-expanded="${cpMore}">${cpMore?"less":"more"}</button></span></span><span class="${cpMore?"":"hide"}"><span class="pvkr"><i>₿ Bitcoin</i><span class="pvka">${cpVer?`<a href="https://mempool.space/address/${cpBtc}" target="_blank" rel="noreferrer" title="This key's Bitcoin address, used to lock BTC for cBTC">${cpBtc.slice(0,8)}…${cpBtc.slice(-6)}</a>${cpBtcSat!=null?" "+trimAmt(BigInt(cpBtcSat),8)+" BTC":""}`:""}<button type="button" class="fclink" data-a="btckey" title="Export this key for a Bitcoin wallet">btc key</button><button type="button" class="fclink" data-a="lockbtc" title="Lock BTC from this key\'s address to mint cBTC">lock btc</button></span></span><span class="pvkr"><i>· Key</i><span class="pvka"><button type="button" class="fclink" data-a="backup" title="Save the key">backup</button><button type="button" class="fclink" data-a="export" title="Your note records, to keep with the key">export</button><button type="button" class="fclink" data-a="import" title="Restore a key or note records">import</button><button type="button" class="fclink" data-a="recover" title="Find this key\'s deposits on chain">recover</button><button type="button" class="fclink" data-a="relay" title="Choose the relay that proves and settles">relay</button></span></span></span>`);
+`Key unlocked · your private account for this wallet${cpVer?"":'<button type="button" class="fclink" data-a="verify" title="Sign once to confirm the key saved in this browser is your wallet\'s">verify key</button>'}<span class="pvkr"><i>↓ Get paid</i><span class="pvka"><button type="button" class="fclink pri" data-a="addr" title="Your tacit1 address: anyone can send to it privately">your address</button><button type="button" class="fclink" data-a="request" title="Make a link someone can pay privately">request a payment</button><button type="button" class="fclink" data-a="pub" title="Put your address on your .wei, .gwei or .eth name, so people can pay you by name">${pubName?"published to "+pubName:"publish to name"}</button></span></span><span class="pvkr"><i>↑ Pay</i><span class="pvka"><button type="button" class="fclink" data-a="pay" title="Paste a payment link someone sent you">pay a request</button></span></span><span class="pvkr"><i></i><span class="pvka"><button type="button" class="fclink" data-a="more" aria-expanded="${cpMore}">${cpMore?"less":"more"}</button></span></span><span class="${cpMore?"":"hide"}"><span class="pvkr"><i>₿ Bitcoin</i><span class="pvka">${cpVer?`<a href="https://mempool.space/address/${cpBtc}" target="_blank" rel="noreferrer" title="This key's Bitcoin address, used to lock BTC for cBTC">${cpBtc.slice(0,8)}…${cpBtc.slice(-6)}</a>${cpBtcSat!=null?" "+trimAmt(BigInt(cpBtcSat),8)+" BTC":""}`:""}<button type="button" class="fclink" data-a="btckey" title="Export this key for a Bitcoin wallet">btc key</button><button type="button" class="fclink" data-a="lockbtc" title="Lock BTC from this key\'s address to mint cBTC">lock btc</button></span></span><span class="pvkr"><i>· Key</i><span class="pvka"><button type="button" class="fclink" data-a="backup" title="Save the key">backup</button><button type="button" class="fclink" data-a="export" title="Your note records, to keep with the key">export</button><button type="button" class="fclink" data-a="import" title="Restore a key or note records">import</button><button type="button" class="fclink" data-a="recover" title="Find this key\'s deposits on chain">recover</button><button type="button" class="fclink" data-a="relay" title="Choose the relay that proves and settles">relay</button></span></span></span>`);
 pvGo.textContent=!account?CW:!on?"Unlock key":pvAct.value==="send"?"Send":pvAct.value==="out"?"Withdraw":"Deposit";
 pvGo.disabled=!!cpBusy;
 if(!on)return cpSet(pvList,"");
@@ -8342,7 +8350,7 @@ const bp=v=>{const x=Math.round(+v*100);if(!(x>=0&&x<=5000))throw Error("Taxes r
 mkNew=d;await mkSend({from:account,to:PM,data:"0x6f406fa1"+pad32("e0")+encAddr(r)+encAddr(mkAsset.value)+encUint(cl)+encBool(mkCan.checked)+encUint(bp(mkExit.value))+encUint(bp(mkLate.value))+encUint(db.length)+hx.padEnd(Math.ceil(hx.length/64)*64,"0"),value:"0x0"},"Creating…");
 mkForm.classList.add("hide");mkGo.textContent="New market";mkDesc.value="";mkF="open";mkS="new";mkChipPaint();mkCount=-1;mkLoad(1)}
 catch(e){err(e)}finally{mkGo.disabled=false}};
-const pvWake=()=>{if(!account){cpSeed="";cpNotes=[]}else if(!cpSeed){const s=cpKeyFor(account);if(/^0x[0-9a-f]{64}$/i.test(s||""))cpUse(s)}
+const pvWake=()=>{pubFor="";if(!account){cpSeed="";cpNotes=[]}else if(!cpSeed){const s=cpKeyFor(account);if(/^0x[0-9a-f]{64}$/i.test(s||""))cpUse(s)}
 if(account)pvTo.placeholder=account;pvAssetPaint();pvActSync();cpLoadAssets();fmSync();cpPaint();pvRefresh()};
 const cpDone=()=>{const k=new Set,j=x=>x&&x.job&&!x.self&&x.js==="settled"&&k.add(x.job);
 for(const n of cpNotes)j(n.ex||n);for(const l of cpLocks)j(l);for(const p of cpLoadCdps())j(p);
@@ -8386,11 +8394,15 @@ if(a==="lockbtc")return pvRun(cpLockBtc,"Building the lock…");
 if(a==="addr")return pvRun(async()=>{await cpCopy("Your Tacit address. Anyone can send to it privately, from zSwap or tacit.finance; what arrives shows up here.",cpTacAddr(cpSeed))},"Check your wallet for the message to sign.");
 if(a==="verify")return pvRun(async()=>{},"Check your wallet for the message to sign.");
 if(a==="more"){cpMore=!cpMore;return cpPaint()}
-if(a==="pub")return pvRun(async()=>{const n=await nameRev(account).catch(()=>"");
-if(!n||!/\.(g?wei|eth)$/i.test(n)||/\.base\.eth$/i.test(n))throw Error("Give this wallet a primary .wei, .gwei or .eth name first, then publish.");
-const addr=cpTacAddr(cpSeed);if(String(await nameText(n)||"").trim()===addr)return void(stat.textContent=n+" already points to your Tacit address.");
+if(a==="pub")return pvRun(async()=>{let n=await nameRev(account).catch(()=>"");
+if(!pubOk(n)){n=String(await ask("Which name should point to your Tacit address? A .wei, .gwei or .eth name this wallet owns.")||"").trim().toLowerCase();
+if(!n)return;
+if(!nameOk(n)||!pubOk(n))throw Error("zSwap publishes to .wei, .gwei and .eth names. A Basename takes a finance.tacit record set on Base.");
+const o=await nameFwd(n).catch(()=>"");
+if(!isAddr(o||"")||o.toLowerCase()!==account.toLowerCase())throw Error(n+" does not point at this wallet, so its records cannot be set from here.")}
+const addr=cpTacAddr(cpSeed);if(String(await nameText(n)||"").trim()===addr){pubName=n;cpPaint();return void(stat.textContent=n+" already points to your Tacit address.")}
 if(!await sure("Publish your Tacit address on "+n+"?\n\n"+addr+"\n\nAnyone can then pay you privately by typing "+n+". The record is public: it ties the name to this Tacit address, never to a balance."))return;
-const req=await setTextReq(n);await rpc(C,[req,L]);await settle(await sendTx([req]));stat.textContent=n+" now points to your Tacit address — anyone can send to it privately by name."},"Checking your name…");
+const req=await setTextReq(n);await rpc(C,[req,L]);await settle(await sendTx([req]));pubName=n;cpPaint();stat.textContent=n+" now points to your Tacit address — anyone can send to it privately by name."},"Checking your name…");
 if(a==="merge")return pvRun(()=>cpMergeGo(b.dataset.as),"Building the merge…");
 const sq=b.dataset.s!==undefined?cpSends.find(S=>S.id===b.dataset.s)||null:null;
 if(sq){if(a==="sgo")return pvRun(()=>cpSGo(sq),"Sending…");if(a==="srefund")return pvRun(()=>cpRefund(sq),"Taking it back…");
