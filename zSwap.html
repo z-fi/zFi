@@ -546,7 +546,7 @@ rpcs:["https://ethereum-rpc.publicnode.com","https://eth-mainnet.public.blastapi
 8453:{name:"Base",slowTip:true,sweep4:false,curve:-1,fill:"0x03d95ecAF7B2Ab6027b8541b19Cb0Ce5CEd9bC74",exec:"0x1434A2579DE1009aA12b7064A161E53a5be2C030",slvId:"8453",slvSlug:"base",sources:["UniV2","Aero","zAMM","UniV3","UniV4","AeroCL","Wrap","","Precision"],v4port:"0x508ad1b0ae31FaF295c5af8C5c2bE9e33E0D19C4",
 wrapped:"0x4200000000000000000000000000000000000006",explorer:"https://basescan.org",hubs:["0x4200000000000000000000000000000000000006","0x833589fcd6edb6e08f4c7c32d4f71b54bda02913","0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf","0x50c5725949a6f0c72e6c4a641f24049a917db0cb","0x940181a94a35a4569e4529a3cdfb74e38fd98631"],
 money:["0x833589fcd6edb6e08f4c7c32d4f71b54bda02913","0xfde4c96c8593536e31f229ea8f37b2ada2699bb2","0x50c5725949a6f0c72e6c4a641f24049a917db0cb"],
-gasFloor:100000000n,icon:CHAIN_ICON_BASE,rpcs:["https://base-rpc.publicnode.com","https://base.gateway.tenderly.co"]},
+gasFloor:100000000n,icon:CHAIN_ICON_BASE,rpcs:["https://base-rpc.publicnode.com","https://base.rpc.blxrbdn.com"]},
 4663:{name:"Robinhood",slowTip:true,sweep4:false,curve:5,fill:"0x03d95ecAF7B2Ab6027b8541b19Cb0Ce5CEd9bC74",exec:"0x1434A2579DE1009aA12b7064A161E53a5be2C030",slvId:"4663",slvSlug:"robinhood",sources:["UniV2","Sushi","zAMM","UniV3","UniV4","Curve","Lido","Wrap","Precision"],v4port:"0x508ad1b0ae31FaF295c5af8C5c2bE9e33E0D19C4",
 wrapped:"0x0bd7d308f8e1639fab988df18a8011f41eacad73",explorer:"https://robinscan.io",hubs:["0x0bd7d308f8e1639fab988df18a8011f41eacad73","0x5fc5360d0400a0fd4f2af552add042d716f1d168"],
 money:["0x5fc5360d0400a0fd4f2af552add042d716f1d168"],gasFloor:1500000000n,
@@ -7322,16 +7322,16 @@ const rt={ins:[{txid:bTxid(ct),vout:0,seq:0xfffffffd,wit:[]}],outs:[{v:546,s:K.w
 rt.ins[0].wit=[bSchnorr(bSig341(rt,[{v:cv,s:p2tr}],lf),K.d,aux),scr,cpCat([192|tw.par],TAP_NUMS)];
 return{commit:cpHex(bSer(ct,1)),reveal:cpHex(bSer(rt,1)),lockTxid:bTxid(rt),blinding:r,cx,cy,anchor:{txid:f.txid,vout:f.vout},vBtc:vSats,fee:cfee+cv-vSats-546}};
 const CP_CE="0x000000003f608BDdF0ca45934003ffb9DbDF70DB",CP_WSTETH="0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",CP_LOCKS="zswap:cpl:",B_API=["https://mempool.space/api","https://blockstream.info/api"];
-const EPS="0x00000051F365d898132f4ebF345Cd3968e02F288",SEL_EPS="c03c2d74",EP_KEY="zswap:ep",EP_H=/^https:\/\/\S+$/,EP_Q=[["rpc",8453],["rpc",4663],["logs",1],["tacit",1],["btc",0],["wc",0],["wcpid",0]];
+const EPS="0x00000051F365d898132f4ebF345Cd3968e02F288",SEL_EPS="c03c2d74",EP_KEY="zswap:ep2",EP_H=/^https:\/\/\S+$/,EP_Q=[["rpc",8453],["rpc",4663],["logs",1],["tacit",1],["btc",0],["wc",0],["wcpid",0],["tacad",1]];
 const epM=(a,u,re)=>{u=(u||[]).map(s=>String(s).trim()).filter(s=>re.test(s));if(u.length){const m=[...new Set(u.concat(a))];a.length=0;a.push(...m)}};
-const epApply=v=>{if(!Array.isArray(v))return;epM(CHAINS[8453].rpcs,v[0],EP_H);epM(CHAINS[4663].rpcs,v[1],EP_H);epM(CP_LOGS,v[2],EP_H);epM(B_API,v[4],EP_H);epM(WC_RELAY,v[5],/^wss:\/\/[\w.-]+(:\d+)?$/);epM(L1_RPCS,v[7],EP_H);
+const epApply=v=>{if(!Array.isArray(v))return;epM(CHAINS[8453].rpcs,v[0],EP_H);epM(CHAINS[4663].rpcs,v[1],EP_H);epM(CP_LOGS,v[2],EP_H);epM(B_API,v[4],EP_H);epM(WC_RELAY,v[5],/^wss:\/\/[\w.-]+(:\d+)?$/);epM(AD_API,v[7],/^https:\/\/[\w.-]+(:\d+)?\/[\w.\/@-]*\/$/);epM(L1_RPCS,v[8],EP_H);
 const t=(v[3]||[]).find(s=>/^https:\/\/[\w.-]+(:\d+)?(\/[\w./-]*)?$/.test(s)),p=(v[6]||[]).find(s=>/^[0-9a-f]{32}$/.test(s)),c=CHAINS[CHAIN_ID];if(t)CP_RELAY=t.replace(/\/$/,"");if(p)WC_PID=p;if(CHAIN_ID!==1&&c)rpcPool=[...new Set(c.rpcs.concat(rpcPool))]};
 const epLoad=async()=>{let c;try{c=JSON.parse(LS[EP_KEY])}catch{}const ok=c&&c.t<=Date.now();if(ok&&Date.now()-c.t<216e5)return epApply(c.v);const old=()=>ok&&epApply(c.v);
 const n=EP_Q.length,rd=x=>Promise.all(L1_RPCS.slice(0,2).map(u=>httpRead(u,"eth_call",[x,L]))).then(([a,b])=>a&&strip0x(a)===strip0x(b||"")?strip0x(a):""),
 [e,r]=await Promise.all([rd({to:EPS,data:"0x"+SEL_EPS+encUint(64)+encUint(96+32*n)+encUint(n)+EP_Q.map(q=>cpHex(cpU8(q[0])).padEnd(64,"0")).join("")+encUint(n)+EP_Q.map(q=>encUint(q[1])).join("")}),rd({to:RPCS_PIN,data:"0x"+SEL_LIST})]),
 W=i=>parseInt(e.slice(i*64,i*64+64),16),o=W(0)/32;
 const rl=decStrArr(r);if(W(o)!==n)return void(epM(L1_RPCS,rl,EP_H),old());
-const v=EP_Q.map((_,i)=>decStrArr(e,o+1+W(o+1+i)/32));v[7]=rl;old();epApply(v);try{LS[EP_KEY]=JSON.stringify({t:Date.now(),v})}catch{}};
+const v=EP_Q.map((_,i)=>decStrArr(e,o+1+W(o+1+i)/32));v[8]=rl;old();epApply(v);try{LS[EP_KEY]=JSON.stringify({t:Date.now(),v})}catch{}};
 epLoad().catch(()=>{try{const c=JSON.parse(LS[EP_KEY]);if(c.t<=Date.now())epApply(c.v)}catch{}});
 const bGet=async p=>{let e;for(const u of B_API){try{const j=await relayFetch(p,null,u);if(j&&j.status!=="unknown")return j}catch(x){e=x}}throw e||Error("No Bitcoin node answered.")};
 const bPost=async h=>{let e;for(const u of B_API){try{return(await relayFetch("/tx",h,u)).text}catch(x){if(/already|known|in block|conflict/i.test(x.message))return"";e=x}}throw e||Error("No Bitcoin node took the transaction.")};

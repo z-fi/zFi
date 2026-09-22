@@ -58,7 +58,7 @@
   <p class="sub">
     <code>zEndpoints</code> at <code id="addr">…</code>, on mainnet only. It lists the off-chain
     endpoints the zSwap page reads — L2 read nodes, wide-range log nodes, the private pool's prover,
-    Bitcoin APIs, the WalletConnect relay — curated on chain. The page merges each list ahead of the
+    Bitcoin APIs, the WalletConnect relay, the TAC airdrop's proof mirrors — curated on chain. The page merges each list ahead of the
     values it was built with and falls back to those. A listed endpoint can affect liveness and
     privacy; it cannot move funds.
   </p>
@@ -88,9 +88,27 @@
   <div id="cards"><p class="hint">Reading…</p></div>
 
   <section>
+    <h2>Tune-up</h2>
+    <p class="hint">
+      Probes every entry of every list zSwap reads, from this browser, and proposes each list best
+      first. Read nodes are measured the way a quote uses them: 24 calls at once, ranked by how many
+      fail, then by speed; one that fails a quarter or more, or serves the wrong chain, is proposed
+      for removal. Other services are probed once and moved fastest first, never dropped.
+      A list zSwap reads that was never written is proposed with its default entries. Tick what to
+      send: a wallet that batches sends them as one approval, any other sends them one by one.
+    </p>
+    <div class="row">
+      <button id="tune" class="ghost">Probe all and propose</button>
+      <button id="batch" disabled>Send selected</button>
+    </div>
+    <div id="plan"></div>
+    <div class="msg" id="planmsg"></div>
+  </section>
+
+  <section>
     <h2>New list</h2>
     <div class="row">
-      <input class="addr" id="nSvc" list="svcs" placeholder="service — rpc, logs, tacit, btc, wc, wcpid" spellcheck="false">
+      <input class="addr" id="nSvc" list="svcs" placeholder="service — rpc, logs, tacit, btc, wc, wcpid, tacad" spellcheck="false">
       <input class="addr" id="nChain" placeholder="chain id — 0 for all chains" inputmode="numeric" spellcheck="false">
     </div>
     <div class="row" style="margin-top:9px">
@@ -135,7 +153,7 @@ const ERR = { '30cd7471': 'NotOwner() — this account is not the owner.',
               'ff633a38': 'LengthMismatch()' };
 const CHAIN = { 1: 'Ethereum', 8453: 'Base', 4663: 'Robinhood' };
 // The (service, chainId) pairs zSwap reads, in the order it asks for them.
-const READS = [['rpc', 8453], ['rpc', 4663], ['logs', 1], ['tacit', 1], ['btc', 0], ['wc', 0], ['wcpid', 0]];
+const READS = [['rpc', 8453], ['rpc', 4663], ['logs', 1], ['tacit', 1], ['btc', 0], ['wc', 0], ['wcpid', 0], ['tacad', 1]];
 const HTTPS = /^https:\/\/\S+$/;
 // The same shape checks zSwap applies before it uses an entry.
 const SERVICE = {
@@ -151,6 +169,13 @@ const SERVICE = {
            desc: 'The WalletConnect relay — wss://, host only, no path.' },
   wcpid: { rule: /^[0-9a-f]{32}$/, fmt: '32 lowercase hex characters',
            desc: 'The WalletConnect project id — 32 lowercase hex characters, not a URL. The page uses the first valid entry.' },
+  tacad: { rule: /^https:\/\/[\w.-]+(:\d+)?\/[\w.\/@-]*\/$/, probe: 'tacad', fmt: 'https://host/…/ — the folder that holds <byte>.json, ending in /',
+           desc: 'Mirrors of the TAC airdrop proof files — https://, a folder ending in /. Every proof is checked against the airdrop contract\'s Merkle root, so a mirror can be down but never wrong.' },
+};
+// What a list zSwap reads should hold when it was never written.
+const DEFAULTS = {
+  'tacad|1': ['https://cdn.jsdelivr.net/gh/z0r0z/tacit@1b2eedde8490801c9ef4406020530059162e6d47/dapp/airdrop/v1/proofs/',
+              'https://raw.githubusercontent.com/z0r0z/tacit/1b2eedde8490801c9ef4406020530059162e6d47/dapp/airdrop/v1/proofs/'],
 };
 const OTHER = { rule: /^(https|wss):\/\/\S+$/, fmt: 'https://… or wss://…',
                 desc: 'Not a service zSwap reads today — https:// or wss://.' };
@@ -398,6 +423,12 @@ function paintProbes() {
 
 async function probe(pk, kind, u, chain) {
   probes.set(pk, ['probing…', 'warn']); paintProbes();
+  const r = await probeRaw(kind, u, chain);
+  probes.set(pk, [r.text, r.kind]); paintProbes();
+  return r;
+}
+
+async function probeRaw(kind, u, chain) {
   const t0 = performance.now(), ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 8000);
   const ms = () => Math.round(performance.now() - t0) + ' ms';
   const base = u.replace(/\/$/, ''), signal = ctl.signal;
@@ -415,6 +446,11 @@ async function probe(pk, kind, u, chain) {
       const t = ms(), h = (await r.text()).trim();
       if (!r.ok || !/^\d+$/.test(h)) throw Error('HTTP ' + r.status);
       res = [`ok · tip ${h} · ${t}`, 'ok'];
+    } else if (kind === 'tacad') {
+      const r = await fetch(base + '/00.json', { signal });
+      const t = ms(), j = await r.json();
+      if (!r.ok || !j || typeof j !== 'object' || !j.claims) throw Error('HTTP ' + r.status + ', no proof shard');
+      res = [`ok · shard 00 · ${t}`, 'ok'];
     } else {
       // Any answer at all means the prover is up and lets this origin in.
       const r = await fetch(base + '/confidential/quote?asset=' + TACIT_ASSET, { signal });
@@ -425,7 +461,7 @@ async function probe(pk, kind, u, chain) {
     res = [`fail · ${why} · ${ms()}`, 'bad'];
   }
   clearTimeout(timer);
-  probes.set(pk, res); paintProbes();
+  return { text: res[0], kind: res[1], ok: res[1] === 'ok', ms: performance.now() - t0 };
 }
 
 // ---------------------------------------------------------------- who
@@ -438,6 +474,7 @@ function checkWho() {
   $('cancel').disabled = !mine || zero(pending);
   $('accept').disabled = !isPending;
   $('nAdd').disabled = !mine;
+  $('batch').disabled = !mine || !plan.length;
   if (owner) {
     if (!account) say('who', 'Read-only. Connect the owner to change anything.', 'warn');
     else if (mine) say('who', 'You are the owner.', 'ok');
@@ -495,6 +532,104 @@ async function sendOp(c, data, msgEl) {
   } catch (e) { return say(msgEl, 'Could not re-read the list: ' + e.message, 'bad'); }
   send(data, msgEl);
 }
+
+// ---------------------------------------------------------------- tune-up
+const MC3 = '0xcA11bde05977b3631167028862bE2a173976CA11', BURST = 24;
+/** A quote's worth of reads at once: how many fail, and the median time of the rest. */
+async function burst(u, chain) {
+  const c = await probeRaw('rpc', u, chain);
+  if (!c.ok) return { ok: false, fail: BURST, ms: Infinity, why: c.text };
+  const ts = []; let fail = 0;
+  await Promise.all(Array.from({ length: BURST }, async (_, i) => {
+    const t0 = performance.now(), ctl = new AbortController(), k = setTimeout(() => ctl.abort(), 10000);
+    try {
+      const r = await fetch(u, { method: 'POST', headers: { 'content-type': 'application/json' }, signal: ctl.signal,
+        body: JSON.stringify({ jsonrpc: '2.0', id: i + 1, method: 'eth_call', params: [{ to: MC3, data: '0x42cbb15c' }, 'latest'] }) });
+      const j = await r.json();
+      if (!r.ok || j.error || !/^0x[0-9a-f]{64}$/i.test(j.result || '')) fail++; else ts.push(performance.now() - t0);
+    } catch { fail++; }
+    clearTimeout(k);
+  }));
+  ts.sort((a, b) => a - b);
+  return { ok: fail * 4 < BURST, fail, ms: ts.length ? ts[ts.length >> 1] : Infinity, why: `${fail}/${BURST} failed` };
+}
+let plan = [];
+function renderPlan() {
+  const box = $('plan'); box.innerHTML = '';
+  for (const x of plan) {
+    const cb = mk('input', { type: 'checkbox', checked: x.on, onchange: () => { x.on = cb.checked; } });
+    box.append(mk('div', { className: 'ent', style: 'margin:10px 0' },
+      mk('label', { className: 'row', style: 'gap:8px;align-items:center' }, cb,
+        mk('b', { textContent: `${x.c.name} · ${chainLabel(x.c.chain)}` }), mk('span', { className: 'hint', textContent: x.why })),
+      mk('div', { className: 'url', style: 'white-space:pre-wrap;margin-top:4px', textContent: x.next.map((u, i) => `#${i} ${u}`).join('\n') })));
+  }
+  $('batch').disabled = !isOwner() || !plan.length;
+}
+$('tune').onclick = async () => {
+  plan = []; renderPlan(); say('planmsg', 'Probing every entry from this browser…', 'warn');
+  for (const c of cards) {
+    if (!READS.some(([s, ch]) => s === c.name && BigInt(ch) === c.chain)) continue;
+    const sv = spec(c.name), def = DEFAULTS[c.name + '|' + c.chain];
+    if (!c.list.length && def) { plan.push({ c, next: def, on: true, why: 'never written: its default entries' }); continue; }
+    if (!sv.probe || !c.list.length) continue;
+    if (sv.probe === 'rpc') {
+      const rs = [];
+      for (const u of c.list) rs.push({ u, r: await burst(u, c.chain) });
+      const up = rs.filter(x => x.r.ok).sort((a, b) => a.r.fail - b.r.fail || a.r.ms - b.r.ms), out = rs.filter(x => !x.r.ok);
+      const next = up.map(x => x.u);
+      if (!next.length) { say('planmsg', `Every ${c.name} node for ${chainLabel(c.chain)} failed the burst — left as it is.`, 'bad'); continue; }
+      if (next.join('\n') !== c.list.join('\n'))
+        plan.push({ c, next, on: true, why: up.map(x => `${x.u.replace(/^https:\/\//, '')} ${x.r.fail}/${BURST} failed, ${Math.round(x.r.ms)} ms`).join(' · ')
+          + (out.length ? ' — remove: ' + out.map(x => `${x.u.replace(/^https:\/\//, '')} (${x.r.why})`).join(', ') : '') });
+      continue;
+    }
+    if (c.list.length < 2) continue;
+    const rs = await Promise.all(c.list.map(u => probeRaw(sv.probe, u, c.chain)));
+    const up = c.list.map((u, i) => ({ u, r: rs[i] })).filter(x => x.r.ok).sort((a, b) => a.r.ms - b.r.ms);
+    const down = c.list.filter((_, i) => !rs[i].ok);
+    const next = [...up.map(x => x.u), ...down];
+    if (next.join('\n') !== c.list.join('\n'))
+      plan.push({ c, next, on: true, why: 'fastest first (' + up.map(x => Math.round(x.r.ms) + ' ms').join(', ') + ')'
+        + (down.length ? `; ${down.length} not answering moved to the back` : '') });
+  }
+  renderPlan();
+  say('planmsg', plan.length ? `${plan.length} change${plan.length === 1 ? '' : 's'} proposed. Untick any you do not want.` : 'Every list is already in order.', plan.length ? 'warn' : 'ok');
+};
+$('batch').onclick = async () => {
+  const pick = plan.filter(x => x.on);
+  if (!pick.length) return say('planmsg', 'Nothing ticked.', 'warn');
+  if (!confirm(`Send ${pick.length} list change${pick.length === 1 ? '' : 's'} to zEndpoints?\n\n` + pick.map(x => `${x.c.name} · ${chainLabel(x.c.chain)}:\n  ${x.next.join('\n  ')}`).join('\n\n'))) return;
+  const calls = pick.map(x => ({ to: EPS, data: CALL.set(x.c.w, x.c.chain, x.next) }));
+  try {
+    if (parseInt(await provider.request({ method: 'eth_chainId' }), 16) !== 1)
+      await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x1' }] });
+    for (const k of calls) await provider.request({ method: 'eth_call', params: [{ from: account, ...k }, 'latest'] });
+  } catch (e) { return say('planmsg', 'It would revert: ' + why(e), 'bad'); }
+  let batched = false;
+  if (calls.length > 1) try {
+    const r = await provider.request({ method: 'wallet_sendCalls', params: [{ version: '2.0.0', chainId: '0x1', from: account, atomicRequired: false, calls }] });
+    const id = typeof r === 'string' ? r : r && r.id;
+    batched = true;
+    say('planmsg', 'Sent as one batch ' + id + '\nWaiting for it to land…', 'warn');
+    for (let i = 0; i < 120; i++) {
+      await new Promise(res => setTimeout(res, 2500));
+      const s = await provider.request({ method: 'wallet_getCallsStatus', params: [id] }).catch(() => null);
+      const st = s && (typeof s.status === 'number' ? s.status : { CONFIRMED: 200, FAILED: 400 }[s.status]);
+      if (st >= 200) { say('planmsg', st < 300 ? 'Done: the batch landed.' : 'The batch failed on chain.', st < 300 ? 'ok' : 'bad'); plan = []; renderPlan(); return load(); }
+    }
+    return say('planmsg', 'Still pending: ' + id, 'warn');
+  } catch (e) { if (batched || (e && e.code === 4001)) return say('planmsg', why(e), 'bad'); }
+  for (let i = 0; i < calls.length; i++) {
+    try {
+      const tx = await provider.request({ method: 'eth_sendTransaction', params: [{ from: account, ...calls[i] }] });
+      say('planmsg', `Sent ${i + 1} of ${calls.length}: ${tx}\nWaiting…`, 'warn');
+      let r = null;
+      for (let k = 0; k < 120 && !r; k++) { await new Promise(res => setTimeout(res, 2500)); r = await provider.request({ method: 'eth_getTransactionReceipt', params: [tx] }); }
+      if (!r || r.status === '0x0') return say('planmsg', (r ? 'Reverted: ' : 'Still pending: ') + tx, 'bad');
+    } catch (e) { return say('planmsg', why(e), 'bad'); }
+  }
+  say('planmsg', `Done: ${calls.length} change${calls.length === 1 ? '' : 's'} landed.`, 'ok'); plan = []; renderPlan(); load();
+};
 
 $('nAdd').onclick = () => {
   const name = $('nSvc').value.trim(), cs = $('nChain').value.trim(), v = $('nUrl').value.trim();

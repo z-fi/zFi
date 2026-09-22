@@ -18,12 +18,12 @@ const b32 = s => '0x' + Buffer.from(s, 'ascii').toString('hex').padEnd(64, '0');
 /* The order the page asks in, which is the order its answer is read back in.
    Pinned here as data so a reordering on either side fails loudly instead of
    pouring the Bitcoin list into the Tacit relay. */
-const ASKED = [['rpc', 8453], ['rpc', 4663], ['logs', 1], ['tacit', 1], ['btc', 0], ['wc', 0], ['wcpid', 0]];
+const ASKED = [['rpc', 8453], ['rpc', 4663], ['logs', 1], ['tacit', 1], ['btc', 0], ['wc', 0], ['wcpid', 0], ['tacad', 1]];
 
 const PID = 'ab'.repeat(16);
 const CURATED = [
   ['https://base.cur'], ['https://rh.cur'], ['https://logs.cur'], ['https://relay.cur/'],
-  ['https://btc.cur/api'], ['wss://wc.cur'], [PID],
+  ['https://btc.cur/api'], ['wss://wc.cur'], [PID], ['https://ad.cur/proofs/'],
 ];
 
 /* Serves the roster, and zRpcList's rpcs(), from whichever node asks. `each`
@@ -67,7 +67,7 @@ describe('the endpoint roster', () => {
     await p.settle();
     const base = ev(p, 'CHAINS[8453].rpcs');
     assert.equal(base[0], 'https://base.cur');
-    assert.ok(base.includes('https://base.gateway.tenderly.co'), 'a built-in node was dropped');
+    assert.ok(base.includes('https://base.rpc.blxrbdn.com'), 'a built-in node was dropped');
     assert.equal(ev(p, 'CHAINS[4663].rpcs[0]'), 'https://rh.cur');
     assert.equal(ev(p, 'CP_LOGS[0]'), 'https://logs.cur');
     assert.ok(ev(p, 'CP_LOGS').includes('https://mainnet.gateway.tenderly.co'));
@@ -77,8 +77,10 @@ describe('the endpoint roster', () => {
     assert.equal(ev(p, 'WC_RELAY[0]'), 'wss://wc.cur');
     assert.equal(ev(p, 'WC_PID'), PID);
     assert.equal(ev(p, 'L1_RPCS[0]'), 'https://l1.cur', "zRpcList reaches the L1 read path too");
-    const kept = JSON.parse(p.window.localStorage.getItem('zswap:ep'));
-    assert.ok(kept && kept.t > 0 && kept.v.length === 8, 'the answer is kept for the next load');
+    assert.equal(ev(p, 'AD_API[0]'), 'https://ad.cur/proofs/', 'a curated airdrop mirror goes first');
+    assert.ok(ev(p, 'AD_API').some(u => u.startsWith('https://cdn.jsdelivr.net/')), 'the built-in mirrors stay behind it');
+    const kept = JSON.parse(p.window.localStorage.getItem('zswap:ep2'));
+    assert.ok(kept && kept.t > 0 && kept.v.length === 9, 'the answer is kept for the next load');
     assert.deepEqual(p.consoleErrors, []);
     p.close();
   });
@@ -106,6 +108,7 @@ describe('the endpoint roster', () => {
       ['ftp://x', ' https://ok.cur ', 'https://has space'], [], ['http://plain'],
       ['http://insecure', 'javascript:alert(1)', 'https://relay.cur/a?b=1'],
       ['https://btc.cur/api'], ['https://not-a-socket', 'wss://wc.cur/path'], ['XYZ', 'AB'.repeat(16)],
+      ['https://ad.cur/proofs', 'http://ad.cur/proofs/', 'https://ad.cur/p/?x=1/'],
     ], { l1: ['http://l1.plain'] });
     const p = await loadPage({ walletless: true, chain });
     await p.settle();
@@ -116,6 +119,17 @@ describe('the endpoint roster', () => {
     assert.equal(ev(p, 'WC_RELAY').length, 1, 'no usable socket: the built-in relay stays');
     assert.equal(ev(p, 'WC_PID'), '1e8390ef1c1d8a185e035912a1409749', 'upper-case and short ids refused');
     assert.ok(!ev(p, 'L1_RPCS').includes('http://l1.plain'));
+    assert.equal(ev(p, 'AD_API').length, 2, 'a mirror that is not an https folder is skipped');
+    p.close();
+  });
+
+  test('a roster kept by an older page, in the old order, is not applied', async () => {
+    const chain = serve(new MockChain(), CURATED);
+    const old = [['https://b.old'], [], [], [], [], [], [], ['https://l1.old']];
+    const p = await loadPage({ walletless: true, chain, storage: { 'zswap:ep': JSON.stringify({ t: Date.now(), v: old }) } });
+    await p.settle();
+    assert.ok(!ev(p, 'AD_API').includes('https://l1.old'), 'an L1 node never lands among the airdrop mirrors');
+    assert.equal(chain.epAsks.length, 2, 'the roster is read afresh');
     p.close();
   });
 
@@ -127,7 +141,7 @@ describe('the endpoint roster', () => {
     await p.settle();
     assert.equal(ev(p, 'cpRelayBase()'), 'https://api.tacit.finance');
     assert.notEqual(ev(p, 'CHAINS[8453].rpcs[0]'), 'https://base.cur');
-    assert.equal(p.window.localStorage.getItem('zswap:ep'), null, 'nothing kept from a split answer');
+    assert.equal(p.window.localStorage.getItem('zswap:ep2'), null, 'nothing kept from a split answer');
     p.close();
   });
 
@@ -136,7 +150,7 @@ describe('the endpoint roster', () => {
     const v = CURATED.concat([['https://l1.cur']]);
     const p = await loadPage({
       walletless: true, chain,
-      storage: { 'zswap:ep': JSON.stringify({ t: Date.now(), v }) },
+      storage: { 'zswap:ep2': JSON.stringify({ t: Date.now(), v }) },
     });
     await p.settle();
     assert.equal(ev(p, 'cpRelayBase()'), 'https://relay.cur');
@@ -150,7 +164,7 @@ describe('the endpoint roster', () => {
     const v = CURATED.concat([[]]);
     const p = await loadPage({
       walletless: true, chain,
-      storage: { 'zswap:ep': JSON.stringify({ t: Date.now() - 7 * 3600e3, v }) },
+      storage: { 'zswap:ep2': JSON.stringify({ t: Date.now() - 7 * 3600e3, v }) },
     });
     await p.settle();
     assert.equal(chain.epAsks.length, 2, 'a stale copy must be refreshed');
