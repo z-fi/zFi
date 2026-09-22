@@ -165,7 +165,7 @@ const SLOW = { timeout: 15000 };
 
 async function open(opts = {}) {
   const chain = withPool(opts.chain ?? new MockChain(), opts);
-  const p = await loadPage({ chain, storage: opts.storage, chime: opts.chime });
+  const p = await loadPage({ chain, storage: opts.storage, chime: opts.chime, hash: opts.hash });
   // Capture relay bodies: the fetch mock only records URL + method, and the
   // witness is the thing under test.
   const inner = p.window.fetch;
@@ -937,8 +937,10 @@ describe('paying a request', () => {
     r.type('pvAmt', '0.01');
     r.click(r.$('pvKey').querySelector('button[data-a="request"]'));
     await r.waitFor(() => r.asked.prompt.length === 1, { label: 'the request prompt', timeout: 15000 });
-    assert.match(r.asked.prompt[0], /payment request/);
-    const invoice = JSON.parse(r.window.__promptDefaults[0]);
+    assert.match(r.asked.prompt[0], /payment request link/);
+    const link = r.window.__promptDefaults[0];
+    assert.match(link, /#tacit-invoice=[A-Za-z0-9_-]+$/, 'a link with the request in its fragment');
+    const invoice = JSON.parse(Buffer.from(link.split('#tacit-invoice=')[1], 'base64url').toString('utf8'));
     assert.equal(invoice.v, 1);
     assert.equal(invoice.assetId, F.ethAssetId);
     assert.equal(invoice.underlying, A.ZERO);
@@ -956,9 +958,11 @@ describe('paying a request', () => {
     // The payer pays it from another browser.
     const q = await open();
     await unlock(q);
-    q.queuePrompt(JSON.stringify(invoice));
+    q.queuePrompt(link);
+    q.queueConfirm(true);
     q.click(q.$('pvKey').querySelector('button[data-a="pay"]'));
     await q.waitFor(() => q.chain.sentTo(POOL).length === 1, { label: 'the payment to be sent', timeout: 15000 });
+    assert.match(q.asked.confirm.at(-1), /^Pay 0\.01 ETH into this private request \(deposit 0x/, 'the payer confirms the amount and the deposit');
     const tx = q.chain.sentTo(POOL)[0];
     assert.equal(BigInt(tx.value), BigInt(F.amountWei));
     assert.equal(tx.data, F.wrapCalldata, 'pool.wrap to the request\'s commitment');
@@ -1360,6 +1364,54 @@ describe('the private form tells you before you press', () => {
     const v = p.$('pvAmt').value;
     assert.ok(Number(v) > 9.9 && Number(v) < 10, 'the balance, less a gas reserve: ' + v);
     assert.ok(!/\.\d{9,}/.test(v), 'no more than eight decimals');
+    p.close();
+  });
+});
+
+describe('a payment request opened from a link', () => {
+  const REQ = { v: 1, chainBinding: F.wrapOp.chainBinding, assetId: F.ethAssetId, underlying: A.ZERO, ticker: 'cETH',
+    amount: F.amountWei, value: F.note.value, cx: F.note.cx, cy: F.note.cy, owner: F.note.owner,
+    commit: F.commit, depositId: F.depositId, leaf: F.leaf, memo: F.memo, witness: F.wrapOp };
+  const linked = async (req, confirm) => {
+    const chain = withPool(new MockChain(), {});
+    const p = await loadPage({ chain, hash: 'tacit-invoice=' + Buffer.from(JSON.stringify(req)).toString('base64url') });
+    const inner = p.window.fetch;
+    p.window.__relayPosts = [];
+    p.window.fetch = async (url, init) => {
+      if (String(url).includes('/confidential/') && init && init.body) p.window.__relayPosts.push(JSON.parse(init.body));
+      return inner(url, init);
+    };
+    await p.settle();
+    assert.equal(p.window.location.hash, '', 'the request leaves the address bar at once');
+    assert.match(p.text('stat'), /payment request is waiting/);
+    await p.connect();
+    if (!p.$('pv').classList.contains('on')) p.click('pv');
+    await p.settle();
+    p.queueConfirm(confirm);
+    p.click('pvGo');
+    await p.waitFor(() => /Key unlocked/.test(p.text('pvKey')), { label: 'the key to unlock' });
+    return p;
+  };
+
+  test('it opens the pay confirmation once the key is unlocked, and pays only on yes', async () => {
+    const p = await linked(REQ, true);
+    await p.waitFor(() => p.chain.sentTo(POOL).length === 1, { label: 'the payment', timeout: 15000 });
+    assert.match(p.asked.confirm.at(-1), /^Pay 0\.01 ETH into this private request/);
+    assert.equal(p.chain.sentTo(POOL)[0].data, F.wrapCalldata);
+    p.close();
+  });
+
+  test('declining the confirmation sends nothing', async () => {
+    const p = await linked(REQ, false);
+    await p.waitFor(() => /Payment cancelled/.test(p.text('stat')), { label: 'the decline', timeout: 15000 });
+    assert.equal(p.chain.sentTo(POOL).length, 0);
+    p.close();
+  });
+
+  test('a link to a request for another pool is refused before anything is paid', async () => {
+    const p = await linked({ ...REQ, chainBinding: '0x' + '12'.repeat(32) }, true);
+    await p.waitFor(() => /another pool/.test(p.text('stat')), { label: 'the refusal', timeout: 15000 });
+    assert.equal(p.chain.sentTo(POOL).length, 0);
     p.close();
   });
 });

@@ -166,6 +166,24 @@ describe('Tacit farms', () => {
     p.close();
   });
 
+  test('the APR uses the reserves the program now carries, with no extra pool read', async () => {
+    const enc = AbiCoder.defaultAbiCoder();
+    const [x, y] = BigInt(TAC_ID) < BigInt(ETH_ID) ? [TAC_ID, ETH_ID] : [ETH_ID, TAC_ID];
+    const P0 = keccak256(enc.encode(['bytes32', 'bytes32', 'uint32'], [x, y, 30]));
+    const rE = 51101, rT = 729864783, sh = 6106393, staked = 5873947;
+    const chain = tacitChain();
+    chain.lanes[RELAY + '/farm/program'] = { ...FARM, pools: [{ ...FARM.pools[0], poolId: P0, lpAsset: keccak256(P0 + '6c70'), totalShares: String(staked),
+      reserves: { assetA: x, assetB: y, reserveA: String(x === ETH_ID ? rE : rT), reserveB: String(x === ETH_ID ? rT : rE), lpTotalShares: String(sh) } }] };
+    let poolReads = 0;
+    chain.answer(POOL, 'b5217bb4', () => { poolReads++; return '0x' + u256(0).repeat(7); });
+    const p = await open({ chain });
+    await p.waitFor(() => /APR/.test(p.text('pvFarm')), { label: 'the APR' });
+    const apr = Math.round(553.8888 * 365 * (rE / rT) / (2 * rE / 1e8 * staked / sh + 1) * 100).toLocaleString();
+    assert.equal(p.$('pvFarm').querySelector('.fmc').textContent, `TAC/tETH 554 TAC/day · ~${apr}% APR on 1 ETH`);
+    assert.equal(poolReads, 0, 'the reserves came with the program');
+    p.close();
+  });
+
   test('a stale, ended or odd program shows nothing', async () => {
     for (const bad of [{ ...FARM, stale: true }, { ...FARM, epoch: { active: false } },
       { ...FARM, pools: [{ pair: '<img src=x>', tacPerDayForPool: '5' }] }, { ...FARM, pools: [{ pair: 'TAC/cETH', tacPerDayForPool: 'Infinity' }] }]) {
@@ -294,7 +312,7 @@ describe('shielding TAC', () => {
     r.type('pvAmt', '100');
     r.click(r.$('pvKey').querySelector('button[data-a="request"]'));
     await r.waitFor(() => r.asked.prompt.length === 1, { label: 'the request prompt', ...SLOW });
-    const inv = JSON.parse(r.window.__promptDefaults[0]);
+    const inv = JSON.parse(Buffer.from(r.window.__promptDefaults[0].split('#tacit-invoice=')[1], 'base64url').toString('utf8'));
     assert.equal(inv.assetId, TAC_ID);
     assert.equal(inv.underlying, TAC);
     assert.equal(inv.ticker, 'cTAC', 'Tacit\'s own ticker, so its dapp can pay it too');
@@ -307,8 +325,10 @@ describe('shielding TAC', () => {
     const q = await open({ chain });
     await unlock(q);
     q.queuePrompt(JSON.stringify(inv));
+    q.queueConfirm(true);
     q.click(q.$('pvKey').querySelector('button[data-a="pay"]'));
     await q.waitFor(() => q.chain.sentTo(POOL).length === 1, { label: 'the payment', ...SLOW });
+    assert.match(q.asked.confirm.at(-1), /^Pay 100 TAC into this private request/, 'pasted JSON still works, and still asks first');
     const tx = q.chain.sentTo(POOL)[0];
     assert.equal(tx.data, F.tac.wrapCalldata);
     assert.equal(BigInt(tx.value || 0), 0n);

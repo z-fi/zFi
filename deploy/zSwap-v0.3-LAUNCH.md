@@ -6,7 +6,7 @@ The page and all its on-chain dependencies are ready. What remains is deploying 
 
 | | |
 |---|---|
-| Page | `zSwap.html`, 597,522 B, 25 chunks (16,878 B headroom) |
+| Page | `zSwap.html`, 599,440 B, 25 chunks (14,960 B headroom) |
 | Identity | `CP_MSG` is Tacit's shared identity message (tacit 2abd65b0, `dapp/identity-message.js`), byte-equal; the derivation is unchanged |
 | Checks | `script/check-zSwap.mjs` all pass; `check-create2-artifacts.mjs` 27/27 reproduce |
 | Tests | UI suite 79 files; Foundry zSwap 83, zGuard 18, Precision fork 19; browser 30 |
@@ -18,7 +18,7 @@ The page and all its on-chain dependencies are ready. What remains is deploying 
 
 1. **Commit the tree.** It also holds work from other sessions (v0.3 polish, private bridge, zEndpoints, chunk count, audit fixes). Note that anything under `dapp/` auto-deploys to zfi.wei.is on push.
 2. **Chunks.** `node script/build-zSwap-chunks.mjs` then `PRIVATE_KEY=… ETH_RPC_URL=… node script/deploy-zSwap-chunks.mjs`.
-   - Cost: 25 transactions at about 5.2M gas each, about 130M gas in total (roughly 0.13–0.2 ETH at 1–1.5 gwei).
+   - Cost: 25 transactions at about 5.27M gas each (eth_estimateGas on mainnet), about 132M gas in total: about 0.012 ETH at 0.09 gwei (2026-09-22), 0.066 ETH at 0.5 gwei, 0.13 ETH at 1 gwei. Fund the key with about 2× the figure at the gas price of the day.
    - Use a dedicated funded key, **not** `0x68575B07…`: it signs Tacit's header relay and reflection, and Tacit asked that it not be used.
 3. **Successor.** Run `node script/build-zSwapNext.mjs <25 chunk addresses>`. It emits the initcode and the calldata for the DAO's `deployNext` on the current tip.
 4. **DAO** executes `deployNext`. Then record the wrapper address in README / `docs/src/README.md` and rerun `node script/check-zSwap.mjs`.

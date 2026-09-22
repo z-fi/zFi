@@ -7607,13 +7607,15 @@ if(A.tok!==ZERO&&await cpTokBal(A)<wei)throw Error("Not enough "+A.pub+" in this
 const e=await cpDepositOne(v,"Deposited.",A);
 refreshBalance();
 stat.textContent=e?"Deposited, but the relay did not take the settle ("+explain(e)+"). Press settle on the note, or choose Settle: from this wallet.":"Deposited. The relay is settling it into the pool.";sGot()};
-const CP_RET="This Tacit pool is retired: deposits and requests are closed, and what you hold can still be withdrawn.";const cpRequest=async()=>{if(cpRet)throw Error(CP_RET);const{v,A}=cpAmount(1),{i,k}=await cpFresh(v,A.id),n=cpNote(i,k);n.inv=1;
+const CP_RET="This Tacit pool is retired: deposits and requests are closed, and what you hold can still be withdrawn.";const TINV="zswap:tinv",cpInvGet=()=>{try{return sessionStorage.getItem(TINV)||window.__tinv||""}catch{return window.__tinv||""}},cpInvSet=v=>{window.__tinv=v;try{v?sessionStorage.setItem(TINV,v):sessionStorage.removeItem(TINV)}catch{}},cpInvGo=()=>{const r=cpInvGet();if(!r)return;if(CHAIN_ID!==1){stat.textContent="A payment request is waiting. Tacit payments are on Ethereum: switch to Ethereum to review it.";return}if(!pvMode)pvSet(true);if(!account||!cpSeed){if(!stat.textContent)stat.textContent="A payment request is waiting. Connect a wallet and unlock your Tacit key to review it.";return}if(cpBusy)return;cpInvSet("");pvRun(()=>cpPay("tacit-invoice="+r),"Checking the payment request…")};
+const cpRequest=async()=>{if(cpRet)throw Error(CP_RET);const{v,A}=cpAmount(1),{i,k}=await cpFresh(v,A.id),n=cpNote(i,k);n.inv=1;
 cpNotes.push(n);cpSaveNotes();cpPaint();
 pvAmt.value="";stat.textContent="Request built. Send it to whoever is paying; the note settles once they pay.";cpShow(n)};
 const cpTicker=A=>A.id===CP_ETH?"cETH":/^c[A-Z]/.test(A.sym)?A.sym:"c"+A.sym;
-const cpShow=async n=>{const k=cpNoteOf(n),A=cpAs(k.asset);if(!A)return;await ask("Your payment request. Anyone can pay it; only this key can spend the result.",JSON.stringify({v:1,chainBinding:n.op.chainBinding,assetId:k.asset,underlying:A.tok,ticker:cpTicker(A),amount:String(k.value*A.scale),value:n.v,
-cx:k.cx,cy:k.cy,owner:k.owner,commit:cpDepCommit(k.cx,k.cy,k.owner),depositId:k.dep,leaf:k.leaf,memo:n.memo,witness:n.op}))};
-const cpPay=async()=>{let inv;try{inv=JSON.parse((await ask("Paste the payment request (JSON).")||"").trim())}catch{}
+const cpB64u=s=>btoa(s).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,""),cpInvRead=raw=>{const s=String(raw||"").trim(),m=s.match(/tacit-invoice=([A-Za-z0-9_-]{16,8000})(?:[&#]|$)/);return JSON.parse(m?atob(m[1].replace(/-/g,"+").replace(/_/g,"/")):s)};
+const cpShow=async n=>{const k=cpNoteOf(n),A=cpAs(k.asset);if(!A)return;await ask("Your payment request link. Anyone can pay it with zSwap or tacit.finance; only this key can spend the result.",location.href.split("#")[0]+"#tacit-invoice="+cpB64u(JSON.stringify({v:1,chainBinding:n.op.chainBinding,assetId:k.asset,underlying:A.tok,ticker:cpTicker(A),amount:String(k.value*A.scale),value:n.v,
+cx:k.cx,cy:k.cy,owner:k.owner,commit:cpDepCommit(k.cx,k.cy,k.owner),depositId:k.dep,leaf:k.leaf,memo:n.memo,witness:n.op})))};
+const cpPay=async raw=>{let inv;try{inv=cpInvRead(raw??await ask("Paste the payment request: its link or its JSON."))}catch{}
 const h32=x=>/^0x[0-9a-fA-F]{64}$/.test(x||"");
 if(!inv||inv.v!==1||!inv.witness)throw Error("That is not a payment request.");
 if(!h32(inv.assetId))throw Error("The request is malformed.");
@@ -7632,6 +7634,7 @@ if(!/^0x0[23][0-9a-fA-F]{64}[0-9a-fA-F]{272}$/.test(inv.memo||""))throw Error("T
 const st=await cfgRead(C,[{to:CP_POOL,data:"0x"+SEL_CPDEP+pad32(inv.depositId)},L]);
 if(BigInt(st||"0x0")!==0n)throw Error("This request was already paid.");
 if(A.tok!==ZERO&&await cpTokBal(A)<wei)throw Error("Not enough "+A.pub+" to pay this request.");
+if(!await sure("Pay "+trimAmt(wei,A.dec)+" "+A.pub+" into this private request (deposit "+cpShort(String(inv.depositId))+")? A request does not say who made it: pay only one you expected."))throw Error("Payment cancelled.");
 const n={p:1,i:-1,v:String(v),dep:inv.depositId,at:Math.floor(Date.now()/1000),op:w,memo:inv.memo};if(A.id!==CP_ETH)n.a=A.id;
 const req={from:account,to:CP_POOL,value:A.tok===ZERO?toHex(wei):"0x0",data:"0x"+SEL_CPWRAP+pad32(A.id)+encUint(wei)+pad32(commit)};
 await rpc(C,[req,L]);
@@ -7947,9 +7950,12 @@ const pvActSync=()=>{const s=pvAct.value==="send";for(const e of[pvChain,pvTo])e
 const fmApr=async j=>{const ids={cETH:CP_ETH,TAC:(cpAssets.find(a=>a.sym==="TAC")||{}).id,cBTC:CP_CBTC,cUSD:CP_CUSD},cs=[...pvFarm.querySelectorAll(".fmc")],
 pid=(a,b)=>{const[x,y]=BigInt(a)<BigInt(b)?[a,b]:[b,a];return keccak(hexToBytes(pad32(x)+pad32(y)+encUint(30n))).toLowerCase()},
 q=cs.map(c=>{const[a,b]=c._p.pair.split("/").map(k=>ids[k]);if(!a||!b)return null;const P=pid(a,b);return keccak(hexToBytes(strip0x(P)+"6c70")).toLowerCase()===String(c._p.lpAsset).toLowerCase()?P:null});
-const rs=await cfgBatch(q.filter(Boolean).map(P=>({to:CP_POOL,data:"0xb5217bb4"+strip0x(P)})));if(CHAIN_ID!==1)return;let k=0,px=0;
-const pl=q.map((P,i)=>{if(!P)return null;const h=strip0x(rs[k++]||""),w=n=>BigInt("0x"+(h.slice(n*64,n*64+64)||"0"));if(h.length<448||!w(0))return null;
-const E=h.slice(64,128)===strip0x(CP_ETH).toLowerCase(),rE=Number(E?w(3):w(4)),rO=Number(E?w(4):w(3));if(cs[i]._p.pair==="TAC/cETH"&&rO)px=rE/rO;return{rE,sh:Number(w(6))}});
+const need=q.map((P,i)=>P&&!(cs[i]._p.reserves&&String(cs[i]._p.poolId).toLowerCase()===P)?P:null);
+const rs=need.some(Boolean)?await cfgBatch(need.filter(Boolean).map(P=>({to:CP_POOL,data:"0xb5217bb4"+strip0x(P)}))):[];if(CHAIN_ID!==1)return;let k=0,px=0;
+const pl=q.map((P,i)=>{if(!P)return null;const R=cs[i]._p.reserves;let a,rA,rB,sh;
+if(!need[i]){a=String(R.assetA).toLowerCase();rA=+R.reserveA;rB=+R.reserveB;sh=+R.lpTotalShares}
+else{const h=strip0x(rs[k++]||""),w=n=>BigInt("0x"+(h.slice(n*64,n*64+64)||"0"));if(h.length<448||!w(0))return null;a="0x"+h.slice(64,128);rA=Number(w(3));rB=Number(w(4));sh=Number(w(6))}
+const E=a===CP_ETH.toLowerCase(),rE=E?rA:rB,rO=E?rB:rA;if(!(rE>0&&rO>0&&sh>0&&isFinite(rE+rO+sh)))return null;if(cs[i]._p.pair==="TAC/cETH")px=rE/rO;return{rE,sh}});
 cs.forEach((c,i)=>{const o=pl[i],p=c._p;if(!o||!px||!o.sh)return;const st=2*o.rE/1e8*Math.min(1,+p.totalShares/o.sh),apr=+p.tacPerDayForPool*365*px/(st+1)*100;
 if(!isFinite(apr)||apr<=0)return;c.append(" · ~"+Math.round(apr).toLocaleString()+"% APR on 1 ETH");
 c.title="Rewards valued at the TAC/tETH pool price ("+px.toPrecision(3)+" ETH per TAC). "+(+st.toPrecision(3))+" ETH staked here now; the rate falls as more joins."})};
@@ -7992,7 +7998,7 @@ const ok=kind==="tx"?/^0x[0-9a-fA-F]{64}$/.test(value):/^0x[0-9a-fA-F]{40}$/.tes
 return ok?`<a href="${base}/${kind}/${value}" target="_blank" rel="noreferrer">${label}</a>`:label;
 };
 const cpSet=(e,h)=>{if(e._h!==h)e.innerHTML=e._h=h},cpPaint=()=>{if(!pvMode)return;
-const on=!!cpSeed;pvHintSync();pvPrevSoon();
+const on=!!cpSeed;pvHintSync();pvPrevSoon();cpInvGo();
 cpSet(pvKey,!account?"Connect a wallet to begin.":!on?"Sign once to unlock your Tacit key: the same key tacit.finance derives from this wallet, with a Bitcoin address of its own.":
 `Key unlocked · ${cpVer?`<a href="https://mempool.space/address/${cpBtc}" target="_blank" rel="noreferrer" title="This key's Bitcoin address — the one tacit.finance scans and locks cBTC from">${cpBtc.slice(0,8)}…${cpBtc.slice(-6)}</a>`:'<button type="button" class="fclink" data-a="verify" title="Sign once to confirm the key saved in this browser is your wallet\'s">verify key</button>'}${cpBtcSat!=null?" "+trimAmt(BigInt(cpBtcSat),8)+" BTC":""} <button type="button" class="fclink" data-a="addr">address</button><button type="button" class="fclink" data-a="pub" title="Publish your Tacit address on your primary .wei, .gwei or .eth name, so anyone can pay you privately by name">publish to name</button><button type="button" class="fclink" data-a="request">request</button><button type="button" class="fclink" data-a="pay">pay</button><button type="button" class="fclink" data-a="more" aria-expanded="${cpMore}">${cpMore?"less":"more"}</button><span class="${cpMore?"":"hide"}"><button type="button" class="fclink" data-a="btckey">btc key</button><button type="button" class="fclink" data-a="lockbtc">lock btc</button><button type="button" class="fclink" data-a="backup">backup</button><button type="button" class="fclink" data-a="import">import</button><button type="button" class="fclink" data-a="recover">recover</button><button type="button" class="fclink" data-a="export">export</button><button type="button" class="fclink" data-a="relay">relay</button></span>`);
 pvGo.textContent=!account?CW:!on?"Unlock key":pvAct.value==="send"?"Send":pvAct.value==="out"?"Withdraw":"Deposit";
@@ -8796,8 +8802,10 @@ el.value=v;lkWrote[el.id]=v;return true;
 };
 async function applyLink(e){if(e&&(busy||txLive))return void idle(()=>applyLink(e));lkEv=!!e;
 const q=new URLSearchParams(location.hash.slice(1));
+const ti=q.get("tacit-invoice");if(ti!==null){try{history.replaceState(null,"",location.href.split("#")[0])}catch{}if(/^[A-Za-z0-9_-]{16,8000}$/.test(ti)){window.__tinv=ti;try{sessionStorage.setItem("zswap:tinv",ti)}catch{}setTimeout(()=>cpInvGo(),0)}return}
 const my=++lSeq;
 if(![...q.keys()].length){
+if(!e)setTimeout(()=>cpInvGo(),0);
 if(e){
 const d=mode==="out"?outAmt:amt;
 if(d.value===lkWrote[d.id]){amt.value=outAmt.value="";fitFont(amt);fitFont(outAmt);setMode("in")}
