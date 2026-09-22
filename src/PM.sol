@@ -362,7 +362,7 @@ contract PM {
         if (y == 0 || n == 0) return _void(m, marketId);
 
         uint256 pot = m.pot;
-        uint256 fee = pot * m.feeBps / 10_000;
+        uint256 fee = pot.fullMulDiv(m.feeBps, 10_000);
         m.state = yes ? State.Yes : State.No;
         pot -= fee;
         m.pot = pot;
@@ -486,7 +486,9 @@ contract PM {
         shares = _net(m, amount, 0);
         if (shares == 0) return (0, 0);
         uint256 pot = m.pot + amount;
-        payout = shares.fullMulDiv(pot - pot * m.feeBps / 10_000, totalSupply[yes ? marketId : marketId | 1] + shares);
+        payout = shares.fullMulDiv(
+            pot - pot.fullMulDiv(m.feeBps, 10_000), totalSupply[yes ? marketId : marketId | 1] + shares
+        );
     }
 
     /*//////////////////////////////////////////////////////////////

@@ -16,10 +16,10 @@ stay in the pot:
 | | |
 |---|---|
 | deployer | SafeSummoner `0x00000000004473e1f31C8266612e7FD5504e6f2a` |
-| PM | `0x000000DA87aFE58551dc39c70845a24619bFcbef` |
-| salt | `0x00000000000000000000000000000000000000000000000000000000005ea469` |
-| initcode hash | `0xeaed9d8c3d084797051671e99127467d0280a8c39525c2f52e66d59a22e21314` |
-| creation / runtime | 15,556 B / 15,530 B |
+| PM | `0x0000003b32cDD39bc950e56093df98aF220aB5C5` |
+| salt | `0x0000000000000000000000000000000000000000000000000000000000cb5e06` |
+| initcode hash | `0xd17fd2a7e6f05f978626c6f0f101c00fc8d89256c1003daaa044691add47cecd` |
+| creation / runtime | 15,690 B / 15,664 B |
 | compiler | solc 0.8.37, via_ir, optimizer 9,999,999 runs, evm prague |
 
 There are no constructor arguments. `WSTETH`, `ZROUTER`
@@ -82,6 +82,10 @@ The proof suites are committed:
 | `test/PMAuditRoute.t.sol` | every zRouter entry point as a route (fork) |
 | `test/PMAuditTokens.t.sol` | no-return, false-return, fee-on-transfer, rebasing, hooks, blacklist, garbage decimals |
 | `test/PMAuditPermit.t.sol` | EIP-2612 front-run, WETH-fallback permit, Permit2 binding (fork) |
+
+An external review of `31cbbf6` found one low: resolver fees used 256-bit
+`pot * feeBps`, so a fee-bearing pot above `max / feeBps` could not resolve. That
+case is now full precision (`test_hugePotWithFee_resolvesAndQuotes`).
 
 Findings that were fixed:
 - Exit could dodge the late tax.

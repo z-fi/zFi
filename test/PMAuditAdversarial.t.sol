@@ -155,4 +155,24 @@ contract PMAuditAdversarial is Test {
             emit log_named_uint(string.concat("gas n=", vm.toString(ns[k])), g - gasleft());
         }
     }
+
+    // Fees are full precision: a fee-bearing market whose pot exceeds max / feeBps still resolves and quotes.
+    function test_hugePotWithFee_resolvesAndQuotes() public {
+        vm.prank(resolver);
+        pm.setResolverFeeBps(1_000);
+        uint256 m = pm.createMarket("x", resolver, address(tok), uint48(block.timestamp + 1 days), false, 0, 0);
+        uint256 big = type(uint256).max / 1_000;
+        _bet(alice, m, true, big);
+        _bet(bob, m, false, big);
+        (uint256 s, uint256 p) = pm.quote(m, true, 1e18);
+        assertEq(s, 1e18);
+        assertGt(p, 0);
+        vm.warp(block.timestamp + 1 days);
+        vm.prank(resolver);
+        pm.resolve(m, true);
+        uint256 fee = (2 * big) / 10;
+        assertEq(pm.feesOwed(resolver, address(tok)), fee);
+        vm.prank(alice);
+        assertEq(pm.claim(m, alice), 2 * big - fee);
+    }
 }
