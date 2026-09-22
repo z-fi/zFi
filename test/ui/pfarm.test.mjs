@@ -83,8 +83,10 @@ describe('the TAC/ETH farm line', () => {
     assert.match(t, /TAC\/ETH farm · 554 TAC\/day/);
     // Nothing staked yet: 553.8888 x 365 x (ETH per TAC) on a 1 ETH entry.
     const apr = Math.round(553.8888 * 365 * (1 / (119510621510568635147 / 1e18) ** 2) * 100).toLocaleString();
-    assert.ok(t.includes(`~${apr}% APR on 1 ETH`), t);
-    assert.match(t, /until \w+/);
+    assert.ok(t.includes(`~${apr}% APR`), t);
+    // The line stays quiet; the day rate, the 1 ETH basis and the end date are in its tooltip.
+    const tip = p.$('pfEl').title;
+    assert.ok(tip.includes(`~${apr}% APR on 1 ETH`) && /until \w+/.test(tip), tip);
     assert.equal(p.$('pfEl').querySelector('[data-pf="go"]').textContent, 'Farm');
     assert.ok(p.$('pfEl').querySelector('svg.adic'), 'the pair shows its ETH logo beside TAC');
     p.close();

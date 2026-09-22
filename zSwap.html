@@ -67,7 +67,7 @@ svg{vertical-align:middle;flex-shrink:0}
 .primary:disabled{border-color:var(--e);color:var(--dm);cursor:not-allowed}
 .rcpt{width:100%;box-sizing:border-box;margin-top:-1px;padding:.66em .85em;border:1px solid var(--e);background:transparent;transition:border-color .15s;color:var(--f);font-size:.75em;outline:0;font-family:inherit}
 #lq.on,#ln.on,#wn.on,#pv.on,#mk.on{background:var(--k);color:var(--kf)}
-.cpr{display:flex;justify-content:space-between;align-items:center;gap:.5em;font-size:.75em;color:var(--m);padding:.6em .8em;border:1px solid var(--e);margin-top:-1px}.cpr b{font-weight:600;color:var(--f)}.cpr a{color:var(--m)}#pvList{margin-top:.6em}#pvKey{display:block;margin-top:.6em;color:var(--m)}
+.cpr{display:flex;justify-content:space-between;align-items:center;gap:.5em;font-size:.75em;color:var(--m);padding:.6em .8em;border:1px solid var(--e);margin-top:-1px}.cpr b{font-weight:600;color:var(--f)}.cpr a{color:var(--m)}#pvList{margin-top:.6em}#pvKey{display:block;margin-top:.6em;color:var(--m)}.pvkr{display:flex;gap:.55em;align-items:baseline;margin-top:.35em}.pvkr>i{flex:0 0 auto;min-width:5.4em;white-space:nowrap;font-style:normal;color:var(--m);text-transform:uppercase;letter-spacing:.08em;font-size:.92em}.pvka{display:flex;flex-wrap:wrap;gap:.1em .9em;min-width:0}.pvka .fclink{margin-left:0}.pvka .pri{color:var(--f)}
 .lqrow{padding:.62em .7em;border:1px solid var(--e);margin:-1px 0 0}
 .lqrow.out{opacity:.55}
 .lqband{display:flex;flex-wrap:wrap;align-items:center;gap:.3em .4em;font-size:.82em}
@@ -177,11 +177,11 @@ vertical-align:.1em;line-height:1;text-decoration:none;margin-left:.5em}
 #lnArtNote{color:var(--m);font-variant-numeric:tabular-nums}
 #lnArtNote.set{color:var(--f)}
 .lnbtn{font:inherit;font-size:.85em;letter-spacing:.08em;text-transform:uppercase;color:var(--f);background:transparent;border:1px solid var(--e);padding:.4em .7em;cursor:pointer;transition:border-color .15s}.wnbtn{display:block;width:100%;box-sizing:border-box;font:inherit;font-size:.75em;color:var(--f);background:var(--b);border:1px solid var(--e);padding:.65em .8em;margin-top:.5em;cursor:pointer;text-align:center;transition:border-color .15s,color .15s}.wnbtn:hover{border-color:var(--f)}.wnbtn.mut{color:var(--m);cursor:default;border-color:transparent}.wnbtn.mut:hover{border-color:transparent}
-#adEl,#pfEl{display:block;text-align:center;color:var(--m);font-size:.72em;letter-spacing:.03em;margin-top:.9em}
-#adEl .adic,#pfEl .adic,.pfh .adic{vertical-align:middle;margin:-2px .45em 0 0;border-radius:50%}
-#adEl b,#pfEl b{color:var(--f);font-weight:600}
+#adEl,#pfEl{display:block;text-align:center;color:var(--dm);font-size:.66em;letter-spacing:.03em;margin-top:.75em}
+#adEl .adic,#pfEl .adic,.pfh .adic{vertical-align:middle;margin:-2px .4em 0 0;border-radius:50%;opacity:.8}
+#adEl b,#pfEl b{color:var(--m);font-weight:500}
 #fcEl{display:block;text-align:center;color:var(--m);font-size:.72em;letter-spacing:.03em;margin-top:.9em}
-.pfb{margin-top:.5em;padding-top:.45em;border-top:1px dashed var(--e)}.pfh{font-size:.72em;letter-spacing:.03em}.pfo,.pfp{font:inherit;font-size:.75em;background:transparent;color:var(--f);border:1px solid var(--e)}.fmpf{font:inherit;background:none;border:0;padding:0;cursor:pointer}.fmc svg{border-radius:50%;box-shadow:0 0 0 2px var(--b)}.fmc :is(img,svg)+svg{margin-left:-.75em}.adic+.adic{margin-left:-.75em}
+.pfb{margin-top:.5em;padding-top:.45em;border-top:1px dashed var(--e)}.pfh{font-size:.72em;letter-spacing:.03em}.pfo,.pfp{font:inherit;font-size:.75em;background:transparent;color:var(--f);border:1px solid var(--e)}.fmpf{font:inherit;background:none;border:0;padding:0;cursor:pointer;white-space:normal;text-align:left}.fmc svg{border-radius:50%;box-shadow:0 0 0 2px var(--b)}.fmc :is(img,svg)+svg{margin-left:-.75em}.adic+.adic{margin-left:-.75em}
 .fclink{font:inherit;color:var(--m);background:none;border:0;border-bottom:1px solid var(--e);padding:0 0 .1em;margin-left:.35em;cursor:pointer;letter-spacing:inherit}
 .fclink:hover{color:var(--f);border-color:var(--f)}
 .fclink:disabled{cursor:default;opacity:.6}
@@ -361,7 +361,7 @@ body:has(.tkp:not(.hide))::before{content:"";position:fixed;inset:0;z-index:39;p
 .flip{width:2.4em;height:2.4em;margin:-1.2em auto}
 .chtog{padding:1em .1em}
 .fclink{padding:.55em 0;margin:-.55em 0 -.55em .35em}
-#adEl .fclink,#pfEl .fclink,#fcEl .fclink{padding:.8em .2em;margin:-.8em 0 -.8em .2em}
+#adEl .fclink,#pfEl .fclink,#fcEl .fclink{padding:1.05em .25em;margin:-1.05em 0 -1.05em .25em}
 .docs summary{padding:1em .2em}
 .tkp{position:fixed;left:50%;right:auto;bottom:0;top:auto;transform:translateX(-50%);width:min(100%,30em);max-width:none;
 box-sizing:border-box;
@@ -6420,7 +6420,7 @@ const adEl=document.getElementById("adEl");let adSeq=0,adC=null,adHas=false;
 const adShow=()=>adEl.classList.toggle("hide",!adHas||lnMode||lqMode||wnMode||pvMode||mkMode||tab!=="swap");
 const adHide=()=>{adC=null;adHas=false;adEl.textContent="";adShow()};
 const adLine=(pre,n,post)=>{adEl.textContent="";const k=known(TAC_TOK);
-if(k&&/^<img /.test(k.icon))adEl.insertAdjacentHTML("beforeend",sm(k.icon).replace("<img ",'<img class="adic" '));
+if(k&&/^<(img|svg) /.test(k.icon))adEl.insertAdjacentHTML("beforeend",k.icon.replace('width="20" height="20"','width="13" height="13"').replace(/^<(img|svg) /,'<$1 class="adic" '));
 const s=document.createElement("b");s.textContent=n;adEl.append(pre,s,post)};
 const adRoot=c=>{let h=keccak(hexToBytes(keccak(hexToBytes(encUint(BigInt(c.index))+encAddr(c.a)+encUint(BigInt(c.amount))))));
 for(const x of c.proof)h=BigInt(h)<BigInt(x)?keccak(hexToBytes(strip0x(h)+strip0x(x))):keccak(hexToBytes(strip0x(x)+strip0x(h)));return h.toLowerCase()};
@@ -6433,13 +6433,13 @@ let c=null;for(const u of AD_API){try{const j=await relayFetch(a.slice(2,4)+".js
 if(my!==adSeq)return;
 if(!c||!Number.isSafeInteger(c.index)||c.index<0||!/^\d{1,40}$/.test(String(c.amount))||!Array.isArray(c.proof)||c.proof.length>64||!c.proof.every(x=>/^0x[0-9a-f]{64}$/i.test(x))||adRoot({...c,a})!=="0x"+strip0x(root).slice(-64).toLowerCase())return adHide();
 const amt=BigInt(c.amount),[cl,bal]=await mc3([{to:TACAD,data:"0x9e34070f"+encUint(BigInt(c.index))},{to:TAC_TOK,data:"0x70a08231"+encAddr(TACAD)}]);
-if(my!==adSeq)return;const n=trimAmt(amt,18)+" TAC",D=new Date(end*1e3);
+if(my!==adSeq)return;const n=Math.round(+formatUnits(amt,18)).toLocaleString("en-US")+" TAC",D=new Date(end*1e3);
 adHas=true;adShow();
 if(BigInt(cl||"0x0")!==0n){adC=null;adEl.title="";adLine("Tacit airdrop claimed · ",n,"");return}
 if(BigInt(bal||"0x0")<amt)return adHide();
 adC={index:BigInt(c.index),amt,proof:c.proof};
 adLine("",n," airdrop · until "+D.toLocaleDateString(undefined,D.getFullYear()===new Date().getFullYear()?{month:"short",day:"numeric"}:{year:"numeric",month:"short",day:"numeric"})+" ");
-adEl.title="TAC set aside for this address in Tacit's airdrop. Claim sends it to this wallet; Claim to… sends it to another address or name. Open until "+D.toLocaleString()+".";
+adEl.title=trimAmt(amt,18)+" TAC set aside for this address in Tacit's airdrop. Claim sends it to this wallet; Claim to… sends it to another address or name. Open until "+D.toLocaleString()+".";
 for(const [k,t] of [["me","Claim"],["to","Claim to…"]]){const x=document.createElement("button");x.type="button";x.className="fclink";x.dataset.ad=k;x.textContent=t;adEl.append(x)}
 }catch{if(my===adSeq)adHide()}}
 adEl.onclick=async e=>{const b=e.target.closest("button[data-ad]");if(!b||!adC||busy)return;const c=adC;let to=account;
@@ -6459,7 +6459,7 @@ pfVal=sh=>pfS.sup?Number(sh)/Number(pfS.sup)*(Number(pfS.r0)+Number(pfS.r1)*pfPx
 pfApr=()=>{const a=pfDay()*365*pfPx()/(pfVal(pfS.tot)+1)*100;return isFinite(a)&&a>0?"~"+Math.round(a).toLocaleString()+"% APR on 1 ETH":""},
 pfHead=()=>[Math.round(pfDay()).toLocaleString()+" TAC/day",pfApr(),"until "+new Date(pfS.fin*1e3).toLocaleDateString(undefined,{month:"short",day:"numeric"})].filter(Boolean),
 pfBtn=(k,t,c="fclink")=>{const x=document.createElement("button");x.type="button";x.className=c;x.dataset.pf=k;x.textContent=t;return x},
-pfIcon=(el,n=15,c="adic")=>{for(const a of[TAC_TOK,ZERO]){const k=known(a);if(k&&/^<(img|svg) /.test(k.icon))el.insertAdjacentHTML("beforeend",k.icon.replace('width="20" height="20"',`width="${n}" height="${n}"`).replace(/^<(img|svg) /,`<$1 class="${c}" `))}};
+pfIcon=(el,n=13,c="adic")=>{for(const a of[TAC_TOK,ZERO]){const k=known(a);if(k&&/^<(img|svg) /.test(k.icon))el.insertAdjacentHTML("beforeend",k.icon.replace('width="20" height="20"',`width="${n}" height="${n}"`).replace(/^<(img|svg) /,`<$1 class="${c}" `))}};
 async function pfSync(){const my=++pfSeq,a=account;
 if(CHAIN_ID===1)try{const r=await mc3([{to:PFARM,data:"0x7b0a47ee"},{to:PFARM,data:"0xebe2b12b"},{to:PFARM,data:"0x817b1cd2"},{to:PFPOOL,data:"0x18160ddd"},
 {to:PFPOOL,data:"0x443cb4bc"},{to:PFPOOL,data:"0x5a76f25e"},{to:PFPOOL,data:"0x2af1f249"},
@@ -6469,10 +6469,10 @@ pfS=CHAIN_ID===1?{rate:w(0),fin:Number(w(1)),tot:w(2),sup:w(3),r0:w(4),r1:w(5),s
 else pfS=null;
 pfLine();pfPaint();fmPf()}
 function pfLine(){pfEl.textContent="";if(pfS&&(pfOn()||pfMine())){const on=pfOn(),b=document.createElement("b");pfIcon(pfEl);
-b.textContent=on?pfHead()[0]:"ended";pfEl.append("TAC/ETH farm · ",b,on?pfHead().slice(1).map(x=>" · "+x).join(""):" · your stake is still here");
+b.textContent=on?pfHead()[0]:"ended";pfEl.append("TAC/ETH farm · ",b,on?" · "+pfApr().replace(" on 1 ETH",""):" · your stake is still here");
 if(pfS.ea>0n){const e=document.createElement("b");e.textContent=trimAmt(pfS.ea,18)+" TAC";pfEl.append(" · earned ",e)}
 pfEl.append(pfBtn("go",on&&!pfMine()?"Farm":"Open"));if(pfS.ea>0n)pfEl.append(pfBtn("cl","Claim"));
-pfEl.title=on?"Stake liquidity in the TAC/ETH Precision pool to earn TAC by the second. The rate is shared by everyone staked, so it falls as more joins.":"This farm has stopped paying. Your stake and anything earned can be taken out at any time."}
+pfEl.title=on?pfHead().join(" · ")+". Stake liquidity in the TAC/ETH Precision pool to earn TAC by the second. The rate is shared by everyone staked, so it falls as more joins.":"This farm has stopped paying. Your stake and anything earned can be taken out at any time."}
 pfShow()}
 function pfPaint(){const row=[...lqList.querySelectorAll(".lqrow")].find(r=>(r.dataset.pool||"").toLowerCase()===PFPOOL.toLowerCase());if(!row)return;
 let el=row.querySelector(".pfb");const on=!!pfS&&pfOn(),box=row.querySelector(".lqadd"),k=box&&box.querySelector(".pfk");
@@ -6488,7 +6488,7 @@ if(S.ea>0n)acts.append(pfBtn("cl","Claim","lqbtn"));
 if(S.st>0n){acts.insertAdjacentHTML("beforeend",'<select class="pfp" aria-label="How much"><option value="100">all</option><option value="75">75%</option><option value="50">50%</option><option value="25">25%</option></select><select class="pfo" aria-label="Withdraw as"><option value="both">as ETH + TAC</option><option value="eth">as ETH</option><option value="tac">as TAC</option><option value="lp">as LP</option></select>');const w=pfBtn("wd","Withdraw","lqbtn");w.title="Withdrawing all also claims your TAC; a part leaves it to claim.";acts.append(w)}
 if(acts.childNodes.length)el.append(acts)}
 function fmPf(){pvFarm.querySelector(".fmpf")?.remove();if(!pfS||!pfOn()||pvFarm.classList.contains("hide"))return;
-const c=pfBtn("go","","fmc fmpf");pfIcon(c,16,"");c.append("TAC/ETH on zSwap "+pfHead().slice(0,2).join(" · "));pvFarm.insertBefore(c,pvFarm.querySelector("a"))}
+const c=pfBtn("go","","fmc fmpf");pfIcon(c,16,"");c.append("TAC/ETH zSwap "+pfHead().slice(0,2).join(" · "));pvFarm.insertBefore(c,pvFarm.querySelector("a"))}
 function pfGo(){pairUser=false;if(location.hash==="#farm")applyLink(1);else location.hash="farm"}
 const pfTx=async(data,val,verb)=>settle(await sendWith([],{from:account,to:PFARM,data,value:toHex(val)},verb));
 async function pfTok(tok,amt,plain,withP,val,verb){const dl=BigInt(nowS()+1800),aps=await apSeq(tok,PFARM,amt);
@@ -7758,9 +7758,10 @@ const CP_RET="This Tacit pool is retired: deposits and requests are closed, and 
 const cpRequest=async()=>{if(cpRet)throw Error(CP_RET);const{v,A}=cpAmount(1),{i,k}=await cpFresh(v,A.id),n=cpNote(i,k);n.inv=1;
 cpNotes.push(n);cpSaveNotes();cpPaint();
 pvAmt.value="";stat.textContent="Request built. Send it to whoever is paying; the note settles once they pay.";cpShow(n)};
+const cpCopy=(m,d)=>dlg(m+"\n\nUse Copy, then paste it where you need it.",d,1);
 const cpTicker=A=>A.id===CP_ETH?"cETH":/^c[A-Z]/.test(A.sym)?A.sym:"c"+A.sym;
 const cpB64u=s=>btoa(s).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,""),cpInvRead=raw=>{const s=String(raw||"").trim(),m=s.match(/tacit-invoice=([A-Za-z0-9_-]{16,8000})(?:[&#]|$)/);return JSON.parse(m?atob(m[1].replace(/-/g,"+").replace(/_/g,"/")):s)};
-const cpShow=async n=>{const k=cpNoteOf(n),A=cpAs(k.asset);if(!A)return;await ask("Your payment request link. Anyone can pay it with zSwap or tacit.finance; only this key can spend the result.",location.href.split("#")[0]+"#tacit-invoice="+cpB64u(JSON.stringify({v:1,chainBinding:n.op.chainBinding,assetId:k.asset,underlying:A.tok,ticker:cpTicker(A),amount:String(k.value*A.scale),value:n.v,
+const cpShow=async n=>{const k=cpNoteOf(n),A=cpAs(k.asset);if(!A)return;await cpCopy("Your payment request link. Anyone can pay it with zSwap or tacit.finance; only this key can spend the result.",location.href.split("#")[0]+"#tacit-invoice="+cpB64u(JSON.stringify({v:1,chainBinding:n.op.chainBinding,assetId:k.asset,underlying:A.tok,ticker:cpTicker(A),amount:String(k.value*A.scale),value:n.v,
 cx:k.cx,cy:k.cy,owner:k.owner,commit:cpDepCommit(k.cx,k.cy,k.owner),depositId:k.dep,leaf:k.leaf,memo:n.memo,witness:n.op})))};
 const cpPay=async raw=>{let inv;try{inv=cpInvRead(raw??await ask("Paste the payment request: its link or its JSON."))}catch{}
 const h32=x=>/^0x[0-9a-fA-F]{64}$/.test(x||"");
@@ -8002,12 +8003,12 @@ const have=rd.reduce((s,n)=>s+BigInt(n.v),0n);if(!await sure((have?"Only "+cpFmt
 const{i}=await cpFresh(v,A.id),x=cpWtOp(v,A.id,i,cpSeed,cpBinding()),S={...cpNewS(A,v,to,self),st:"fund",di:i,ins:[]};
 S.fj=await cpJob("wraptransfer",x.op,x.memos,1,x.dep);Object.assign(S.fj,{w:String(v*A.scale),cm:x.cm});S.n=cpAddOut(x.out,A.id,S.id);cpSends.push(S);cpSaveS();cpSaveNotes();stat.textContent="The relay is proving the wrap; send it from its row when it is ready."};
 const cpSendTick=async()=>{const c=cpPool;if(!c)return;let ch=0;for(const S of cpSends){try{
-if(S.st==="fund"){await cpJobPoll(S.fj);ch=1;const n=cpNotes.find(x=>cpKeyOf(x)===S.n);if(n&&cpStatus(n).s==="ready"){if(S.out){try{await cpExit(n,null,{...S.out,auto:1});S.st="done"}catch(e){S.st="outfail";S.err=String(e&&e.message||e).slice(0,120)}}else if(S.to===cpPub)S.st="done";else await cpLockGo(S)}else if(/failed|unknown/.test(S.fj.js)&&!S.fj.stx){S.st="failed";cpDropOut(S.id)}}
-else if(S.st==="lock"||S.st==="lockfail"&&c.lk.includes(S.lf)){ch=1;if(c.lk.includes(S.lf))S.st="sent";else if(!S.lj)await cpLockGo(S).catch(e=>{S.st="lockfail";S.err=String(e&&e.message||e).slice(0,120)});else{await cpJobPoll(S.lj);if(/failed|unknown/.test(S.lj.js)&&!S.lj.stx)S.st="lockfail"}}
+if(S.st==="fund"){try{await cpJobPoll(S.fj)}catch{}ch=1;const n=cpNotes.find(x=>cpKeyOf(x)===S.n);if(n&&cpStatus(n).s==="ready"){if(S.out){try{await cpExit(n,null,{...S.out,auto:1});S.st="done"}catch(e){S.st="outfail";S.err=String(e&&e.message||e).slice(0,120)}}else if(S.to===cpPub)S.st="done";else await cpLockGo(S)}else if(/failed|unknown/.test(S.fj.js)&&!S.fj.stx){S.st="failed";cpDropOut(S.id)}}
+else if(S.st==="lock"||S.st==="lockfail"&&c.lk.includes(S.lf)){ch=1;if(c.lk.includes(S.lf))S.st="sent";else if(!S.lj)await cpLockGo(S).catch(e=>{S.st="lockfail";S.err=String(e&&e.message||e).slice(0,120)});else{try{await cpJobPoll(S.lj)}catch{}if(/failed|unknown/.test(S.lj.js)&&!S.lj.stx)S.st="lockfail"}}
 else if((S.st==="sent"||S.st==="refund")&&await cpLockSpent(S.lf)){S.st=S.st==="refund"&&c.leaves.includes(S.rj.nd)?"refunded":"claimed";ch=1}
-else if(S.st==="refund"){ch=1;await cpJobPoll(S.rj);if(/failed|unknown/.test(S.rj.js)&&!S.rj.stx){cpDropOut(S.id+"r");delete S.rj;S.st="sent"}}}catch{}}
+else if(S.st==="refund"){ch=1;try{await cpJobPoll(S.rj)}catch{}if(/failed|unknown/.test(S.rj.js)&&!S.rj.stx){cpDropOut(S.id+"r");delete S.rj;S.st="sent"}}}catch{}}
 if(ch){cpSaveS();cpSaveNotes()}};
-const cpInTick=async()=>{const c=cpPool;if(!c)return;let ch=0;for(const L of cpInbox){try{if(L.st==="claimed")continue;if(await cpLockSpent(L.lf)){L.st="claimed";ch=1}else if(L.cj){await cpJobPoll(L.cj);ch=1}}catch{}}if(ch)cpSaveI()};
+const cpInTick=async()=>{const c=cpPool;if(!c)return;let ch=0;for(const L of cpInbox){try{if(L.st==="claimed")continue;if(await cpLockSpent(L.lf)){L.st="claimed";ch=1}else if(L.cj){try{await cpJobPoll(L.cj)}catch{}ch=1}}catch{}}if(ch)cpSaveI()};
 const cpFeeOk=async(v,A,self,what,g=600000n,b=0n)=>{if(self||!A)return 0n;const fee=await cpFee(v,A,g);if(fee*100n<=(b||v)*3n)return fee;
 if(!await sure("The relay's fee ("+cpFmt(fee,A)+" "+A.sym+") is more than 3% of this "+what+". Send it from this wallet instead? That is fee-free, but this wallet sends the transaction."))throw Error("Cancelled.");return null};
 const cpClaim=async L=>{const c=await cpSync(true),li=c.lk.indexOf(L.lf);if(li<0)throw Error("That payment is not in the pool's lock set yet.");if(c.lkok===0)throw Error(CP_LKBAD);if(await cpLockSpent(L.lf))throw Error("That payment was already claimed.");if(Date.now()/1e3>Number(L.dl))throw Error("That payment expired; the sender can take it back.");
@@ -8041,19 +8042,21 @@ const ins=[];let t=0n;for(const n of rd.sort((x,y)=>BigInt(y.v)>BigInt(x.v)?1:-1
 if(t<v+fee)throw Error(ins.length===8?"That needs more than eight notes — merge some first.":"The notes do not cover that plus the relay fee ("+cpFmt(fee,A)+" "+A.sym+").");
 const S=await cpXferGo(ins,v,fee,A,c,self,cpPub);S.out=q;cpSaveS();stat.textContent="Merging "+ins.length+" notes into one of "+cpFmt(v,A)+" "+A.sym+(fee?" (relay fee "+cpFmt(fee,A)+" "+A.sym+")":"")+"; the withdrawal follows once that settles."};
 const cpShort=h=>h.slice(0,6)+"…"+h.slice(-4);
-const cpSendRows=()=>cpSends.map((S,j)=>{if(S.st==="done"||/^(claimed|refunded)$/.test(S.st)&&nowS()-(S.at||0)>864e3)return"";const A=cpAs(S.a)||{sym:"?",scale:CP_SCALE,dec:18},B=(a,l)=>`<button type="button" class="fclink" data-a="${a}" data-s="${S.id}">${l}</button>`,J=S.st==="fund"?S.fj:S.st==="lock"?S.lj:S.st==="refund"?S.rj:null,
-w=J&&J.stx?"sent…":J&&J.self?(J.pv?B("sgo",J.t==="wraptransfer"?"wrap & send":"send"):"proving…"):"",
+const cpWatch=x=>typeof x==="string"&&/…$/.test(x)?`<span title="Only this browser is following this step. Whatever happens, the result lands on chain and shows up here again — on any device, from your key alone.">${x}</span>`:x;
+const cpDoing=k=>{const S=cpSends.find(S=>S.st!=="done"&&(S.n===k||(S.ins||[]).includes(k)));return!S?"sending…":S.out?"merging…":S.to!==cpPub?"sending…":(S.ins||[]).length>1?"merging…":"splitting…"};
+const cpSendRows=()=>cpSends.map((S,j)=>{if(S.st==="done"||/^(claimed|refunded)$/.test(S.st)&&nowS()-(S.at||0)>864e3)return"";const A=cpAs(S.a)||{sym:"?",scale:CP_SCALE,dec:18},B=(a,l,t)=>`<button type="button" class="fclink" data-a="${a}" data-s="${S.id}"${t?` title="${t}"`:""}>${l}</button>`,J=S.st==="fund"?S.fj:S.st==="lock"?S.lj:S.st==="refund"?S.rj:null,
+w=J&&J.stx?"sent…":J&&J.self?(J.pv?B("sgo",J.t==="wraptransfer"?"wrap & send":S.to===cpPub?"settle":"send",S.to===cpPub?"One transaction from this wallet finishes it, with no relay fee":"Send it from this wallet, with no relay fee"):"proving…"):"",
 s=S.st==="fund"?w||(S.to===cpPub?"settling…":"funding…"):S.st==="lock"?w||"locking…":S.st==="sent"?(Date.now()/1e3>+S.dl?"unclaimed"+B("srefund","take back"):"waiting for the recipient"):S.st==="claimed"?"claimed":S.st==="refund"?w||"taking back…":S.st==="refunded"?"taken back":S.st==="lockfail"?`<span title="${String(S.err||"").replace(/[^\w .,:;()%-]/g,"")}">relay failed</span>`+B("slock","retry")+B("sforget","forget"):S.st==="outfail"?"withdrawal not started"+B("sout","withdraw")+B("sforget","forget"):"failed"+B("sforget","forget");
-return`<div class="cpr"><span><b>${cpFmt(S.v,A)} ${A.sym}</b> ${S.out?"merge for a withdrawal":S.to===cpPub?(S.ins&&S.ins.length>1?"merge":"split"):"sent to "+cpShort(S.to)}</span><span>${s}</span></div>`}).join("");
+return`<div class="cpr"><span><b>${cpFmt(S.v,A)} ${A.sym}</b> ${S.out?"merge for a withdrawal":S.to===cpPub?(S.ins&&S.ins.length>1?"merging "+S.ins.length+" notes into one":"split · the rest stays shielded"):"sent to "+cpShort(S.to)}</span><span>${cpWatch(s)}</span></div>`}).join("");
 const cpInRows=()=>cpInbox.map((L,j)=>{if(L.st==="claimed")return"";const A=cpAs(L.a)||{sym:"?",scale:CP_SCALE,dec:18},B=(a,l)=>`<button type="button" class="fclink" data-a="${a}" data-i="${L.lf}">${l}</button>`,J=L.cj,
 s=J?(J.stx?"sent…":J.self?(J.pv?B("cgo","claim"):"proving…"):/failed|unknown/.test(J.js)?"relay failed"+B("claim","retry"):"claiming…"):Date.now()/1e3>+L.dl?"expired":B("claim","claim");
 const by=!J&&+L.dl>Date.now()/1e3?" · claim by "+new Date(+L.dl*1e3).toLocaleDateString(undefined,{year:"numeric",month:"short",day:"numeric"}):"";
 return`<div class="cpr"><span><b>${cpFmt(L.v,A)} ${A.sym}</b> received privately${by}</span><span>${s}</span></div>`}).join("");
-const cpSum=()=>{const r={},inc={},cnt={},b=cpBusyK(),og=new Set(cpSends.filter(S=>S.out||S.to!==cpPub).map(S=>S.n)),F=o=>Object.entries(o).map(([a,v])=>{const A=cpAs(a)||{sym:"?",scale:CP_SCALE,dec:18};return cpFmt(v,A)+" "+A.sym}).join(" · ");
-let o=0;for(const n of cpNotes){if(n.p||n.ex)continue;const s=cpStatus(n).s,a=n.a||CP_ETH;if(!cpAs(a)&&cpAssets.length>1){o+=s==="ready";continue}if(s==="ready"&&!b.has(cpKeyOf(n))){r[a]=(r[a]||0n)+BigInt(n.v);cnt[a]=(cnt[a]||0)+1}else if(s==="pending"&&(n.sid||n.job)&&!og.has(cpKeyOf(n)))inc[a]=(inc[a]||0n)+BigInt(n.v)}
+const cpSum=()=>{const r={},inc={},mov={},cnt={},b=cpBusyK(),own=new Set(cpSends.filter(S=>S.st!=="done"&&!S.out&&S.to===cpPub).map(S=>S.id)),og=new Set(cpSends.filter(S=>S.out||S.to!==cpPub).map(S=>S.n)),F=o=>Object.entries(o).map(([a,v])=>{const A=cpAs(a)||{sym:"?",scale:CP_SCALE,dec:18};return cpFmt(v,A)+" "+A.sym}).join(" · ");
+let o=0;for(const n of cpNotes){if(n.p||n.ex)continue;const s=cpStatus(n).s,a=n.a||CP_ETH;if(!cpAs(a)&&cpAssets.length>1){o+=s==="ready";continue}if(s==="ready"&&!b.has(cpKeyOf(n))){r[a]=(r[a]||0n)+BigInt(n.v);cnt[a]=(cnt[a]||0)+1}else if(s==="pending"&&(n.sid||n.job)&&!og.has(cpKeyOf(n))){const t=n.sid&&own.has(n.sid)?mov:inc;t[a]=(t[a]||0n)+BigInt(n.v)}}
 for(const L of cpInbox)if(L.st!=="claimed"&&!L.cj&&Date.now()/1e3<=+L.dl)inc[L.a]=(inc[L.a]||0n)+BigInt(L.v);
-const x=F(r),y=F(inc),m=Object.keys(cnt).filter(a=>cnt[a]>1).map(a=>`<button type="button" class="fclink" data-a="merge" data-as="${a}">merge ${(cpAs(a)||{sym:"?"}).sym}</button>`).join("");
-return x||y||o?`<div class="cpr"><span>Shielded <b>${x||"0"}</b>${y?" · incoming "+y:""}${o?` · ${o} other Tacit note${o>1?"s":""} (LP or farm), on tacit.finance`:""}</span><span>${m}</span></div>`:""};
+const x=F(r),y=F(inc),z=F(mov),m=Object.keys(cnt).filter(a=>cnt[a]>1).map(a=>`<button type="button" class="fclink" data-a="merge" data-as="${a}">merge ${(cpAs(a)||{sym:"?"}).sym}</button>`).join("");
+return x||y||z||o?`<div class="cpr"><span>Shielded <b>${x||"0"}</b>${z?" · settling "+z:""}${y?" · incoming "+y:""}${o?` · ${o} other Tacit note${o>1?"s":""} (LP or farm), on tacit.finance`:""}</span><span>${m}</span></div>`:""};
 let cpFindQ=Promise.resolve();const cpFind=full=>{const p=cpFindQ.then(()=>cpFind0(full));cpFindQ=p.catch(()=>{});return p};const cpFind0=async full=>{const c=await cpSync(!!full),m={},own=id=>cpNotes.some(n=>!n.p&&cpNoteOf(n).dep===id),z=()=>++q%16?0:new Promise(r=>setTimeout(r)),cu=cpCur(),N=64+cpNotes.concat(cpSends.map(S=>({i:S.di}))).reduce((x,n)=>Number.isInteger(n.i)&&n.i>=0?Math.max(x,n.i+1):x,0);let f=0,q=0;
 for(const[id,amt,as]of c.wraps){const A=cpAs(as),wei=BigInt(amt),h=cpFp+id,dn=cpK[h]||0;if(!A||wei%A.scale||dn>=N||own(id))continue;const v=wei/A.scale,a=A.id,g="t"+cpFp+a,mk=a+v+"/"+dn;
 const t=cpK[g]||(cpK[g]=[]);for(let i=t.length;i<N;i++){const d=cpDerive(cpSeed,i,a);t[i]=[cpOwner(d.secret),pmul(GP,d.blinding)];await z()}
@@ -8137,8 +8140,9 @@ try{if(pvAct.value==="dep"){const b=e?BigInt(await rpc("eth_getBalance",[account
 else{v=pvShV(A);const fe=await pvCost(v,A);if(fe)v=v>fe?v-fe:0n}}catch(x){return err(x)}
 pvAmt.value=v>0n?f0(v*A.scale,A.dec):"";pvPrevSoon()};
 const f0=(w,d)=>{const s=formatUnits(w,d);return s.includes(".")?s.replace(/\.?0+$/,""):s};
-const pvHintSync=()=>{const v=pvAct.value,A=cpSel(),e=A.tok===ZERO,P=A.pub,on=e?" on Ethereum, Base or Robinhood":" on Ethereum";pvHint.textContent=v==="send"?"Send "+(e?"tETH, or plain ETH straight from this wallet,":"shielded "+A.sym)+" to a tacit1 address or name. The amount and the recipient stay hidden; they claim it into their own notes.":v==="out"?"Pay out shielded "+A.sym+" as "+P+" to any 0x"+on+". You stay hidden as the sender; the amount and the recipient are public.":(e?"Deposit plain ETH from this wallet. It becomes tETH, private ETH, so you need no tETH first.":"Deposit "+P+" from this wallet. It becomes shielded "+A.sym+".")+" From there, send it privately or withdraw it as "+P+" to any 0x"+on+"."+(A.id===CP_CBTC?"\ncBTC is bitcoin locked on Bitcoin. "+(cpSeed?"Use lock btc under more on the key row below":"Unlock your key below, then use lock btc under more")+", or deposit tacBTC.":A.id===CP_CUSD?"\ncUSD is borrowed against shielded cBTC: use borrow cUSD on a cBTC note, or deposit tacUSD.":"");if(cpRet)pvHint.textContent=CP_RET+"\n"+pvHint.textContent};
+const pvHintSync=()=>{const v=pvAct.value,A=cpSel(),e=A.tok===ZERO,P=A.pub,on=e?" on Ethereum, Base or Robinhood":" on Ethereum";pvHint.textContent=v==="send"?"Send "+(e?"tETH, or plain ETH straight from this wallet,":"shielded "+A.sym)+" to a tacit1 address or name. The amount and the recipient stay hidden; they claim it into their own notes.":v==="out"?"Pay out shielded "+A.sym+" as "+P+" to any 0x"+on+". You stay hidden as the sender; the amount and the recipient are public.":(e?"Deposit plain ETH from this wallet. It becomes tETH, private ETH, so you need no tETH first.":"Deposit "+P+" from this wallet. It becomes shielded "+A.sym+".")+" From there, send it privately or withdraw it as "+P+" to any 0x"+on+"."+(A.id===CP_CBTC?"\ncBTC is bitcoin locked on Bitcoin. "+(cpSeed?"Use lock btc under more on the key row below":"Unlock your key below, then use lock btc under more")+", or deposit tacBTC.":A.id===CP_CUSD?"\ncUSD is borrowed against shielded cBTC: use borrow cUSD on a cBTC note, or deposit tacUSD.":"");pvHint.textContent+="\n"+(pvPath.value==="self"?"Settling from this wallet: after the "+(v==="dep"?"deposit":"first")+" transaction you send the settle yourself, with no relay fee.":v==="dep"?"The relay proves and settles your deposit, free, paying its own gas.":"The relay proves and settles it, paying its own gas, for a flat fee taken from the amount.");if(cpRet)pvHint.textContent=CP_RET+"\n"+pvHint.textContent};
 pvAct.onchange=()=>{sBlip();pvActSync();cpPaint()};
+pvPath.onchange=()=>{sBlip();pvHintSync()};
 const cpExplorerLink=(base,value,label,kind)=>{
 if(typeof value!=="string")return label;
 const ok=kind==="tx"?/^0x[0-9a-fA-F]{64}$/.test(value):/^0x[0-9a-fA-F]{40}$/.test(value);
@@ -8147,14 +8151,14 @@ return ok?`<a href="${base}/${kind}/${value}" target="_blank" rel="noreferrer">$
 const cpSet=(e,h)=>{if(e._h!==h)e.innerHTML=e._h=h},cpPaint=()=>{if(!pvMode)return;
 const on=!!cpSeed;pvHintSync();pvPrevSoon();cpInvGo();
 cpSet(pvKey,!account?"Connect a wallet to begin.":!on?"Sign once to unlock your Tacit key: the same key tacit.finance derives from this wallet, with a Bitcoin address of its own.":
-`Key unlocked · ${cpVer?`<a href="https://mempool.space/address/${cpBtc}" target="_blank" rel="noreferrer" title="This key's Bitcoin address — the one tacit.finance scans and locks cBTC from">${cpBtc.slice(0,8)}…${cpBtc.slice(-6)}</a>`:'<button type="button" class="fclink" data-a="verify" title="Sign once to confirm the key saved in this browser is your wallet\'s">verify key</button>'}${cpBtcSat!=null?" "+trimAmt(BigInt(cpBtcSat),8)+" BTC":""} <button type="button" class="fclink" data-a="addr">address</button><button type="button" class="fclink" data-a="pub" title="Publish your Tacit address on your primary .wei, .gwei or .eth name, so anyone can pay you privately by name">publish to name</button><button type="button" class="fclink" data-a="request">request</button><button type="button" class="fclink" data-a="pay">pay</button><button type="button" class="fclink" data-a="more" aria-expanded="${cpMore}">${cpMore?"less":"more"}</button><span class="${cpMore?"":"hide"}"><button type="button" class="fclink" data-a="btckey">btc key</button><button type="button" class="fclink" data-a="lockbtc">lock btc</button><button type="button" class="fclink" data-a="backup">backup</button><button type="button" class="fclink" data-a="import">import</button><button type="button" class="fclink" data-a="recover">recover</button><button type="button" class="fclink" data-a="export">export</button><button type="button" class="fclink" data-a="relay">relay</button></span>`);
+`Key unlocked · your private account for this wallet${cpVer?"":'<button type="button" class="fclink" data-a="verify" title="Sign once to confirm the key saved in this browser is your wallet\'s">verify key</button>'}<span class="pvkr"><i>↓ Get paid</i><span class="pvka"><button type="button" class="fclink pri" data-a="addr" title="Your tacit1 address: anyone can send to it privately">your address</button><button type="button" class="fclink" data-a="request" title="Make a link someone can pay privately">request a payment</button><button type="button" class="fclink" data-a="pub" title="Put your address on your .wei, .gwei or .eth name, so people can pay you by name">publish to name</button></span></span><span class="pvkr"><i>↑ Pay</i><span class="pvka"><button type="button" class="fclink" data-a="pay" title="Paste a payment link someone sent you">pay a request</button></span></span><span class="pvkr"><i></i><span class="pvka"><button type="button" class="fclink" data-a="more" aria-expanded="${cpMore}">${cpMore?"less":"more"}</button></span></span><span class="${cpMore?"":"hide"}"><span class="pvkr"><i>₿ Bitcoin</i><span class="pvka">${cpVer?`<a href="https://mempool.space/address/${cpBtc}" target="_blank" rel="noreferrer" title="This key's Bitcoin address, used to lock BTC for cBTC">${cpBtc.slice(0,8)}…${cpBtc.slice(-6)}</a>${cpBtcSat!=null?" "+trimAmt(BigInt(cpBtcSat),8)+" BTC":""}`:""}<button type="button" class="fclink" data-a="btckey" title="Export this key for a Bitcoin wallet">btc key</button><button type="button" class="fclink" data-a="lockbtc" title="Lock BTC from this key\'s address to mint cBTC">lock btc</button></span></span><span class="pvkr"><i>· Key</i><span class="pvka"><button type="button" class="fclink" data-a="backup" title="Save the key">backup</button><button type="button" class="fclink" data-a="export" title="Your note records, to keep with the key">export</button><button type="button" class="fclink" data-a="import" title="Restore a key or note records">import</button><button type="button" class="fclink" data-a="recover" title="Find this key\'s deposits on chain">recover</button><button type="button" class="fclink" data-a="relay" title="Choose the relay that proves and settles">relay</button></span></span></span>`);
 pvGo.textContent=!account?CW:!on?"Unlock key":pvAct.value==="send"?"Send":pvAct.value==="out"?"Withdraw":"Deposit";
 pvGo.disabled=!!cpBusy;
 if(!on)return cpSet(pvList,"");
-const bz=cpBusyK(),rows=cpNotes.map((n,j)=>{const{s,k}=cpStatus(n),x=n.ex,chain=x&&CHAINS[x.ch],ch=chain?.name||"",B=(a,l)=>`<button type="button" class="fclink" data-a="${a}" data-k="${cpKeyOf(n)}">${l}</button>`;
+const bz=cpBusyK(),live=cpSends.filter(S=>S.st!=="done"),rows=cpNotes.map((n,j)=>{const kk=cpKeyOf(n);if(live.some(S=>S.id===n.sid||(S.ins||[]).includes(kk)))return"";const{s,k}=cpStatus(n),x=n.ex,chain=x&&CHAINS[x.ch],ch=chain?.name||"",B=(a,l)=>`<button type="button" class="fclink" data-a="${a}" data-k="${cpKeyOf(n)}">${l}</button>`;
 const seen=!!k&&!!cpPool&&cpPool.wraps.some(w=>w[0]===k.dep),paid=n.inv&&seen,stale=!seen&&Date.now()/1000-(n.at||0)>600;
-const act=s==="ready"?(bz.has(cpKeyOf(n))?"sending…":(n.z?B("borrow","borrow cUSD"):"")+B("split","split")+B("exit","exit"))
-:s==="pending"?(n.inv&&!paid?"awaiting payment"+B("show","show")+(stale?B("forget","forget"):""):n.i<0?"settling…":stale?"deposit not seen"+B("forget","forget"):n.job?(/failed|unknown/.test(n.js)?"relay failed"+B("settle","retry"):n.self?(n.stx?"sent…":n.pv?B("wrapsend","settle"):"proving…"):"settling…"):B("settle","settle"))
+const act=s==="ready"?(bz.has(cpKeyOf(n))?cpWatch(cpDoing(cpKeyOf(n))):(n.z?B("borrow","borrow cUSD"):"")+B("split","split")+B("exit","exit"))
+:s==="pending"?(n.inv&&!paid?"unpaid"+B("show","copy link")+B("forget","cancel"):n.i<0?"settling…":stale?"deposit not seen"+B("forget","forget"):n.job?(/failed|unknown/.test(n.js)?"relay failed"+B("settle","retry"):n.self?(n.stx?"sent…":n.pv?B("wrapsend","settle"):"proving…"):"settling…"):B("settle","settle"))
 :s==="exiting"?(!x.job||x.js==="failed"||Date.now()/1e3>+x.du?"relay failed"+B("exit","retry")+(Date.now()/1e3>+x.du?B("xdrop","cancel"):"")
 :x.self?(x.ptx?"sent…":x.pv?B("send","send"):"proving…"):"relaying…")
 :s==="funded"?(x.ja==="pending"&&!x.self&&Date.now()-(x.jst||0)<6e5?"bridging…":B("activate","activate"))
@@ -8162,7 +8166,7 @@ const act=s==="ready"?(bz.has(cpKeyOf(n))?"sending…":(n.z?B("borrow","borrow c
 :s==="bridged"||s==="withdrawn"?(chain?cpExplorerLink(chain.explorer,x.to,"on "+ch,"address"):s)
 :s==="paying"?(n.job?(n.self?(n.stx?"sent…":n.pv?B("wrapsend","settle"):"proving…"):"settling…"):B("settle","settle")):s==="payfailed"?"relay failed"+B("settle","retry")
 :s==="paid"?cpExplorerLink(CHAINS[1].explorer,n.tx,"paid","tx"):s;
-const A=cpAs(n.a)||(cpAssets.length>1?0:{sym:"?",scale:CP_SCALE,dec:18,icon:""});if(!A)return"";return`<div class="cpr"><span><b>${A.icon?`<img src="${A.icon}" width="12" height="12" alt=""> `:""}${x&&x.v?cpFmt(x.v,A)+" of ":""}${cpFmt(n.v,A)} ${A.sym}</b> ${n.p?"paid":n.inv?"request #"+n.i:n.sid?"":n.s?"found":"#"+n.i}${x&&s!=="bridged"&&s!=="withdrawn"?" → "+ch:""}</span><span>${act}${x&&x.rk?B("rescue","rescue key"):""}</span></div>`}).join("");
+const A=cpAs(n.a)||(cpAssets.length>1?0:{sym:"?",scale:CP_SCALE,dec:18,icon:""});if(!A)return"";return`<div class="cpr"><span><b>${A.icon?`<img src="${A.icon}" width="12" height="12" alt=""> `:""}${x&&x.v?cpFmt(x.v,A)+" of ":""}${cpFmt(n.v,A)} ${A.sym}</b> ${n.p?"paid":n.inv?"payment request":n.sid?"":n.s?"found":"#"+n.i}${x&&s!=="bridged"&&s!=="withdrawn"?" → "+ch:""}</span><span>${act}${x&&x.rk?B("rescue","rescue key"):""}</span></div>`}).join("");
 const lr=cpSendRows()+cpInRows()+cpLockRows()+cpCdpRows()+cpBtcRows();cpSet(pvList,(cpSum()+rows+lr)||`<div class="cpr"><span>No deposits yet.</span></div>`)};
 const pvPaint=()=>{const on=pvMode;
 pv.setAttribute("aria-pressed",on?"true":"false");
@@ -8350,7 +8354,7 @@ if(a==="request")return pvRun(cpRequest,"Building the request…");
 if(a==="pay")return pvRun(cpPay,"Checking the request…");
 if(a==="recover")return pvRun(async()=>{const f=await cpRecover();stat.textContent=(f?"Recovered "+f+" deposit"+(f>1?"s":"")+".":"Nothing new on chain for this key.")+(cpRecMiss.length?" Could not check "+cpRecMiss.join(", ")+" — try again.":"")},"Scanning the pool…");
 if(a==="lockbtc")return pvRun(cpLockBtc,"Building the lock…");
-if(a==="addr")return pvRun(async()=>{await ask("Your Tacit address. Anyone can send to it privately, from zSwap or tacit.finance; what arrives shows up here.",cpTacAddr(cpSeed))},"Check your wallet for the message to sign.");
+if(a==="addr")return pvRun(async()=>{await cpCopy("Your Tacit address. Anyone can send to it privately, from zSwap or tacit.finance; what arrives shows up here.",cpTacAddr(cpSeed))},"Check your wallet for the message to sign.");
 if(a==="verify")return pvRun(async()=>{},"Check your wallet for the message to sign.");
 if(a==="more"){cpMore=!cpMore;return cpPaint()}
 if(a==="pub")return pvRun(async()=>{const n=await nameRev(account).catch(()=>"");

@@ -311,8 +311,8 @@ describe('shielding TAC', () => {
     r.select('pvAsset', TAC_ID);
     r.type('pvAmt', '100');
     r.click(r.$('pvKey').querySelector('button[data-a="request"]'));
-    await r.waitFor(() => r.asked.prompt.length === 1, { label: 'the request prompt', ...SLOW });
-    const inv = JSON.parse(Buffer.from(r.window.__promptDefaults[0].split('#tacit-invoice=')[1], 'base64url').toString('utf8'));
+    await r.waitFor(() => r.$('wkList').querySelector('textarea'), { label: 'the request link box', ...SLOW });
+    const inv = JSON.parse(Buffer.from(r.$('wkList').querySelector('textarea').value.split('#tacit-invoice=')[1], 'base64url').toString('utf8'));
     assert.equal(inv.assetId, TAC_ID);
     assert.equal(inv.underlying, TAC);
     assert.equal(inv.ticker, 'cTAC', 'Tacit\'s own ticker, so its dapp can pay it too');

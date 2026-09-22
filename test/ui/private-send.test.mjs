@@ -161,8 +161,9 @@ describe('private sends', () => {
     await ready(p);
     assert.match(p.text('pvList'), /Shielded 0\.01 tETH/);
     p.click(p.$('pvKey').querySelector('button[data-a="addr"]'));
-    await p.settle();
-    assert.equal(p.window.__promptDefaults.at(-1), S.address, 'the address is the key\'s tacit1 address, with its Ethereum lane');
+    // Long values come up in a box that can be copied, not a one-line prompt.
+    await p.waitFor(() => p.$('wkList').querySelector('textarea'), { label: 'the address box' });
+    assert.equal(p.$('wkList').querySelector('textarea').value, S.address, 'the address is the key\'s tacit1 address, with its Ethereum lane');
     p.close();
   });
 
@@ -614,6 +615,9 @@ describe('a recipient with only a 0x', () => {
     const shown = a => { const b = p.$('pvKey').querySelector(`button[data-a="${a}"]`); return !!b && !b.closest('.hide'); };
     for (const a of ['addr', 'pub', 'request', 'pay']) assert.ok(shown(a), a + ' is in view');
     for (const a of ['backup', 'relay', 'btckey']) assert.ok(!shown(a), a + ' waits behind more');
+    // The Bitcoin address reads as a deposit address to anyone not minting cBTC.
+    const btc = p.$('pvKey').querySelector('a[href*="mempool.space"]');
+    assert.ok(!btc || btc.closest('.hide'), 'the key\'s Bitcoin address waits behind more too');
     p.click(p.$('pvKey').querySelector('button[data-a="more"]'));
     await p.settle();
     for (const a of ['backup', 'relay', 'btckey']) assert.ok(shown(a), a + ' after more');

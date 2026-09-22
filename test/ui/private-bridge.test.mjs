@@ -936,9 +936,9 @@ describe('paying a request', () => {
     await unlock(r);
     r.type('pvAmt', '0.01');
     r.click(r.$('pvKey').querySelector('button[data-a="request"]'));
-    await r.waitFor(() => r.asked.prompt.length === 1, { label: 'the request prompt', timeout: 15000 });
-    assert.match(r.asked.prompt[0], /payment request link/);
-    const link = r.window.__promptDefaults[0];
+    await r.waitFor(() => r.$('wkList').querySelector('textarea'), { label: 'the request link box', timeout: 15000 });
+    assert.match(r.text('wkList'), /payment request link/);
+    const link = r.$('wkList').querySelector('textarea').value;
     assert.match(link, /#tacit-invoice=[A-Za-z0-9_-]+$/, 'a link with the request in its fragment');
     const invoice = JSON.parse(Buffer.from(link.split('#tacit-invoice=')[1], 'base64url').toString('utf8'));
     assert.equal(invoice.v, 1);
@@ -952,8 +952,9 @@ describe('paying a request', () => {
     assert.equal(invoice.leaf, F.leaf);
     assert.deepEqual(invoice.witness, F.wrapOp, 'the pre-signed consume is the reference wrap witness');
     assert.match(invoice.memo, /^0x0[23][0-9a-f]{64}[0-9a-f]{272}$/);
-    assert.match(r.text('pvList'), /request #0/);
-    assert.match(r.text('pvList'), /awaiting payment/);
+    assert.match(r.text('pvList'), /payment request/);
+    assert.match(r.text('pvList'), /unpaid/, 'an unpaid request says so, with copy link and cancel beside it');
+
 
     // The payer pays it from another browser.
     const q = await open();
