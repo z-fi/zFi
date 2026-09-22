@@ -181,7 +181,7 @@ vertical-align:.1em;line-height:1;text-decoration:none;margin-left:.5em}
 #adEl .adic,#pfEl .adic,.pfh .adic{vertical-align:middle;margin:-2px .45em 0 0;border-radius:50%}
 #adEl b,#pfEl b{color:var(--f);font-weight:600}
 #fcEl{display:block;text-align:center;color:var(--m);font-size:.72em;letter-spacing:.03em;margin-top:.9em}
-.pfb{margin-top:.5em;padding-top:.45em;border-top:1px dashed var(--e)}.pfh{font-size:.72em;letter-spacing:.03em}.pfo{font:inherit;font-size:.75em;background:transparent;color:var(--f);border:1px solid var(--e)}.fmpf{font:inherit;background:none;border:0;padding:0;cursor:pointer;text-decoration:underline dotted var(--m);text-underline-offset:3px}
+.pfb{margin-top:.5em;padding-top:.45em;border-top:1px dashed var(--e)}.pfh{font-size:.72em;letter-spacing:.03em}.pfo,.pfp{font:inherit;font-size:.75em;background:transparent;color:var(--f);border:1px solid var(--e)}.fmpf{font:inherit;background:none;border:0;padding:0;cursor:pointer}.fmc svg{border-radius:50%;box-shadow:0 0 0 2px var(--b)}.fmc :is(img,svg)+svg{margin-left:-.75em}.adic+.adic{margin-left:-.75em}
 .fclink{font:inherit;color:var(--m);background:none;border:0;border-bottom:1px solid var(--e);padding:0 0 .1em;margin-left:.35em;cursor:pointer;letter-spacing:inherit}
 .fclink:hover{color:var(--f);border-color:var(--f)}
 .fclink:disabled{cursor:default;opacity:.6}
@@ -6459,7 +6459,7 @@ pfVal=sh=>pfS.sup?Number(sh)/Number(pfS.sup)*(Number(pfS.r0)+Number(pfS.r1)*pfPx
 pfApr=()=>{const a=pfDay()*365*pfPx()/(pfVal(pfS.tot)+1)*100;return isFinite(a)&&a>0?"~"+Math.round(a).toLocaleString()+"% APR on 1 ETH":""},
 pfHead=()=>[Math.round(pfDay()).toLocaleString()+" TAC/day",pfApr(),"until "+new Date(pfS.fin*1e3).toLocaleDateString(undefined,{month:"short",day:"numeric"})].filter(Boolean),
 pfBtn=(k,t,c="fclink")=>{const x=document.createElement("button");x.type="button";x.className=c;x.dataset.pf=k;x.textContent=t;return x},
-pfIcon=el=>{const k=known(TAC_TOK);if(k&&/^<img /.test(k.icon))el.insertAdjacentHTML("beforeend",sm(k.icon).replace("<img ",'<img class="adic" '))};
+pfIcon=(el,n=15,c="adic")=>{for(const a of[TAC_TOK,ZERO]){const k=known(a);if(k&&/^<(img|svg) /.test(k.icon))el.insertAdjacentHTML("beforeend",k.icon.replace('width="20" height="20"',`width="${n}" height="${n}"`).replace(/^<(img|svg) /,`<$1 class="${c}" `))}};
 async function pfSync(){const my=++pfSeq,a=account;
 if(CHAIN_ID===1)try{const r=await mc3([{to:PFARM,data:"0x7b0a47ee"},{to:PFARM,data:"0xebe2b12b"},{to:PFARM,data:"0x817b1cd2"},{to:PFPOOL,data:"0x18160ddd"},
 {to:PFPOOL,data:"0x443cb4bc"},{to:PFPOOL,data:"0x5a76f25e"},{to:PFPOOL,data:"0x2af1f249"},
@@ -6485,13 +6485,11 @@ if(S.st>0n&&S.sup){const m=document.createElement("div");m.className="lqmine";m.
 const acts=document.createElement("div");acts.className="lqacts";
 if(on&&S.lp>0n)acts.append(pfBtn("st","Stake "+trimAmt(S.lp,18)+" LP","lqbtn"));
 if(S.ea>0n)acts.append(pfBtn("cl","Claim","lqbtn"));
-if(S.st>0n){acts.insertAdjacentHTML("beforeend",'<select class="pfo" aria-label="Withdraw as"><option value="both">as ETH + TAC</option><option value="eth">as ETH</option><option value="tac">as TAC</option><option value="lp">as LP</option></select>');acts.append(pfBtn("wd","Withdraw all","lqbtn"))}
+if(S.st>0n){acts.insertAdjacentHTML("beforeend",'<select class="pfp" aria-label="How much"><option value="100">all</option><option value="75">75%</option><option value="50">50%</option><option value="25">25%</option></select><select class="pfo" aria-label="Withdraw as"><option value="both">as ETH + TAC</option><option value="eth">as ETH</option><option value="tac">as TAC</option><option value="lp">as LP</option></select>');const w=pfBtn("wd","Withdraw","lqbtn");w.title="Withdrawing all also claims your TAC; a part leaves it to claim.";acts.append(w)}
 if(acts.childNodes.length)el.append(acts)}
 function fmPf(){pvFarm.querySelector(".fmpf")?.remove();if(!pfS||!pfOn()||pvFarm.classList.contains("hide"))return;
-const c=pfBtn("go","TAC/ETH on zSwap "+pfHead().slice(0,2).join(" · "),"fmc fmpf");pvFarm.insertBefore(c,pvFarm.querySelector("a"))}
-function pfGo(){const e=TOKENS.findIndex(t=>t.addr===ZERO),t=TOKENS.findIndex(x=>x.addr.toLowerCase()===TAC_TOK.toLowerCase());if(e<0||t<0)return;
-fromSel.value=String(e);toSel.value=String(t);fromSel.dataset.prev=fromSel.value;toSel.dataset.prev=toSel.value;pairChosen=true;
-syncDisabled();refreshBalance();loadChart();if(lqMode)loadLq();else lqSet(true)}
+const c=pfBtn("go","","fmc fmpf");pfIcon(c,16,"");c.append("TAC/ETH on zSwap "+pfHead().slice(0,2).join(" · "));pvFarm.insertBefore(c,pvFarm.querySelector("a"))}
+function pfGo(){pairUser=false;if(location.hash==="#farm")applyLink(1);else location.hash="farm"}
 const pfTx=async(data,val,verb)=>settle(await sendWith([],{from:account,to:PFARM,data,value:toHex(val)},verb));
 async function pfTok(tok,amt,plain,withP,val,verb){const dl=BigInt(nowS()+1800),aps=await apSeq(tok,PFARM,amt);
 if(aps.length){const pi=await permitInfo(tok,account);if(pi)try{stat.textContent="Sign approval…";const d=withP(dl,await pmSig(tok,pi,account,amt,dl,PFARM));
@@ -6511,10 +6509,10 @@ async function pfDo(k,b){if(busy||!pfS)return;if(k==="go")return pfGo();if(!acco
 ++busy;b.disabled=true;try{await checkWallet();const S=pfS,dl=encUint(BigInt(nowS()+1800));
 if(k==="cl")await pfTx("0x4e71d92d",0n,"Claiming TAC…");
 else if(k==="st")await pfTok(PFPOOL,S.lp,()=>"0xa694fc3a"+encUint(S.lp),(d,s)=>"0xecd9ba82"+encUint(S.lp)+encUint(d)+s,0n,"Staking…");
-else if(k==="wd"){const o=b.parentElement.querySelector(".pfo")?.value;
-if(o==="lp")await pfTx("0xe9fad8ee",0n,"Withdrawing…");
-else if(o==="both"){const q=await pfSim("0xbccbe38a"+encUint(0n)+encUint(0n)+dl);await pfTx("0xbccbe38a"+encUint(pfW(q,0))+encUint(pfW(q,1))+dl,0n,"Withdrawing…")}
-else{const e=encBool(o==="eth"),q=await pfSim("0x6ae36ea7"+e+encUint(0n)+dl);await pfTx("0x6ae36ea7"+e+encUint(pfW(q,0))+dl,0n,"Withdrawing…")}}
+else if(k==="wd"){const r=b.parentElement,o=r.querySelector(".pfo")?.value,f=BigInt(r.querySelector(".pfp")?.value||100),all=f===100n,sh=encUint(S.st*f/100n);
+if(o==="lp")await pfTx(all?"0xe9fad8ee":"0x2e1a7d4d"+sh,0n,"Withdrawing…");
+else if(o==="both"){const s=all?"0xbccbe38a":"0xbd8196a9"+sh,q=await pfSim(s+encUint(0n)+encUint(0n)+dl);await pfTx(s+encUint(pfW(q,0))+encUint(pfW(q,1))+dl,0n,"Withdrawing…")}
+else{const e=encBool(o==="eth"),s=all?"0x6ae36ea7"+e:"0x47d1eebd"+e+sh,q=await pfSim(s+encUint(0n)+dl);await pfTx(s+encUint(pfW(q,0))+dl,0n,"Withdrawing…")}}
 }catch(e){err(e)}finally{--busy;b.disabled=false;refreshBalance();lqMode?loadLq():pfSync().catch(()=>{})}}
 pfEl.onclick=e=>{const b=e.target.closest("button[data-pf]");if(b){sBlip();pfDo(b.dataset.pf,b)}};
 pvFarm.addEventListener("click",e=>{const b=e.target.closest("button[data-pf]");if(b){sBlip();pfGo()}});
@@ -8195,7 +8193,7 @@ r.push({id:W(0),r:"0x"+h.slice(e+88,e+128).toLowerCase(),a:"0x"+h.slice(e+152,e+
 return r};
 const mkLive=m=>m.s===0&&nowS()<m.c;
 const mkLeft=c=>{const d=c-nowS();return d<3600?Math.max(1,Math.ceil(d/60))+"m":d<86400?Math.floor(d/3600)+"h":Math.floor(d/86400)+"d"};
-const mkWhen=m=>m.s?["","YES won","NO won","void"][m.s]:nowS()<m.c?mkLeft(m.c)+" left":"awaiting result";
+const mkWhen=m=>m.s?["","YES won","NO won","void"][m.s]:nowS()<m.c?mkLeft(m.c)+" left":nowS()>=m.c+2592000?"unresolved — anyone can void":"awaiting result";
 const mkPct=m=>{const t=m.y+m.n;return t?Number(m.y*1000n/t)/10:50};
 const mkUsd=m=>{const t=mkTok(m.a),v=Number(formatUnits(m.p,t.dec));return/ETH/i.test(t.sym)?v*(ethUsd||2e3):/USD|BOLD|DAI/i.test(t.sym)?v:v*1e-6};
 const mkPosLoad=async all=>{const P={};if(account&&all.length){const cs=[];
@@ -8221,7 +8219,7 @@ mkSub.textContent=mkAll.length?mkAll.length+(mkAll.length>1?" markets":" market"
 const mkDetPaint=()=>{if(!mkMode)return;const m=mkSel;mkDet.classList.toggle("hide",!m);if(!m)return;
 const t=mkTok(m.a),me=mkPos[m.id]||{y:0n,n:0n,c:0n},live=mkLive(m),isR=!!account&&m.r===account.toLowerCase(),net=m.p-m.p*BigInt(m.f)/10000n,X=s=>s?"×"+(Number(net*1000n/s)/1000).toFixed(2):"—",S=safeSym(t.sym),lapsed=nowS()>=m.c+2592000;
 mkT.textContent=m.d;
-mkInfo.innerHTML=`Pot ${sigAmt(m.p,t.dec,6)} ${S} · YES pays ${X(m.y)} · NO pays ${X(m.n)}<br>${m.s?mkWhen(m):live?"Closes "+new Date(m.c*1e3).toLocaleString():"Closed — awaiting the resolver"} · resolver <span id="mkRv">${m.r.slice(0,6)}…${m.r.slice(-4)}</span>${m.f?` · fee ${m.f/100}%`:""}${m.x?` · exit tax ${m.x/100}%`:" · bets final"}${m.l?` · late tax to ${m.l/100}%`:""}${me.y||me.n?`<br>You hold ${sigAmt(me.y,t.dec,6)} YES · ${sigAmt(me.n,t.dec,6)} NO`:""}`;
+mkInfo.innerHTML=`Pot ${sigAmt(m.p,t.dec,6)} ${S} · ${m.s?`${m.s===3?"each share returns":"each winning share pays"} ${m.w?"×"+(Number(m.p*1000n/m.w)/1000).toFixed(2):"—"}`:`YES pays ${X(m.y)} · NO pays ${X(m.n)}`}<br>${m.s?mkWhen(m):live?"Closes "+new Date(m.c*1e3).toLocaleString():"Closed — awaiting the resolver"} · resolver <span id="mkRv">${m.r.slice(0,6)}…${m.r.slice(-4)}</span>${m.f?` · fee ${m.f/100}%`:""}${m.x?` · exit tax ${m.x/100}%`:" · bets final"}${m.l?` · late tax to ${m.l/100}%`:""}${me.y||me.n?`<br>You hold ${sigAmt(me.y,t.dec,6)} YES · ${sigAmt(me.n,t.dec,6)} NO`:""}`;
 nameRev(m.r).then(n=>{if(n&&mkSel===m)mkRv.textContent=safeSym(n,48)}).catch(()=>{});
 mkAmtL.classList.toggle("hide",!live);
 if(mkPay._k!==String(m.id)){mkPay._k=String(m.id);mkPay.innerHTML=(m.a===ZERO?[ZERO]:m.a===MK_WST?[ZERO,MK_WST]:[m.a]).map(a=>`<option value="${a}">${safeSym(mkTok(a).sym)}</option>`).join("");mkAmt.value="";mkQ.textContent="";mkQv=null;mkPayB.disabled=mkPay.options.length<2;mkIco(mkPayB,mkTok(mkPay.value))}
@@ -9076,7 +9074,7 @@ if(lkEv&&el.value!==v&&(el===rc||el===amt||el===outAmt))lkArm=Date.now()+2500;
 el.value=v;lkWrote[el.id]=v;return true;
 };
 async function applyLink(e){if(e&&(busy||txLive))return void idle(()=>applyLink(e));lkEv=!!e;
-const q=new URLSearchParams(location.hash.slice(1));
+const q=new URLSearchParams(location.hash.slice(1));if(q.has("farm")){q.set("token","ETH");q.set("out",TAC_TOK);q.set("lq","1")}
 const ti=q.get("tacit-invoice");if(ti!==null){try{history.replaceState(null,"",location.href.split("#")[0])}catch{}if(/^[A-Za-z0-9_-]{16,8000}$/.test(ti)){window.__tinv=ti;try{sessionStorage.setItem("zswap:tinv",ti)}catch{}setTimeout(()=>cpInvGo(),0)}return}
 const my=++lSeq;
 if(![...q.keys()].length){

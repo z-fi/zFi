@@ -28,7 +28,7 @@ const sel = d => d.slice(2, 10);
 const args = d => '0x' + d.slice(10);
 const floorOk = (min, exact) => min < exact && min >= exact * 99n / 100n;
 
-async function open({ fin = Math.floor(Date.now() / 1e3) + 30 * 86400, staked = 0n, earned = 0n, lp = 0n, sims = {} } = {}) {
+async function open({ fin = Math.floor(Date.now() / 1e3) + 30 * 86400, staked = 0n, earned = 0n, lp = 0n, sims = {}, hash = 'token=ETH&out=TAC' } = {}) {
   const chain = new MockChain();
   chain.registry = [row('ETH', A.ZERO, { p: 'Native' }), row('TAC', TAC), row('USDC', A.USDC, { d: 6 })];
   chain.conviction = [1, 2, 3];
@@ -51,9 +51,9 @@ async function open({ fin = Math.floor(Date.now() / 1e3) + 30 * 86400, staked = 
   const reads = { '7b0a47ee': u(RATE), 'ebe2b12b': u(fin), '817b1cd2': u(staked), '98807d84': u(staked), '008cc262': u(earned),
     // Simulations of the writes; a floor-free exit reports what it would pay.
     '8703a0d8': u(10n ** 17n), '51291e77': u(10n ** 17n), '9376f34e': u(10n ** 17n), '6d15c09b': u(10n ** 17n), 'ddd9f3fb': u(10n ** 17n),
-    '4e71d92d': '', 'e9fad8ee': '', 'a694fc3a': '', 'ecd9ba82': '', ...sims };
+    '4e71d92d': '', 'e9fad8ee': '', 'a694fc3a': '', 'ecd9ba82': '', '2e1a7d4d': '', ...sims };
   for (const [s, v] of Object.entries(reads)) chain.answer(FARM, s, '0x' + v);
-  const p = await loadPage({ chain, hash: 'token=ETH&out=TAC' });
+  const p = await loadPage({ chain, hash });
   await p.connect({ pin: false });
   await p.settle();
   return p;
@@ -86,6 +86,7 @@ describe('the TAC/ETH farm line', () => {
     assert.ok(t.includes(`~${apr}% APR on 1 ETH`), t);
     assert.match(t, /until \w+/);
     assert.equal(p.$('pfEl').querySelector('[data-pf="go"]').textContent, 'Farm');
+    assert.ok(p.$('pfEl').querySelector('svg.adic'), 'the pair shows its ETH logo beside TAC');
     p.close();
   });
 
@@ -229,6 +230,66 @@ describe('the farm on its band', () => {
     await p.waitFor(() => /credited to your own wallet/.test(p.text('stat')), { label: 'the refusal' });
     await p.settle();
     assert.equal(p.chain.sentTo(FARM).length, 0);
+    p.close();
+  });
+
+  test('Farm from another pair moves the pickers to ETH / TAC as well as the panel', async () => {
+    const p = await open({ hash: 'token=ETH&out=USDC' });
+    await p.waitFor(() => p.visible('pfEl'), { label: 'the farm line' });
+    await openBand(p);
+    assert.match(p.text('toPick'), /TAC/);
+    assert.match(p.text('fromPick'), /ETH/);
+    p.close();
+  });
+
+  test('#farm links straight to the band', async () => {
+    const p = await open({ hash: 'farm' });
+    await p.waitFor(() => bandRow(p)?.querySelector('.pfb'), { label: 'the farm block from the link' });
+    assert.match(p.text('toPick'), /TAC/);
+    assert.ok(bandRow(p).querySelector('.lqadd .pfk'));
+    p.close();
+  });
+
+  test('half the stake withdraws as ETH through withdrawTo, leaving the rest staked', async () => {
+    const p = await open({ staked: ETH, earned: ETH, sims: { '47d1eebd': u(15n * 10n ** 15n) } });
+    const r = await openBand(p);
+    await p.waitFor(() => r.querySelector('.pfp'), { label: 'the amount picker' });
+    r.querySelector('.pfp').value = '50';
+    r.querySelector('.pfo').value = 'eth';
+    p.click(r.querySelector('[data-pf="wd"]'));
+    await p.waitFor(() => farmTx(p), { label: 'the partial exit' });
+    const d = args(farmTx(p).data);
+    assert.equal(sel(farmTx(p).data), '47d1eebd');
+    assert.equal(word(d, 0), 1n, 'toETH');
+    assert.equal(word(d, 1), ETH / 2n, 'half the stake');
+    assert.ok(floorOk(word(d, 2), 15n * 10n ** 15n));
+    p.close();
+  });
+
+  test('a quarter of the stake comes back as LP with plain withdraw', async () => {
+    const p = await open({ staked: ETH });
+    const r = await openBand(p);
+    await p.waitFor(() => r.querySelector('.pfp'), { label: 'the amount picker' });
+    r.querySelector('.pfp').value = '25';
+    r.querySelector('.pfo').value = 'lp';
+    p.click(r.querySelector('[data-pf="wd"]'));
+    await p.waitFor(() => farmTx(p), { label: 'the unstake' });
+    assert.equal(sel(farmTx(p).data), '2e1a7d4d');
+    assert.equal(word(args(farmTx(p).data), 0), ETH / 4n);
+    p.close();
+  });
+
+  test('a partial exit to both assets floors each side of withdrawAndRemove', async () => {
+    const p = await open({ staked: ETH, sims: { bd8196a9: u(10n ** 16n) + u(140n * ETH) } });
+    const r = await openBand(p);
+    await p.waitFor(() => r.querySelector('.pfp'), { label: 'the amount picker' });
+    r.querySelector('.pfp').value = '75';
+    p.click(r.querySelector('[data-pf="wd"]'));
+    await p.waitFor(() => farmTx(p), { label: 'the partial exit' });
+    const d = args(farmTx(p).data);
+    assert.equal(sel(farmTx(p).data), 'bd8196a9');
+    assert.equal(word(d, 0), ETH * 3n / 4n);
+    assert.ok(floorOk(word(d, 1), 10n ** 16n) && floorOk(word(d, 2), 140n * ETH));
     p.close();
   });
 
