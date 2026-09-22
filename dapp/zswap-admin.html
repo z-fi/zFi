@@ -1,0 +1,192 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>zSwap Admin</title>
+<style>
+  :root { color-scheme: light dark; --bg:#0b0d10; --fg:#e6e8eb; --mut:#8b949e; --line:#232a31;
+          --ok:#3fb950; --bad:#f85149; --warn:#d29922; --acc:#58a6ff; }
+  @media (prefers-color-scheme: light) {
+    :root { --bg:#fff; --fg:#14171a; --mut:#57606a; --line:#d8dee4; --ok:#1a7f37; --bad:#cf222e; --warn:#9a6700; --acc:#0969da; }
+  }
+  * { box-sizing:border-box }
+  body { margin:0; background:var(--bg); color:var(--fg); padding:28px 18px; display:flex; justify-content:center;
+         font:14px/1.55 ui-sans-serif,-apple-system,system-ui,sans-serif }
+  main { width:100%; max-width:700px }
+  h1 { font-size:17px; margin:0 0 2px }
+  .sub { color:var(--mut); margin:0 0 22px }
+  section { border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-bottom:14px }
+  h2 { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--mut); margin:0 0 8px; font-weight:600;
+       display:flex; justify-content:space-between; gap:10px; align-items:baseline }
+  h2 code { text-transform:none; font-size:12.5px; color:var(--fg) }
+  h2 a { text-transform:none; letter-spacing:0; font-family:ui-monospace,Menlo,monospace }
+  dl { display:grid; grid-template-columns:auto 1fr; gap:4px 14px; margin:8px 0 0 }
+  dt { color:var(--mut); font-size:12.5px }
+  dd { margin:0; font-family:ui-monospace,Menlo,monospace; font-size:12px; word-break:break-all }
+  button { font:inherit; font-weight:600; padding:9px 15px; border-radius:8px; border:1px solid var(--line);
+           background:var(--acc); color:#fff; cursor:pointer }
+  button.ghost { background:transparent; color:var(--fg) }
+  .row { display:flex; gap:9px; align-items:center; flex-wrap:wrap }
+  .hint { color:var(--mut); font-size:12.5px; margin:4px 0 0 }
+  a { color:var(--acc) }
+  .pill { font-size:11px; font-weight:600; padding:1px 8px; border-radius:99px; border:1px solid currentColor; text-transform:none; letter-spacing:0 }
+  .ok { color:var(--ok) } .bad { color:var(--bad) } .warn { color:var(--warn) } .mut { color:var(--mut) }
+  ul.att { margin:8px 0 0; padding-left:18px; font-size:12.5px }
+  .go { margin-top:10px }
+</style>
+
+<main>
+  <h1>zSwap — what you run on chain</h1>
+  <p class="sub">
+    Every contract zSwap reads for its settings, read live from Ethereum. Each card says what it
+    controls, who owns it, whether anything needs doing, and links to the page that changes it.
+    This page only reads; the linked pages prepare the transactions and your wallet signs them.
+  </p>
+
+  <section>
+    <h2>Wallet</h2>
+    <div class="row">
+      <button id="connect" class="ghost">Connect</button>
+      <span id="me" class="mut">not connected — connecting only shows which cards you can change</span>
+    </div>
+  </section>
+
+  <div id="cards"><p class="hint">Reading…</p></div>
+
+  <section>
+    <h2>Next page version</h2>
+    <p class="hint" style="margin:0">
+      zSwap v0.3 is built as 25 data chunks. To ship it: deploy the chunks from a funded key,
+      run <code>build-zSwapNext</code> with their addresses, and have the DAO execute
+      <code>deployNext</code>. The steps and cost are in <code>deploy/zSwap-v0.3-LAUNCH.md</code>.
+      The page before it links to the new one once it matures, three days after deploy.
+    </p>
+  </section>
+</main>
+
+<script>
+const NODES = ['https://ethereum-rpc.publicnode.com', 'https://eth.drpc.org', 'https://rpc.mevblocker.io'];
+const EPS = '0x00000051F365d898132f4ebF345Cd3968e02F288', RPCL = '0x8C7348D039f58C4e9cfA936EF410eec759213b12',
+      FLAGS = '0x0000008a1a3C78440d0a28EBB4bb5526abA91d45', SOLVERS = '0x1Dfbb2f41B596F72187370469074C46de60dA2e3',
+      TOKENLIST = '0x0000006013dF75A31678B786061C2B54bf531524';
+// The (service, chain) pairs the zSwap page reads from zEndpoints, and what each is for.
+const READS = [['rpc', 8453, 'Base read nodes'], ['rpc', 4663, 'Robinhood read nodes'], ['logs', 1, 'wide log nodes for the private pool'],
+  ['tacit', 1, 'Tacit relay'], ['btc', 0, 'Bitcoin APIs'], ['wc', 0, 'WalletConnect relay'], ['wcpid', 0, 'WalletConnect project id'],
+  ['tacad', 1, 'TAC airdrop proof mirrors']];
+const NEED = { rpc: 2, logs: 2, btc: 2, tacad: 2, tacit: 1, wc: 1, wcpid: 1 };
+const FLAG_STATE = ['unset (lane follows the page default: off)', 'on', 'off'];
+
+const $ = id => document.getElementById(id);
+const mk = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
+const hex = n => BigInt(n).toString(16).padStart(64, '0');
+const svc = s => Array.from(new TextEncoder().encode(s), b => b.toString(16).padStart(2, '0')).join('').padEnd(64, '0');
+const short = a => a.slice(0, 6) + '…' + a.slice(-4);
+const scan = a => mk('a', { href: 'https://etherscan.io/address/' + a + '#code', target: '_blank', rel: 'noreferrer', textContent: short(a) });
+
+async function call(to, data) {
+  let e;
+  for (const u of NODES) {
+    try {
+      const j = await (await fetch(u, { method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_call', params: [{ to, data }, 'latest'] }) })).json();
+      if (j.error) throw Error(j.error.message);
+      if (/^0x([0-9a-f]{2})*$/i.test(j.result || '')) return j.result.slice(2);
+    } catch (x) { e = x; }
+  }
+  throw e || Error('no node answered');
+}
+const W = (h, p) => BigInt('0x' + (h.slice(p * 2, p * 2 + 64) || '0'));
+const N = (h, p) => Number(W(h, p));
+const addr = h => '0x' + h.slice(24, 64);
+const strs = h => {
+  const p = N(h, 0), n = N(h, p), out = [];
+  for (let i = 0; i < n; i++) {
+    const q = p + 32 + N(h, p + 32 + 32 * i), len = N(h, q);
+    out.push(new TextDecoder().decode(new Uint8Array((h.slice((q + 32) * 2, (q + 32 + len) * 2).match(/../g) || []).map(b => parseInt(b, 16)))));
+  }
+  return out;
+};
+
+let account = null, info = [];
+
+function card({ name, addr: a, what, owner, pending, rows, att, links }) {
+  const mine = account && owner && account.toLowerCase() === owner.toLowerCase();
+  const s = mk('section');
+  const st = att.length ? mk('span', { className: 'pill warn', textContent: att.length + ' to look at' }) : mk('span', { className: 'pill ok', textContent: 'all good' });
+  s.append(mk('h2', {}, mk('span', {}, mk('code', { textContent: name }), ' · ', scan(a)), st));
+  s.append(mk('p', { className: 'hint', style: 'margin:0', textContent: what }));
+  const dl = mk('dl');
+  dl.append(mk('dt', { textContent: 'Owner' }), mk('dd', {}, owner ? scan(owner) : '—', mine ? mk('span', { className: 'ok', textContent: '  · you' }) : ''));
+  if (pending && !/^0x0+$/.test(pending)) dl.append(mk('dt', { textContent: 'Offered to' }), mk('dd', {}, scan(pending)));
+  for (const [k, v, cls] of rows) dl.append(mk('dt', { textContent: k }), mk('dd', { className: cls || '', textContent: v }));
+  s.append(dl);
+  if (att.length) s.append(mk('ul', { className: 'att warn' }, ...att.map(x => mk('li', { textContent: x }))));
+  s.append(mk('div', { className: 'row go' }, ...links.map(([t, h]) => mk('a', { href: h, textContent: t + ' →' }))));
+  return s;
+}
+
+async function load() {
+  const box = $('cards'), cards = [];
+  const own = async a => { try { return addr(await call(a, '0x8da5cb5b')); } catch { return null; } };
+  const pend = async a => { try { return addr(await call(a, '0xe30c3978')); } catch { return null; } };
+
+  // zEndpoints
+  try {
+    const lists = await Promise.all(READS.map(([s, c]) => call(EPS, '0xe8edb32f' + svc(s) + hex(c)).then(strs).catch(() => null)));
+    const att = [], rows = [];
+    READS.forEach(([s, c, label], i) => {
+      const l = lists[i];
+      rows.push([`${s}/${c}`, l ? `${l.length} · ${label}` : 'unreadable', l && l.length < (NEED[s] || 1) ? 'warn' : '']);
+      if (l && l.length < (NEED[s] || 1)) att.push(`${s}/${c} (${label}) has ${l.length} entr${l.length === 1 ? 'y' : 'ies'}; ${NEED[s]} or more gives it a curated failover.`);
+    });
+    cards.push({ name: 'zEndpoints', addr: EPS, owner: await own(EPS), pending: await pend(EPS), rows, att,
+      what: 'The off-chain services zSwap reads other than Ethereum nodes: L2 read nodes, log nodes, the Tacit relay, Bitcoin APIs, WalletConnect, airdrop mirrors. The page puts these ahead of its built-in values.',
+      links: [['Edit, or run the Tune-up', 'endpoints-admin.html']] });
+  } catch (e) { cards.push({ name: 'zEndpoints', addr: EPS, rows: [['Read', e.message, 'bad']], att: ['Could not read it.'], links: [['Open', 'endpoints-admin.html']] }); }
+
+  // zRpcList
+  try {
+    const l = strs(await call(RPCL, '0xd77e4c79'));
+    cards.push({ name: 'zRpcList', addr: RPCL, owner: await own(RPCL), pending: await pend(RPCL),
+      rows: [['Nodes', `${l.length} · first: ${l[0] || '—'}`]], att: l.length < 3 ? [`Only ${l.length} Ethereum read node${l.length === 1 ? '' : 's'}; three or more keeps quotes up when one fails.`] : [],
+      what: 'Ethereum\'s own read nodes, tried in order. The first that answers takes the traffic.',
+      links: [['Edit, or run the Tune-up', 'endpoints-admin.html']] });
+  } catch (e) { cards.push({ name: 'zRpcList', addr: RPCL, rows: [['Read', e.message, 'bad']], att: ['Could not read it.'], links: [] }); }
+
+  // zSwapFlags
+  try {
+    const st = await Promise.all([1, 8453, 4663].map(c => call(FLAGS, '0xeb517a45' + svc('bridge') + hex(c)).then(h => N(h, 0)).catch(() => -1)));
+    cards.push({ name: 'zSwapFlags', addr: FLAGS, owner: await own(FLAGS), pending: await pend(FLAGS),
+      rows: [['bridge · Ethereum', FLAG_STATE[st[0]] || 'unreadable'], ['bridge · Base', FLAG_STATE[st[1]] || 'unreadable'], ['bridge · Robinhood', FLAG_STATE[st[2]] || 'unreadable']],
+      att: [], what: 'On/off switches for zSwap lanes. "bridge" turns on instant SLOW sends through the slow-relayer: fund its account on each chain before switching it on.',
+      links: [['Switch lanes', 'flags-admin.html']] });
+  } catch (e) { cards.push({ name: 'zSwapFlags', addr: FLAGS, rows: [['Read', e.message, 'bad']], att: ['Could not read it.'], links: [['Open', 'flags-admin.html']] }); }
+
+  // zSolverList
+  cards.push({ name: 'zSolverList', addr: SOLVERS, owner: await own(SOLVERS), pending: await pend(SOLVERS), rows: [], att: [],
+    what: 'The solver lanes zSwap asks for quotes on each chain.',
+    links: [['Lane roster', 'admin/index.html'], ['Chain coverage', 'solver-admin.html']] });
+
+  // TokenList
+  cards.push({ name: 'TokenList', addr: TOKENLIST, owner: await own(TOKENLIST), pending: null, rows: [], att: [],
+    what: 'The on-chain token list: what zSwap lists, with logos, including the Tacit assets. Owned separately, by the ops multisig.',
+    links: [['Compose an owner batch', 'tokenlist-admin.html']] });
+
+  info = cards; paint();
+}
+
+function paint() {
+  const box = $('cards'); box.innerHTML = '';
+  for (const c of info) box.append(card(c));
+  if (account) {
+    const n = info.filter(c => c.owner && c.owner.toLowerCase() === account.toLowerCase()).length;
+    $('me').textContent = `${short(account)} · owner of ${n} of ${info.length}`;
+  }
+}
+
+$('connect').onclick = async () => {
+  const p = window.ethereum;
+  if (!p) return ($('me').textContent = 'No wallet found.');
+  try { account = (await p.request({ method: 'eth_requestAccounts' }))[0]; paint(); } catch (e) { $('me').textContent = e.message || String(e); }
+};
+load();
+</script>

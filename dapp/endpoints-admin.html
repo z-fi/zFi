@@ -91,9 +91,12 @@
     <h2>Tune-up</h2>
     <p class="hint">
       Probes every entry of every list zSwap reads, from this browser, and proposes each list best
-      first. Read nodes are measured the way a quote uses them: 24 calls at once, ranked by how many
-      fail, then by speed; one that fails a quarter or more, or serves the wrong chain, is proposed
-      for removal. Other services are probed once and moved fastest first, never dropped.
+      first, and leaves order alone where the difference is only noise. Read nodes are measured the
+      way a quote uses them, 24 calls at once, and ranked by how many fail; one that fails a quarter
+      or more, or serves the wrong chain, is proposed for removal. Logs nodes must return every
+      private-pool log since its deploy block, counted against a windowed reference. A list with
+      fewer than two working entries is offered known-good additions. Other services only move an
+      entry that does not answer to the back.
       A list zSwap reads that was never written is proposed with its default entries. Tick what to
       send: a wallet that batches sends them as one approval, any other sends them one by one.
     </p>
@@ -144,10 +147,12 @@
 
 <script>
 const EPS = '0x00000051F365d898132f4ebF345Cd3968e02F288';
+// zRpcList: Ethereum's own read nodes, the one list zSwap keeps outside zEndpoints. Same owner.
+const RPCL = '0x8C7348D039f58C4e9cfA936EF410eec759213b12';
 const RPC = 'https://ethereum-rpc.publicnode.com';
 const SEL = { owner:'8da5cb5b', pending:'e30c3978', keys:'307540f6', listAt:'292a5f4b', listOf:'e8edb32f',
               add:'63a418e3', remove:'aceba3fd', pop:'b87e183d', move:'fd530b5e', setAt:'1dbd5943',
-              set:'3e2e459c', transfer:'f2fde38b', accept:'79ba5097' };
+              set:'3e2e459c', transfer:'f2fde38b', accept:'79ba5097', rpcs:'d77e4c79', rset:'52e66db8' };
 const ERR = { '30cd7471': 'NotOwner() — this account is not the owner.',
               'ef3ff4ae': 'BadIndex() — the list is shorter than this page thinks. Reload.',
               'ff633a38': 'LengthMismatch()' };
@@ -159,8 +164,8 @@ const HTTPS = /^https:\/\/\S+$/;
 const SERVICE = {
   rpc:   { rule: HTTPS, probe: 'rpc', fmt: 'https://… with no spaces',
            desc: 'Read nodes for this chain — https://.' },
-  logs:  { rule: HTTPS, probe: 'rpc', fmt: 'https://… with no spaces',
-           desc: 'Nodes that serve wide eth_getLogs ranges — https://.' },
+  logs:  { rule: HTTPS, probe: 'logs', fmt: 'https://… with no spaces',
+           desc: 'Nodes that serve wide eth_getLogs ranges — https://. The probe asks for every private-pool log since its deploy block and needs all of them.' },
   tacit: { rule: /^https:\/\/[\w.-]+(:\d+)?(\/[\w./-]*)?$/, probe: 'tacit', fmt: 'https://host[:port][/path], no query',
            desc: 'The private pool\'s prover and settle relay — https://. The page uses the first valid entry.' },
   btc:   { rule: HTTPS, probe: 'btc', fmt: 'https://… with no spaces',
@@ -172,6 +177,12 @@ const SERVICE = {
   tacad: { rule: /^https:\/\/[\w.-]+(:\d+)?\/[\w.\/@-]*\/$/, probe: 'tacad', fmt: 'https://host/…/ — the folder that holds <byte>.json, ending in /',
            desc: 'Mirrors of the TAC airdrop proof files — https://, a folder ending in /. Every proof is checked against the airdrop contract\'s Merkle root, so a mirror can be down but never wrong.' },
 };
+// Known-good candidates offered when a list zSwap reads has fewer than two working entries.
+const SUGGEST = {
+  'logs|1': ['https://mainnet.gateway.tenderly.co', 'https://rpc.mevblocker.io', 'https://gateway.tenderly.co/public/mainnet', 'https://eth.api.onfinality.io/public'],
+  'rpc|8453': ['https://base-rpc.publicnode.com', 'https://base.rpc.blxrbdn.com'],
+  'rpc|4663': ['https://robinhood-rpc.publicnode.com', 'https://rpc.mainnet.chain.robinhood.com'],
+};
 // What a list zSwap reads should hold when it was never written.
 const DEFAULTS = {
   'tacad|1': ['https://cdn.jsdelivr.net/gh/z0r0z/tacit@1b2eedde8490801c9ef4406020530059162e6d47/dapp/airdrop/v1/proofs/',
@@ -180,6 +191,8 @@ const DEFAULTS = {
 const OTHER = { rule: /^(https|wss):\/\/\S+$/, fmt: 'https://… or wss://…',
                 desc: 'Not a service zSwap reads today — https:// or wss://.' };
 const TACIT_ASSET = '0x3cba71e1114af183cdeacc6b8457a474d17529fd28704480ca799d0d03126f34';
+// The private pool zSwap scans, and its deploy block: the widest range a logs node must serve.
+const TACIT_POOL = '0x000000000Ed1eabD231Be41d93b719056F7febFC', TACIT_FROM = 25998736;
 
 const $ = id => document.getElementById(id);
 const mk = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
@@ -196,6 +209,7 @@ const hide = id => { notes.delete(id); paint(id); };
 
 let provider = null, account = null, owner = null, pending = null;
 let cards = [];             // { w, chain, name, known, list, inherits }
+let l1 = [], l1Owner = null; // zRpcList's list and owner
 const probes = new Map();   // probe key -> [text, kind]
 
 // ---------------------------------------------------------------- abi
@@ -292,6 +306,8 @@ async function load() {
       c.inherits = c.chain && !c.list.length ? decList(await rpcCall(CALL.listOf(c.w, c.chain))) : null;
     }));
     cards = next;
+    try { const [lo, ll] = await Promise.all([rpcCall('0x' + SEL.owner, RPCL), rpcCall('0x' + SEL.rpcs, RPCL)]); l1Owner = '0x' + lo.slice(26); l1 = decList(ll); }
+    catch { l1 = []; l1Owner = null; }
     checkWho();
   } catch (e) {
     if (!e.nocode) return say('who', 'Could not read the contract: ' + e.message, 'bad');
@@ -318,7 +334,9 @@ function render() {
   const box = $('cards'); box.innerHTML = '';
   const mine = isOwner();
   for (const c of cards) box.append(card(c, mine));
+  box.append(l1Card());
   for (const c of cards) paint(msgId(c));
+  paint('m-l1');
   paintProbes();
 }
 
@@ -405,6 +423,32 @@ function card(c, mine) {
   return s;
 }
 
+function l1Card() {
+  const mine = !!(account && l1Owner && account.toLowerCase() === l1Owner.toLowerCase());
+  const s = mk('section');
+  s.append(mk('h2', {}, mk('code', { textContent: 'zRpcList' }), ' · Ethereum read nodes'));
+  s.append(mk('p', { className: 'hint', style: 'margin:0 0 6px', textContent: `At ${RPCL}. zSwap reads Ethereum through these nodes, in this order, and sticks with the first that answers — so #0 takes the traffic. They must allow browser requests from any origin.` }));
+  const ol = mk('ol', { className: 'ents' });
+  l1.forEach((u, i) => {
+    const pk = `l1|1|${u}`, out = mk('span', { className: 'tag' }); out.dataset.probe = pk;
+    ol.append(mk('li', {}, mk('span', { className: 'idx', textContent: '#' + i }), mk('div', {}, mk('div', { className: 'url', textContent: u })),
+      mk('div', { className: 'acts' }, mk('button', { className: 'ghost sm', textContent: 'probe', onclick: () => probe(pk, 'rpc', u, 1n) }), out)));
+  });
+  s.append(l1.length ? ol : mk('p', { className: 'state', textContent: 'Could not read the list.' }));
+  const ta = mk('textarea', { className: 'addr', value: l1.join('\n'), spellcheck: false, placeholder: 'one https:// node per line' });
+  s.append(mk('details', {}, mk('summary', { textContent: 'Replace the whole list' }), ta,
+    mk('div', { className: 'row', style: 'margin-top:9px' }, mk('button', { textContent: 'Set list', disabled: !mine, onclick: () => {
+      const next = ta.value.split('\n').map(x => x.trim()).filter(Boolean);
+      if (!next.length) return say('m-l1', 'Ethereum needs at least one read node.', 'bad');
+      if (next.some(v => !HTTPS.test(v))) return say('m-l1', 'Every entry must be https://… with no spaces.', 'bad');
+      if (new Set(next).size !== next.length) return say('m-l1', 'The list repeats an entry.', 'bad');
+      if (next.join('\n') === l1.join('\n')) return say('m-l1', 'No change.', 'warn');
+      if (confirm(`Replace zRpcList with these ${next.length} nodes?\n\n${next.join('\n')}`)) send('0x' + SEL.rset + hex(32) + encStrs(next), 'm-l1', RPCL);
+    } }))));
+  s.append(mk('div', { className: 'msg', id: 'm-l1' }));
+  return s;
+}
+
 /** Why an entry cannot be written, or ''. */
 function refuse(sv, v, others) {
   if (!v) return 'Nothing to write.';
@@ -428,6 +472,23 @@ async function probe(pk, kind, u, chain) {
   return r;
 }
 
+// How many logs the widest range holds, counted in 10,000-block windows through this page's read node.
+const logsRefs = new Map();
+async function logsRef(q) {
+  if (logsRefs.has(q.toBlock)) return logsRefs.get(q.toBlock);
+  let n = 0;
+  try {
+    for (let a = TACIT_FROM, z = parseInt(q.toBlock, 16); a <= z; a += 10000) {
+      const r = await (await fetch('https://mainnet.gateway.tenderly.co', { method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getLogs', params: [{ address: TACIT_POOL, fromBlock: '0x' + a.toString(16), toBlock: '0x' + Math.min(z, a + 9999).toString(16) }] }) })).json();
+      if (!Array.isArray(r.result)) throw 0;
+      n += r.result.length;
+    }
+  } catch { n = null; }
+  logsRefs.set(q.toBlock, n);
+  return n;
+}
+
 async function probeRaw(kind, u, chain) {
   const t0 = performance.now(), ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 8000);
   const ms = () => Math.round(performance.now() - t0) + ' ms';
@@ -446,6 +507,19 @@ async function probeRaw(kind, u, chain) {
       const t = ms(), h = (await r.text()).trim();
       if (!r.ok || !/^\d+$/.test(h)) throw Error('HTTP ' + r.status);
       res = [`ok · tip ${h} · ${t}`, 'ok'];
+    } else if (kind === 'logs') {
+      // A reference count from this page's own read node, then the whole range from the candidate.
+      const q = { address: TACIT_POOL, fromBlock: '0x' + TACIT_FROM.toString(16), toBlock: 'latest' };
+      const tip = await (await fetch(RPC, { method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_blockNumber', params: [] }) })).json();
+      q.toBlock = tip.result;
+      const r = await fetch(u, { method: 'POST', headers: { 'content-type': 'application/json' }, signal,
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getLogs', params: [q] }) });
+      const t = ms(), j = await r.json();
+      if (!Array.isArray(j.result)) throw Error((j.error && j.error.message || 'HTTP ' + r.status).slice(0, 80));
+      const want = await logsRef(q);
+      if (want !== null && j.result.length !== want) throw Error(`returned ${j.result.length} of ${want} logs`);
+      res = [`ok · ${j.result.length} logs over ${parseInt(q.toBlock, 16) - TACIT_FROM} blocks · ${t}`, 'ok'];
     } else if (kind === 'tacad') {
       const r = await fetch(base + '/00.json', { signal });
       const t = ms(), j = await r.json();
@@ -474,7 +548,7 @@ function checkWho() {
   $('cancel').disabled = !mine || zero(pending);
   $('accept').disabled = !isPending;
   $('nAdd').disabled = !mine;
-  $('batch').disabled = !mine || !plan.length;
+  $('batch').disabled = !account || !plan.length;
   if (owner) {
     if (!account) say('who', 'Read-only. Connect the owner to change anything.', 'warn');
     else if (mine) say('who', 'You are the owner.', 'ok');
@@ -491,7 +565,7 @@ const why = e => {
   return hit ? ERR[hit] : (e && e.message) || String(e);
 };
 
-async function send(data, msgEl) {
+async function send(data, msgEl, to = EPS) {
   hide(msgEl);
   const id = await provider.request({ method: 'eth_chainId' });
   if (parseInt(id, 16) !== 1) {
@@ -501,11 +575,11 @@ async function send(data, msgEl) {
   try {
     // Simulate first: a revert here is almost always "not the owner", and it
     // is much cheaper to learn that before signing.
-    await provider.request({ method: 'eth_call', params: [{ from: account, to: EPS, data }, 'latest'] });
+    await provider.request({ method: 'eth_call', params: [{ from: account, to, data }, 'latest'] });
   } catch (e) { return say(msgEl, 'It would revert: ' + why(e), 'bad'); }
   try {
     const tx = await provider.request({ method: 'eth_sendTransaction',
-      params: [{ from: account, to: EPS, data }] });
+      params: [{ from: account, to, data }] });
     say(msgEl, 'Sent ' + tx + '\nWaiting for it to be mined…', 'warn');
     for (let i = 0; i < 120; i++) {
       await new Promise(r => setTimeout(r, 2500));
@@ -563,7 +637,7 @@ function renderPlan() {
         mk('b', { textContent: `${x.c.name} · ${chainLabel(x.c.chain)}` }), mk('span', { className: 'hint', textContent: x.why })),
       mk('div', { className: 'url', style: 'white-space:pre-wrap;margin-top:4px', textContent: x.next.map((u, i) => `#${i} ${u}`).join('\n') })));
   }
-  $('batch').disabled = !isOwner() || !plan.length;
+  $('batch').disabled = !account || !plan.length;
 }
 $('tune').onclick = async () => {
   plan = []; renderPlan(); say('planmsg', 'Probing every entry from this browser…', 'warn');
@@ -572,10 +646,27 @@ $('tune').onclick = async () => {
     const sv = spec(c.name), def = DEFAULTS[c.name + '|' + c.chain];
     if (!c.list.length && def) { plan.push({ c, next: def, on: true, why: 'never written: its default entries' }); continue; }
     if (!sv.probe || !c.list.length) continue;
+    if (sv.probe === 'logs') {
+      const rs = [];
+      for (const u of c.list) rs.push({ u, r: await probeRaw('logs', u, c.chain) });
+      // Only a refusal that will not pass — a capped range, an unsupported method, a short answer — earns a removal.
+      const perm = x => /range|block|limit|not (supported|available)| of \d+ logs|archive|token|key/i.test(x.r.text);
+      const up = rs.filter(x => x.r.ok), out = rs.filter(x => !x.r.ok && perm(x)), soft = rs.filter(x => !x.r.ok && !perm(x));
+      const next = up.map(x => x.u);
+      for (const u of SUGGEST[c.name + '|' + c.chain] || []) if (next.length < 3 && !next.includes(u) && (await probeRaw('logs', u, c.chain)).ok) { next.push(u); up.push({ u, r: { ms: NaN } }); }
+      next.push(...soft.map(x => x.u));
+      if (!up.length) { say('planmsg', 'No logs node served the whole range — left as it is.', 'bad'); continue; }
+      if (next.join('\n') !== c.list.join('\n'))
+        plan.push({ c, next, on: true, why: up.map(x => `${x.u.replace(/^https:\/\//, '')} ${isNaN(x.r.ms) ? 'added, serves the whole range' : Math.round(x.r.ms) + ' ms'}`).join(' · ')
+          + (soft.length ? ' — to the back, did not answer just now: ' + soft.map(x => x.u.replace(/^https:\/\//, '')).join(', ') : '')
+          + (out.length ? ' — remove: ' + out.map(x => `${x.u.replace(/^https:\/\//, '')} (${x.r.text.replace(/^fail · /, '')})`).join(', ') : '') });
+      continue;
+    }
     if (sv.probe === 'rpc') {
       const rs = [];
       for (const u of c.list) rs.push({ u, r: await burst(u, c.chain) });
-      const up = rs.filter(x => x.r.ok).sort((a, b) => a.r.fail - b.r.fail || a.r.ms - b.r.ms), out = rs.filter(x => !x.r.ok);
+      const up = rs.filter(x => x.r.ok).sort((a, b) => a.r.fail - b.r.fail), out = rs.filter(x => !x.r.ok);
+      for (const u of SUGGEST[c.name + '|' + c.chain] || []) if (up.length < 2 && !up.some(x => x.u === u)) { const r = await burst(u, c.chain); if (r.ok) up.push({ u, r }); }
       const next = up.map(x => x.u);
       if (!next.length) { say('planmsg', `Every ${c.name} node for ${chainLabel(c.chain)} failed the burst — left as it is.`, 'bad'); continue; }
       if (next.join('\n') !== c.list.join('\n'))
@@ -585,12 +676,20 @@ $('tune').onclick = async () => {
     }
     if (c.list.length < 2) continue;
     const rs = await Promise.all(c.list.map(u => probeRaw(sv.probe, u, c.chain)));
-    const up = c.list.map((u, i) => ({ u, r: rs[i] })).filter(x => x.r.ok).sort((a, b) => a.r.ms - b.r.ms);
+    const up = c.list.map((u, i) => ({ u, r: rs[i] })).filter(x => x.r.ok);
     const down = c.list.filter((_, i) => !rs[i].ok);
     const next = [...up.map(x => x.u), ...down];
     if (next.join('\n') !== c.list.join('\n'))
-      plan.push({ c, next, on: true, why: 'fastest first (' + up.map(x => Math.round(x.r.ms) + ' ms').join(', ') + ')'
-        + (down.length ? `; ${down.length} not answering moved to the back` : '') });
+      plan.push({ c, next, on: true, why: `${down.length} not answering moved to the back` });
+  }
+  if (l1.length) {
+    const rs = [];
+    for (const u of l1) rs.push({ u, r: await burst(u, 1n) });
+    const up = rs.filter(x => x.r.ok).sort((a, b) => a.r.fail - b.r.fail), out = rs.filter(x => !x.r.ok), next = up.map(x => x.u);
+    if (next.length && next.join('\n') !== l1.join('\n'))
+      plan.push({ c: { name: 'zRpcList', chain: 1n }, next, on: true, call: { to: RPCL, data: '0x' + SEL.rset + hex(32) + encStrs(next) },
+        why: up.map(x => `${x.u.replace(/^https:\/\//, '')} ${x.r.fail}/${BURST} failed`).join(' · ')
+          + (out.length ? ' — remove: ' + out.map(x => `${x.u.replace(/^https:\/\//, '')} (${x.r.why})`).join(', ') : '') });
   }
   renderPlan();
   say('planmsg', plan.length ? `${plan.length} change${plan.length === 1 ? '' : 's'} proposed. Untick any you do not want.` : 'Every list is already in order.', plan.length ? 'warn' : 'ok');
@@ -599,7 +698,7 @@ $('batch').onclick = async () => {
   const pick = plan.filter(x => x.on);
   if (!pick.length) return say('planmsg', 'Nothing ticked.', 'warn');
   if (!confirm(`Send ${pick.length} list change${pick.length === 1 ? '' : 's'} to zEndpoints?\n\n` + pick.map(x => `${x.c.name} · ${chainLabel(x.c.chain)}:\n  ${x.next.join('\n  ')}`).join('\n\n'))) return;
-  const calls = pick.map(x => ({ to: EPS, data: CALL.set(x.c.w, x.c.chain, x.next) }));
+  const calls = pick.map(x => x.call || { to: EPS, data: CALL.set(x.c.w, x.c.chain, x.next) });
   try {
     if (parseInt(await provider.request({ method: 'eth_chainId' }), 16) !== 1)
       await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x1' }] });
