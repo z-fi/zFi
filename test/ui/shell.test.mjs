@@ -545,7 +545,8 @@ describe('the docs', () => {
     // a mode is added and this list is not, that is the omission worth failing.
     const p = await loadPage({ chain: new MockChain() });
     const text = p.$('docPanel').textContent;
-    for (const topic of ['Swapping', 'Sending', 'Orders', 'Liquidity', 'Launching', 'Fees'])
+    for (const topic of ['Swapping', 'Sending', 'Orders', 'Liquidity', 'Launching', 'Fees',
+      'Names', 'Private bridge', 'Markets'])
       assert.match(text, new RegExp(topic), `nothing documents ${topic}`);
     p.close();
   });
