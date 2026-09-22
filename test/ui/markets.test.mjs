@@ -157,6 +157,8 @@ test('markets mode', async (t) => {
     assert.ok(rows(p).some((r) => /BOLD above peg/.test(r)), 'markets you resolve are yours too');
     await pick(p, BALL);
     assert.match(act(p, 'claim').textContent, /Claim 2 ETH/);
+    assert.match(p.$('mkInfo').textContent, /each winning share pays ×2\.00/, 'settled payout uses the post-fee pot');
+    assert.doesNotMatch(p.$('mkInfo').textContent, /YES pays/);
     act(p, 'claim').click();
     await p.waitFor(() => chain.sentTo(PM).length === 1, { label: 'claim sent' });
     const tx = chain.sentTo(PM)[0];
