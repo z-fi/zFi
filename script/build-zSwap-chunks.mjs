@@ -36,7 +36,7 @@ import {fileURLToPath} from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const EIP170 = 24576;
-const n = 24;
+const n = 25;
 
 // THE COUNT LIVES IN TWO PLACES AND THEY MUST AGREE. `n` here decides how the
 // page is split; `zSwap.sol`'s constructor arity decides how many addresses the

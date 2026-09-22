@@ -83,6 +83,7 @@ describe('the wallet survives a refresh', () => {
     await p.waitFor(() => /1111/.test(p.text('addr')), { label: 'the wallet to come back' });
 
     p.window.__reloaded = 0;
+    p.queueConfirm(true);
     p.click('addr');
     await p.settle();
     assert.ok(!seen.includes('wallet_revokePermissions'),

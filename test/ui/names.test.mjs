@@ -670,6 +670,73 @@ describe('claiming a name', () => {
     p.close();
   });
 
+  /**
+   * `state()` returns a `Phase` enum (Idle, Open, Ready, Drawing), and only
+   * `Open` means entries are accepted. Collapsing the other three into one
+   * "closed" label used to tell people a draw was "due" even mid-draw, or
+   * worse, while the round sat idle waiting on the next funding - which
+   * happens every single time a round settles, not as some rare edge case.
+   */
+  const stateWith = (phase, roundEnd) => '0x'
+    + [phase, 0, roundEnd, ETH / 10n, 0, 57, 10n ** 18n, 0, 0, 0, 0, 0, 0].map(u256).join('');
+
+  test('a round awaiting its draw says a draw is due, not just "closed"', async () => {
+    const chain = new MockChain();
+    chain.answer(WROLL, SEL.STATE, stateWith(2, Math.floor(Date.now() / 1000) - 100));
+    const p = await openNames({ chain });
+    assert.match(p.text('wnRollEl'), /closed — a draw is due before the next round opens\./,
+      `got ${p.text('wnRollEl')}`);
+    assert.equal(p.$('wnEnter').textContent, 'The round is closed');
+    p.close();
+  });
+
+  test('a round mid-draw says a draw is in flight, not that one is due', async () => {
+    const chain = new MockChain();
+    chain.answer(WROLL, SEL.STATE, stateWith(3, Math.floor(Date.now() / 1000) - 100));
+    const p = await openNames({ chain });
+    assert.match(p.text('wnRollEl'), /a draw is in flight — waiting on the random result\./,
+      `got ${p.text('wnRollEl')}`);
+    assert.equal(p.$('wnEnter').textContent, 'A draw is in flight');
+    p.close();
+  });
+
+  test('a round idle between draw and funding says so, not that a draw is due', async () => {
+    const chain = new MockChain();
+    chain.answer(WROLL, SEL.STATE, stateWith(0, 0));
+    const p = await openNames({ chain });
+    assert.match(p.text('wnRollEl'), /idle — waiting for the next round to be funded\./,
+      `got ${p.text('wnRollEl')}`);
+    assert.equal(p.$('wnEnter').textContent, 'Waiting for the next round');
+    p.close();
+  });
+
+  /**
+   * The readout polls `state()` on its own clock, throttled to once every 30
+   * seconds; the quote fires on every keystroke and reads `state()` for
+   * itself. A round can close between those polls, and the quote's own read
+   * is the fresher one - so it must win, not the readout's last answer.
+   */
+  test('quoting a name after the round closes does not offer to enter on a stale open read', async () => {
+    const chain = new MockChain();
+    const future = Math.floor(Date.now() / 1000) + 1000;
+    let asked = 0;
+    chain.answer(WROLL, SEL.STATE, () => stateWith(asked++ === 0 ? 1 : 2, future));
+    chain.answer(WNS, SEL.OWNER, '0x' + '0'.repeat(24) + A.ACCOUNT.slice(2).toLowerCase());
+    chain.answer(WROLL, SEL.WEIGHT, '0x' + u256(10n ** 17n));
+    chain.answer(WROLL, SEL.TICKET, '0x' + u256(0));
+
+    const p = await openNames({ chain, available: false });
+    assert.ok(asked >= 1, 'the readout never read the round at open');
+
+    p.type('wnName', 'zswap');
+    await p.settle();
+
+    assert.equal(p.$('wnEnter').textContent, 'The round is closed',
+      'a fresher closed read must override the readout\'s stale open state');
+    assert.equal(p.$('wnEnter').dataset.id, '', 'a closed round must not be enterable');
+    p.close();
+  });
+
   test('a taken name is refused without a transaction', async () => {
     const p = await openNames({ available: false });
     p.type('wnName', 'zswap');

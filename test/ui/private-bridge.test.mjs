@@ -165,7 +165,7 @@ const SLOW = { timeout: 15000 };
 
 async function open(opts = {}) {
   const chain = withPool(opts.chain ?? new MockChain(), opts);
-  const p = await loadPage({ chain, storage: opts.storage });
+  const p = await loadPage({ chain, storage: opts.storage, chime: opts.chime });
   // Capture relay bodies: the fetch mock only records URL + method, and the
   // witness is the thing under test.
   const inner = p.window.fetch;
@@ -281,6 +281,23 @@ describe('depositing', () => {
     p.close();
   });
 
+  test('the deposit chimes when it lands, and again when the relay settles it', async () => {
+    const GOT = [392, 493.88, 587.33, 783.99];
+    const p = await open({ chime: true });
+    await unlock(p);
+    await deposit(p);
+    await p.waitFor(() => /relay is settling/.test(p.text('stat')), { label: 'the deposit to confirm' });
+    const heard = () => p.window.__chime.voices.filter(v => v.join() === GOT.join()).length;
+    assert.equal(heard(), 1, 'the confirmed deposit should sing once');
+    settleDeposit(p);
+    poke(p);
+    await p.waitFor(() => heard() === 2, { label: 'the relay settle to sing', ...SLOW });
+    poke(p);
+    await p.settle();
+    assert.equal(heard(), 2, 'a settled job sang again on the next poll');
+    p.close();
+  });
+
   test('refuses more than eight decimals - the pool cannot hold them', async () => {
     const p = await open();
     await unlock(p);
@@ -304,6 +321,27 @@ describe('depositing', () => {
 });
 
 describe('exiting to Base through the relay', () => {
+  test('deposit asks for no destination, and exit from a note opens Withdraw for it', async () => {
+    const p = await open();
+    assert.ok(p.$('pvChain').parentElement.classList.contains('hide'), 'no destination chain under Deposit');
+    assert.ok(p.$('pvTo').parentElement.classList.contains('hide'), 'no recipient under Deposit');
+    await unlock(p);
+    await deposit(p);
+    settleDeposit(p);
+    poke(p);
+    await p.waitFor(() => /exit/.test(p.text('pvList')), { label: 'the note to show as settled', ...SLOW });
+    const posts = p.window.__relayPosts.length;
+    p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
+    await p.settle();
+    assert.equal(p.$('pvAct').value, 'out', 'the panel switches to Withdraw');
+    assert.ok(!p.$('pvChain').parentElement.classList.contains('hide'), 'the destination is shown to confirm');
+    assert.ok(!p.$('pvTo').parentElement.classList.contains('hide'));
+    assert.ok(p.$('pvAmt').value, 'the note amount is filled in');
+    assert.equal(p.text('pvGo'), 'Withdraw');
+    assert.equal(p.window.__relayPosts.length, posts, 'nothing is sent until Withdraw is pressed');
+    p.close();
+  });
+
   test('the unwrap witness pays the recipe escrow, and activate fires the pinned recipe', async () => {
     const p = await open();
     await unlock(p);
@@ -316,7 +354,7 @@ describe('exiting to Base through the relay', () => {
     const net = NET_BASE * 10n ** 10n;
     const recipe = baseRecipe(net);
     p.chain.escrow = escrowOf(recipe);
-
+    p.select('pvAct', 'out');
     p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
     await p.waitFor(() => p.window.__relayPosts.length === 2, { label: 'the unwrap to reach the relay' });
     const post = p.window.__relayPosts[1];
@@ -366,6 +404,27 @@ describe('exiting to Base through the relay', () => {
     p.close();
   });
 
+  test('a recipient left in the hidden Withdraw form is shown, not used, when exit is pressed from Send', async () => {
+    const p = await open();
+    await unlock(p);
+    await deposit(p);
+    settleDeposit(p);
+    poke(p);
+    await p.waitFor(() => /exit/.test(p.text('pvList')), { label: 'the note to show as settled', ...SLOW });
+    p.$('pvAct').value = 'out'; p.$('pvAct').dispatchEvent(new p.window.Event('change', { bubbles: true }));
+    p.$('pvTo').value = A.OTHER;
+    p.$('pvAct').value = 'send'; p.$('pvAct').dispatchEvent(new p.window.Event('change', { bubbles: true }));
+    assert.ok(p.$('pvTo').parentElement.classList.contains('hide'), 'the recipient box is hidden in Send');
+    const posts = p.window.__relayPosts.length;
+    p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
+    await p.settle();
+    assert.equal(p.window.__relayPosts.length, posts, 'nothing leaves on a recipient the user cannot see');
+    assert.equal(p.$('pvAct').value, 'out');
+    assert.ok(!p.$('pvTo').parentElement.classList.contains('hide'), 'the recipient is on screen to confirm');
+    assert.equal(p.$('pvTo').value, A.OTHER);
+    p.close();
+  });
+
   test('a stale exit reclaims to the L1 recipient instead', async () => {
     const p = await open();
     await unlock(p);
@@ -376,6 +435,7 @@ describe('exiting to Base through the relay', () => {
     const net = NET_BASE * 10n ** 10n;
     const recipe = baseRecipe(net);
     p.chain.escrow = escrowOf(recipe);
+    p.select('pvAct', 'out');
     p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
     await p.waitFor(() => p.window.__relayPosts.length === 2, SLOW);
     p.chain.relay.status = { status: 'settled' };
@@ -404,6 +464,7 @@ describe('exiting to Base through the relay', () => {
     poke(p);
     await p.waitFor(() => /exit/.test(p.text('pvList')), SLOW);
     p.chain.escrow = escrowOf(baseRecipe(NET_BASE * 10n ** 10n));
+    p.select('pvAct', 'out');
     p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
     await p.waitFor(() => p.window.__relayPosts.length === 2, SLOW);
     p.chain.relay.status = { status: 'settled' };
@@ -437,9 +498,11 @@ describe('exiting to Base through the relay', () => {
       }
       return inner(url, init);
     };
+    p.select('pvAct', 'out');
     p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
     await p.waitFor(() => /relay failed/.test(p.text('pvList')), { label: 'the retry to be offered', ...SLOW });
     p.chain.gasPrice = GAS * 2n;
+    p.select('pvAct', 'out');
     p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
     await p.waitFor(() => p.window.__relayPosts.length === 3, { label: 'the retry to reach the relay', ...SLOW });
     const [, first, again] = p.window.__relayPosts;
@@ -457,6 +520,7 @@ describe('exiting to Base through the relay', () => {
     poke(p);
     await p.waitFor(() => /exit/.test(p.text('pvList')), SLOW);
     p.chain.escrow = A.OTHER;
+    p.select('pvAct', 'out');
     p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
     await p.waitFor(() => /Escrow address mismatch/.test(p.text('stat')), { label: 'the mismatch refusal' });
     assert.equal(p.window.__relayPosts.length, 1, 'nothing was proven');
@@ -474,6 +538,7 @@ describe('exiting to Base through the relay', () => {
     p.chain.escrow = escrowOf(baseRecipe(net));
     // A relay that activates reports it pending from the moment the exit is queued.
     p.chain.relay.status = { status: 'pending', activation: 'pending', activateTx: null };
+    p.select('pvAct', 'out');
     p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
     await p.waitFor(() => p.window.__relayPosts.length === 2, SLOW);
     return { p, net };
@@ -528,6 +593,7 @@ describe('exiting to Base through the relay', () => {
     const recipe = baseRecipe(net, BigInt((Math.floor(p.window.Date.now() / 86400000) + 3) * 86400));
     p.chain.escrow = escrowOf(recipe);
     p.queueConfirm(true);
+    p.select('pvAct', 'out');
     p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
     await p.waitFor(() => p.window.__relayPosts.length === 3, { label: 'the rebuilt exit', ...SLOW });
     const post = p.window.__relayPosts[2];
@@ -562,6 +628,7 @@ describe('exiting yourself, in one transaction', () => {
     p.select('pvPath', 'self');
     const pv = '0x' + '12'.repeat(200) + F.nullifier.slice(2), pr = '0x' + 'ab'.repeat(260);
     p.chain.relay.status = { status: 'proven', publicValues: pv, proof: pr };
+    p.select('pvAct', 'out');
     p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
     await p.waitFor(() => p.window.__relayPosts.length === 2);
     const post = p.window.__relayPosts[1];
@@ -596,6 +663,7 @@ describe('exiting to Robinhood Chain', () => {
     const recipe = rhRecipe(net, g);
     p.chain.escrow = escrowOf(recipe);
     p.select('pvChain', '4663');
+    p.select('pvAct', 'out');
     p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
     await p.waitFor(() => p.window.__relayPosts.length === 2, { label: 'the unwrap to reach the relay' });
     assert.equal(p.window.__relayPosts[1].op.recipient, p.chain.escrow);
@@ -771,6 +839,7 @@ describe('withdrawing to Ethereum', () => {
     await p.waitFor(() => /exit/.test(p.text('pvList')), SLOW);
     p.select('pvChain', '1');
     p.type('pvTo', A.OTHER);
+    p.select('pvAct', 'out');
     p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
     await p.waitFor(() => p.window.__relayPosts.length === 2, SLOW);
     const post = p.window.__relayPosts[1];
@@ -801,10 +870,12 @@ describe('withdrawing to Ethereum', () => {
     p.chain.gasPrice = 10n ** 9n;
     p.select('pvChain', '1');
     p.queueConfirm(false);
+    p.select('pvAct', 'out');
     p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
     await p.waitFor(() => /6\.7% of this note/.test(p.text('stat')), { label: 'the refusal', ...SLOW });
     assert.equal(p.window.__relayPosts.length, 1, 'declined: nothing was proven');
     p.queueConfirm(true);
+    p.select('pvAct', 'out');
     p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
     await p.waitFor(() => p.window.__relayPosts.length === 2, SLOW);
     const post = p.window.__relayPosts[1];
@@ -822,6 +893,7 @@ describe('withdrawing to Ethereum', () => {
     poke(p);
     await p.waitFor(() => /exit/.test(p.text('pvList')), SLOW);
     p.select('pvChain', '1');
+    p.select('pvAct', 'out');
     p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
     await p.waitFor(() => p.window.__relayPosts.length === 2, SLOW);
     assert.equal(p.window.__relayPosts[1].op.fee, '10000', 'the floor, not the 0.000061 ETH the gas alone prices');
@@ -839,6 +911,7 @@ describe('withdrawing to Ethereum', () => {
     p.select('pvPath', 'self');
     const pv = '0x' + '12'.repeat(200) + F.nullifier.slice(2), pr = '0x' + 'ab'.repeat(260);
     p.chain.relay.status = { status: 'proven', publicValues: pv, proof: pr };
+    p.select('pvAct', 'out');
     p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
     await p.waitFor(() => p.window.__relayPosts.length === 2, SLOW);
     const post = p.window.__relayPosts[1];
@@ -997,6 +1070,7 @@ describe('one key, two chains', () => {
     await p.waitFor(() => /Recovered 1 deposit/.test(p.text('stat')), { label: 'the memo to be opened', ...SLOW });
     assert.match(p.text('pvList'), /0\.02 tETH found/);
     p.select('pvChain', '1');
+    p.select('pvAct', 'out');
     p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
     await p.waitFor(() => p.window.__relayPosts.length === 1, { label: 'the withdrawal to reach the relay', ...SLOW });
     const op = p.window.__relayPosts[0].op;
@@ -1078,6 +1152,7 @@ describe('the rescue key', () => {
     recipe.calls[0].data = '0x9a2ac6d5' + coder.encode(['address', 'uint32', 'bytes'], [A.OTHER, 200000, '0x']).slice(2);
     p.chain.escrow = escrowOf(recipe);
     p.type('pvTo', A.OTHER);
+    p.select('pvAct', 'out');
     p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
     await p.waitFor(() => p.window.__relayPosts.length === 2, SLOW);
     assert.equal(p.window.__relayPosts[1].op.recipient, p.chain.escrow, 'the recipe with the rescue recipient is what was proven');
@@ -1189,6 +1264,102 @@ describe('a browser that blocks prompt()', () => {
     assert.ok([...p.$('wkList').querySelectorAll('button')].some(b => b.textContent === 'Copy'));
     [...p.$('wkList').querySelectorAll('button')].find(b => b.textContent === 'OK').click();
     await p.waitFor(() => p.$('wkWrap').classList.contains('hide'), { label: 'dialog closed' });
+    p.close();
+  });
+});
+
+describe('deposits the relay or the pool turn away', () => {
+  test('a deposit the relay would not settle says so, and says what to do', async () => {
+    const p = await open();
+    await unlock(p);
+    const inner = p.window.fetch;
+    p.window.fetch = async (url, init) => {
+      if (String(url).includes('/confidential/submit') && init && /"type":"wrap"/.test(init.body)) return { ok: false, status: 429, json: async () => ({ error: 'free_budget: no free relays left today' }) };
+      return inner(url, init);
+    };
+    p.type('pvAmt', '0.01');
+    p.click('pvGo');
+    await p.waitFor(() => p.chain.sentTo(POOL).length === 1, { label: 'the deposit to be sent' });
+    await p.waitFor(() => /did not take the settle/.test(p.text('stat')), { label: 'the refusal', ...SLOW });
+    assert.match(p.text('stat'), /free_budget/);
+    assert.match(p.text('stat'), /Settle: from this wallet/);
+    assert.doesNotMatch(p.text('stat'), /relay is settling/);
+    p.close();
+  });
+
+  test('a deposit the pool already consumed is not handed to the relay again', async () => {
+    const p = await open();
+    await unlock(p);
+    p.chain.answer(POOL, SEL.DEPOSIT, () => '0x' + u256(p.chain.sentTo(POOL).length ? 2 : 0));
+    p.type('pvAmt', '0.01');
+    p.click('pvGo');
+    await p.waitFor(() => p.chain.sentTo(POOL).length === 1, { label: 'the deposit to be sent' });
+    await p.waitFor(() => /Deposited/.test(p.text('stat')), { label: 'the deposit to finish', ...SLOW });
+    assert.equal(p.window.__relayPosts.filter(x => x.type === 'wrap').length, 0);
+    p.close();
+  });
+
+  test('a retired pool takes no deposits, and says what still works', async () => {
+    const p = await open();
+    p.chain.answer(POOL, '6ff968c3', '0x' + '00'.repeat(12) + '11'.repeat(20));
+    await unlock(p);
+    poke(p);
+    await p.waitFor(() => /retired/.test(p.text('pvHint')), { label: 'the retired note', ...SLOW });
+    assert.match(p.text('pvHint'), /can still be withdrawn/);
+    p.type('pvAmt', '0.01');
+    p.click('pvGo');
+    await p.waitFor(() => /retired/.test(p.text('stat')), { label: 'the refusal' });
+    assert.equal(p.chain.sentTo(POOL).length, 0, 'nothing is sent to a retired pool');
+    p.close();
+  });
+});
+
+describe('the private form tells you before you press', () => {
+  test('a deposit previews the wallet balance, what you will hold, and how long settling takes', async () => {
+    const p = await open();
+    await unlock(p);
+    p.type('pvAmt', '0.01');
+    await p.waitFor(() => /you'll hold 0\.01 tETH/.test(p.text('pvPrev')), { label: 'the deposit preview' });
+    assert.match(p.text('pvPrev'), /10 ETH in this wallet/);
+    assert.match(p.text('pvPrev'), /Settling is free, usually 1–3 min/);
+    p.type('pvAmt', '11');
+    await p.waitFor(() => /more than this wallet holds/.test(p.text('pvPrev')), { label: 'the over-balance note' });
+    p.close();
+  });
+
+  test('a withdrawal to an L2 previews the fee, what arrives, the timing, and warns when it goes back to this wallet', async () => {
+    const p = await open();
+    await unlock(p);
+    p.select('pvAct', 'out');
+    p.select('pvChain', '8453');
+    p.type('pvAmt', '0.01');
+    await p.waitFor(() => /arrives on Base, usually 4–8 min/.test(p.text('pvPrev')), { label: 'the withdrawal preview' });
+    assert.match(p.text('pvPrev'), /Relay fee [\d.]+ tETH · ≈[\d.]+ ETH arrives on Base/);
+    assert.match(p.text('pvPrev'), /links it to your deposit/);
+    p.type('pvTo', A.OTHER);
+    await p.waitFor(() => !/links it to your deposit/.test(p.text('pvPrev')), { label: 'the note to go for a fresh recipient' });
+    p.select('pvChain', '4663');
+    await p.waitFor(() => /arrives on Robinhood, usually 8–15 min/.test(p.text('pvPrev')), { label: 'Robinhood timing' });
+    p.close();
+  });
+
+  test('an amount past eight decimals is rounded down to what the pool keeps', async () => {
+    const p = await open();
+    await unlock(p);
+    p.type('pvAmt', '0.0123456789123');
+    p.$('pvAmt').dispatchEvent(new p.window.Event('change', { bubbles: true }));
+    assert.equal(p.$('pvAmt').value, '0.01234567');
+    p.close();
+  });
+
+  test('max fills the wallet ETH less gas for a deposit, on the pool grid', async () => {
+    const p = await open();
+    await unlock(p);
+    p.click('pvMax');
+    await p.waitFor(() => p.$('pvAmt').value !== '', { label: 'max to fill the amount' });
+    const v = p.$('pvAmt').value;
+    assert.ok(Number(v) > 9.9 && Number(v) < 10, 'the balance, less a gas reserve: ' + v);
+    assert.ok(!/\.\d{9,}/.test(v), 'no more than eight decimals');
     p.close();
   });
 });

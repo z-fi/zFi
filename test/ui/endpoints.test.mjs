@@ -67,7 +67,7 @@ describe('the endpoint roster', () => {
     await p.settle();
     const base = ev(p, 'CHAINS[8453].rpcs');
     assert.equal(base[0], 'https://base.cur');
-    assert.ok(base.includes('https://mainnet.base.org'), 'a built-in node was dropped');
+    assert.ok(base.includes('https://base.gateway.tenderly.co'), 'a built-in node was dropped');
     assert.equal(ev(p, 'CHAINS[4663].rpcs[0]'), 'https://rh.cur');
     assert.equal(ev(p, 'CP_LOGS[0]'), 'https://logs.cur');
     assert.ok(ev(p, 'CP_LOGS').includes('https://mainnet.gateway.tenderly.co'));

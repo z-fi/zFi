@@ -300,6 +300,7 @@ describe('private bridge notes', () => {
     b.window.__shared = store;
     b.window.eval('LS=window.__shared');
 
+    a.select('pvAct', 'out');
     a.click(a.$('pvList').querySelector('button[data-a="exit"]'));
     await a.waitFor(() => a.window.__relayPosts.length === 2, { label: 'the exit to reach the relay', timeout: 15000 });
     await a.settle();

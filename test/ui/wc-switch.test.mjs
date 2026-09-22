@@ -206,6 +206,7 @@ describe('a WalletConnect session across a reload', () => {
 describe('ending a WalletConnect session', () => {
   test('disconnecting forgets the kept session', async () => {
     const { p } = await connectWc();
+    p.queueConfirm(true);
     p.click('addr');
     await p.waitFor(() => p.reloads() > 0, { label: 'the reload' });
     assert.equal(p.window.localStorage.getItem('zswap:wcs'), null);
@@ -216,6 +217,7 @@ describe('ending a WalletConnect session', () => {
   // leaves the wallet listing a connection nothing will ever answer again.
   test('disconnecting tells the wallet the session is over', async () => {
     const { p, peer } = await connectWc();
+    p.queueConfirm(true);
     p.click('addr');
     await p.waitFor(() => p.reloads() > 0, { label: 'the reload' });
     assert.ok((peer.seen || []).includes('wc_sessionDelete'), 'the wallet must hear the session end');

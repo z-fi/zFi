@@ -50,6 +50,7 @@ test("launching a coin", async (t) => {
     assert.ok(!p.visible("rcvPanel"), "the receive panel should stand down");
     p.click("ln");
     assert.ok(!p.visible("lnPanel"), "clicking again closes it");
+    await p.settle();
     p.close();
   });
 
@@ -65,6 +66,7 @@ test("launching a coin", async (t) => {
     assert.ok(!p.visible("swap"), "the swap button does stand down");
     p.click("ln");
     assert.match(p.$("rc").placeholder, /Recipient/, "and reverts when launch mode ends");
+    await p.settle();
     p.close();
   });
 

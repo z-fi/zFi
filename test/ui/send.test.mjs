@@ -223,6 +223,24 @@ describe('time-locked sends', () => {
     p.close();
   });
 
+  test('choosing a lock after the recipient re-checks that the token can be locked', async () => {
+    const p = await setup();
+    p.pickToken('fromSel', 'USDC');
+    await p.settle();
+    p.window.eval(`TOKENS.find(t=>t.sym==="USDC").cust=1`);
+    await p.typeAmount('amt', '100');
+    await recipient(p, A.OTHER);
+    assert.equal(p.$('swap').disabled, false, 'an instant send of a custom token is fine');
+    p.select('dly', '86400');
+    await p.settle();
+    assert.match(p.text('stat'), /Only listed tokens can be time-locked/);
+    assert.doesNotMatch(p.text('swap'), /Lock/);
+    p.click('swap');
+    await new Promise(r => setTimeout(r, 300)); await p.settle();
+    assert.equal(p.chain.sent.length, 0, 'nothing is deposited into SLOW');
+    p.close();
+  });
+
   test('an ERC-20 lock approves SLOW first, then deposits the amount', async () => {
     const p = await setup();
     p.pickToken('fromSel', 'USDC');

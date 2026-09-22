@@ -47,7 +47,8 @@ const RELAY = 'api.tacit.finance';
 
 const row = (s, a, o = {}) => ({ i: '1', c: 1, k: 'eip155', p: 'ERC-20', x: true, o: false, f: false,
   a, n: `${s} Token`, s, d: 18, t: '#888', r: 1, u: '', au: '', l: '', desc: '', e: [], v: true, ...o });
-const tacitRow = (s, id) => row(s, id, { c: 0, k: 'raw', p: 'Tacit', d: 8 });
+const LOGO = 'data:image/svg+xml;base64,' + Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2 2"><circle cx="1" cy="1" r="1"/></svg>').toString('base64');
+const tacitRow = (s, id) => row(s, id, { c: 0, k: 'raw', p: 'Tacit', d: 8, l: LOGO });
 const REGISTRY = [row('ETH', A.ZERO, { p: 'Native' }), row('USDC', A.USDC, { d: 6 }), row('TAC', TAC),
   tacitRow('tETH', ETH_ID), tacitRow('TAC', TAC_ID), tacitRow('cFAKE', FAKE_ID)];
 
@@ -122,6 +123,62 @@ async function depositTac(p) {
   await p.waitFor(() => p.window.__relayPosts.length === 1, { label: 'the wrap to reach the relay' });
 }
 
+const FARM = { network: 'mainnet', epoch: { active: true, ratePerDayTac: '1107.7776' }, stale: false, pools: [
+  { pid: 0, pair: 'TAC/cETH', idle: false, tacPerDayForPool: '553.8888' },
+  { pid: 1, pair: 'cETH/cUSD', idle: false, tacPerDayForPool: '332.33328' },
+  { pid: 2, pair: 'cETH/cBTC', idle: false, tacPerDayForPool: '221.55552' }] };
+
+describe('Tacit farms', () => {
+  test('the live program shows as TAC per day per pool, with a link out to add liquidity', async () => {
+    const chain = tacitChain();
+    chain.lanes[RELAY + '/farm/program'] = FARM;
+    const p = await open({ chain });
+    await p.waitFor(() => !p.$('pvFarm').classList.contains('hide'), { label: 'the farm line' });
+    const chips = [...p.$('pvFarm').querySelectorAll('.fmc')];
+    assert.deepEqual(chips.map(c => c.textContent), ['TAC/tETH 554 TAC/day', 'tETH/cUSD 332 TAC/day', 'tETH/cBTC 222 TAC/day'], 'cETH reads as tETH, as everywhere else on the page');
+    assert.equal(chips[0].querySelectorAll('img').length, 2, 'a listed pair shows both logos');
+    assert.equal(p.$('pvFarm').querySelector('a').getAttribute('href'), 'https://tacit.finance');
+    p.close();
+  });
+
+  test('each farm shows its APR for a 1 ETH entry, priced off the pools themselves', async () => {
+    const enc = AbiCoder.defaultAbiCoder();
+    const pid = (a, b) => { const [x, y] = BigInt(a) < BigInt(b) ? [a, b] : [b, a]; return keccak256(enc.encode(['bytes32', 'bytes32', 'uint32'], [x, y, 30])); };
+    const lpOf = P => keccak256(P + '6c70');
+    const P0 = pid(TAC_ID, ETH_ID);
+    const [a0, b0] = BigInt(TAC_ID) < BigInt(ETH_ID) ? [TAC_ID, ETH_ID] : [ETH_ID, TAC_ID];
+    const rE = 51101n, rT = 729864783n, sh = 6106393n, staked = 5873947;
+    const chain = tacitChain();
+    chain.lanes[RELAY + '/farm/program'] = { ...FARM, epoch: { ...FARM.epoch, periodFinish: 4102444800 },
+      pools: [{ ...FARM.pools[0], lpAsset: lpOf(P0), totalShares: String(staked) }, FARM.pools[1]] };
+    chain.answer(POOL, 'b5217bb4', data => '0x' + (('0x' + data.slice(10, 74)).toLowerCase() === P0.toLowerCase()
+      ? u256(1) + a0.slice(2) + b0.slice(2) + u256(a0 === ETH_ID ? rE : rT) + u256(a0 === ETH_ID ? rT : rE) + u256(30) + u256(sh)
+      : u256(0).repeat(7)));
+    const p = await open({ chain });
+    await p.waitFor(() => /APR/.test(p.text('pvFarm')), { label: 'the APR' });
+    const px = Number(rE) / Number(rT), st = 2 * Number(rE) / 1e8 * staked / Number(sh);
+    const apr = Math.round(553.8888 * 365 * px / (st + 1) * 100).toLocaleString();
+    const chips = [...p.$('pvFarm').querySelectorAll('.fmc')];
+    assert.equal(chips[0].textContent, `TAC/tETH 554 TAC/day · ~${apr}% APR on 1 ETH`);
+    assert.match(chips[0].title, /TAC\/tETH pool price/);
+    assert.equal(chips[1].textContent, 'tETH/cUSD 332 TAC/day', 'a pool the page cannot match to its LP asset shows no APR');
+    assert.match(p.text('pvFarm'), /until /, 'the stream end is named');
+    p.close();
+  });
+
+  test('a stale, ended or odd program shows nothing', async () => {
+    for (const bad of [{ ...FARM, stale: true }, { ...FARM, epoch: { active: false } },
+      { ...FARM, pools: [{ pair: '<img src=x>', tacPerDayForPool: '5' }] }, { ...FARM, pools: [{ pair: 'TAC/cETH', tacPerDayForPool: 'Infinity' }] }]) {
+      const chain = tacitChain();
+      chain.lanes[RELAY + '/farm/program'] = bad;
+      const p = await open({ chain });
+      await p.settle();
+      assert.ok(p.$('pvFarm').classList.contains('hide'));
+      p.close();
+    }
+  });
+});
+
 describe('the shielded assets come from the token list', () => {
   test('the picker offers what the list names and the pool backs, and nothing else', async () => {
     const p = await open();
@@ -136,6 +193,26 @@ describe('the shielded assets come from the token list', () => {
     p.select('pvAsset', ETH_ID);
     assert.equal(p.text('pvUnit'), 'ETH');
     assert.ok(chains.every(o => !o.disabled), 'ether can again');
+    p.close();
+  });
+
+  test('the asset button shows each asset with its list logo and switches the asset', async () => {
+    const p = await open();
+    assert.equal(p.text('pvAssetB'), 'tETH');
+    assert.ok(p.$('pvAssetB').querySelector('img'), 'the current asset carries its logo');
+    p.click('pvAssetB');
+    await p.waitFor(() => !p.$('wkWrap').classList.contains('hide'), { label: 'the asset chooser' });
+    const rows = [...p.$('wkList').querySelectorAll('button.tkr')];
+    assert.deepEqual(rows.map(b => [b.firstChild.nextSibling.textContent, b.querySelector('.wks').textContent]), [['tETH', 'private ETH'], ['TAC', 'private TAC']]);
+    assert.ok(rows.every(b => b.querySelector('img')), 'every row carries its logo');
+    rows[1].click();
+    await p.waitFor(() => p.$('pvAsset').value === TAC_ID, { label: 'TAC to be chosen' });
+    assert.equal(p.text('pvAssetB'), 'TAC');
+    assert.equal(p.text('pvUnit'), 'TAC');
+    assert.equal(p.$('pvChain').value, '1', 'a token withdraws on Ethereum');
+    assert.match(p.text('pvHint'), /withdraw it as TAC to any 0x on Ethereum/);
+    p.select('pvAct', 'send');
+    assert.match(p.text('pvHint'), /stay hidden/);
     p.close();
   });
 });
@@ -184,6 +261,8 @@ describe('shielding TAC', () => {
     advance(p);
     poke(p);
     await p.waitFor(() => p.$('pvList').querySelector('button[data-a="exit"]'), { label: 'the note to settle', ...SLOW });
+    assert.match(p.text('pvList'), /Shielded 100 TAC/, 'the TAC note counts in the shielded balance');
+    p.select('pvAct', 'out');
     p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
     await p.waitFor(() => p.window.__relayPosts.length === 2, { label: 'the unwrap to reach the relay', ...SLOW });
     const op = p.window.__relayPosts[1].op;

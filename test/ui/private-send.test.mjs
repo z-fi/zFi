@@ -603,3 +603,64 @@ describe('a recipient with only a 0x', () => {
     p.close();
   });
 });
+
+describe('when the relay says no', () => {
+  test('a lock the relay keeps refusing ends as relay failed, with the reason and a retry', async () => {
+    const p = await open(withNote(poolChain()));
+    await ready(p);
+    p.window.Date.now = () => (Number(S.deadline) - 7776000) * 1000;
+    p.select('pvAct', 'send');
+    await p.settle();
+    p.type('pvAmt', '0.01');
+    p.type('pvRc', S.lock.recipient);
+    useStream(p, S.lock.tag);
+    const inner = p.window.fetch;
+    p.window.fetch = async (url, init) => {
+      if (String(url).includes('/confidential/submit') && init && /stealthlock/.test(init.body)) return { ok: false, status: 429, json: async () => ({ error: 'free_budget: no free relays left today' }) };
+      return inner(url, init);
+    };
+    p.click('pvGo');
+    await until(p, () => p.$('pvList').querySelector('button[data-a="slock"]'), 'the send to read as relay failed');
+    const why = [...p.$('pvList').querySelectorAll('span[title]')].find(s => s.textContent === 'relay failed');
+    assert.ok(why, 'the row says relay failed');
+    assert.match(why.getAttribute('title'), /free_budget/, 'and says why');
+    assert.ok(p.$('pvList').querySelector('button[data-a="sforget"]'));
+    p.close();
+  });
+
+  test('the halves of a split read as settling, never as an unseen deposit to settle or forget', async () => {
+    const p = await open(withNote(poolChain()));
+    await ready(p);
+    useStream(p, S.xfer.tag);
+    p.queuePrompt('0.0025');
+    p.click(p.$('pvList').querySelector('button[data-a="split"]'));
+    await p.waitFor(() => posts(p).some(x => x.type === 'transfer'), { label: 'the split to reach the relay', ...SLOW });
+    const t0 = Date.now();
+    p.window.Date.now = () => t0 + 7e5;
+    poke(p);
+    await p.settle();
+    assert.match(p.text('pvList'), /settling…/);
+    assert.doesNotMatch(p.text('pvList'), /deposit not seen/);
+    assert.ok(!p.$('pvList').querySelector('button[data-a="settle"]'), 'no settle button that has nothing to settle');
+    assert.ok(!p.$('pvList').querySelector('button[data-a="forget"]'), 'no invitation to forget a real note');
+    p.close();
+  });
+
+  test('a payment on its way to someone else is not shown as incoming', async () => {
+    const p = await open(withNote(poolChain()));
+    await ready(p);
+    p.window.Date.now = () => (Number(S.deadline) - 7776000) * 1000;
+    p.select('pvAct', 'send');
+    await p.settle();
+    p.type('pvAmt', '0.005');
+    p.type('pvRc', S.lock.recipient);
+    useStream(p, S.xfer.tag);
+    p.click('pvGo');
+    await p.waitFor(() => posts(p).some(x => x.type === 'transfer'), { label: 'the split for the send', ...SLOW });
+    poke(p);
+    await p.settle();
+    assert.match(p.text('pvList'), /incoming 0\.0049 tETH/, 'only the change comes back to this key');
+    assert.doesNotMatch(p.text('pvList'), /incoming 0\.0099/, 'the part paid away is not counted as incoming');
+    p.close();
+  });
+});

@@ -435,9 +435,10 @@ describe('Robinhood — the Arbitrum retryable', () => {
     p.select('dly', '600');
     p.select('sdChain', '4663');
     await p.settle();
-    assert.equal(p.disabled('swap'), false, 'the page still offers the send');
+    await p.waitFor(() => /could not be quoted/.test(p.text('stat')), { label: 'the refusal, before any click' });
+    assert.equal(p.disabled('swap'), true, 'the send is not offered');
     p.click('swap');
-    await p.waitFor(() => /could not be quoted/.test(p.text('stat')), { label: 'the refusal' });
+    await p.settle();
     assert.equal(p.chain.sent.length, 0,
       'a ticket priced from a guess sits unredeemable on the far side');
     p.close();
@@ -741,7 +742,7 @@ describe('leaving an L2 through the relay', () => {
     await recipient(p, A.OTHER);
     p.select('sdChain', '1');
     await p.settle();
-    await p.waitFor(() => !p.disabled('swap'), { label: 'ready' });
+    await p.waitFor(() => !p.disabled('swap') || /Can't deliver/.test(p.text('swap')), { label: 'ready or refused' });
     p.click('swap');
     await p.settle();
     assert.equal(p.chain.sent.length, 0,
@@ -992,7 +993,7 @@ describe('the refusals', () => {
     p.select('dly', delay);
     p.select('sdChain', dest);
     await p.settle();
-    await p.waitFor(() => !p.disabled('swap'), { label: 'ready' });
+    await p.waitFor(() => !p.disabled('swap') || /Can't deliver/.test(p.text('swap')), { label: 'ready or refused' });
     p.click('swap');
     await p.settle();
     return p.chain.sent.length;
@@ -1076,7 +1077,7 @@ describe('the refusals', () => {
     p.select('dly', '3600');
     p.select('sdChain', '8453');
     await p.settle();
-    await p.waitFor(() => !p.disabled('swap'), { label: 'ready' });
+    await p.waitFor(() => !p.disabled('swap') || /Can't deliver/.test(p.text('swap')), { label: 'ready or refused' });
     p.click('swap');
     await p.waitFor(() => p.chain.sent.length > 0, { label: 'tx' });
     await p.settle();
@@ -1143,7 +1144,7 @@ describe('the list survives bad data', () => {
     await recipient(p, A.OTHER);
     p.select('sdChain', '1');
     await p.settle();
-    await p.waitFor(() => !p.disabled('swap'), { label: 'ready' });
+    await p.waitFor(() => !p.disabled('swap') || /Can't deliver/.test(p.text('swap')), { label: 'ready or refused' });
     p.click('swap');
     await p.settle();
     assert.equal(p.chain.sent.length, 0,
@@ -1179,7 +1180,7 @@ describe('a store that only looks like one', () => {
     await recipient(p, A.OTHER);
     p.select('sdChain', '1');
     await p.settle();
-    await p.waitFor(() => !p.disabled('swap'), { label: 'ready' });
+    await p.waitFor(() => !p.disabled('swap') || /Can't deliver/.test(p.text('swap')), { label: 'ready or refused' });
     p.click('swap');
     await p.settle();
     assert.equal(p.chain.sent.length, 0,

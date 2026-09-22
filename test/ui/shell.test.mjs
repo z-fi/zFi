@@ -301,9 +301,22 @@ describe('accessibility and shell affordances', () => {
     p.close();
   });
 
+  test('the address asks before disconnecting, and a no leaves the wallet connected', async () => {
+    const p = await setup();
+    await p.connect();
+    p.queueConfirm(false);
+    p.click('addr');
+    await p.settle();
+    assert.match(p.asked.confirm.at(-1), /Disconnect/);
+    assert.equal(p.reloads(), 0, 'declining must not disconnect');
+    assert.notEqual(p.text('addr'), 'Connect');
+    p.close();
+  });
+
   test('disconnecting clears the session and reloads', async () => {
     const p = await setup();
     await p.connect();
+    p.queueConfirm(true);
     p.click('addr');
     await p.waitFor(() => p.reloads() > 0, { label: 'reload' });
     assert.equal(p.window.sessionStorage.getItem('dc'), '1',

@@ -64,7 +64,7 @@ const open = async (opts, page = {}) => {
 describe('the TAC airdrop card', () => {
   test('offers the claim, and claims to the connected wallet with the exact proof', async () => {
     const p = await open();
-    await p.waitFor(() => /1\.2346 TAC airdrop · until/.test(card(p)), { label: 'the card' });
+    await p.waitFor(() => /1\.23456 TAC airdrop · until/.test(card(p)), { label: 'the card' });
     p.click(p.$('adEl').querySelector('button[data-ad="me"]'));
     await p.waitFor(() => p.chain.sentTo(TACAD).length > 0, { label: 'the claim' });
     const tx = p.chain.sentTo(TACAD).at(-1);
@@ -72,6 +72,16 @@ describe('the TAC airdrop card', () => {
     const [i, a, v, pr] = coder.decode(['uint256', 'address', 'uint256', 'bytes32[]'], '0x' + tx.data.slice(10));
     assert.equal(i, 7n); assert.equal(a.toLowerCase(), ME); assert.equal(v, AMT);
     assert.deepEqual([...pr], T.proof(1));
+    p.close();
+  });
+
+  test('a claim that lands is accepted, then celebrated', async () => {
+    const p = await open({}, { chime: true });
+    await p.waitFor(() => /TAC airdrop · until/.test(card(p)), { label: 'the card' });
+    const quiet = p.window.__chime.voices.length;
+    p.click(p.$('adEl').querySelector('button[data-ad="me"]'));
+    await p.waitFor(() => p.window.__chime.voices.length >= quiet + 2, { label: 'the claim to sound' });
+    assert.deepEqual(p.window.__chime.voices.slice(quiet), [[392, 587.33], [392, 493.88, 587.33, 783.99]]);
     p.close();
   });
 

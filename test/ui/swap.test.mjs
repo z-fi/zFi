@@ -142,6 +142,23 @@ describe('connection', () => {
 });
 
 describe('quoting', () => {
+  test('a wallet node that rate-limits reads is retried after a pause, and the quote lands', async () => {
+    const p = await setup();
+    const inner = p.window.ethereum.request;
+    let refused = 0;
+    p.window.ethereum.request = args => {
+      if (args.method === 'eth_call' && refused < 3) { refused++; return Promise.reject(Object.assign(new Error('Request is being rate limited'), { code: -32005 })); }
+      return inner(args);
+    };
+    p.chain.httpLog = [];
+    await p.type('amt', '1');
+    await p.waitFor(() => p.value('outAmt') === '3000', { label: 'the quote', timeout: 20000 });
+    assert.equal(refused, 3, 'the wallet node refused the first reads');
+    assert.doesNotMatch(p.text('rate'), /unreachable/, 'nothing was given up on');
+    assert.ok(!p.chain.httpLog.some(x => x.method === 'eth_call'), 'a connected wallet\'s reads never go to the public pool');
+    p.close();
+  });
+
   test('exact-in shows output, rate, source and the slippage floor', async () => {
     const p = await setup();
     await p.typeAmount('amt', '1');
@@ -825,10 +842,35 @@ describe('ERC-20 funding waterfall', () => {
     p.close();
   });
 
+  test('tops up a stale non-zero allowance in one approval when the token allows it', async () => {
+    const p = await erc20Swap(c => c.setAllowance(A.USDC, A.ACCOUNT, A.ZROUTER, 1n));
+    p.click('swap');
+    await p.waitFor(() => p.chain.sent.length >= 2, { label: 'approve + swap' });
+    await p.settle();
+    const [approve, swap] = p.chain.sent;
+    assert.equal(p.chain.sent.length, 2, 'no reset to zero for a token that does not need it');
+    assert.equal(selectorOf(approve.data), SEL.APPROVE);
+    assert.ok(word('0x' + approve.data.slice(10), 1) > 0n);
+    assert.equal(swap.to.toLowerCase(), A.ZROUTER.toLowerCase());
+    p.close();
+  });
+
   test('clears a stale non-zero allowance first, for USDT-style tokens', async () => {
     // A partial existing allowance is the case that reverts on approve() for
     // tokens that require going through zero.
-    const p = await erc20Swap(c => c.setAllowance(A.USDC, A.ACCOUNT, A.ZROUTER, 1n));
+    const p = await erc20Swap(c => {
+      c.setAllowance(A.USDC, A.ACCOUNT, A.ZROUTER, 1n);
+      // USDT's rule: approving a non-zero amount over a non-zero allowance reverts.
+      const ethCall = c.ethCall.bind(c);
+      c.ethCall = (tx, block) => {
+        const d = (tx.data || '').replace(/^0x/, '');
+        if ((tx.to || '').toLowerCase() === A.USDC.toLowerCase() && d.slice(0, 8) === SEL.APPROVE.replace(/^0x/, '')
+          && BigInt('0x' + d.slice(72, 136)) > 0n
+          && (c.allow.get(`${A.USDC.toLowerCase()}:${A.ACCOUNT.toLowerCase()}:${A.ZROUTER.toLowerCase()}`) ?? 0n) > 0n)
+          throw Object.assign(new Error('execution reverted'), { code: 3, data: '0x' });
+        return ethCall(tx, block);
+      };
+    });
     p.click('swap');
     await p.waitFor(() => p.chain.sent.length >= 3, { label: 'zero + approve + swap' });
     await p.settle();
