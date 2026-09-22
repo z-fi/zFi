@@ -6,11 +6,12 @@ The page and all its on-chain dependencies are ready. What remains is deploying 
 
 | | |
 |---|---|
-| Page | `zSwap.html`, 599,598 B, 25 chunks (14,802 B headroom) |
+| Page | `zSwap.html`, 617,803 B, 26 chunks (21,173 B headroom) |
 | Identity | `CP_MSG` is Tacit's shared identity message (tacit 2abd65b0, `dapp/identity-message.js`), byte-equal; the derivation is unchanged |
 | Checks | `script/check-zSwap.mjs` all pass; `check-create2-artifacts.mjs` 27/27 reproduce |
-| Tests | UI suite 79 files; Foundry zSwap 83, zGuard 18, Precision fork 19; browser 30 |
+| Tests | UI suite 81 files; Foundry zSwap 83, zGuard 18, Precision fork 19; browser 30 |
 | Live smoke (read-only, real Chromium) | quotes land on 1 / 8453 / 4663 in 7–10 s, no page errors |
+| Markets | PM LIVE `0x0000003b…aB5C5` on mainnet, verified (Etherscan + Sourcify); the page's `#mk` mode (mainnet only) |
 | zGuard | LIVE `0x00000057…2b1961` on 1/8453/4663, verified (Sourcify + Etherscan) |
 | Explorers | every zFi contract under `deploy/` verified on Etherscan (1/8453/4663) |
 
@@ -18,9 +19,9 @@ The page and all its on-chain dependencies are ready. What remains is deploying 
 
 1. **Commit the tree.** It also holds work from other sessions (v0.3 polish, private bridge, zEndpoints, chunk count, audit fixes). Note that anything under `dapp/` auto-deploys to zfi.wei.is on push.
 2. **Chunks.** `node script/build-zSwap-chunks.mjs` then `PRIVATE_KEY=… ETH_RPC_URL=… node script/deploy-zSwap-chunks.mjs`.
-   - Cost: 25 transactions at about 5.27M gas each (eth_estimateGas on mainnet), about 132M gas in total: about 0.012 ETH at 0.09 gwei (2026-09-22), 0.066 ETH at 0.5 gwei, 0.13 ETH at 1 gwei. Fund the key with about 2× the figure at the gas price of the day.
+   - Cost: 26 transactions at about 5.27M gas each (eth_estimateGas on mainnet), about 137M gas in total: about 0.012 ETH at 0.09 gwei (2026-09-22), 0.069 ETH at 0.5 gwei, 0.14 ETH at 1 gwei. Fund the key with about 2× the figure at the gas price of the day.
    - Use a dedicated funded key, **not** `0x68575B07…`: it signs Tacit's header relay and reflection, and Tacit asked that it not be used.
-3. **Successor.** Run `node script/build-zSwapNext.mjs <25 chunk addresses>`. It emits the initcode and the calldata for the DAO's `deployNext` on the current tip.
+3. **Successor.** Run `node script/build-zSwapNext.mjs <26 chunk addresses>`. It emits the initcode and the calldata for the DAO's `deployNext` on the current tip.
 4. **DAO** executes `deployNext`. Then record the wrapper address in README / `docs/src/README.md` and rerun `node script/check-zSwap.mjs`.
 5. **Old version.** Nothing to change. Its "newer →" link finds the successor once it matures (MATURITY = 3 days).
 

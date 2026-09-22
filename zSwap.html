@@ -41,9 +41,9 @@ letter-spacing:.04em;white-space:nowrap;margin-right:.15em}
 .meta input{width:3em;font-size:.9em;padding:.15em .1em;border:0;border-bottom:1px solid var(--e);transition:border-color .15s;background:transparent;text-align:right;outline:0;color:var(--f);-moz-appearance:textfield}
 .meta input::-webkit-outer-spin-button,.meta input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 #slip{font-size:1.2em;width:2.4em;font-weight:600;font-variant-numeric:tabular-nums}
-#th,#lk,#lq,#ln,#wn,#pv{display:inline-flex;align-items:center;justify-content:center;border:0;background:transparent;cursor:pointer;color:var(--m);opacity:.8;width:1.8em;height:1.8em;line-height:1;transition:color .15s,opacity .15s,background .15s}
-#th:hover,#lk:hover,#lq:hover,#ln:hover,#wn:hover,#pv:hover,#lq.on,#ln.on,#wn.on,#pv.on{opacity:1}
-#th:hover,#lk:hover,#lq:hover,#ln:hover,#wn:hover,#pv:hover{color:var(--f)}
+#th,#lk,#lq,#ln,#wn,#pv,#mk{display:inline-flex;align-items:center;justify-content:center;border:0;background:transparent;cursor:pointer;color:var(--m);opacity:.8;width:1.8em;height:1.8em;line-height:1;transition:color .15s,opacity .15s,background .15s}
+#th:hover,#lk:hover,#lq:hover,#ln:hover,#wn:hover,#pv:hover,#mk:hover,#lq.on,#ln.on,#wn.on,#pv.on,#mk.on{opacity:1}
+#th:hover,#lk:hover,#lq:hover,#ln:hover,#wn:hover,#pv:hover,#mk:hover{color:var(--f)}
 .meta input:hover{border-bottom-color:var(--m)}
 .meta input:focus{border-bottom-color:currentcolor}
 .panel{background:transparent;border:1px solid var(--e);padding:.95em .9em;margin:0;transition:border-color .15s}
@@ -66,7 +66,7 @@ svg{vertical-align:middle;flex-shrink:0}
 .primary:hover:not(:disabled){background:var(--fh)}
 .primary:disabled{border-color:var(--e);color:var(--dm);cursor:not-allowed}
 .rcpt{width:100%;box-sizing:border-box;margin-top:-1px;padding:.66em .85em;border:1px solid var(--e);background:transparent;transition:border-color .15s;color:var(--f);font-size:.75em;outline:0;font-family:inherit}
-#lq.on,#ln.on,#wn.on,#pv.on{background:var(--k);color:var(--kf)}
+#lq.on,#ln.on,#wn.on,#pv.on,#mk.on{background:var(--k);color:var(--kf)}
 .cpr{display:flex;justify-content:space-between;align-items:center;gap:.5em;font-size:.75em;color:var(--m);padding:.6em .8em;border:1px solid var(--e);margin-top:-1px}.cpr b{font-weight:600;color:var(--f)}.cpr a{color:var(--m)}#pvList{margin-top:.6em}#pvKey{display:block;margin-top:.6em;color:var(--m)}
 .lqrow{padding:.62em .7em;border:1px solid var(--e);margin:-1px 0 0}
 .lqrow.out{opacity:.55}
@@ -191,7 +191,7 @@ vertical-align:.1em;line-height:1;text-decoration:none;margin-left:.5em}
 .lqon>*{order:2}
 .lqon>.meta,.lqon>.tabs,.lqon>.panel,.lqon>.flip,.lqon>#rcvPanel{order:0}
 .lqon>#rc,.lqon>#rcvEl{order:1}
-.lnon>.tabs .on,.wnon>.tabs .on,.pvon>.tabs .on{color:var(--m);font-weight:600;box-shadow:none}.lnon #chTog,.lnon #chBox,.lnon #bkTog,.lnon #book,.lnon #pos,.pvon #chTog,.pvon #chBox,.pvon #bkTog,.pvon #book,.pvon #pos,.wnon #chTog,.wnon #chBox{display:none!important}
+.lnon>.tabs .on,.wnon>.tabs .on,.pvon>.tabs .on,.mkon>.tabs .on{color:var(--m);font-weight:600;box-shadow:none}.lnon #chTog,.lnon #chBox,.lnon #bkTog,.lnon #book,.lnon #pos,.pvon #chTog,.pvon #chBox,.pvon #bkTog,.pvon #book,.pvon #pos,.wnon #chTog,.wnon #chBox,.mkon #chTog,.mkon #chBox,.mkon #bkTog,.mkon #book,.mkon #pos{display:none!important}
 .docs{margin-top:.5em}
 .docs details{border-top:1px solid var(--e)}
 .docs details:last-child{border-bottom:1px solid var(--e)}
@@ -224,8 +224,16 @@ margin-top:.55em;padding-top:.55em;border-top:1px solid var(--e);color:var(--f)}
 .cbmsg{display:block;margin-top:.5em}
 .lnhdr>small+small{color:var(--dm);text-transform:none;letter-spacing:.01em;font-size:.65em;font-weight:400;text-align:right;text-wrap:balance}
 #wnRollEl{display:block;font-size:.72em;line-height:1.55;color:var(--m)}
-#lnNote,#floorNote,#wnNote{display:block;font-size:.7em;line-height:1.45;color:var(--m);text-align:center;text-wrap:balance;margin:.55em .2em 0}
-#lnNote:empty,#floorNote:empty,#wnNote:empty{display:none}
+#lnNote,#floorNote,#wnNote,#mkNote{display:block;font-size:.7em;line-height:1.45;color:var(--m);text-align:center;text-wrap:balance;margin:.55em .2em 0}
+#lnNote:empty,#floorNote:empty,#wnNote:empty,#mkNote:empty{display:none}
+.mkbar{height:3px;background:var(--e);margin:.4em 0 .15em}
+.mkbar i{display:block;height:100%;background:var(--f)}
+.mkr{cursor:pointer}
+.mkr.on{border-color:var(--f);position:relative}
+#mkList{max-height:22em;overflow:auto;margin:.2em 0 .5em}
+.mkd{display:block;font-size:.72em;line-height:1.55;color:var(--m);margin:.3em 0}
+.mkd:empty{display:none}
+#mkT{text-transform:none;letter-spacing:0;font-size:.82em;color:var(--f)}
 .lnu{display:flex;align-items:baseline;gap:.3em;color:var(--m);flex:0 1 auto;min-width:0}
 .lnu input{width:7em;flex:0 1 7em;min-width:0}
 .lnu i{font-style:normal;min-width:2.6em}
@@ -249,7 +257,7 @@ margin-top:.55em;padding-top:.55em;border-top:1px solid var(--e);color:var(--f)}
 #bal:empty,#bal1:empty,#rate:empty{display:none}
 #bal a,#bal1 a{color:var(--f);cursor:pointer;text-decoration:underline;font-weight:600}
 .meta input.warn{color:var(--w);border-bottom-color:var(--w)}
-#th:focus-visible,#lk:focus-visible,#lq:focus-visible,#ln:focus-visible,#wn:focus-visible,#pv:focus-visible{background:var(--b);color:var(--f)}
+#th:focus-visible,#lk:focus-visible,#lq:focus-visible,#ln:focus-visible,#wn:focus-visible,#pv:focus-visible,#mk:focus-visible{background:var(--b);color:var(--f)}
 .chtog{width:100%;margin-top:.5em;padding:.75em .1em;border:0;border-top:1px solid var(--e);background:transparent;color:var(--m);cursor:pointer;font:inherit;font-size:.7em;font-weight:400;text-transform:uppercase;letter-spacing:.08em;transition:color .15s,background .15s}
 .chtog:hover{color:var(--f)}
 .chtog span{display:inline-block;transition:transform .2s}
@@ -326,7 +334,7 @@ display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hi
 body:has(.tkp:not(.hide))::before{content:"";position:fixed;inset:0;z-index:39;pointer-events:none;background:#0006}
 @media(max-width:30em){#slipL span{display:none}}
 @media(pointer:coarse){
-#th,#lk,#lq,#ln,#wn,#pv{width:36px;height:36px}
+#th,#lk,#lq,#ln,#wn,#pv,#mk{width:36px;height:36px}
 #sd{width:44px;height:44px;top:calc(.35em + env(safe-area-inset-top,0px));right:calc(.35em + env(safe-area-inset-right,0px))}
 #net{width:44px;height:44px;top:calc(.35em + env(safe-area-inset-top,0px));right:calc(.35em + 44px + env(safe-area-inset-right,0px))}
 #addr{padding:.7em 0;margin:-.7em 0}.mtl{gap:.15em}
@@ -359,14 +367,14 @@ background:var(--e);margin:.5em auto .1em}
 .invq{padding:10px 11px;margin:-10px -6px;opacity:1}
 .invm,.invsh{padding:10px 3px;margin:-10px -1px}}
 @media(pointer:coarse) and (max-width:24em){
-.meta{gap:.3em .12em}.mtl{gap:.12em}#th,#lk,#lq,#ln,#wn,#pv{width:32px;height:32px}#slip{width:2em}}.dlgm{white-space:pre-wrap;text-align:left;max-height:50vh;overflow:auto}.dlgt{width:100%;box-sizing:border-box;font:inherit;font-size:.8em;word-break:break-all}@media(pointer:coarse){.dlgt{font-size:16px}}.dlgr{display:flex;gap:1.2em;justify-content:flex-end;margin-top:.5em}</style>
+.meta{gap:.3em .12em}.mtl{gap:.12em}#th,#lk,#lq,#ln,#wn,#pv,#mk{width:32px;height:32px}#slip{width:2em}}.dlgm{white-space:pre-wrap;text-align:left;max-height:50vh;overflow:auto}.dlgt{width:100%;box-sizing:border-box;font:inherit;font-size:.8em;word-break:break-all}@media(pointer:coarse){.dlgt{font-size:16px}}.dlgr{display:flex;gap:1.2em;justify-content:flex-end;margin-top:.5em}</style>
 <script>const H=document.documentElement;let LS,SS;try{LS=localStorage||{}}catch{LS={}}try{SS=sessionStorage}catch{SS={getItem(){return null},setItem(){},removeItem(){}}}if(LS.t?LS.t=='d':matchMedia('(prefers-color-scheme:dark)').matches)H.className='d'</script>
 <button id="sd" title="Sound" aria-label="Toggle sound"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5v5h3.5L12 18V6L7.5 9.5H4z"/><path id="sdw" d="M15.5 9a4 4 0 0 1 0 6"/><path id="sdx" d="M16 9.5l4 4m0-4l-4 4"/></svg></button>
 <span id="net" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false" title="Network"></span>
 <a id="logoLink" href="https://zfi.wei.is/dao/#/dao/1/0x5E58BA0e06ED0F5558f83bE732a4b899a674053E" target="_blank" rel="noopener" aria-label="The DAO that governs this page" title="zFi DAO — the governance that owns this page's lineage"><svg id="logo" viewBox="0 0 400 400" aria-hidden="true"><clipPath id="lgf"><rect width="400" height="400"/></clipPath><g clip-path="url(#lgf)"><rect width="400" height="400"/><path d="M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z"/></g></svg></a>
 <svg id="fish" viewBox="0 0 24 14" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" aria-hidden="true"><path d="M2 12.2C7 .8 18 1.8 22 7"/><path d="M2 1.8C7 13.2 18 12.2 22 7"/></svg>
 <div class="card">
-<div class="meta"><span id="addr" role="button" tabindex="0" title="Connect a wallet">Connect</span><span class="mtl"><label id="slipL" title="Slippage"><span>Slippage </span><input id="slip" aria-label="Slippage" type="number" value="0.5" min="0.01" max="10" step="0.1">%</label><button id="lq" title="Liquidity for this pair" aria-label="Toggle liquidity mode" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.2c3.6 4 6 7.2 6 10.1a6 6 0 0 1-12 0c0-2.9 2.4-6.1 6-10.1z"/></svg></button><button id="ln" title="Launch a coin" aria-label="Toggle launch mode" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/></svg></button><button id="wn" title="Claim a .wei name" aria-label="Toggle names mode" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" fill-rule="evenodd" shape-rendering="crispEdges" aria-hidden="true"><path d="M3 1h1v1H3zM5 2h1v1H5zM10 2h1v1h-1zM12 1h1v1h-1zM4 4h8v1H4zM3 5h10v1H3zM2 6h12v3H2zM3 9h10v1H3zM4 10h8v1H4zM5 11h2v1H5zM9 11h2v1H9zM2 12h3v1H2zM7 12h2v1H7zM11 12h3v1h-3zM1 13h2v1H1zM13 13h2v1h-2zM3 6h3v2H3zM10 6h3v2h-3z"/></svg></button><button id="pv" title="Tacit private bridge: shield, send, withdraw or bridge" aria-label="Toggle private bridge mode" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6l7-3z"/><path d="M13 7.4L10.75 15.15Q10.75 16.4 13.25 15.9M9.25 9.4h5.5" stroke="#f7931a" stroke-width="1.9"/></svg></button><button id="lk" title="Copy shareable link" aria-label="Copy shareable link"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5.5 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v.5"/></svg></button><button id="th" title="Toggle theme" aria-label="Toggle theme"></button></span></div>
+<div class="meta"><span id="addr" role="button" tabindex="0" title="Connect a wallet">Connect</span><span class="mtl"><label id="slipL" title="Slippage"><span>Slippage </span><input id="slip" aria-label="Slippage" type="number" value="0.5" min="0.01" max="10" step="0.1">%</label><button id="lq" title="Liquidity for this pair" aria-label="Toggle liquidity mode" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.2c3.6 4 6 7.2 6 10.1a6 6 0 0 1-12 0c0-2.9 2.4-6.1 6-10.1z"/></svg></button><button id="ln" title="Launch a coin" aria-label="Toggle launch mode" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/></svg></button><button id="wn" title="Claim a .wei name" aria-label="Toggle names mode" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" fill-rule="evenodd" shape-rendering="crispEdges" aria-hidden="true"><path d="M3 1h1v1H3zM5 2h1v1H5zM10 2h1v1h-1zM12 1h1v1h-1zM4 4h8v1H4zM3 5h10v1H3zM2 6h12v3H2zM3 9h10v1H3zM4 10h8v1H4zM5 11h2v1H5zM9 11h2v1H9zM2 12h3v1H2zM7 12h2v1H7zM11 12h3v1h-3zM1 13h2v1H1zM13 13h2v1h-2zM3 6h3v2H3zM10 6h3v2h-3z"/></svg></button><button id="pv" title="Tacit private bridge: shield, send, withdraw or bridge" aria-label="Toggle private bridge mode" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6l7-3z"/><path d="M13 7.4L10.75 15.15Q10.75 16.4 13.25 15.9M9.25 9.4h5.5" stroke="#f7931a" stroke-width="1.9"/></svg></button><button id="mk" title="Prediction markets" aria-label="Toggle markets mode" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></svg></button><button id="lk" title="Copy shareable link" aria-label="Copy shareable link"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5.5 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v.5"/></svg></button><button id="th" title="Toggle theme" aria-label="Toggle theme"></button></span></div>
 <div class="tabs" role="tablist"><button id="tabSwap" class="on" role="tab" aria-selected="true">Swap</button><button id="tabSend" role="tab" aria-selected="false">Send</button><button id="tabBook" role="tab" aria-selected="false">Orders</button></div>
 <div class="panel"><div class="hdr"><small id="payL">You pay</small><span class="pill"><span id="fromIcon"></span><select id="fromSel" aria-labelledby="payL"></select><button type="button" class="tkb" id="fromPick" aria-haspopup="listbox" aria-expanded="false"><span class="tkbs"></span><span class="tkbc">▾</span></button></span></div><div class="row" id="amtRow"><input id="amt" type="text" inputmode="decimal" placeholder="0.0" aria-labelledby="payL" autocomplete="off" spellcheck="false"></div><small id="bal"></small><button type="button" class="fclink hide" id="shieldGo" title="Deposit it into Tacit's confidential pool as a shielded note">shield</button></div>
 <button id="flip" class="flip" title="Flip tokens" aria-label="Flip tokens"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14m-5-5 5 5 5-5"/></svg></button>
@@ -409,6 +417,31 @@ background:var(--e);margin:.5em auto .1em}
 <small id="pvFarm" class="hide"></small>
 <small id="pvNote" role="status" aria-live="polite"></small>
 </div>
+<div id="mkPanel" class="hide">
+<div class="hdr lnhdr"><small>Markets</small><small id="mkSub"></small></div>
+<input id="mkFind" class="rcpt" aria-label="Search markets" placeholder="Search markets" autocomplete="off" spellcheck="false">
+<div class="bkf" id="mkChips"><button type="button" class="bkc on" data-f="open">Open</button><button type="button" class="bkc" data-f="done">Settled</button><button type="button" class="bkc" data-f="mine">Mine</button><button type="button" class="bkc on" data-s="pot">Liquidity</button><button type="button" class="bkc" data-s="new">New</button><button type="button" class="bkc" data-s="end">Ending</button></div>
+<div id="mkList"></div>
+<div id="mkDet" class="hide">
+<div class="lngap" id="mkT"></div>
+<small id="mkInfo" class="mkd"></small>
+<label class="dly" id="mkAmtL">Amount<input id="mkAmt" inputmode="decimal" placeholder="0.0" autocomplete="off"><select id="mkPay" aria-label="Pay with"></select></label>
+<small id="mkQ" class="mkd"></small>
+<div class="lqacts" id="mkActs"></div>
+</div>
+<div id="mkForm" class="hide">
+<div class="lngap">New market</div>
+<label class="dly">Question<input id="mkDesc" maxlength="1024" placeholder="Will ETH close above $5k on Dec 31?" autocomplete="off"></label>
+<label class="dly" title="Settles the market. An address, or a .eth / .wei / .gwei name.">Resolver<input id="mkRes" placeholder="0x or name — defaults to you" autocomplete="off" spellcheck="false"></label>
+<small id="mkResEl" class="mkd"></small>
+<label class="dly">Pot in<select id="mkAsset"></select></label>
+<label class="dly">Closes<select id="mkClose"><option value="86400">in a day</option><option value="604800" selected>in a week</option><option value="2592000">in a month</option><option value="7776000">in 3 months</option><option value="0">at…</option></select><input id="mkAt" type="datetime-local" class="hide" aria-label="Close at"></label>
+<label class="dly" title="Lets the resolver end trading early, once the answer is known.">Early close<input id="mkCan" type="checkbox" checked></label>
+<label class="dly" title="Holders may sell back before close at par less this tax, which stays in the pot. 0 makes bets final.">Exit tax %<input id="mkExit" type="number" min="0" max="50" step="0.5" value="0"></label>
+<label class="dly" title="Later bets mint fewer shares, ramping from 0 now to this tax at close. It stays in the pot for earlier bettors.">Late tax %<input id="mkLate" type="number" min="0" max="50" step="0.5" value="0"></label>
+</div>
+<small id="mkNote" role="status" aria-live="polite"></small>
+</div>
 <input id="rc" class="rcpt" aria-label="Recipient" placeholder="Recipient (optional) — 0x or name" spellcheck="false" autocomplete="off">
 <small id="rcvEl"></small>
 <small id="fcEl" class="hide" role="status" aria-live="polite"></small>
@@ -418,6 +451,7 @@ background:var(--e);margin:.5em auto .1em}
 <button id="lnGo" class="primary hide">Launch</button>
 <button id="wnGo" class="primary hide">Register</button>
 <button id="pvGo" class="primary hide">Deposit</button>
+<button id="mkGo" class="primary hide">New market</button>
 <div id="wnRollPanel" class="hide"><div class="lngap">roll.wei</div><small id="wnRollEl" role="status" aria-live="polite"></small><button id="wnEnter" class="wnbtn hide">Enter the roll</button></div>
 <label class="dly hide" id="kindL">Order type<select id="kind"><option value="fixed">Fixed limit</option><option value="dutch">Dutch decay</option><option value="floor">Climbing bid</option></select></label>
 <label class="dly hide" id="dlyL">SLOW<select id="dly"><option value="0">Instant</option><option value="600">10 minutes</option><option value="3600">1 hour</option><option value="86400">1 day</option><option value="259200">3 days</option><option value="604800">7 days</option></select></label>
@@ -1594,21 +1628,22 @@ for(const ver of ["1","2","1.0","V1",""])if(domainSep(name,ver,tok).toLowerCase(
 return{name,ver,nonce};
 }catch{}
 return null};
-const signPermit=async(tok,info,owner,value,deadline)=>{
+const pmSig=async(tok,info,owner,value,deadline,sp)=>{
 const td={types:{EIP712Domain:[{name:"name",type:"string"},{name:"version",type:"string"},
 {name:"chainId",type:"uint256"},{name:"verifyingContract",type:"address"}],
 Permit:[{name:"owner",type:"address"},{name:"spender",type:"address"},
 {name:"value",type:"uint256"},{name:"nonce",type:"uint256"},{name:"deadline",type:"uint256"}]},
 primaryType:"Permit",domain:{name:info.name,version:info.ver,chainId:CHAIN_ID,verifyingContract:tok},
-message:{owner,spender:ZROUTER,value:value.toString(),nonce:info.nonce.toString(),deadline:deadline.toString()}};
+message:{owner,spender:sp,value:value.toString(),nonce:info.nonce.toString(),deadline:deadline.toString()}};
 const sig=strip0x(await rpc("eth_signTypedData_v4",[owner,JSON.stringify(td)]));
 if(sig.length!==130)throw Error("bad signature");
 let v=parseInt(sig.slice(128,130),16);if(v<27)v+=27;
-return"0x"+SEL_RPERMIT+encAddr(tok)+encUint(value)+encUint(deadline)+encUint(v)+sig.slice(0,64)+sig.slice(64,128)};
+return encUint(v)+sig.slice(0,64)+sig.slice(64,128)};
+const signPermit=async(tok,info,owner,value,deadline)=>"0x"+SEL_RPERMIT+encAddr(tok)+encUint(value)+encUint(deadline)+await pmSig(tok,info,owner,value,deadline,ZROUTER);
 const P2DOM=()=>({name:"Permit2",chainId:CHAIN_ID,verifyingContract:PERMIT2});
 const p2Ready=async(tok,owner)=>{
 try{return BigInt(await rpc(C,[{to:tok,data:alwOf(owner,PERMIT2)},L]))}catch{return 0n}};
-const signPermit2=async(tok,owner,amount,deadline)=>{
+const p2Sig=async(tok,owner,amount,deadline,sp)=>{
 const nonce=BigInt("0x"+[...crypto.getRandomValues(new Uint8Array(31))].map(b=>b.toString(16).padStart(2,"0")).join(""));
 const td={types:{EIP712Domain:[{name:"name",type:"string"},{name:"chainId",type:"uint256"},
 {name:"verifyingContract",type:"address"}],
@@ -1616,7 +1651,7 @@ TokenPermissions:[{name:"token",type:"address"},{name:"amount",type:"uint256"}],
 PermitTransferFrom:[{name:"permitted",type:"TokenPermissions"},{name:"spender",type:"address"},
 {name:"nonce",type:"uint256"},{name:"deadline",type:"uint256"}]},
 primaryType:"PermitTransferFrom",domain:P2DOM(),
-message:{permitted:{token:tok,amount:amount.toString()},spender:ZROUTER,
+message:{permitted:{token:tok,amount:amount.toString()},spender:sp,
 nonce:nonce.toString(),deadline:deadline.toString()}};
 const sig=strip0x(await rpc("eth_signTypedData_v4",[owner,JSON.stringify(td)]));
 const n=sig.length/2;if(!Number.isInteger(n)||n===0||n>4096)throw Error("bad signature");
@@ -1624,6 +1659,8 @@ const norm=n===65&&parseInt(sig.slice(128,130),16)<27
 ?sig.slice(0,128)+(parseInt(sig.slice(128,130),16)+27).toString(16).padStart(2,"0")
 :sig;
 const tail=encUint(n)+norm.padEnd(Math.ceil(norm.length/64)*64,"0");
+return[nonce,tail]};
+const signPermit2=async(tok,owner,amount,deadline)=>{const[nonce,tail]=await p2Sig(tok,owner,amount,deadline,ZROUTER);
 return"0x"+SEL_P2TF+encAddr(tok)+encUint(amount)+encUint(nonce)+encUint(deadline)+pad32("a0")+tail};
 const capsFor=(c,id)=>{
 for(const key of Object.keys(c)){
@@ -2899,7 +2936,7 @@ if(lnMode)lnKindQuote();
 lnGo.disabled=false;lnGo.textContent=account?"Launch":CW;
 wnGo.disabled=false;
 if(wnMode){wnPaint();wnQuote();wnRoll()}else wnGo.textContent="Register";
-if(pvMode)pvWake();render()}
+if(pvMode)pvWake();if(mkMode)mkLoad();render()}
 }
 const lqReserveGas=()=>lqList.querySelector(".lqnew")?LQ_CREATE_GAS+300000n:400000n;
 const lqFillMax=(tok,max)=>{
@@ -3037,7 +3074,7 @@ fcSync();
 cbSync();
 const my=++seq;
 quoting=false;
-if(wnMode||lnMode||pvMode)return;
+if(wnMode||lnMode||pvMode||mkMode)return;
 if(offChain()&&(lqMode||tab!=="swap")){stat.textContent=offChainNote();last=null;sendReady=null;return render()}
 if(lqMode)return loadLq();
 if(tab==="book")return render();
@@ -5416,7 +5453,7 @@ function modeBtns(){
 lq.classList.toggle("hide",tab!=="swap"||PROUTE===ZERO);
 ln.classList.toggle("hide",tab!=="swap"||PLAUNCH===ZERO);
 wn.classList.toggle("hide",tab!=="swap"||CHAIN_ID!==1);
-pv.classList.toggle("hide",tab!=="swap"||CHAIN_ID!==1);shieldSync();
+pv.classList.toggle("hide",tab!=="swap"||CHAIN_ID!==1);mk.classList.toggle("hide",tab!=="swap"||CHAIN_ID!==1);shieldSync();
 }
 function chainUi(){
 modeBtns();
@@ -5428,6 +5465,7 @@ if(lqMode&&PROUTE===ZERO)lqSet(false);
 if(lnMode&&PLAUNCH===ZERO)lnSet(false);
 if(wnMode&&CHAIN_ID!==1)wnSet(false);
 if(pvMode&&CHAIN_ID!==1)pvSet(false);
+if(mkMode&&CHAIN_ID!==1)mkSet(false);
 const co=lnKind.querySelector('option[value="cause"]');co.hidden=co.disabled=CHAIN_ID!==1;
 if(co.disabled&&lnKind.value==="cause"){lnKind.value="coin";if(lnMode)cauKind()}
 }
@@ -5437,6 +5475,7 @@ if(t!=="swap"&&lqMode)lqSet(false);
 if(t!=="swap"&&lnMode)lnSet(false);
 if(t!=="swap"&&wnMode)wnSet(false);
 if(t!=="swap"&&pvMode)pvSet(false);
+if(t!=="swap"&&mkMode)mkSet(false);
 if(t!==tab){rc.value="";rc.classList.remove("bad");rcvEl.textContent=""}
 tab=t;modeBtns();last=null;sendReady=null;stat.textContent="";posShown=POSPAGE;
 const send=t==="send",bk=t==="book";
@@ -5478,6 +5517,7 @@ loadPos();loadBook();
 outAmt.value="";mode="in";
 if(wnMode)wnPaint();
 if(pvMode)pvPaint();
+if(mkMode)mkPaint();
 update();
 };
 dly.onchange=()=>{if(tab==="book")bookD=dly.value;else sendD=dly.value;syncTip();syncSlowLink();if(tab==="send")updateSend();else{syncBr();render()}};
@@ -5546,6 +5586,7 @@ document.addEventListener("visibilitychange",()=>{
 if(document.hidden)return;
 if(wnMode){wnSync();wnRoll()}
 if(pvMode)pvRefresh();
+if(mkMode)mkLoad();
 if(!account||busy)return;
 autoQ=0;
 refreshBalance();loadPos();
@@ -5586,6 +5627,7 @@ lqMode=on;
 if(on&&lnMode)lnSet(false);
 if(on&&wnMode)wnSet(false);
 if(on&&pvMode)pvSet(false);
+if(on&&mkMode)mkSet(false);
 lq.setAttribute("aria-pressed",on?"true":"false");
 lq.classList.toggle("on",on);
 document.querySelector(".card").classList.toggle("lqon",on);
@@ -6344,7 +6386,7 @@ const SEL_COLLECTMANY="c296057e";
 const TACAD="0x4b4cb98D0C836c2783Ac46f0078b904dab533AE8",TAC_TOK="0xA1313eb9f3A445606D9583bcAc3ebeB56a858279",
 AD_API=["https://cdn.jsdelivr.net/gh/z0r0z/tacit@1b2eedde8490801c9ef4406020530059162e6d47/dapp/airdrop/v1/proofs/","https://raw.githubusercontent.com/z0r0z/tacit/1b2eedde8490801c9ef4406020530059162e6d47/dapp/airdrop/v1/proofs/"];
 const adEl=document.getElementById("adEl");let adSeq=0,adC=null,adHas=false;
-const adShow=()=>adEl.classList.toggle("hide",!adHas||lnMode||lqMode||wnMode||pvMode||tab!=="swap");
+const adShow=()=>adEl.classList.toggle("hide",!adHas||lnMode||lqMode||wnMode||pvMode||mkMode||tab!=="swap");
 const adHide=()=>{adC=null;adHas=false;adEl.textContent="";adShow()};
 const adLine=(pre,n,post)=>{adEl.textContent="";const k=known(TAC_TOK);
 if(k&&/^<img /.test(k.icon))adEl.insertAdjacentHTML("beforeend",sm(k.icon).replace("<img ",'<img class="adic" '));
@@ -6407,7 +6449,7 @@ fcEl.innerHTML=(mine.length===1?`${safeSym(mine[0].sym)} · `:`${mine.length} of
 +`<button type="button" id="fcGo" class="fclink">${mine.length===1?"Collect":"Collect all"}</button>`;
 fcEl.title="Trading fees your launched coins have earned and nobody has swept yet. "
 +"The ether comes to you; the token side is burned, which raises the floor for your holders.";
-fcEl.classList.toggle("hide",lnMode||lqMode||wnMode||pvMode||tab!=="swap");
+fcEl.classList.toggle("hide",lnMode||lqMode||wnMode||pvMode||mkMode||tab!=="swap");
 fcGo.onclick=fcCollectMine;
 }catch{if(my===fcMineSeq)fcSync()}
 }
@@ -6435,7 +6477,7 @@ const my=++fcSeq;
 const t=TOKENS[toSel.value],f=TOKENS[fromSel.value];
 const cand=[t,f].find(x=>x&&x.addr&&x.addr!==ZERO&&x.std!=="nft");
 fcTok="";
-if(lnMode||lqMode||wnMode||pvMode||tab!=="swap"||PLAUNCH===ZERO){fcEl.classList.add("hide");return}
+if(lnMode||lqMode||wnMode||pvMode||mkMode||tab!=="swap"||PLAUNCH===ZERO){fcEl.classList.add("hide");return}
 if(fcMineToks.length){fcEl.classList.remove("hide");return}
 if(!cand){fcEl.classList.add("hide");return}
 try{
@@ -6514,7 +6556,7 @@ async function cbSync(){
 const my=++cbSeq;
 cbDao="";cbAmt=0n;cbBuy=false;
 const f=TOKENS[fromSel.value],t=TOKENS[toSel.value];
-if(CHAIN_ID!==1||lnMode||lqMode||wnMode||pvMode||tab!=="swap"||!f||!t){cbEl.classList.add("hide");return}
+if(CHAIN_ID!==1||lnMode||lqMode||wnMode||pvMode||mkMode||tab!=="swap"||!f||!t){cbEl.classList.add("hide");return}
 const real=x=>x&&x.addr&&x.addr!==ZERO&&x.std!=="nft";
 const cbEth=f.addr===ZERO;
 let hit=null,tok=null,buy=false;
@@ -6872,6 +6914,7 @@ lnMode=on;
 if(on&&lqMode)lqSet(false);
 if(on&&wnMode)wnSet(false);
 if(on&&pvMode)pvSet(false);
+if(on&&mkMode)mkSet(false);
 ln.setAttribute("aria-pressed",on?"true":"false");
 ln.classList.toggle("on",on);
 for(const el of [rate,flip,swap])if(el)el.classList.toggle("hide",on);
@@ -7117,6 +7160,7 @@ wnMode=on;
 if(on&&lqMode)lqSet(false);
 if(on&&lnMode)lnSet(false);
 if(on&&pvMode)pvSet(false);
+if(on&&mkMode)mkSet(false);
 wnPaint();
 stat.textContent="";
 clearInterval(wnTimer);
@@ -8036,11 +8080,127 @@ pvMode=on;
 if(on&&lqMode)lqSet(false);
 if(on&&lnMode)lnSet(false);
 if(on&&wnMode)wnSet(false);
+if(on&&mkMode)mkSet(false);
 pvPaint();
 stat.textContent="";pvNote.textContent="";
 clearInterval(pvTimer);
 if(on){pvTimer=setInterval(()=>{if(document.hidden||!pvMode)return;pvRefresh()},8000);pvWake()}
 fcSync();shieldSync()}
+const PM="0x0000003b32cDD39bc950e56093df98aF220aB5C5",MK_WST="0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0",MK_AS=[[ZERO,"ETH",18],[MK_WST,"wstETH",18],["0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48","USDC",6],["0x6440f144b7e50d6a8439336510312d2f54beb01d","BOLD",18],["0x23cacffac2674514a6d4f6cd420b4cc2ac921564","tacUSD",18]].map(([addr,sym,dec])=>({addr,sym,dec}));
+let mkMode=false,mkSeq=0,mkQSeq=0,mkRvSeq=0,mkAll=[],mkPos={},mkMeta={},mkSel=null,mkF="open",mkS="pot",mkTimer=0,mkBusy=0,mkQv=null,mkWant="";
+const mkTok=a=>MK_AS.find(t=>t.addr===a)||TOKENS.find(t=>t.addr.toLowerCase()===a)||mkMeta[a]||(mkMeta[a]={addr:a,sym:a.slice(0,8),dec:18},tokMeta(a).then(t=>{mkMeta[a]={addr:a,sym:t.sym,dec:+t.dec||0};mkPaintList();mkDetPaint()}).catch(()=>{}),mkMeta[a]);
+const mkDec=h=>{h=strip0x(h);const n=i=>BigInt("0x"+(h.slice(i,i+64)||"0")),o=Number(n(0))*2,len=Number(n(o)),r=[];
+for(let i=0;i<len&&i<100;i++){const e=o+64+Number(n(o+64+i*64))*2,W=k=>n(e+k*64),so=e+Number(W(14))*2,sl=Math.min(Number(n(so)),1024);
+r.push({id:W(0),r:"0x"+h.slice(e+88,e+128).toLowerCase(),a:"0x"+h.slice(e+152,e+192).toLowerCase(),o:Number(W(3)),c:Number(W(4)),f:Number(W(5)),x:Number(W(6)),l:Number(W(7)),cc:W(8)>0n,s:Number(W(9)),y:W(10),n:W(11),p:W(12),w:W(13),d:new TextDecoder().decode(hexToBytes(h.slice(so+64,so+64+sl*2)))})}
+return r};
+const mkLive=m=>m.s===0&&nowS()<m.c;
+const mkLeft=c=>{const d=c-nowS();return d<3600?Math.max(1,Math.ceil(d/60))+"m":d<86400?Math.floor(d/3600)+"h":Math.floor(d/86400)+"d"};
+const mkWhen=m=>m.s?["","YES won","NO won","void"][m.s]:nowS()<m.c?mkLeft(m.c)+" left":"awaiting result";
+const mkPct=m=>{const t=m.y+m.n;return t?Number(m.y*1000n/t)/10:50};
+const mkUsd=m=>{const t=mkTok(m.a),v=Number(formatUnits(m.p,t.dec));return/ETH/i.test(t.sym)?v*(ethUsd||2e3):/USD|BOLD|DAI/i.test(t.sym)?v:v*1e-6};
+const mkPosLoad=async all=>{const P={};if(account&&all.length){const cs=[];
+for(let i=0;i<all.length;i+=100){const s=all.slice(i,i+100);cs.push({to:PM,data:"0xafa8f792"+encAddr(account)+pad32("40")+encUint(s.length)+s.map(m=>encUint(m.id)).join("")})}
+(await mc3Deep(cs)).forEach((h,j)=>{if(!h)return;h=strip0x(h);const A=k=>{const o=Number(BigInt("0x"+h.slice(k*64,k*64+64)))*2,c=Number(BigInt("0x"+h.slice(o,o+64)));return Array.from({length:c},(_,i)=>BigInt("0x"+h.slice(o+64+i*64,o+128+i*64)))},Y=A(0),N=A(1),K=A(2);
+Y.forEach((y,i)=>{if(y||N[i]||K[i])P[all[j*100+i].id]={y,n:N[i],c:K[i]}})})}
+mkPos=P};
+const mkLoad=async()=>{if(!mkMode)return;const my=++mkSeq;
+try{const n=Number(BigInt(await rpc(C,[{to:PM,data:"0xec979082"},L]))),cs=[];
+for(let s=0;s<n;s+=25)cs.push({to:PM,data:"0x80968d48"+encUint(s)+encUint(25)});
+const all=(cs.length?await mc3Deep(cs):[]).flatMap(h=>h?mkDec(h):[]);await mkPosLoad(all);if(my!==mkSeq)return;mkAll=all;
+if(mkWant){const w=mkWant.toLowerCase();mkWant="";mkSel=all.find(m=>String(m.id)===w||toHex(m.id)===w)||mkSel;if(mkSel){mkF=mkLive(mkSel)?"open":"done";mkChipPaint()}}
+else if(mkSel)mkSel=all.find(m=>m.id===mkSel.id)||null;
+mkNote.textContent="";mkPaintList();mkDetPaint()}catch{if(my===mkSeq)mkNote.textContent="Could not load markets — retrying."}};
+const mkChipPaint=()=>{for(const c of mkChips.children)c.classList.toggle("on",c.dataset.f?c.dataset.f===mkF:c.dataset.s===mkS)};
+const mkRow=m=>{const t=mkTok(m.a),p=mkPct(m),me=mkPos[m.id];
+return`<div class="lqrow mkr${mkSel&&mkSel.id===m.id?" on":""}" data-k="${m.id}" role="button" tabindex="0"><div class="lqband">${safeSym(m.d,140)}${m.d.length>140?"…":""}</div><div class="mkbar"><i style="width:${p}%"></i></div><div class="lqmeta"><span>YES ${p}%</span><span>${sigAmt(m.p,t.dec,4)} ${safeSym(t.sym)}</span><span>${mkWhen(m)}</span>${me?`<span class="lqtag">${m.s&&me.c?"claim":"yours"}</span>`:""}</div></div>`};
+const mkPaintList=()=>{if(!mkMode)return;const me=(account||"").toLowerCase(),q=mkFind.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+const r=mkAll.filter(m=>(mkF==="open"?mkLive(m):mkF==="done"?!mkLive(m):!!mkPos[m.id]||m.r===me)&&q.every(t=>(m.d+" "+mkTok(m.a).sym+" "+m.r).toLowerCase().includes(t)));
+r.sort(mkS==="pot"?(a,b)=>mkUsd(b)-mkUsd(a):mkS==="end"?(a,b)=>mkF==="done"?b.c-a.c:a.c-b.c:(a,b)=>b.o-a.o);
+cpSet(mkList,r.length?r.slice(0,100).map(mkRow).join(""):`<div class="lqempty">${!mkAll.length?"No markets yet — create the first.":mkF==="mine"&&!account?"Connect a wallet to see yours.":"No markets match."}</div>`);
+mkSub.textContent=mkAll.length?mkAll.length+(mkAll.length>1?" markets":" market"):""};
+const mkDetPaint=()=>{if(!mkMode)return;const m=mkSel;mkDet.classList.toggle("hide",!m);if(!m)return;
+const t=mkTok(m.a),me=mkPos[m.id]||{y:0n,n:0n,c:0n},live=mkLive(m),isR=!!account&&m.r===account.toLowerCase(),net=m.p-m.p*BigInt(m.f)/10000n,X=s=>s?"×"+(Number(net*1000n/s)/1000).toFixed(2):"—",S=safeSym(t.sym),lapsed=nowS()>=m.c+2592000;
+mkT.textContent=m.d;
+mkInfo.innerHTML=`Pot ${sigAmt(m.p,t.dec,6)} ${S} · YES pays ${X(m.y)} · NO pays ${X(m.n)}<br>${m.s?mkWhen(m):live?"Closes "+new Date(m.c*1e3).toLocaleString():"Closed — awaiting the resolver"} · resolver <span id="mkRv">${m.r.slice(0,6)}…${m.r.slice(-4)}</span>${m.f?` · fee ${m.f/100}%`:""}${m.x?` · exit tax ${m.x/100}%`:" · bets final"}${m.l?` · late tax to ${m.l/100}%`:""}${me.y||me.n?`<br>You hold ${sigAmt(me.y,t.dec,6)} YES · ${sigAmt(me.n,t.dec,6)} NO`:""}`;
+nameRev(m.r).then(n=>{if(n&&mkSel===m)mkRv.textContent=safeSym(n,48)}).catch(()=>{});
+mkAmtL.classList.toggle("hide",!live);
+if(mkPay._k!==String(m.id)){mkPay._k=String(m.id);mkPay.innerHTML=(m.a===ZERO?[ZERO]:m.a===MK_WST?[ZERO,MK_WST]:[m.a]).map(a=>`<option value="${a}">${safeSym(mkTok(a).sym)}</option>`).join("");mkAmt.value="";mkQ.textContent="";mkQv=null}
+const B=(a,l)=>`<button type="button" class="lqbtn" data-a="${a}">${l}</button>`;
+let h=live?B("yes","Buy YES")+B("no","Buy NO"):"";
+if(live&&m.x){if(me.y)h+=B("xy","Sell YES");if(me.n)h+=B("xn","Sell NO")}
+if(m.s&&me.c)h+=B("claim",`Claim ${sigAmt(me.c,t.dec,6)} ${S}`);
+if(!m.s&&(isR||!live&&lapsed)){if(isR&&live&&m.cc)h+=B("close","Close now");if(isR&&!live&&!lapsed)h+=B("ry","Resolve YES")+B("rn","Resolve NO");h+=B("void","Void")}
+cpSet(mkActs,h);
+if(isR)rpc(C,[{to:PM,data:"0xffecc085"+encAddr(account)+encAddr(m.a)},L]).then(BigInt).then(f=>{if(f&&mkSel===m&&!mkActs.querySelector('[data-a="fees"]')){mkActs.insertAdjacentHTML("beforeend",B("fees",`Fees ${sigAmt(f,t.dec,6)} ${S}`));mkActs._h=""}}).catch(()=>{})};
+const mkQuote=async()=>{const m=mkSel,my=++mkQSeq;mkQv=null;if(!m||!mkLive(m))return mkQ.textContent="";
+const t=mkTok(m.a),pay=mkPay.value;let v;try{v=parseUnits(mkAmt.value||"0",mkTok(pay).dec)}catch(e){return mkQ.textContent=e.message}
+if(!v)return mkQ.textContent="";
+try{const a=pay===m.a?v:BigInt(await rpc(C,[{to:MK_WST,data:"0xbb2952fc"+encUint(v)},L])),[hy,hn]=await mc3Deep([true,false].map(y=>({to:PM,data:"0x124d6efc"+encUint(m.id)+encBool(y)+encUint(a)})));if(my!==mkQSeq)return;
+const d=h=>{h=strip0x(h||"");return[BigInt("0x"+(h.slice(0,64)||"0")),BigInt("0x"+(h.slice(64,128)||"0"))]},[sy,py]=d(hy),[sn,pn]=d(hn),S=safeSym(t.sym);
+mkQv={v,sy,sn};mkQ.textContent=`Wins ${sigAmt(py,t.dec,6)} ${S} if YES · ${sigAmt(pn,t.dec,6)} ${S} if NO`}catch{if(my===mkQSeq)mkQ.textContent="Could not quote."}};
+const mkSend=async(req,verb)=>{stat.textContent=verb;await rpc(C,[req,L]);await settle(await sendTx([req]));mkLoad()};
+const mkBuy=async yes=>{const m=mkSel,pay=mkPay.value;await mkQuote();const q=mkQv;if(!q)throw Error(mkQ.textContent||"Enter an amount.");
+const v=q.v,min=(yes?q.sy:q.sn)*BigInt(1e4-Math.round(slipPct()*100))/10000n,H=encUint(m.id)+encBool(yes),V="Betting…",T=d=>({from:account,to:PM,data:d,value:"0x0"});
+if(pay===ZERO)return mkSend({from:account,to:PM,data:"0xc2b5b4c8"+H+encAddr(account)+encUint(min)+pad32("a0")+encUint(0),value:toHex(v)},V);
+const b=H+encUint(v)+encAddr(account)+encUint(min),dl=BigInt(nowS()+1800),aps=await apSeq(pay,PM,v);
+if(!aps.length)return mkSend(T("0x28ccbb45"+b),V);
+const tryReq=async f=>{try{stat.textContent="Sign approval…";const r=T(await f());await rpc(C,[r,L]);return r}catch(e){if(isRejection(e))throw e;return null}};
+const pi=await permitInfo(pay,account),r1=pi&&await tryReq(async()=>"0x2a304886"+b+encUint(dl)+await pmSig(pay,pi,account,v,dl,PM));
+if(r1)return mkSend(r1,V);
+const r2=(await Promise.all([rpc(C,[{to:pay,data:balOf(account)},L]).then(BigInt),p2Ready(pay,account)])).every(x=>x>=v)&&await tryReq(async()=>{const[n,tl]=await p2Sig(pay,account,v,dl,PM);return"0xb390d8b5"+b+encUint(n)+encUint(dl)+pad32("100")+tl});
+if(r2)return mkSend(r2,V);
+await settle(await sendWith(aps,T("0x28ccbb45"+b),V));mkLoad()};
+const mkPaint=()=>{const on=mkMode;
+mk.setAttribute("aria-pressed",on?"true":"false");
+mk.classList.toggle("on",on);
+for(const el of [rate,flip,swap])if(el)el.classList.toggle("hide",on);
+for(const el of [document.querySelector(".panel"),rcvPanel])if(el)el.classList.toggle("hide",on);
+for(const el of [mkPanel,mkGo])el.classList.toggle("hide",!on);
+for(const el of [rc,rcvEl])if(el)el.classList.toggle("hide",on);document.querySelector(".card").classList.toggle("mkon",on)};
+function mkSet(on){
+if(on&&CHAIN_ID!==1)return;
+if(on)cbDisarm();
+++seq;quoting=false;
+mkMode=on;
+if(on&&lqMode)lqSet(false);
+if(on&&lnMode)lnSet(false);
+if(on&&wnMode)wnSet(false);
+if(on&&pvMode)pvSet(false);
+mkPaint();
+stat.textContent="";mkNote.textContent="";
+clearInterval(mkTimer);
+if(on){loadEthUsd();mkLoad();mkTimer=setInterval(()=>{if(!document.hidden&&mkMode&&!mkBusy)mkLoad()},30000)}
+fcSync()}
+mk.onclick=()=>{sBlip();mkSet(!mkMode);if(!mkMode)update()};
+mkAsset.innerHTML=MK_AS.map(t=>`<option value="${t.addr}">${t.sym}</option>`).join("");
+mkChips.onclick=e=>{const b=e.target.closest("button");if(!b)return;sBlip();if(b.dataset.f)mkF=b.dataset.f;else mkS=b.dataset.s;mkChipPaint();mkPaintList()};
+mkFind.oninput=()=>mkPaintList();
+mkList.onclick=e=>{const r=e.target.closest(".mkr");if(!r)return;sBlip();const m=mkAll.find(x=>String(x.id)===r.dataset.k);mkSel=m&&!(mkSel&&mkSel.id===m.id)?m:null;mkForm.classList.add("hide");mkGo.textContent="New market";mkPaintList();mkDetPaint()};
+mkList.onkeydown=e=>{if(e.key==="Enter")mkList.onclick(e)};
+mkAmt.oninput=mkPay.onchange=()=>{clearTimeout(mkAmt._t);mkAmt._t=setTimeout(mkQuote,250)};
+mkClose.onchange=()=>mkAt.classList.toggle("hide",mkClose.value!=="0");
+mkRes.oninput=()=>{clearTimeout(mkRes._t);const v=mkRes.value.trim(),my=++mkRvSeq;
+if(!v)return mkResEl.textContent=account?`Defaults to you — ${account.slice(0,6)}…${account.slice(-4)}`:"Defaults to you";
+const e=rcErr(v);if(e)return mkResEl.textContent=e;mkResEl.textContent="resolving…";
+mkRes._t=setTimeout(()=>rcvOf(v).then(a=>{if(my===mkRvSeq)mkResEl.textContent=a?"→ "+a:"Name not registered"},x=>{if(my===mkRvSeq)mkResEl.textContent=x.message}),250)};
+mkActs.onclick=async e=>{const b=e.target.closest("button[data-a]");if(!b||!mkSel||mkBusy)return;if(!account)return void connect();
+const a=b.dataset.a,m=mkSel,me=mkPos[m.id]||{},I=encUint(m.id),T=d=>({from:account,to:PM,data:d,value:"0x0"});
+if(/^(r[yn]|void|close)$/.test(a)&&!b.dataset.c){b.dataset.c=1;b.textContent="Confirm: "+b.textContent;return}
+sBlip();mkBusy=1;b.disabled=true;
+try{if(a==="yes"||a==="no")await mkBuy(a==="yes");
+else await mkSend(T({xy:"0x0fc95438"+I+encBool(true)+encUint(me.y||0)+encAddr(account),xn:"0x0fc95438"+I+encBool(false)+encUint(me.n||0)+encAddr(account),claim:"0xddd5e1b2"+I+encAddr(account),close:"0xae418095"+I,ry:"0x52a34b05"+I+encBool(true),rn:"0x52a34b05"+I+encBool(false),void:"0x5ea2145b"+I,fees:"0xf2555278"+encAddr(m.a)+encAddr(account)}[a]),{xy:"Selling…",xn:"Selling…",claim:"Claiming…",fees:"Withdrawing…"}[a]||"Settling…")}
+catch(x){err(x)}finally{mkBusy=0;b.disabled=false;mkDetPaint()}};
+mkGo.onclick=async()=>{if(mkGo.disabled)return;sBlip();
+if(mkForm.classList.contains("hide")){mkSel=null;mkPaintList();mkDetPaint();mkForm.classList.remove("hide");mkGo.textContent="Create market";mkRes.oninput();return}
+if(!account)return void connect();
+mkGo.disabled=true;
+try{const d=mkDesc.value.trim(),db=new TextEncoder().encode(d);if(!d)throw Error("Write the question first.");if(db.length>1024)throw Error("That question is too long.");
+const rv=mkRes.value.trim();let r=account;if(rv){const e=rcErr(rv);if(e)throw Error(e);r=await rcvOf(rv,true);if(!r)throw Error("Resolver name not registered.")}
+const cl=mkClose.value==="0"?Math.floor(new Date(mkAt.value).getTime()/1e3):nowS()+ +mkClose.value;if(!(cl>nowS()+300))throw Error("Pick a close time in the future.");
+const bp=v=>{const x=Math.round(+v*100);if(!(x>=0&&x<=5000))throw Error("Taxes run from 0 to 50%.");return x},hx=cpHex(db);
+await mkSend({from:account,to:PM,data:"0x6f406fa1"+pad32("e0")+encAddr(r)+encAddr(mkAsset.value)+encUint(cl)+encBool(mkCan.checked)+encUint(bp(mkExit.value))+encUint(bp(mkLate.value))+encUint(db.length)+hx.padEnd(Math.ceil(hx.length/64)*64,"0"),value:"0x0"},"Creating…");
+mkForm.classList.add("hide");mkGo.textContent="New market";mkDesc.value="";mkF="open";mkS="new";mkChipPaint();mkLoad()}
+catch(e){err(e)}finally{mkGo.disabled=false}};
 const pvWake=()=>{if(!account){cpSeed="";cpNotes=[]}else if(!cpSeed){const s=cpKeyFor(account);if(/^0x[0-9a-f]{64}$/i.test(s||""))cpUse(s)}
 if(account)pvTo.placeholder=account;pvAssetPaint();pvActSync();cpLoadAssets();fmSync();cpPaint();pvRefresh()};
 const cpDone=()=>{const k=new Set,j=x=>x&&x.job&&!x.self&&x.js==="settled"&&k.add(x.job);
@@ -8860,8 +9020,9 @@ const rcMine=rc.value!==""&&rc.value!==lkWrote.rc;
 const wantLq=q.get("lq")==="1";
 const linkWantsCard=fi>=0||oi>=0||to||n||!isNaN(lk)||q.get("token")||q.get("out");
 if(!wantLq&&lqMode&&linkWantsCard)lqSet(false);
-if(linkWantsCard){if(lnMode)lnSet(false);if(wnMode)wnSet(false);if(pvMode)pvSet(false)}
+if(linkWantsCard){if(lnMode)lnSet(false);if(wnMode)wnSet(false);if(pvMode)pvSet(false);if(mkMode)mkSet(false)}
 setTab(t);
+if(q.get("pm")&&t==="swap"&&CHAIN_ID===1){mkWant=q.get("pm");if(mkMode)mkLoad();else mkSet(true)}
 if(wantLq&&t==="swap"&&!lqMode)lqSet(true);
 if(to&&!rcMine)lkKeep(rc,to);
 if(!isNaN(lk)){const os=[...dly.options].map(x=>+x.value).sort((a,b)=>a-b);
@@ -8907,6 +9068,7 @@ if(brDest())p.set("dest",String(brDest()));
 }else{
 p.set("out",tname(t));
 if(lqMode)p.set("lq","1");
+if(mkMode&&mkSel)p.set("pm",String(mkSel.id));
 if(tab==="book"){p.set("tab","book");if(+dly.value)p.set("lock",dly.value);
 const k=kind.value,v=[["want",outAmt],["id",nftId]];
 if(k!=="fixed"){p.set("kind",k);v.push(["floor",floorAmt])}else if(fill.value==="0")p.set("fill","0");

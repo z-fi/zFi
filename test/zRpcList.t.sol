@@ -21,7 +21,7 @@ contract zRpcListTest is Test {
     /// below: at a new arity those two lines would still compile and still pass
     /// while building a page of the wrong shape, and nothing else in the tree
     /// scans this file for the count.
-    uint256 constant CHUNKS = 25;
+    uint256 constant CHUNKS = 26;
 
     /// The seed curation this version ships, pinned here rather than imported:
     /// the strings live in zSwap's source as private constants, and the pin is
