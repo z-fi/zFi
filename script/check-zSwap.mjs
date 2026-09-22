@@ -858,7 +858,8 @@ if (exported) {
       return { R: () => { for (;;) { const s = BigInt('0x' + Buffer.from(take(32)).toString('hex')); if (s && s < NS) return s; } }, X: () => take(32) };
     };
     const same = (a, b, what) => eq(canon(a), canon(b), what);
-    const sIn = { v: F.note.value, b: BigInt(F.note.blinding), s: F.note.secret, owner: F.note.owner, cx: F.note.cx, cy: F.note.cy, li: 0, path: F.path, root: F.root };
+    // `nu` is the anchor the outputs derive from, so a restored key re-derives them without a memo.
+    const sIn = { v: F.note.value, b: BigInt(F.note.blinding), s: F.note.secret, owner: F.note.owner, cx: F.note.cx, cy: F.note.cy, li: 0, path: F.path, root: F.root, nu: F.nullifier };
     const px = X.cpXferOp([sIn], BigInt(SV.xfer.amount), BigInt(SV.fee), F.ethAssetId, cb, F.seed, stream(SV.xfer.tag).R);
     same(px.op, SV.xfer.op, 'transfer op'); eq(JSON.stringify(px.memos), JSON.stringify(SV.xfer.memos), 'transfer memos');
     const pw = X.cpWtOp(BigInt(SV.wt.value), F.ethAssetId, SV.wt.index, F.seed, cb, stream(SV.wt.tag).R);
