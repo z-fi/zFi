@@ -418,7 +418,18 @@ const send = {
   claim: { tag: 'zswap-vector-claim', leaf: leaf2, memo: memo2, lockRoot: cRoot, lockPath: cPath, op: claim.op, memos: claim.memos },
 };
 
+// Tacit's own KAT for the deposit commitment and id — the primitive an
+// invoice and an ordinary wrap share. The page derives both itself, so this is
+// what catches a divergence rather than the shared-code-path argument.
+const KAT = path.join(TACIT, 'contracts', 'sp1', 'confidential', 'fixtures', 'deposit_id_vectors.json');
+const depositIdKat = fs.existsSync(KAT)
+  ? JSON.parse(fs.readFileSync(KAT, 'utf8')).vectors.map(
+      ({ assetId, value, cx, cy, owner, depositCommit, depositId }) =>
+        ({ assetId, value, cx, cy, owner, depositCommit, depositId }))
+  : die('no deposit_id_vectors.json in ' + KAT + ' — update the Tacit checkout');
+
 const out = {
+  depositIdKat,
   account, sig: old.sig, identityMessage, seed, pub, pool: getAddress(cfg.pool), router: getAddress(cfg.router), executorImpl,
   ethAssetId: ETH, H: { x: word(hA.x), y: word(hA.y) }, amountWei: old.amountWei, index: old.index,
   note, leaf: w.leaf, depositId: w.depositId, commit: w.commit, wrapOp: w.wrapOp, wrapCalldata: w.calldata,

@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url';
 import { JsonRpcProvider, Wallet, formatEther } from 'ethers';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const N = 26;
+const N = 27;
 const DRY = process.argv.includes('--dry-run');
 const tipAt = process.argv.indexOf('--min-tip-gwei');
 const FLOOR = BigInt(Math.round(Number(tipAt > -1 ? process.argv[tipAt + 1] : '0.5') * 1e9));

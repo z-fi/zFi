@@ -6433,7 +6433,7 @@ let c=null;for(const u of AD_API){try{const j=await relayFetch(a.slice(2,4)+".js
 if(my!==adSeq)return;
 if(!c||!Number.isSafeInteger(c.index)||c.index<0||!/^\d{1,40}$/.test(String(c.amount))||!Array.isArray(c.proof)||c.proof.length>64||!c.proof.every(x=>/^0x[0-9a-f]{64}$/i.test(x))||adRoot({...c,a})!=="0x"+strip0x(root).slice(-64).toLowerCase())return adHide();
 const amt=BigInt(c.amount),[cl,bal]=await mc3([{to:TACAD,data:"0x9e34070f"+encUint(BigInt(c.index))},{to:TAC_TOK,data:"0x70a08231"+encAddr(TACAD)}]);
-if(my!==adSeq)return;const n=Math.round(+formatUnits(amt,18)).toLocaleString("en-US")+" TAC",D=new Date(end*1e3);
+if(my!==adSeq)return;const f=+formatUnits(amt,18),n=(f>=1000?Math.round(f).toLocaleString("en-US"):trimAmt(amt,18))+" TAC",D=new Date(end*1e3);
 adHas=true;adShow();
 if(BigInt(cl||"0x0")!==0n){adC=null;adEl.title="";adLine("Tacit airdrop claimed · ",n,"");return}
 if(BigInt(bal||"0x0")<amt)return adHide();

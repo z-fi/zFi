@@ -206,6 +206,23 @@ function settleDeposit(p) {
   advance(p);
 }
 
+describe('the deposit commitment', () => {
+  // Tacit's own KAT (contracts/sp1/confidential/fixtures/deposit_id_vectors.json).
+  // A wrap and a payment request share this primitive, so a drift here would
+  // silently point requests at commitments nobody can pay.
+  test('the page derives Tacit\'s depositCommit and depositId, case for case', async () => {
+    const p = await open();
+    for (const v of F.depositIdKat) {
+      const commit = p.window.eval(`cpDepCommit("${v.cx}","${v.cy}","${v.owner}")`);
+      assert.equal(commit.toLowerCase(), v.depositCommit.toLowerCase(), 'depositCommit for ' + v.value);
+      const id = p.window.eval(`cpDepId(${v.value}n,"${v.depositCommit}","${v.assetId}")`);
+      assert.equal(id.toLowerCase(), v.depositId.toLowerCase(), 'depositId for ' + v.value);
+    }
+    assert.ok(F.depositIdKat.length >= 5);
+    p.close();
+  });
+});
+
 describe('the private bridge tile', () => {
   test('is a mode beside liquidity, launch and names, and they displace each other', async () => {
     const p = await open();

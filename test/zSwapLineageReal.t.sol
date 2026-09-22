@@ -27,7 +27,7 @@ import {zSwap} from "../src/zSwap.sol";
 ///         cache that were told the answer is fixed must all keep getting the
 ///         same bytes afterwards.
 contract zSwapLineageRealTest is Test {
-    uint256 constant CHUNKS = 26;
+    uint256 constant CHUNKS = 27;
 
     address dao = makeAddr("dao");
 
