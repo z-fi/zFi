@@ -472,3 +472,19 @@ max_optimizer_runs = 200
 # On the command line the equivalent is:
 #   --threads 1 --fork-retries 20 --fork-retry-backoff 3000 --compute-units-per-second 100
 compute_units_per_second = 100
+
+# PM ships from solc 0.8.37, which fixes two via-IR codegen bugs on paths PM uses
+# (constants read in checked and unchecked contexts; returndatacopy after a stale
+# returndatasize). The repo stays on 0.8.36 so deployed CREATE2 artifacts keep their
+# initcode; PM's pragma stays ^0.8.36 so the default build still compiles it. Its
+# deploy artifact comes only from this profile, and the artifact scripts pin the
+# compiler version so a default build cannot be mined or verified by mistake:
+#   FOUNDRY_PROFILE=pm forge build src/PM.sol --skip test --skip script
+[profile.pm]
+solc = "0.8.37"
+src = "src"
+test = "test"
+via_ir = true
+optimizer = true
+optimizer_runs = 9_999_999
+evm_version = "prague"

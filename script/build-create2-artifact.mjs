@@ -33,6 +33,7 @@ const SOURCES = {
   zSwapFlags: "src/utils/zSwapFlags.sol",
   zEndpoints: "src/utils/zEndpoints.sol",
   zGuard: "src/utils/zGuard.sol",
+  PM: "src/PM.sol",
   TokenListRenderer: "src/utils/TokenListRenderer.sol",
   FWCPoisonPillProposer: "src/dao/FWCPoisonPill.sol",
   ZorgPageStyle: "src/dao/ZorgPageStyle.sol",
@@ -95,6 +96,10 @@ const PINNED_RUNS = {
   PrecisionLauncherLens: 200,
   FeeSplitter: 200,
 };
+// Contracts built by a non-default compiler profile (see foundry.toml). Their
+// salts commit to that compiler's initcode, so an artifact from any other one
+// must not be picked up.
+const PINNED_SOLC = {PM: "0.8.37"};
 const [name, saltArg, constructorArgsJson = "[]"] = process.argv.slice(2);
 if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name || "") || !saltArg) {
   console.error(
@@ -127,7 +132,8 @@ function findFreshArtifact(contractName) {
     if (
       sourceKey &&
       metadata.sources[sourceKey].keccak256.toLowerCase() === sourceHash.toLowerCase() &&
-      metadata.settings.optimizer.runs === expectedRuns
+      metadata.settings.optimizer.runs === expectedRuns &&
+      (!PINNED_SOLC[contractName] || metadata.compiler.version.startsWith(PINNED_SOLC[contractName] + "+"))
     ) return artifact;
   }
   throw Error(

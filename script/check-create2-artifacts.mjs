@@ -55,6 +55,7 @@ const SOURCES = {
   zQuoterV4: "src/zQuoterV4.sol",
   zEndpoints: "src/utils/zEndpoints.sol",
   zGuard: "src/utils/zGuard.sol",
+  PM: "src/PM.sol",
   PrecisionPoolFactory: "src/pools/PrecisionPoolFactory.sol",
   PrecisionRoute: "src/pools/PrecisionRoute.sol",
   PrecisionZap: "src/pools/PrecisionZap.sol",
@@ -107,6 +108,7 @@ const OPTIMIZER_RUNS = {
   zQuoterV4: 9_999_999,
   zEndpoints: 9_999_999,
   zGuard: 9_999_999,
+  PM: 9_999_999,
   PrecisionPoolFactory: 200,
   PrecisionRoute: 200,
   PrecisionZap: 200,
@@ -118,6 +120,10 @@ const OPTIMIZER_RUNS = {
   PrecisionLauncherLens: 200,
   FeeSplitter: 200,
 };
+// Contracts built by a non-default compiler profile (see foundry.toml). Their
+// salts commit to that compiler's initcode, so an artifact from any other one
+// must not be picked up.
+const PINNED_SOLC = {PM: "0.8.37"};
 const deployInterface = new Interface([
   "function create2Deploy(bytes creationCode,bytes32 salt) returns (address)",
 ]);
@@ -149,7 +155,8 @@ function findFreshArtifact(name) {
     if (
       sourceKey &&
       metadata.sources[sourceKey].keccak256.toLowerCase() === sourceHash.toLowerCase() &&
-      metadata.settings.optimizer.runs === expectedRuns
+      metadata.settings.optimizer.runs === expectedRuns &&
+      (!PINNED_SOLC[name] || metadata.compiler.version.startsWith(PINNED_SOLC[name] + "+"))
     ) return artifact;
   }
   throw Error(
@@ -255,6 +262,8 @@ const specs = [
   // constructor, so the same SafeSummoner calldata lands one address on 1,
   // 8453 and 4663, which is the one the page pins as GUARD.
   {name: "zGuard", args: []},
+  // Parimutuel markets. No constructor; WSTETH, ZROUTER and PERMIT2 are constants.
+  {name: "PM", args: []},
   // The on-chain endpoint roster. Its constructor takes the owner and the seven
   // seeded lists verbatim, so the spec reads deploy/zEndpoints.seeds.json rather
   // than restating them: if that file and the mined address ever disagree, the
