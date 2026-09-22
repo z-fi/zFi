@@ -2965,7 +2965,7 @@ if(lnMode)lnKindQuote();
 lnGo.disabled=false;lnGo.textContent=account?"Launch":CW;
 wnGo.disabled=false;
 if(wnMode){wnPaint();wnQuote();wnRoll()}else wnGo.textContent="Register";
-if(pvMode)pvWake();if(mkMode)mkLoad();render()}
+if(pvMode)pvWake();if(mkMode){mkCount=-1;mkLoad(1)}render()}
 }
 const lqReserveGas=()=>lqList.querySelector(".lqnew")?LQ_CREATE_GAS+300000n:400000n;
 const lqFillMax=(tok,max)=>{
@@ -5615,7 +5615,7 @@ document.addEventListener("visibilitychange",()=>{
 if(document.hidden)return;
 if(wnMode){wnSync();wnRoll()}
 if(pvMode)pvRefresh();
-if(mkMode)mkLoad();
+if(mkMode)mkLoad(++mkTick%4===0);
 if(!account||busy)return;
 autoQ=0;
 refreshBalance();loadPos();
@@ -8194,37 +8194,58 @@ clearInterval(pvTimer);
 if(on){pvTimer=setInterval(()=>{if(document.hidden||!pvMode)return;pvRefresh()},8000);pvWake()}
 fcSync();shieldSync()}
 const PM="0x0000003b32cDD39bc950e56093df98aF220aB5C5",MK_WST="0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0",MK_AS=[[ZERO,"ETH",18,ETH_ICON,"ether"],[MK_WST,"wstETH",18,WSTETH_ICON,"staked ether, earns yield"],["0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48","USDC",6,USDC_ICON,"dollar"],["0x6440f144b7e50d6a8439336510312d2f54beb01d","BOLD",18,BOLD_ICON,"dollar"],["0x23cacffac2674514a6d4f6cd420b4cc2ac921564","tacUSD",18,"","Tacit dollar"]].map(([addr,sym,dec,icon,sub])=>({addr,sym,dec,icon,sub}));
-let mkMode=false,mkSeq=0,mkQSeq=0,mkRvSeq=0,mkAll=[],mkPos={},mkMeta={},mkSel=null,mkF="open",mkS="pot",mkTimer=0,mkBusy=0,mkQv=null,mkWant="";
+let mkMode=false,mkSeq=0,mkQSeq=0,mkRvSeq=0,mkAll=[],mkPos={},mkMeta={},mkSel=null,mkF="open",mkS="pot",mkTimer=0,mkBusy=0,mkQv=null,mkWant="",mkNew="",mkLoading=0,mkAgain=0,mkCount=-1,mkMore=false,mkFee={},mkTick=0;
+const MK_MAX=200;
 const mkTok=a=>MK_AS.find(t=>t.addr===a)||TOKENS.find(t=>t.addr.toLowerCase()===a)||mkMeta[a]||(mkMeta[a]={addr:a,sym:a.slice(0,8),dec:18},tokMeta(a).then(t=>{mkMeta[a]={addr:a,sym:t.sym,dec:+t.dec||0};mkPaintList();mkDetPaint()}).catch(()=>{}),mkMeta[a]);
+const mkEl=(h,e)=>{const n=i=>BigInt("0x"+(h.slice(i,i+64)||"0")),W=k=>n(e+k*64),so=e+Number(W(14))*2,sl=Math.min(Number(n(so)),1024);
+return{id:W(0),r:"0x"+h.slice(e+88,e+128).toLowerCase(),a:"0x"+h.slice(e+152,e+192).toLowerCase(),o:Number(W(3)),c:Number(W(4)),f:Number(W(5)),x:Number(W(6)),l:Number(W(7)),cc:W(8)>0n,s:Number(W(9)),y:W(10),n:W(11),p:W(12),w:W(13),d:new TextDecoder().decode(hexToBytes(h.slice(so+64,so+64+sl*2)))}};
 const mkDec=h=>{h=strip0x(h);const n=i=>BigInt("0x"+(h.slice(i,i+64)||"0")),o=Number(n(0))*2,len=Number(n(o)),r=[];
-for(let i=0;i<len&&i<100;i++){const e=o+64+Number(n(o+64+i*64))*2,W=k=>n(e+k*64),so=e+Number(W(14))*2,sl=Math.min(Number(n(so)),1024);
-r.push({id:W(0),r:"0x"+h.slice(e+88,e+128).toLowerCase(),a:"0x"+h.slice(e+152,e+192).toLowerCase(),o:Number(W(3)),c:Number(W(4)),f:Number(W(5)),x:Number(W(6)),l:Number(W(7)),cc:W(8)>0n,s:Number(W(9)),y:W(10),n:W(11),p:W(12),w:W(13),d:new TextDecoder().decode(hexToBytes(h.slice(so+64,so+64+sl*2)))})}
+for(let i=0;i<len&&i<25;i++)r.push(mkEl(h,o+64+Number(n(o+64+i*64))*2));
 return r};
+const mkDec1=h=>{h=strip0x(h);return mkEl(h,Number(BigInt("0x"+(h.slice(0,64)||"0")))*2)};
+const mkPosDec=(h,ids,P)=>{h=strip0x(h);const A=k=>{const o=Number(BigInt("0x"+h.slice(k*64,k*64+64)))*2,c=Number(BigInt("0x"+h.slice(o,o+64)));return Array.from({length:c},(_,i)=>BigInt("0x"+h.slice(o+64+i*64,o+128+i*64)))},Y=A(0),N=A(1),K=A(2);
+Y.forEach((y,i)=>{if(y||N[i]||K[i])P[ids[i]]={y,n:N[i],c:K[i]}});return P};
+const mkPosCall=ids=>({to:PM,data:"0xafa8f792"+encAddr(account)+pad32("40")+encUint(ids.length)+ids.map(encUint).join("")});
 const mkLive=m=>m.s===0&&nowS()<m.c;
 const mkLeft=c=>{const d=c-nowS();return d<3600?Math.max(1,Math.ceil(d/60))+"m":d<86400?Math.floor(d/3600)+"h":Math.floor(d/86400)+"d"};
 const mkWhen=m=>m.s?["","YES won","NO won","void"][m.s]:nowS()<m.c?mkLeft(m.c)+" left":nowS()>=m.c+2592000?"unresolved — anyone can void":"awaiting result";
+const mkTax=m=>{const sp=m.c-m.o;return Math.max(m.x,sp>0?Math.floor(m.l*Math.min(Math.max(nowS()-m.o,0),sp)/sp):m.l)};
 const mkPct=m=>{const t=m.y+m.n;return t?Number(m.y*1000n/t)/10:50};
 const mkUsd=m=>{const t=mkTok(m.a),v=Number(formatUnits(m.p,t.dec));return/ETH/i.test(t.sym)?v*(ethUsd||2e3):/USD|BOLD|DAI/i.test(t.sym)?v:v*1e-6};
-const mkPosLoad=async all=>{const P={};if(account&&all.length){const cs=[];
-for(let i=0;i<all.length;i+=100){const s=all.slice(i,i+100);cs.push({to:PM,data:"0xafa8f792"+encAddr(account)+pad32("40")+encUint(s.length)+s.map(m=>encUint(m.id)).join("")})}
-(await mc3Deep(cs)).forEach((h,j)=>{if(!h)return;h=strip0x(h);const A=k=>{const o=Number(BigInt("0x"+h.slice(k*64,k*64+64)))*2,c=Number(BigInt("0x"+h.slice(o,o+64)));return Array.from({length:c},(_,i)=>BigInt("0x"+h.slice(o+64+i*64,o+128+i*64)))},Y=A(0),N=A(1),K=A(2);
-Y.forEach((y,i)=>{if(y||N[i]||K[i])P[all[j*100+i].id]={y,n:N[i],c:K[i]}})})}
+const mkPosLoad=async all=>{const P={};if(account&&all.length){const ps=[];
+for(let i=0;i<all.length;i+=100)ps.push(all.slice(i,i+100).map(m=>m.id));
+(await mc3Deep(ps.map(mkPosCall))).forEach((h,j)=>{if(h)mkPosDec(h,ps[j],P)})}
 mkPos=P};
-const mkLoad=async()=>{if(!mkMode)return;const my=++mkSeq;
-try{const n=Number(BigInt(await rpc(C,[{to:PM,data:"0xec979082"},L]))),cs=[];
-for(let s=0;s<n;s+=25)cs.push({to:PM,data:"0x80968d48"+encUint(s)+encUint(25)});
-const all=(cs.length?await mc3Deep(cs):[]).flatMap(h=>h?mkDec(h):[]);await mkPosLoad(all);if(my!==mkSeq)return;mkAll=all;
+const mkLoad=async full=>{if(!mkMode)return;if(mkLoading){mkAgain=mkAgain||!!full;return}
+mkLoading=1;
+try{await mkLoad0(full)}finally{mkLoading=0;if(mkAgain){mkAgain=0;mkLoad(1)}}};
+const mkLoad0=async full=>{const my=++mkSeq;
+try{const n=Number(BigInt(await rpc(C,[{to:PM,data:"0xec979082"},L])));
+if(!full&&!mkWant&&n===mkCount&&mkAll.length){
+if(!mkSel){mkPaintList();return}
+const cs=[{to:PM,data:"0xeb44fdd3"+encUint(mkSel.id)}];if(account)cs.push(mkPosCall([mkSel.id]));
+const[h,q]=await mc3Deep(cs);if(my!==mkSeq||!h)return;
+const m=mkDec1(h),i=mkAll.findIndex(x=>x.id===m.id);if(i<0)return;
+mkAll[i]=m;mkSel=m;if(q)mkPosDec(q,[m.id],mkPos);
+mkNote.textContent="";mkPaintList();mkDetPaint();if(mkAmt.value.trim())mkQuote();return}
+const cs=[];for(let s=0;s<n&&s<MK_MAX;s+=25)cs.push({to:PM,data:"0x80968d48"+encUint(s)+encUint(25)});
+const hs=cs.length?await mc3Deep(cs):[];
+if(hs.some(h=>!h))throw Error("partial");
+const all=hs.flatMap(mkDec);await mkPosLoad(all);if(my!==mkSeq)return;
+mkAll=all;mkCount=n;mkMore=n>MK_MAX;mkFee={};
+if(mkNew){const d=mkNew;mkNew="";mkSel=all.find(m=>m.d===d)||mkSel}
 if(mkWant){const w=mkWant.toLowerCase();mkWant="";mkSel=all.find(m=>String(m.id)===w||toHex(m.id)===w)||mkSel;if(mkSel){mkF=mkLive(mkSel)?"open":"done";mkChipPaint()}}
 else if(mkSel)mkSel=all.find(m=>m.id===mkSel.id)||null;
-mkNote.textContent="";mkPaintList();mkDetPaint()}catch{if(my===mkSeq)mkNote.textContent="Could not load markets — retrying."}};
+mkNote.textContent="";mkPaintList();mkDetPaint();if(mkSel&&mkAmt.value.trim())mkQuote()}
+catch{if(my===mkSeq)mkNote.textContent=mkAll.length?"Could not refresh just now — showing the last read.":"Could not load markets — retrying."}};
 const mkChipPaint=()=>{for(const c of mkChips.querySelectorAll("[data-f]"))c.classList.toggle("on",c.dataset.f===mkF);mkSort.value=mkS};
 const mkRow=m=>{const t=mkTok(m.a),p=mkPct(m),me=mkPos[m.id];
 return`<div class="lqrow mkr${mkSel&&mkSel.id===m.id?" on":""}" data-k="${m.id}" role="button" tabindex="0"><div class="lqband">${safeSym(m.d,140)}${m.d.length>140?"…":""}</div><div class="mkbar"><i style="width:${p}%"></i></div><div class="lqmeta"><span>YES ${p}%</span><span>${sigAmt(m.p,t.dec,4)} ${safeSym(t.sym)}</span><span>${mkWhen(m)}</span>${me?`<span class="lqtag">${m.s&&me.c?"claim":"yours"}</span>`:""}</div></div>`};
 const mkPaintList=()=>{if(!mkMode)return;const me=(account||"").toLowerCase(),q=mkFind.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
 const r=mkAll.filter(m=>(mkF==="open"?mkLive(m):mkF==="done"?!mkLive(m):!!mkPos[m.id]||m.r===me)&&q.every(t=>(m.d+" "+mkTok(m.a).sym+" "+m.r).toLowerCase().includes(t)));
 r.sort(mkS==="pot"?(a,b)=>mkUsd(b)-mkUsd(a):mkS==="end"?(a,b)=>mkF==="done"?b.c-a.c:a.c-b.c:(a,b)=>b.o-a.o);
-cpSet(mkList,r.length?r.slice(0,100).map(mkRow).join(""):`<div class="lqempty">${!mkAll.length?"No markets yet — create the first.":mkF==="mine"&&!account?"Connect a wallet to see yours.":"No markets match."}</div>`);
-mkSub.textContent=mkAll.length?mkAll.length+(mkAll.length>1?" markets":" market"):""};
+cpSet(mkList,r.length?r.slice(0,100).map(mkRow).join(""):`<div class="lqempty">${mkCount<0?"Reading markets…":!mkAll.length?"No markets yet — create the first.":mkF==="mine"&&!account?"Connect a wallet to see yours.":"No markets match."}</div>`);
+mkSub.textContent=mkAll.length?mkAll.length+(mkAll.length>1?" markets":" market")+(mkMore?", newest first":""):""};
 const mkDetPaint=()=>{if(!mkMode)return;const m=mkSel;mkDet.classList.toggle("hide",!m);if(!m)return;
 const t=mkTok(m.a),me=mkPos[m.id]||{y:0n,n:0n,c:0n},live=mkLive(m),isR=!!account&&m.r===account.toLowerCase(),net=m.p-m.p*BigInt(m.f)/10000n,X=s=>s?"×"+(Number(net*1000n/s)/1000).toFixed(2):"—",S=safeSym(t.sym),lapsed=nowS()>=m.c+2592000;
 mkT.textContent=m.d;
@@ -8234,18 +8255,21 @@ mkAmtL.classList.toggle("hide",!live);
 if(mkPay._k!==String(m.id)){mkPay._k=String(m.id);mkPay.innerHTML=(m.a===ZERO?[ZERO]:m.a===MK_WST?[ZERO,MK_WST]:[m.a]).map(a=>`<option value="${a}">${safeSym(mkTok(a).sym)}</option>`).join("");mkAmt.value="";mkQ.textContent="";mkQv=null;mkPayB.disabled=mkPay.options.length<2;mkIco(mkPayB,mkTok(mkPay.value))}
 const B=(a,l)=>`<button type="button" class="lqbtn" data-a="${a}">${l}</button>`;
 let h=live?B("yes","Buy YES")+B("no","Buy NO"):"";
-if(live&&m.x){if(me.y)h+=B("xy","Sell YES");if(me.n)h+=B("xn","Sell NO")}
+if(live&&m.x){const sv=q=>sigAmt(q-q*BigInt(mkTax(m))/10000n,t.dec,4)+" "+S;
+if(me.y)h+=B("xy",`Sell YES (${sv(me.y)})`);if(me.n)h+=B("xn",`Sell NO (${sv(me.n)})`)}
 if(m.s&&me.c)h+=B("claim",`Claim ${sigAmt(me.c,t.dec,6)} ${S}`);
 if(!m.s&&(isR||!live&&lapsed)){if(isR&&live&&m.cc)h+=B("close","Close now");if(isR&&!live&&!lapsed)h+=B("ry","Resolve YES")+B("rn","Resolve NO");h+=B("void","Void")}
 cpSet(mkActs,h);
-if(isR)rpc(C,[{to:PM,data:"0xffecc085"+encAddr(account)+encAddr(m.a)},L]).then(BigInt).then(f=>{if(f&&mkSel===m&&!mkActs.querySelector('[data-a="fees"]')){mkActs.insertAdjacentHTML("beforeend",B("fees",`Fees ${sigAmt(f,t.dec,6)} ${S}`));mkActs._h=""}}).catch(()=>{})};
+if(isR){const fk=account+":"+m.a;
+if(mkFee[fk]===undefined){mkFee[fk]=0n;rpc(C,[{to:PM,data:"0xffecc085"+encAddr(account)+encAddr(m.a)},L]).then(BigInt).then(f=>{mkFee[fk]=f;if(f&&mkSel===m)mkDetPaint()}).catch(()=>{})}
+else if(mkFee[fk]>0n){mkActs.insertAdjacentHTML("beforeend",B("fees",`Fees ${sigAmt(mkFee[fk],t.dec,6)} ${S}`));mkActs._h=""}}};
 const mkQuote=async()=>{const m=mkSel,my=++mkQSeq;mkQv=null;if(!m||!mkLive(m))return mkQ.textContent="";
 const t=mkTok(m.a),pay=mkPay.value;let v;try{v=parseUnits(mkAmt.value||"0",mkTok(pay).dec)}catch(e){return mkQ.textContent=e.message}
 if(!v)return mkQ.textContent="";
 try{const a=pay===m.a?v:BigInt(await rpc(C,[{to:MK_WST,data:"0xbb2952fc"+encUint(v)},L])),[hy,hn]=await mc3Deep([true,false].map(y=>({to:PM,data:"0x124d6efc"+encUint(m.id)+encBool(y)+encUint(a)})));if(my!==mkQSeq)return;
 const d=h=>{h=strip0x(h||"");return[BigInt("0x"+(h.slice(0,64)||"0")),BigInt("0x"+(h.slice(64,128)||"0"))]},[sy,py]=d(hy),[sn,pn]=d(hn),S=safeSym(t.sym);
 mkQv={v,sy,sn};mkQ.textContent=`Wins ${sigAmt(py,t.dec,6)} ${S} if YES · ${sigAmt(pn,t.dec,6)} ${S} if NO`}catch{if(my===mkQSeq)mkQ.textContent="Could not quote."}};
-const mkSend=async(req,verb)=>{stat.textContent=verb;await rpc(C,[req,L]);await settle(await sendTx([req]));mkLoad()};
+const mkSend=async(req,verb)=>{stat.textContent=verb;await rpc(C,[req,L]);await settle(await sendTx([req]));mkCount=-1;mkLoad(1)};
 const mkBuy=async yes=>{const m=mkSel,pay=mkPay.value;await mkQuote();const q=mkQv;if(!q)throw Error(mkQ.textContent||"Enter an amount.");
 const v=q.v,min=(yes?q.sy:q.sn)*BigInt(1e4-Math.round(slipPct()*100))/10000n,H=encUint(m.id)+encBool(yes),V="Betting…",T=d=>({from:account,to:PM,data:d,value:"0x0"});
 if(pay===ZERO)return mkSend({from:account,to:PM,data:"0xc2b5b4c8"+H+encAddr(account)+encUint(min)+pad32("a0")+encUint(0),value:toHex(v)},V);
@@ -8256,7 +8280,7 @@ const pi=await permitInfo(pay,account),r1=pi&&await tryReq(async()=>"0x2a304886"
 if(r1)return mkSend(r1,V);
 const r2=(await Promise.all([rpc(C,[{to:pay,data:balOf(account)},L]).then(BigInt),p2Ready(pay,account)])).every(x=>x>=v)&&await tryReq(async()=>{const[n,tl]=await p2Sig(pay,account,v,dl,PM);return"0xb390d8b5"+b+encUint(n)+encUint(dl)+pad32("100")+tl});
 if(r2)return mkSend(r2,V);
-await settle(await sendWith(aps,T("0x28ccbb45"+b),V));mkLoad()};
+await settle(await sendWith(aps,T("0x28ccbb45"+b),V));mkCount=-1;mkLoad(1)};
 const mkPaint=()=>{const on=mkMode;
 mk.setAttribute("aria-pressed",on?"true":"false");
 mk.classList.toggle("on",on);
@@ -8276,7 +8300,7 @@ if(on&&pvMode)pvSet(false);
 mkPaint();
 stat.textContent="";mkNote.textContent="";
 clearInterval(mkTimer);
-if(on){loadEthUsd();mkLoad();mkTimer=setInterval(()=>{if(!document.hidden&&mkMode&&!mkBusy)mkLoad()},30000)}
+if(on){loadEthUsd();mkTick=0;mkLoad(1);mkTimer=setInterval(()=>{if(!document.hidden&&mkMode&&!mkBusy)mkLoad(++mkTick%4===0)},30000)}
 fcSync()}
 mk.onclick=()=>{sBlip();mkSet(!mkMode);if(!mkMode)update()};
 const mkIco=(b,t)=>{b.textContent="";if(t.icon){const im=new Image(16,16);im.src=t.icon;im.alt="";b.append(im)}else{const sp=document.createElement("span");sp.innerHTML=genIcon(t.sym);b.append(sp.firstChild)}b.append(safeSym(t.sym))};
@@ -8315,8 +8339,8 @@ try{const d=mkDesc.value.trim(),db=new TextEncoder().encode(d);if(!d)throw Error
 const rv=mkRes.value.trim();let r=account;if(rv){const e=rcErr(rv);if(e)throw Error(e);r=await rcvOf(rv,true);if(!r)throw Error("Resolver name not registered.")}
 const cl=mkClose.value==="0"?Math.floor(new Date(mkAt.value).getTime()/1e3):nowS()+ +mkClose.value;if(!(cl>nowS()+300))throw Error("Pick a close time in the future.");
 const bp=v=>{const x=Math.round(+v*100);if(!(x>=0&&x<=5000))throw Error("Taxes run from 0 to 50%.");return x},hx=cpHex(db);
-await mkSend({from:account,to:PM,data:"0x6f406fa1"+pad32("e0")+encAddr(r)+encAddr(mkAsset.value)+encUint(cl)+encBool(mkCan.checked)+encUint(bp(mkExit.value))+encUint(bp(mkLate.value))+encUint(db.length)+hx.padEnd(Math.ceil(hx.length/64)*64,"0"),value:"0x0"},"Creating…");
-mkForm.classList.add("hide");mkGo.textContent="New market";mkDesc.value="";mkF="open";mkS="new";mkChipPaint();mkLoad()}
+mkNew=d;await mkSend({from:account,to:PM,data:"0x6f406fa1"+pad32("e0")+encAddr(r)+encAddr(mkAsset.value)+encUint(cl)+encBool(mkCan.checked)+encUint(bp(mkExit.value))+encUint(bp(mkLate.value))+encUint(db.length)+hx.padEnd(Math.ceil(hx.length/64)*64,"0"),value:"0x0"},"Creating…");
+mkForm.classList.add("hide");mkGo.textContent="New market";mkDesc.value="";mkF="open";mkS="new";mkChipPaint();mkCount=-1;mkLoad(1)}
 catch(e){err(e)}finally{mkGo.disabled=false}};
 const pvWake=()=>{if(!account){cpSeed="";cpNotes=[]}else if(!cpSeed){const s=cpKeyFor(account);if(/^0x[0-9a-f]{64}$/i.test(s||""))cpUse(s)}
 if(account)pvTo.placeholder=account;pvAssetPaint();pvActSync();cpLoadAssets();fmSync();cpPaint();pvRefresh()};

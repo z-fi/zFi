@@ -43,9 +43,9 @@ const posRet = (rows) => {
   return '0x' + w(96) + w(96 + a.length / 2) + w(96 + (a.length + b.length) / 2) + a + b + c;
 };
 
-const RAIN = 0xa0n, BALL = 0xb0n, STABLE = 0xc0n;
+const RAIN = 0xa0n, BALL = 0xb0n, STABLE = 0xc0n, EXIT = 0xd0n;
 
-function pmChain({ held = {} } = {}) {
+function pmChain({ held = {}, ...extra } = {}) {
   const c = new MockChain();
   c.setNative(A.ACCOUNT, 100n * ONE);
   const t = now();
@@ -53,9 +53,11 @@ function pmChain({ held = {} } = {}) {
     { id: RAIN, d: 'Will it rain in Lisbon on Friday?', r: A.OTHER, a: WST, o: t - 3600, c: t + 3 * 86400, y: 3n * ONE, n: ONE, p: 4n * ONE, cc: true },
     { id: BALL, d: 'Does the home side win the final?', r: A.OTHER, a: A.ZERO, o: t - 9 * 86400, c: t - 86400, s: 1, y: 2n * ONE, n: 2n * ONE, p: 4n * ONE, w: 2n * ONE },
     { id: STABLE, d: 'BOLD above peg at month end', r: A.ACCOUNT, a: BOLD, o: t - 60, c: t + 20 * 86400, y: 500n * ONE, n: 1500n * ONE, p: 2000n * ONE },
+    { id: EXIT, d: 'Exitable market', r: A.OTHER, a: A.ZERO, o: t - 60, c: t + 5 * 86400, x: 200, y: ONE, n: ONE, p: 2n * ONE },
   ];
-  c.answer(PM, 'ec979082', '0x' + w(markets.length));
-  c.answer(PM, '80968d48', (d) => (word(d, 0) === 0n ? marketsRet(markets) : marketsRet([])));
+  const all = () => [...(c.__extra || []), ...markets];
+  c.answer(PM, 'ec979082', () => '0x' + w(all().length));
+  c.answer(PM, '80968d48', (d) => (word(d, 0) === 0n ? marketsRet(all()) : marketsRet([])));
   c.answer(PM, 'afa8f792', (d) => {
     const n = Number(word(d, 2)), ids = Array.from({ length: n }, (_, i) => word(d, 3 + i));
     return posRet(ids.map((id) => held[id] ?? [0n, 0n, 0n]));
@@ -91,7 +93,7 @@ test('markets mode', async (t) => {
     assert.equal(p.$('mk').getAttribute('aria-pressed'), 'true');
     assert.ok(p.$('swap').classList.contains('hide'), 'the swap button yields to the markets panel');
     const open = rows(p);
-    assert.equal(open.length, 2, 'the settled market is not in Open');
+    assert.equal(open.length, 3, 'the settled market is not in Open');
   });
 
   await t.test('ranks by USD liquidity and matches every search term', async () => {
@@ -314,5 +316,44 @@ test('markets mode', async (t) => {
     const notes = () => p.window.__chime.voices.slice(before).map((v) => v.map((n) => Math.round(n.f ?? n)).join(','));
     await p.waitFor(() => notes().some((n) => n === '392,494,587,784'), { label: 'confirmed chime' });
     assert.ok(notes().includes('392,587'), 'the accepted chime came first');
+  });
+
+  await t.test('a sell says what it returns, net of the exit tax', async () => {
+    const chain = pmChain({ held: { [EXIT]: [ONE, 0n, 0n] } });
+    const p = await openMarkets(chain);
+    await pick(p, EXIT);
+    assert.match(act(p, 'xy').textContent, /Sell YES \(0\.98 ETH\)/, '2% exit tax shown before the tap');
+    assert.equal(act(p, 'xn'), null, 'no NO position, no sell button');
+    act(p, 'xy').click();
+    await p_wait(chain, 'exit sent');
+    const tx = chain.sentTo(PM)[0];
+    assert.equal(tx.data.slice(2, 10), '0fc95438', 'exit');
+    assert.equal(word(tx.data, 2), ONE, 'sells the whole side');
+  });
+
+  await t.test('opens the market it just created', async () => {
+    const chain = pmChain();
+    const q = 'Fresh question for the list';
+    chain.answer(PM, '6f406fa1', () => {
+      const t = now();
+      chain.__extra = [{ id: 0xe0n, d: q, r: A.ACCOUNT, a: A.ZERO, o: t, c: t + 86400, y: 0n, n: 0n, p: 0n, cc: true }];
+      return '0x' + w(1);
+    });
+    const p = await openMarkets(chain);
+    p.click('mkGo');
+    p.type('mkDesc', q);
+    p.click('mkGo');
+    await p_wait(chain, 'create sent');
+    await p.waitFor(() => p.$('mkT').textContent === q, { label: 'created market selected' });
+  });
+
+  await t.test('a load costs one count read, one page and one positions read', async () => {
+    const chain = pmChain();
+    const p = await openMarkets(chain);
+    await p.settle();
+    const to = (sel) => chain.calls.filter((c) => c.to === PM && c.selector === sel).length;
+    assert.equal(to('ec979082'), 1, 'marketCount');
+    assert.equal(to('80968d48'), 1, 'one getMarkets page for four markets');
+    assert.equal(to('afa8f792'), 1, 'one positions read');
   });
 });
