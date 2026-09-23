@@ -8128,7 +8128,7 @@ for(const h of js){let t;try{t=JSON.parse(decStr(h))}catch{continue}const id=Str
 if(!cand.length)return;const rd=await cfgBatch(cand.flatMap(c=>[{to:CP_POOL,data:"0x"+SEL_CPASSET+pad32(c.id)},{to:CP_POOL,data:"0x"+SEL_CPCANON+pad32(c.id)}])),out=[];
 cand.forEach((c,i)=>{const a=strip0x(rd[2*i]||""),w=j=>BigInt("0x"+(cpWord(a,j)||"0")),u="0x"+cpWord(a,1).slice(24),eth=c.id===CP_ETH;
 if(a.length<384||w(0)!==1n||!w(2)||w(5)>36n||(eth?u!==ZERO:w(4)!==1n||u===ZERO||retAddr(rd[2*i+1])!==u))return;
-out.push({id:c.id,tok:u,sym:c.sym,pub:eth?"ETH":TOKENS.find(t=>t.addr===u)?.sym||c.sym,dec:Number(w(5)),scale:w(2),icon:c.icon})});
+out.push({id:c.id,tok:u,sym:c.sym,pub:eth?"ETH":TOKENS.find(t=>t.addr===u)?.sym||(c.id===CP_CBTC?"tacBTC":c.id===CP_CUSD?"tacUSD":c.sym),dec:Number(w(5)),scale:w(2),icon:c.icon})});
 const e=out.find(a=>a.id===CP_ETH);cpAssets=[e||CP_ETH_AS,...out.filter(a=>a!==e)];pvAssetPaint();if(pvMode)cpPaint();shieldSync();
 const f=TOKENS[fromSel.value],t=TOKENS[toSel.value];if(!pvMode&&[f,t].some(x=>x&&tacitId(x)))update(true)}catch{cpAsT=0}})());
 function tacitTag(t){try{if(!t||t.addr===ZERO||CHAIN_ID!==1)return"";const A=cpAssets.find(a=>a.tok===t.addr.toLowerCase());if(!A)return"";
