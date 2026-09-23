@@ -20,6 +20,7 @@
  *   node script/serve-zswap.mjs            # zSwap.html on :8080
  *   node script/serve-zswap.mjs --preview  # the simulated build instead
  *   node script/serve-zswap.mjs --port 3000
+ *   node script/serve-zswap.mjs --file deploy/roster-console.html
  *
  * Then open the printed URL, connect a wallet on mainnet, and everything is
  * live - including transactions. Use small amounts.
@@ -35,9 +36,18 @@ const has = (f) => argv.includes(f);
 const val = (f, d) => { const i = argv.indexOf(f); return i >= 0 ? argv[i + 1] : d; };
 
 const PREVIEW = has('--preview');
-const FILE = PREVIEW
-  ? path.join(ROOT, 'dapp', 'preview', 'index.html')
-  : path.join(ROOT, 'zSwap.html');
+// Any page in the repo that wants a real origin - the roster console needs one
+// for the same reason this file exists, and for nothing else.
+const CUSTOM = val('--file', null);
+const FILE = CUSTOM
+  ? path.resolve(ROOT, CUSTOM)
+  : PREVIEW
+    ? path.join(ROOT, 'dapp', 'preview', 'index.html')
+    : path.join(ROOT, 'zSwap.html');
+if (CUSTOM && !FILE.startsWith(ROOT + path.sep)) {
+  console.error('--file must name a page inside the repo');
+  process.exit(1);
+}
 const PORT = Number(val('--port', 8080));
 
 if (!fs.existsSync(FILE)) {
@@ -50,7 +60,8 @@ if (!fs.existsSync(FILE)) {
 // the whole edit loop. No watcher, no build step, no cache to bust.
 const server = http.createServer((req, res) => {
   const url = (req.url || '/').split('?')[0];
-  if (url !== '/' && url !== '/index.html' && url !== '/zSwap.html') {
+  if (url !== '/' && url !== '/index.html' && url !== '/zSwap.html'
+      && url !== '/' + path.basename(FILE)) {
     res.writeHead(404, { 'content-type': 'text/plain' });
     return res.end('not found');
   }
@@ -73,7 +84,7 @@ server.listen(PORT, '127.0.0.1', () => {
   console.log(`  serving ${rel}`);
   console.log(`  http://localhost:${PORT}`);
   console.log('');
-  if (!PREVIEW) {
+  if (!PREVIEW && !CUSTOM) {
     console.log('  Wallet prompts are real and transactions are real. Contracts in play:');
     console.log('    factory  0x000000Eb27B557aB426d9E99cFd54EC455799e81');
     console.log('    route    0x0000007Be74558A1F8c9045301c6F44C8eD0c9eB');
