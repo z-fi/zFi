@@ -1170,7 +1170,7 @@ describe('a store that only looks like one', () => {
     chain.remotes['blastapi'] = l1;
     const p = await loadPage({
       chain, hash: null, storage: RELAY_ON,
-      patch: [['try{LS=localStorage||{}}catch{LS={}}', 'LS={"zswap:relay":"1"}']],
+      patch: [['try{LS=localStorage||{}}catch{LS={}}', 'LS={"zswap:relay":"1"};']],
     });
     await p.connect({ pin: false });
     p.click('tabSend');

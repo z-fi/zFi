@@ -203,6 +203,7 @@ describe('the shielded assets come from the token list', () => {
     const opts = [...p.$('pvAsset').options].map(o => o.textContent);
     assert.deepEqual(opts, ['tETH', 'TAC'], 'a card whose token the pool does not mint is left out');
     assert.equal(p.text('pvUnit'), 'ETH');
+    assert.equal(p.$('pvChain').value, '1', 'a withdrawal defaults to the destination that needs no escrow record kept here');
     p.select('pvAsset', TAC_ID);
     assert.equal(p.text('pvUnit'), 'TAC', 'the amount is in the public token you give up');
     const chains = [...p.$('pvChain').options];

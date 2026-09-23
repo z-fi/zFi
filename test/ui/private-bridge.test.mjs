@@ -165,7 +165,7 @@ const SLOW = { timeout: 15000 };
 
 async function open(opts = {}) {
   const chain = withPool(opts.chain ?? new MockChain(), opts);
-  const p = await loadPage({ chain, storage: opts.storage, chime: opts.chime, hash: opts.hash });
+  const p = await loadPage({ chain, storage: opts.storage, chime: opts.chime, hash: opts.hash, patch: opts.patch });
   // Capture relay bodies: the fetch mock only records URL + method, and the
   // witness is the thing under test.
   const inner = p.window.fetch;
@@ -371,6 +371,7 @@ describe('exiting to Base through the relay', () => {
     const net = NET_BASE * 10n ** 10n;
     const recipe = baseRecipe(net);
     p.chain.escrow = escrowOf(recipe);
+    p.select('pvChain', '8453');
     p.select('pvAct', 'out');
     p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
     await p.waitFor(() => p.window.__relayPosts.length === 2, { label: 'the unwrap to reach the relay' });
@@ -452,6 +453,7 @@ describe('exiting to Base through the relay', () => {
     const net = NET_BASE * 10n ** 10n;
     const recipe = baseRecipe(net);
     p.chain.escrow = escrowOf(recipe);
+    p.select('pvChain', '8453');
     p.select('pvAct', 'out');
     p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
     await p.waitFor(() => p.window.__relayPosts.length === 2, SLOW);
@@ -481,6 +483,7 @@ describe('exiting to Base through the relay', () => {
     poke(p);
     await p.waitFor(() => /exit/.test(p.text('pvList')), SLOW);
     p.chain.escrow = escrowOf(baseRecipe(NET_BASE * 10n ** 10n));
+    p.select('pvChain', '8453');
     p.select('pvAct', 'out');
     p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
     await p.waitFor(() => p.window.__relayPosts.length === 2, SLOW);
@@ -515,10 +518,12 @@ describe('exiting to Base through the relay', () => {
       }
       return inner(url, init);
     };
+    p.select('pvChain', '8453');
     p.select('pvAct', 'out');
     p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
     await p.waitFor(() => /relay failed/.test(p.text('pvList')), { label: 'the retry to be offered', ...SLOW });
     p.chain.gasPrice = GAS * 2n;
+    p.select('pvChain', '8453');
     p.select('pvAct', 'out');
     p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
     await p.waitFor(() => p.window.__relayPosts.length === 3, { label: 'the retry to reach the relay', ...SLOW });
@@ -537,6 +542,7 @@ describe('exiting to Base through the relay', () => {
     poke(p);
     await p.waitFor(() => /exit/.test(p.text('pvList')), SLOW);
     p.chain.escrow = A.OTHER;
+    p.select('pvChain', '8453');
     p.select('pvAct', 'out');
     p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
     await p.waitFor(() => /Escrow address mismatch/.test(p.text('stat')), { label: 'the mismatch refusal' });
@@ -555,6 +561,7 @@ describe('exiting to Base through the relay', () => {
     p.chain.escrow = escrowOf(baseRecipe(net));
     // A relay that activates reports it pending from the moment the exit is queued.
     p.chain.relay.status = { status: 'pending', activation: 'pending', activateTx: null };
+    p.select('pvChain', '8453');
     p.select('pvAct', 'out');
     p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
     await p.waitFor(() => p.window.__relayPosts.length === 2, SLOW);
@@ -645,6 +652,7 @@ describe('exiting yourself, in one transaction', () => {
     p.select('pvPath', 'self');
     const pv = '0x' + '12'.repeat(200) + F.nullifier.slice(2), pr = '0x' + 'ab'.repeat(260);
     p.chain.relay.status = { status: 'proven', publicValues: pv, proof: pr };
+    p.select('pvChain', '8453');
     p.select('pvAct', 'out');
     p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
     await p.waitFor(() => p.window.__relayPosts.length === 2);
@@ -843,6 +851,106 @@ describe('self-help', () => {
     await q.settle();
     assert.equal(q.window.localStorage['zswap:cpk:' + A.ACCOUNT.toLowerCase()], F.seed);
     p.close(); q.close();
+  });
+});
+
+/**
+ * Safari private browsing and a blocked origin both leave the page with a plain
+ * object in place of `localStorage`, so nothing written survives the tab. An L2
+ * exit cannot be rebuilt from the key — its escrow recipe pins gas quoted at
+ * build time — so it is refused. An Ethereum withdrawal pins nothing: the relay
+ * settles it to the address, and a note that never settles stays spendable.
+ */
+/**
+ * The relay is the one thing here the page cannot do itself: a deposit reaches
+ * the pool without it, but nothing moves until something proves. `zEndpoints`
+ * hands out a LIST of relays, so a submit walks it — and the job records which
+ * one took it, because only that one can be polled for the proof.
+ */
+describe('a relay that does not answer', () => {
+  const roster = (...rs) => ({
+    storage: { 'zswap:ep2': JSON.stringify({ t: Date.now(), v: [[], [], [], rs, [], [], [], [], []] }) },
+  });
+
+  test('the roster keeps every relay it names, the built-in one last', async () => {
+    const p = await open(roster('https://a.relay/', 'https://b.relay'));
+    assert.deepEqual([...p.window.eval('CP_RELAYS')],
+      ['https://a.relay', 'https://b.relay', 'https://api.tacit.finance'],
+      'trailing slashes trimmed, and the built-in relay stays as the last resort');
+    assert.equal(p.window.eval('cpRelayBase()'), 'https://a.relay');
+    p.close();
+  });
+
+  test('a submit falls over to the next one, and the job remembers which took it', async () => {
+    const p = await open(roster('https://down.relay'));
+    assert.equal(p.window.eval('cpRelayBase()'), 'https://down.relay');
+    await unlock(p);
+    p.type('pvAmt', '0.01');
+    p.click('pvGo');
+    await p.waitFor(() => p.chain.sentTo(POOL).length === 1, { label: 'the deposit to be sent' });
+    await p.waitFor(() => /settling it into the pool/.test(p.text('stat')), { label: 'the deposit to be taken', ...SLOW });
+    assert.equal(p.window.__relayPosts.length, 2, 'the same submit, offered to each relay in turn');
+    const tried = (p.chain.httpLog || []).filter(h => /\/confidential\/submit/.test(h.url)).map(h => h.url);
+    assert.deepEqual(tried, ['https://down.relay/confidential/submit', 'https://api.tacit.finance/confidential/submit']);
+    assert.equal(p.window.eval('cpNotes[0].rb'), 'https://api.tacit.finance',
+      'the job is polled at the relay that answered, not the one that did not');
+    assert.equal(p.window.eval('cpNotes[0].job'), '0xjob1');
+    p.close();
+  });
+
+  test('a relay the viewer pinned is used alone, with no fallback', async () => {
+    const p = await open({ storage: {
+      'zswap:ep2': JSON.stringify({ t: Date.now(), v: [[], [], [], [], [], [], [], [], []] }),
+      'zswap:cprelay': 'https://down.relay',
+    } });
+    assert.equal(p.window.eval('cpRelayBase()'), 'https://down.relay');
+    assert.ok([...p.window.eval('CP_RELAYS')].includes('https://api.tacit.finance'), 'which would have answered');
+    await unlock(p);
+    await deposit(p);
+    await p.waitFor(() => /did not take the settle/.test(p.text('stat')), { label: 'the pinned relay to be the only one tried', ...SLOW });
+    assert.equal(p.window.eval('cpNotes[0].job'), undefined, 'no job: the viewer\'s choice was not second-guessed');
+    assert.equal(p.chain.sentTo(POOL).length, 1, 'the deposit itself still reached the pool');
+    p.close();
+  });
+});
+
+describe('a browser that keeps nothing', () => {
+  const noStore = { patch: [['try{LS=localStorage||{}}catch{LS={}}', 'LS={};']] };
+
+  test('an Ethereum withdrawal still goes through', async () => {
+    const p = await open(noStore);
+    await unlock(p);
+    await deposit(p);
+    settleDeposit(p);
+    poke(p);
+    await p.waitFor(() => /exit/.test(p.text('pvList')), SLOW);
+    p.select('pvChain', '1');
+    p.type('pvTo', A.OTHER);
+    p.select('pvAct', 'out');
+    p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
+    await p.waitFor(() => p.window.__relayPosts.length === 2, SLOW);
+    const post = p.window.__relayPosts[1];
+    assert.equal(post.type, 'unwrap');
+    assert.equal(post.op.recipient, A.OTHER.toLowerCase(), 'paid straight to the address');
+    assert.doesNotMatch(p.text('stat'), /storage|private browsing/);
+    p.close();
+  });
+
+  test('an exit to an L2 is refused before anything is proven', async () => {
+    const p = await open(noStore);
+    await unlock(p);
+    await deposit(p);
+    settleDeposit(p);
+    poke(p);
+    await p.waitFor(() => /exit/.test(p.text('pvList')), SLOW);
+    const posts = p.window.__relayPosts.length;
+    p.select('pvChain', '8453');
+    p.select('pvAct', 'out');
+    p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
+    await p.waitFor(() => /storage|private browsing/.test(p.text('stat')), { label: 'the refusal', ...SLOW });
+    assert.equal(p.window.__relayPosts.length, posts, 'an escrow whose terms were never written is one that cannot be taken back');
+    assert.equal(p.chain.calls.filter(c => c.selector === SEL.IMPL).length, 0, 'the bridge pins were never read');
+    p.close();
   });
 });
 
@@ -1174,6 +1282,7 @@ describe('the rescue key', () => {
     recipe.calls[0].data = '0x9a2ac6d5' + coder.encode(['address', 'uint32', 'bytes'], [A.OTHER, 200000, '0x']).slice(2);
     p.chain.escrow = escrowOf(recipe);
     p.type('pvTo', A.OTHER);
+    p.select('pvChain', '8453');
     p.select('pvAct', 'out');
     p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
     await p.waitFor(() => p.window.__relayPosts.length === 2, SLOW);
