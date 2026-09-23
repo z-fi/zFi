@@ -1,0 +1,503 @@
+<title>Roster Console</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --ground:#eef2f5; --surface:#fff; --raise:#f7f9fb;
+  --ink:#0f1720; --muted:#5b6774; --faint:#8a95a1;
+  --line:#d3dbe3; --line-soft:#e4eaf0;
+  --accent:#2f6fe4; --accent-ink:#fff; --accent-soft:#e7effc;
+  --good:#127a46; --good-soft:#e2f4ea;
+  --warn:#8a6200; --warn-soft:#fbf0d8;
+  --bad:#ad2a1e; --bad-soft:#fbe6e3;
+  --shadow:0 1px 2px rgba(15,23,32,.06),0 8px 24px -14px rgba(15,23,32,.25);
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,Segoe UI,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --ground:#0b1015; --surface:#141b23; --raise:#1a222b;
+  --ink:#e4eaf1; --muted:#8e9cab; --faint:#6b7885;
+  --line:#26313c; --line-soft:#1e2731;
+  --accent:#5e9bff; --accent-ink:#08121f; --accent-soft:#16283f;
+  --good:#3fd18b; --good-soft:#10291f;
+  --warn:#e5ab33; --warn-soft:#2b2312;
+  --bad:#ff6f61; --bad-soft:#2e1613;
+  --shadow:0 1px 2px rgba(0,0,0,.5),0 10px 30px -18px rgba(0,0,0,.8);
+}}
+:root[data-theme="dark"]{
+  --ground:#0b1015; --surface:#141b23; --raise:#1a222b;
+  --ink:#e4eaf1; --muted:#8e9cab; --faint:#6b7885;
+  --line:#26313c; --line-soft:#1e2731;
+  --accent:#5e9bff; --accent-ink:#08121f; --accent-soft:#16283f;
+  --good:#3fd18b; --good-soft:#10291f;
+  --warn:#e5ab33; --warn-soft:#2b2312;
+  --bad:#ff6f61; --bad-soft:#2e1613;
+  --shadow:0 1px 2px rgba(0,0,0,.5),0 10px 30px -18px rgba(0,0,0,.8);
+}
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5;margin:0}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:16px;padding-block:0 56px}
+h1,h2{text-wrap:balance;margin:0}
+code{font-family:var(--mono)}
+button{font:inherit;font-family:var(--sans);cursor:pointer;border-radius:7px;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:6px 11px}
+button:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+button:disabled{opacity:.42;cursor:not-allowed}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+button.primary:hover:not(:disabled){filter:brightness(1.08);color:var(--accent-ink)}
+button.icon{padding:3px 8px;font-family:var(--mono);font-size:13px;line-height:1.4}
+input,select,textarea{font:inherit;font-family:var(--mono);font-size:13px;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:7px;padding:6px 9px;width:100%;min-width:0}
+textarea{resize:vertical;line-height:1.45}
+input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+a{color:var(--accent)}
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:40;background:var(--surface);border-bottom:1px solid var(--line);margin-bottom:20px}
+.bar-in{max-width:1180px;margin:0 auto;padding-inline:16px;padding-block:10px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.brand{font-weight:700;letter-spacing:-.01em;margin-right:auto}
+.brand small{display:block;font-weight:400;font-size:11.5px;color:var(--muted)}
+.chip{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:12px;padding:4px 9px;border-radius:999px;border:1px solid var(--line);background:var(--raise);white-space:nowrap}
+.chip.warn{border-color:var(--warn);background:var(--warn-soft);color:var(--warn)}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:20px;align-items:start}
+@media (max-width:980px){.cols{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
+.panel>header{padding:14px 16px;border-bottom:1px solid var(--line-soft);display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}
+.panel>header h2{font-size:15px;font-weight:600;letter-spacing:-.01em}
+.panel>header .sub{font-size:12px;color:var(--muted);font-family:var(--mono)}
+.pad{padding:14px 16px}
+.eyebrow{font-size:10.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--faint)}
+.row{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line-soft)}
+.row:last-child{border-bottom:0}
+.row.moved{background:var(--accent-soft)}
+.rank{font-family:var(--mono);font-size:12px;color:var(--faint);text-align:right;font-variant-numeric:tabular-nums}
+.row.lead .rank{color:var(--accent);font-weight:600}
+.url{font-family:var(--mono);font-size:12.5px;word-break:break-all;line-height:1.45}
+.row .acts{display:flex;gap:4px;flex:none}
+.caps{display:flex;gap:4px;flex-wrap:wrap;margin-top:5px}
+.cap{font-family:var(--mono);font-size:10.5px;padding:2px 6px;border-radius:4px;border:1px solid var(--line);color:var(--muted);background:var(--raise)}
+.cap.y{border-color:var(--good);background:var(--good-soft);color:var(--good)}
+.cap.n{border-color:var(--bad);background:var(--bad-soft);color:var(--bad)}
+.score{font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap}
+.call{border:1px solid var(--line);border-radius:9px;margin-bottom:10px;overflow:hidden;background:var(--raise)}
+.call>.head{padding:9px 11px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-bottom:1px solid var(--line-soft)}
+.call .fn{font-family:var(--mono);font-size:12.5px;font-weight:500;word-break:break-all}
+.call .body{padding:9px 11px;font-size:12px;color:var(--muted)}
+.cd{font-family:var(--mono);font-size:10.5px;word-break:break-all;background:var(--surface);border:1px solid var(--line-soft);border-radius:6px;padding:7px 8px;max-height:110px;overflow:auto;color:var(--ink);line-height:1.5}
+.kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:3px 10px;font-family:var(--mono);font-size:11.5px;margin-bottom:8px}
+.kv dt{color:var(--faint)} .kv dd{margin:0;word-break:break-all}
+.note{font-size:12.5px;color:var(--muted);line-height:1.55}
+.note strong{color:var(--ink);font-weight:600}
+.warnbox{border:1px solid var(--warn);background:var(--warn-soft);color:var(--warn);border-radius:9px;padding:10px 12px;font-size:12.5px;line-height:1.5}
+.okbox{border:1px solid var(--good);background:var(--good-soft);color:var(--good);border-radius:9px;padding:10px 12px;font-size:12.5px;line-height:1.5}
+.badbox{border:1px solid var(--bad);background:var(--bad-soft);color:var(--bad);border-radius:9px;padding:10px 12px;font-size:12.5px;line-height:1.5}
+.tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.grow{flex:1;min-width:150px}
+.stack{display:flex;flex-direction:column;gap:11px}
+.empty{padding:26px 16px;text-align:center;color:var(--faint);font-size:13px}
+details>summary{cursor:pointer;font-size:12.5px;color:var(--muted);padding:4px 0}
+details>summary:hover{color:var(--accent)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="bar"><div class="bar-in">
+  <div class="brand">Roster Console<small>zRpcList &amp; zEndpoints · Ethereum mainnet</small></div>
+  <span class="chip" id="chSnap"></span>
+  <span class="chip" id="chOwner">curator —</span>
+  <span class="chip" id="chYou">not connected</span>
+  <button id="btnConnect" class="primary">Connect wallet</button>
+</div></div>
+
+<div class="wrap">
+  <div id="banner" class="stack" style="margin-bottom:18px"></div>
+
+  <div class="cols">
+    <div class="stack">
+      <div class="panel">
+        <header>
+          <h2 id="rosterTitle">Ethereum read nodes</h2>
+          <span class="sub" id="rosterAddr"></span>
+          <span class="sub" style="margin-left:auto" id="rosterCount"></span>
+        </header>
+
+        <div class="pad" style="border-bottom:1px solid var(--line-soft)">
+          <div class="tools">
+            <label class="eyebrow" for="selReg">Registry</label>
+            <select id="selReg" style="width:auto;min-width:200px">
+              <option value="rpc">zRpcList — Ethereum read nodes</option>
+              <option value="eps">zEndpoints — everything else</option>
+            </select>
+            <span id="epsKeyWrap" hidden>
+              <label class="eyebrow" for="selKey" style="margin-left:6px">List</label>
+              <select id="selKey" style="width:auto;min-width:150px"></select>
+            </span>
+            <button id="btnRecommend">Apply recommended order</button>
+            <button id="btnReset">Discard edits</button>
+          </div>
+        </div>
+
+        <div id="rows"></div>
+
+        <div class="pad" style="border-top:1px solid var(--line-soft)">
+          <div class="tools">
+            <input id="newUrl" class="grow" placeholder="https://… add an endpoint" spellcheck="false" autocomplete="off">
+            <button id="btnAdd">Append</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel" id="whyPanel">
+        <header><h2>Why the order decides the quote</h2></header>
+        <div class="pad note">
+          The dapp merges this list <strong>ahead of</strong> its built-in seeds and reads it once per
+          session, so index 0 is what a visitor without a wallet quotes against. A node with a low
+          <code>eth_call</code> ceiling still answers <code>single-hop</code> and <code>split A</code>
+          but returns nothing for <code>routed</code>, <code>3-hop</code> and <code>split B</code> —
+          and because Multicall3 reports that as a <em>successful</em> call carrying a null result, the
+          page never falls through to another node and never warns. Chips below are measured against
+          each node with the dapp's own calldata.
+        </div>
+      </div>
+
+      <div class="panel">
+        <header><h2>Refresh state without a network</h2></header>
+        <div class="pad stack">
+          <p class="note" style="margin:0">If no node is reachable from here, run the read wherever you
+            have one and paste the raw result to replace the list shown above.</p>
+          <div class="cd" id="readCmd"></div>
+          <textarea id="pasteHex" rows="3" placeholder="0x0000…  — the eth_call result" spellcheck="false"></textarea>
+          <div class="tools"><button id="btnPaste">Decode into the roster</button><span class="note" id="pasteMsg"></span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stack">
+      <div class="panel">
+        <header><h2>Transaction plan</h2><span class="sub" id="planCount">no changes</span></header>
+        <div class="pad">
+          <div class="tools" style="margin-bottom:12px">
+            <label class="eyebrow" for="selMode">Shape</label>
+            <select id="selMode" style="width:auto">
+              <option value="ops">Granular ops — move / add / remove</option>
+              <option value="set">Single set() — replace whole list</option>
+            </select>
+            <button id="btnCopyAll">Copy all as JSON</button>
+          </div>
+          <div id="planCheck"></div>
+          <div id="plan"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <header><h2>Curator</h2><span class="sub">who these calls must come from</span></header>
+        <div class="pad stack">
+          <div class="cd" id="ownerBox"></div>
+          <p class="note" style="margin:0">A 7702-delegated EOA. Any call below sent from another
+            address reverts <code>NotOwner()</code> — selector <code>0x30cd7471</code>.</p>
+          <details>
+            <summary>Hand curation to another address</summary>
+            <div class="stack" style="margin-top:10px">
+              <div class="warnbox">Two steps: the current curator offers, the new address accepts.
+                Reversible until accepted.</div>
+              <input id="newOwner" placeholder="0x… next curator" spellcheck="false" autocomplete="off">
+              <div class="tools">
+                <button id="btnOffer">Build transferOwnership</button>
+                <button id="btnAccept">Build acceptOwnership</button>
+                <button id="btnClearOwn">Clear</button>
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const SNAP={"block":26041988,"at":"2026-09-23","rpc":{"owner":"0x1c0aa8ccd568d90d61659f060d1bfb1e6f855a20","list":["https://eth.rpc.blxrbdn.com","https://eth.drpc.org","https://ethereum-rpc.publicnode.com","https://eth-pokt.nodies.app","https://rpc.mevblocker.io","https://eth-mainnet.public.blastapi.io"]},"eps":{"owner":"0x1c0aa8ccd568d90d61659f060d1bfb1e6f855a20","lists":{"rpc|8453":["https://base-rpc.publicnode.com","https://base.rpc.blxrbdn.com","https://base.drpc.org"],"rpc|4663":["https://robinhood-rpc.publicnode.com","https://rpc.mainnet.chain.robinhood.com"],"logs|1":["https://rpc.mevblocker.io","https://mainnet.gateway.tenderly.co","https://gateway.tenderly.co/public/mainnet"],"tacit|1":["https://api.tacit.finance"],"btc|0":["https://mempool.space/api","https://mempool.ninja/api","https://mempool.bitaroo.net/api","https://blockstream.info/api"],"wc|0":["wss://relay.walletconnect.org"],"wcpid|0":["1e8390ef1c1d8a185e035912a1409749"],"tacad|1":["https://cdn.jsdelivr.net/gh/z0r0z/tacit@1b2eedde8490801c9ef4406020530059162e6d47/dapp/airdrop/v1/proofs/","https://raw.githubusercontent.com/z0r0z/tacit/1b2eedde8490801c9ef4406020530059162e6d47/dapp/airdrop/v1/proofs/"]}}};
+const MEASURED={
+ "https://eth.rpc.blxrbdn.com":          {"single-hop":"y","routed":"n","3-hop":"n","split A":"y","split B":"n"},
+ "https://eth.drpc.org":                 {"single-hop":"y","routed":"n","3-hop":"n","split A":"y","split B":"n"},
+ "https://ethereum-rpc.publicnode.com":  {"single-hop":"y","routed":"n","3-hop":"n","split A":"y","split B":"n"},
+ "https://eth-pokt.nodies.app":          {"single-hop":"y","routed":"n","3-hop":"n","split A":"y","split B":"n"},
+ "https://rpc.mevblocker.io":            {"single-hop":"y","routed":"y","3-hop":"n","split A":"y","split B":"y"},
+ "https://eth-mainnet.public.blastapi.io":{"single-hop":"y","routed":"y","3-hop":"n","split A":"y","split B":"y"}};
+const REG={
+ rpc:{name:"zRpcList",addr:"0x8C7348D039f58C4e9cfA936EF410eec759213b12",keyed:false,
+      sel:{list:"0xd77e4c79",add:"0xb0c8f9dc",remove:"0x4cc82215",pop:"0xa4ece52c",
+           move:"0x0867408f",setAt:"0xbf23d38b",set:"0x52e66db8"}},
+ eps:{name:"zEndpoints",addr:"0x00000051F365d898132f4ebF345Cd3968e02F288",keyed:true,
+      sel:{list:"0xe8edb32f",add:"0x63a418e3",remove:"0xaceba3fd",pop:"0xb87e183d",
+           move:"0xfd530b5e",setAt:"0x1dbd5943",set:"0x3e2e459c"}}};
+const SEL_TRANSFER="0xf2fde38b", SEL_ACCEPT="0x79ba5097";
+
+const strip=h=>String(h||"").replace(/^0x/,"");
+const u256=n=>BigInt(n).toString(16).padStart(64,"0");
+const addr32=a=>strip(a).toLowerCase().padStart(64,"0");
+const utf8=s=>{const o=[];for(let i=0;i<s.length;i++){let c=s.charCodeAt(i);
+  if(c<128)o.push(c);
+  else if(c<2048){o.push(192|c>>6,128|c&63)}
+  else if(c<55296||c>57343){o.push(224|c>>12,128|(c>>6&63),128|c&63)}
+  else{c=65536+(((c&1023)<<10)|(s.charCodeAt(++i)&1023));
+       o.push(240|c>>18,128|(c>>12&63),128|(c>>6&63),128|c&63)}}return o};
+const hexOf=s=>utf8(s).map(b=>b.toString(16).padStart(2,"0")).join("");
+const b32str=s=>{const h=hexOf(s);if(h.length>64)throw Error("name too long");return h.padEnd(64,"0")};
+const strEnc=s=>{const h=hexOf(s);return u256(h.length/2)+h.padEnd(Math.ceil(h.length/64)*64,"0")};
+const arrEnc=l=>{const it=l.map(strEnc);let off=l.length*32,head="",tail="";
+  for(const x of it){head+=u256(off);off+=x.length/2;tail+=x}return u256(l.length)+head+tail};
+const W=(h,i)=>parseInt(h.slice(i*64,i*64+64),16);
+function decStrArrTop(hex){const h=strip(hex),base=W(h,0)/32,n=W(h,base),out=[];
+  if(!Number.isInteger(base)||!(n>=0&&n<4096))throw Error("not a string[] return");
+  for(let k=0;k<n;k++){const p=base+1+W(h,base+1+k)/32,len=W(h,p);let s="";
+    for(let j=0;j<len;j++)s+=String.fromCharCode(parseInt(h.slice((p+1)*64+j*2,(p+1)*64+j*2+2),16));
+    out.push(s)}return out}
+
+const READ_POOL=["https://eth.drpc.org","https://ethereum-rpc.publicnode.com",
+                 "https://eth.rpc.blxrbdn.com","https://cloudflare-eth.com"];
+let readUrl=READ_POOL[0];
+const SEL_OWNER="0x8da5cb5b";
+const ERRS={"30cd7471":"NotOwner \u2014 this address does not curate the roster",
+            "ef3ff4ae":"BadIndex \u2014 the index is past the end of the list",
+            "ff633a38":"LengthMismatch"};
+async function once(url,method,params){
+  const r=await fetch(url,{method:"POST",headers:{"content-type":"application/json"},
+    body:JSON.stringify({id:1,jsonrpc:"2.0",method,params})});
+  const j=await r.json();
+  if(j.error) throw Object.assign(new Error(j.error.message||"node refused"),{data:j.error.data,rpc:true});
+  return j.result}
+async function node(method,params,url){
+  if(url) return once(url,method,params);
+  let last;
+  for(const u of [readUrl,...READ_POOL.filter(x=>x!==readUrl)]){
+    try{ const r=await once(u,method,params); readUrl=u; return r }
+    catch(e){ last=e; if(e.rpc) throw e } }
+  throw last||new Error("no read node answered")}
+const ethCall=(to,data,from)=>node("eth_call",[from?{from,to,data}:{to,data},"latest"]);
+function explainRevert(e){
+  const raw=String((e&&e.data&&(e.data.data||e.data))||e.message||"");
+  const m=/0x([0-9a-fA-F]{8})/.exec(raw);
+  if(m&&ERRS[m[1].toLowerCase()])return ERRS[m[1].toLowerCase()];
+  return (e&&e.message||"call failed").slice(0,140)}
+let account="", walletChain=0, provider=null, live=false, liveErr="";
+const wallets=[];
+addEventListener("eip6963:announceProvider",e=>{
+  if(e.detail&&e.detail.provider&&!wallets.some(x=>x.info.uuid===e.detail.info.uuid))wallets.push(e.detail)});
+try{ dispatchEvent(new Event("eip6963:requestProvider")) }catch(_){}
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[<>&"']/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;","'":"&#39;"}[c]));
+const short=a=>a?a.slice(0,6)+"…"+a.slice(-4):"—";
+
+let regKey="rpc", epsKeys=Object.keys(SNAP.eps.lists).map(k=>{const [svc,c]=k.split("|");return{svc,chainId:+c,k}});
+let curKey=epsKeys[0], onchain=[], working=[], extraCalls=[];
+const reg=()=>REG[regKey];
+const ownerOf=()=>liveOwner||(regKey==="rpc"?SNAP.rpc.owner:SNAP.eps.owner);
+const RECOMMENDED=["https://rpc.mevblocker.io","https://eth-mainnet.public.blastapi.io"];
+
+function loadList(){
+  onchain = regKey==="rpc" ? SNAP.rpc.list.slice() : (SNAP.eps.lists[curKey.k]||[]).slice();
+  working = onchain.slice(); extraCalls=[]; render(); refresh();
+}
+let liveOwner="";
+async function refresh(){
+  const r=reg(), want=regKey+"|"+(r.keyed?curKey.k:"");
+  const data = r.keyed ? r.sel.list+b32str(curKey.svc)+u256(curKey.chainId) : r.sel.list;
+  try{
+    const [lh,oh]=await Promise.all([ethCall(r.addr,data), ethCall(r.addr,SEL_OWNER)]);
+    if(want!==regKey+"|"+(reg().keyed?curKey.k:""))return;
+    const l=decStrArrTop(lh);
+    liveOwner="0x"+strip(oh).slice(-40);
+    live=true; liveErr="";
+    const edited=JSON.stringify(onchain)!==JSON.stringify(working);
+    onchain=l.slice(); if(!edited)working=l.slice();
+    render();
+  }catch(e){ live=false; liveErr=/Failed to fetch|NetworkError|load failed/i.test(e.message)
+      ? "no read node reachable from here" : e.message; render() }
+}
+
+/* -------- plan -------- */
+function opsPlan(from,to){
+  const calls=[],w=from.slice();
+  for(let i=w.length-1;i>=0;i--){
+    const keep=to.filter(x=>x===w[i]).length >= w.filter(x=>x===w[i]).length;
+    if(!to.includes(w[i])||!keep){calls.push(i===w.length-1?{fn:"pop",args:[]}:{fn:"remove",args:[i]});w.splice(i,1)}}
+  for(const v of to) if(w.filter(x=>x===v).length < to.filter(x=>x===v).length){calls.push({fn:"add",args:[v]});w.push(v)}
+  for(let i=0;i<to.length;i++){ if(w[i]===to[i])continue;
+    const j=w.indexOf(to[i],i); if(j<0)continue;
+    calls.push({fn:"move",args:[j,i]}); w.splice(i,0,w.splice(j,1)[0])}
+  return{calls,result:w}}
+function buildPlan(){
+  if(JSON.stringify(onchain)===JSON.stringify(working))return{calls:[],result:onchain.slice(),ok:true};
+  if($("selMode").value==="set")return{calls:[{fn:"set",args:[working.slice()]}],result:working.slice(),ok:true};
+  const p=opsPlan(onchain,working);
+  return{...p,ok:JSON.stringify(p.result)===JSON.stringify(working)}}
+function encodeCall(c){
+  const r=reg(),keyed=r.keyed,pre=keyed?b32str(curKey.svc)+u256(curKey.chainId):"",n=keyed?2:0;
+  switch(c.fn){
+    case"pop":return{to:r.addr,data:r.sel.pop+pre};
+    case"remove":return{to:r.addr,data:r.sel.remove+pre+u256(c.args[0])};
+    case"move":return{to:r.addr,data:r.sel.move+pre+u256(c.args[0])+u256(c.args[1])};
+    case"add":return{to:r.addr,data:r.sel.add+pre+u256((n+1)*32)+strEnc(c.args[0])};
+    case"setAt":return{to:r.addr,data:r.sel.setAt+pre+u256(c.args[0])+u256((n+2)*32)+strEnc(c.args[1])};
+    case"set":return{to:r.addr,data:r.sel.set+pre+u256((n+1)*32)+arrEnc(c.args[0])};
+    case"transferOwnership":return{to:r.addr,data:SEL_TRANSFER+addr32(c.args[0])};
+    case"acceptOwnership":return{to:r.addr,data:SEL_ACCEPT};
+  } throw Error("unknown "+c.fn)}
+const sigOf=c=>{const r=reg(),k=r.keyed?`"${curKey.svc}", ${curKey.chainId}`:"";
+  const j=a=>[k,...a].filter(x=>x!=="").join(", ");
+  switch(c.fn){
+    case"pop":return`pop(${k})`;
+    case"remove":return`remove(${j([c.args[0]])})`;
+    case"move":return`move(${j([c.args[0],c.args[1]])})`;
+    case"add":return`add(${j(['"'+c.args[0]+'"'])})`;
+    case"setAt":return`setAt(${j([c.args[0],'"'+c.args[1]+'"'])})`;
+    case"set":return`set(${k?k+", ":""}[${c.args[0].length} entries])`;
+    case"transferOwnership":return`transferOwnership(${c.args[0]})`;
+    case"acceptOwnership":return"acceptOwnership()";
+  }};
+
+/* -------- render -------- */
+function rowHtml(url,i){
+  const origin=onchain.indexOf(url), moved=origin>=0&&origin!==i;
+  const m=MEASURED[url]; let caps="";
+  if(m){const yes=Object.values(m).filter(v=>v==="y").length;
+    caps=`<div class="caps">${Object.entries(m).map(([k,v])=>
+      `<span class="cap ${v==="y"?"y":"n"}" title="${v==="y"?"answers":"exceeds this node's eth_call gas ceiling"}">${esc(k)}</span>`).join("")}
+      <span class="score">${yes}/5 measured ${esc(SNAP.at)}</span></div>`}
+  return`<div class="row${moved?" moved":""}${i===0?" lead":""}">
+    <div class="rank">${i}</div>
+    <div><div class="url">${esc(url)}</div>${caps}</div>
+    <div class="acts">
+      <button class="icon" data-act="up" data-i="${i}" ${i===0?"disabled":""} aria-label="Move up">↑</button>
+      <button class="icon" data-act="down" data-i="${i}" ${i===working.length-1?"disabled":""} aria-label="Move down">↓</button>
+      <button class="icon" data-act="top" data-i="${i}" ${i===0?"disabled":""} aria-label="Move to front">⇈</button>
+      <button class="icon" data-act="del" data-i="${i}" aria-label="Remove">✕</button>
+    </div></div>`}
+
+function render(){
+  const r=reg();
+  $("chSnap").textContent=`snapshot · block ${SNAP.block}`;
+  $("rosterTitle").textContent = r.keyed?`${curKey.svc} · chain ${curKey.chainId}`:"Ethereum read nodes";
+  $("rosterAddr").innerHTML=`<a href="https://etherscan.io/address/${r.addr}" target="_blank" rel="noreferrer">${short(r.addr)}</a>`;
+  $("rosterCount").textContent=`${working.length} entries`;
+  $("epsKeyWrap").hidden=!r.keyed;
+  $("whyPanel").hidden=regKey!=="rpc";
+  $("btnRecommend").hidden=regKey!=="rpc";
+  $("ownerBox").textContent=ownerOf()+(live?"  (read live)":"  (snapshot \u2014 "+esc(liveErr||"not refreshed")+")");
+  const owner=ownerOf(), known=live&&!!liveOwner, isOwner=!!account&&owner&&account.toLowerCase()===owner.toLowerCase();
+  const netOk=walletChain===1;
+  $("chOwner").textContent=owner?"curator "+short(owner):"curator \u2014";
+  $("chYou").textContent=account?short(account):"not connected";
+  $("chYou").className="chip"+(account?(!known?" warn":isOwner?" ok":" no"):"");
+  $("chSnap").textContent=live?("live \u00b7 "+readUrl.replace("https://","")):("snapshot \u00b7 block "+SNAP.block);
+  $("btnConnect").textContent=account?"Connected":"Connect wallet";
+  $("btnConnect").disabled=!!account;
+  const nb=$("banner"); nb.textContent="";
+  const add=(c,h)=>{const d=document.createElement("div");d.className=c;d.innerHTML=h;nb.append(d)};
+  if(!live) add("warnbox",`<strong>Showing the snapshot from block ${SNAP.block}.</strong> The chain could not be read (${esc(liveErr||"not tried")}). Serve this file over http://localhost, or run the reads yourself and paste the result below \u2014 do not send anything built on stale state.`);
+  if(!account) add("warnbox","Connect the curating wallet to simulate and send, or copy any call's calldata and execute it from a Safe or an explorer.");
+  else if(!netOk) add("warnbox",`Your wallet is on chain ${walletChain||"?"}. Both registries are on Ethereum mainnet. <button id="btnSwitch" style="margin-left:8px">Switch</button>`);
+  else if(known&&!isOwner) add("badbox",`<strong>${short(account)} does not curate this registry.</strong> Every call here reverts <code>NotOwner()</code>. The curator is <code>${esc(owner)}</code>.`);
+  const sw=$("btnSwitch"); if(sw) sw.onclick=switchNet;
+  $("rows").innerHTML=working.length?working.map(rowHtml).join(""):`<div class="empty">This list is empty.</div>`;
+  const data = r.keyed ? r.sel.list+b32str(curKey.svc)+u256(curKey.chainId) : r.sel.list;
+  $("readCmd").textContent=`cast call ${r.addr} ${data}   # or eth_call {to, data}`;
+  renderPlan();
+}
+function renderPlan(){
+  const p=buildPlan(), all=[...p.calls,...extraCalls];
+  $("planCount").textContent=all.length?`${all.length} call${all.length>1?"s":""}`:"no changes";
+  $("planCheck").innerHTML = !p.calls.length ? ""
+    : p.ok ? `<div class="okbox" style="margin-bottom:11px">Replaying these calls locally reproduces your roster exactly.</div>`
+           : `<div class="badbox" style="margin-bottom:11px">This plan does not reproduce your list — use <strong>Single set()</strong>.</div>`;
+  if(!all.length){$("plan").innerHTML=`<div class="empty">Reorder or edit the roster and the exact calls appear here.</div>`;return}
+  $("plan").innerHTML=all.map((c,i)=>{
+    let e; try{e=encodeCall(c)}catch(err){return`<div class="call"><div class="body">cannot encode: ${esc(err.message)}</div></div>`}
+    const args = c.fn==="set"
+      ? `<dt>list</dt><dd>${c.args[0].map((u,k)=>`${k}. ${esc(u)}`).join("<br>")}</dd>`
+      : c.args.map((a,k)=>`<dt>arg ${k}</dt><dd>${esc(String(a))}</dd>`).join("");
+    return`<div class="call">
+      <div class="head"><span class="fn">${esc(sigOf(c))}</span>
+        <span style="margin-left:auto;display:flex;gap:6px">
+          <button data-copy="${i}">Copy</button>
+          <button class="primary" data-send="${i}" ${account?"":"disabled"}>Send</button></span></div>
+      <div class="body"><dl class="kv"><dt>to</dt><dd>${esc(e.to)}</dd>${args}</dl>
+        <div class="cd">${esc("0x"+strip(e.data))}</div></div></div>`}).join("");
+  $("plan").querySelectorAll("[data-copy]").forEach(b=>b.onclick=()=>{
+    const e=encodeCall(all[+b.dataset.copy]);
+    copy(JSON.stringify({to:e.to,value:"0",data:"0x"+strip(e.data)},null,2),b)});
+  $("plan").querySelectorAll("[data-send]").forEach(b=>b.onclick=()=>send(all[+b.dataset.send],b));
+}
+function copy(text,btn){
+  const done=ok=>{const t=btn.textContent;btn.textContent=ok?"Copied":"Select it manually";setTimeout(()=>btn.textContent=t,1600)};
+  try{navigator.clipboard.writeText(text).then(()=>done(true),()=>done(false))}catch(_){done(false)}
+}
+
+/* -------- wallet -------- */
+async function connect(){
+  try{
+    provider = provider || (wallets[0]&&wallets[0].provider) || window.ethereum;
+    if(!provider) return alert("No wallet found. Open this file in a browser with your wallet extension.");
+    if(wallets.length>1){
+      const names=wallets.map((x,i)=>i+": "+x.info.name).join("\n");
+      const pick=prompt("Which wallet?\n"+names,"0");
+      if(pick===null)return; provider=(wallets[+pick]||wallets[0]).provider;
+    }
+    account=(await provider.request({method:"eth_requestAccounts"}))[0]||"";
+    walletChain=parseInt(await provider.request({method:"eth_chainId"}),16)||0;
+    provider.on&&provider.on("accountsChanged",a=>{account=(a&&a[0])||"";render()});
+    provider.on&&provider.on("chainChanged",c=>{walletChain=parseInt(c,16)||0;render()});
+    render();
+  }catch(e){ alert("Wallet refused: "+e.message) }}
+async function switchNet(){
+  try{ await provider.request({method:"wallet_switchEthereumChain",params:[{chainId:"0x1"}]});
+       walletChain=1; render() }catch(e){ alert(e.message) }}
+async function send(call,btn){
+  const label=btn.textContent; btn.disabled=true; btn.textContent="Simulating\u2026";
+  try{
+    if(!live) throw new Error("The chain has not been read \u2014 refusing to send against a snapshot.");
+    if(walletChain!==1) throw new Error("Switch your wallet to Ethereum mainnet first.");
+    const e=encodeCall(call);
+    await ethCall(e.to,e.data,account);          // dry run: catches NotOwner / BadIndex before gas
+    btn.textContent="Check wallet\u2026";
+    const hash=await provider.request({method:"eth_sendTransaction",params:[{from:account,to:e.to,data:"0x"+strip(e.data)}]});
+    btn.textContent="Sent";
+    const d=document.createElement("div");d.className="okbox";
+    d.innerHTML=`Submitted <a href="https://etherscan.io/tx/${hash}" target="_blank" rel="noreferrer">${short(hash)}</a>. Refresh once it confirms.`;
+    $("banner").prepend(d);
+  }catch(err){ btn.disabled=false; btn.textContent=label;
+    const d=document.createElement("div");d.className="badbox";d.textContent=explainRevert(err);$("banner").prepend(d) }}
+
+/* -------- events -------- */
+$("btnConnect").onclick=connect;
+$("rows").addEventListener("click",e=>{
+  const b=e.target.closest("button[data-act]");if(!b)return;
+  const i=+b.dataset.i,a=b.dataset.act;
+  if(a==="up"&&i>0)working.splice(i-1,0,working.splice(i,1)[0]);
+  if(a==="down"&&i<working.length-1)working.splice(i+1,0,working.splice(i,1)[0]);
+  if(a==="top"&&i>0)working.unshift(working.splice(i,1)[0]);
+  if(a==="del")working.splice(i,1);
+  render()});
+$("btnAdd").onclick=()=>{const v=$("newUrl").value.trim();if(!v)return;working.push(v);$("newUrl").value="";render()};
+$("btnReset").onclick=()=>{working=onchain.slice();extraCalls=[];render()};
+$("btnRecommend").onclick=()=>{
+  const rest=working.filter(u=>!RECOMMENDED.includes(u));
+  working=[...RECOMMENDED.filter(u=>working.includes(u)),...rest];render()};
+$("selMode").onchange=renderPlan;
+$("selReg").onchange=e=>{regKey=e.target.value;loadList()};
+$("selKey").onchange=e=>{curKey=epsKeys[+e.target.value];loadList()};
+$("btnPaste").onclick=()=>{
+  const v=$("pasteHex").value.trim();
+  try{ const l=decStrArrTop(v); if(!l.length)throw Error("decoded to an empty list");
+       onchain=l.slice();working=l.slice();extraCalls=[];
+       $("pasteMsg").textContent=`replaced with ${l.length} entries`;render() }
+  catch(err){ $("pasteMsg").textContent="could not decode: "+err.message }};
+$("btnOffer").onclick=()=>{const v=$("newOwner").value.trim();
+  if(!/^0x[0-9a-fA-F]{40}$/.test(v)){$("pasteMsg").textContent="";return alert("That is not an address.")}
+  extraCalls=[{fn:"transferOwnership",args:[v]}];renderPlan()};
+$("btnAccept").onclick=()=>{extraCalls=[{fn:"acceptOwnership",args:[]}];renderPlan()};
+$("btnClearOwn").onclick=()=>{extraCalls=[];renderPlan()};
+$("btnCopyAll").onclick=e=>{
+  const p=buildPlan(),all=[...p.calls,...extraCalls];
+  if(!all.length)return;
+  copy(JSON.stringify(all.map(c=>{const x=encodeCall(c);return{to:x.to,value:"0",data:"0x"+strip(x.data)}}),null,2),e.target)};
+
+$("selKey").innerHTML=epsKeys.map((k,i)=>`<option value="${i}">${esc(k.svc)} · chain ${k.chainId}</option>`).join("");
+loadList();
+</script>
