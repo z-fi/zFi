@@ -158,8 +158,8 @@ details>summary:hover{color:var(--accent)}
       <div class="panel">
         <header><h2>Refresh state without a network</h2></header>
         <div class="pad stack">
-          <p class="note" style="margin:0">If no node is reachable from here, run the read wherever you
-            have one and paste the raw result to replace the list shown above.</p>
+          <p class="note" style="margin:0">Only needed if no wallet is reachable. Run the read wherever you
+            have a node and paste the raw result to replace the list shown above.</p>
           <div class="cd" id="readCmd"></div>
           <textarea id="pasteHex" rows="3" placeholder="0x0000…  — the eth_call result" spellcheck="false"></textarea>
           <div class="tools"><button id="btnPaste">Decode into the roster</button><span class="note" id="pasteMsg"></span></div>
@@ -189,7 +189,8 @@ details>summary:hover{color:var(--accent)}
         <div class="pad stack">
           <div class="cd" id="ownerBox"></div>
           <p class="note" style="margin:0">A 7702-delegated EOA. Any call below sent from another
-            address reverts <code>NotOwner()</code> — selector <code>0x30cd7471</code>.</p>
+            address reverts <code>NotOwner()</code> — selector <code>0x30cd7471</code>. Every Send is
+            dry-run from your address first, so that costs nothing.</p>
           <details>
             <summary>Hand curation to another address</summary>
             <div class="stack" style="margin-top:10px">
@@ -249,33 +250,39 @@ function decStrArrTop(hex){const h=strip(hex),base=W(h,0)/32,n=W(h,base),out=[];
     for(let j=0;j<len;j++)s+=String.fromCharCode(parseInt(h.slice((p+1)*64+j*2,(p+1)*64+j*2+2),16));
     out.push(s)}return out}
 
-const READ_POOL=["https://eth.drpc.org","https://ethereum-rpc.publicnode.com",
-                 "https://eth.rpc.blxrbdn.com","https://cloudflare-eth.com"];
-let readUrl=READ_POOL[0];
 const SEL_OWNER="0x8da5cb5b";
 const ERRS={"30cd7471":"NotOwner \u2014 this address does not curate the roster",
             "ef3ff4ae":"BadIndex \u2014 the index is past the end of the list",
             "ff633a38":"LengthMismatch"};
-async function once(url,method,params){
-  const r=await fetch(url,{method:"POST",headers:{"content-type":"application/json"},
-    body:JSON.stringify({id:1,jsonrpc:"2.0",method,params})});
-  const j=await r.json();
-  if(j.error) throw Object.assign(new Error(j.error.message||"node refused"),{data:j.error.data,rpc:true});
-  return j.result}
-async function node(method,params,url){
-  if(url) return once(url,method,params);
+// Reads go through the WALLET's provider, not fetch: the provider is an injected
+// object reached by postMessage, so a page CSP that forbids connecting to an RPC
+// host does not touch it. fetch is only a fallback for running this file locally.
+const READ_POOL=["https://eth.drpc.org","https://ethereum-rpc.publicnode.com",
+                 "https://eth.rpc.blxrbdn.com","https://cloudflare-eth.com"];
+let provider=null, account="", walletChain=0, live=false, liveErr="", liveOwner="";
+async function viaFetch(method,params){
   let last;
-  for(const u of [readUrl,...READ_POOL.filter(x=>x!==readUrl)]){
-    try{ const r=await once(u,method,params); readUrl=u; return r }
+  for(const u of READ_POOL){
+    try{ const r=await fetch(u,{method:"POST",headers:{"content-type":"application/json"},
+           body:JSON.stringify({id:1,jsonrpc:"2.0",method,params})});
+         const j=await r.json();
+         if(j.error) throw Object.assign(new Error(j.error.message),{data:j.error.data,rpc:true});
+         return j.result }
     catch(e){ last=e; if(e.rpc) throw e } }
-  throw last||new Error("no read node answered")}
-const ethCall=(to,data,from)=>node("eth_call",[from?{from,to,data}:{to,data},"latest"]);
+  throw last||new Error("no read node reachable");
+}
+async function rpcCall(method,params){
+  if(provider) return provider.request({method,params});
+  return viaFetch(method,params);
+}
+const ethCall=(to,data,from)=>rpcCall("eth_call",[from?{from,to,data}:{to,data},"latest"]);
 function explainRevert(e){
-  const raw=String((e&&e.data&&(e.data.data||e.data))||e.message||"");
+  const raw=String((e&&e.data&&(e.data.data||e.data))||(e&&e.message)||"");
   const m=/0x([0-9a-fA-F]{8})/.exec(raw);
   if(m&&ERRS[m[1].toLowerCase()])return ERRS[m[1].toLowerCase()];
-  return (e&&e.message||"call failed").slice(0,140)}
-let account="", walletChain=0, provider=null, live=false, liveErr="";
+  if(e&&e.code===4001)return "You rejected it in the wallet.";
+  return ((e&&e.message)||"call failed").slice(0,140);
+}
 const wallets=[];
 addEventListener("eip6963:announceProvider",e=>{
   if(e.detail&&e.detail.provider&&!wallets.some(x=>x.info.uuid===e.detail.info.uuid))wallets.push(e.detail)});
@@ -294,21 +301,21 @@ function loadList(){
   onchain = regKey==="rpc" ? SNAP.rpc.list.slice() : (SNAP.eps.lists[curKey.k]||[]).slice();
   working = onchain.slice(); extraCalls=[]; render(); refresh();
 }
-let liveOwner="";
 async function refresh(){
-  const r=reg(), want=regKey+"|"+(r.keyed?curKey.k:"");
+  const r=reg(), tag=regKey+"|"+(r.keyed?curKey.k:"");
   const data = r.keyed ? r.sel.list+b32str(curKey.svc)+u256(curKey.chainId) : r.sel.list;
   try{
     const [lh,oh]=await Promise.all([ethCall(r.addr,data), ethCall(r.addr,SEL_OWNER)]);
-    if(want!==regKey+"|"+(reg().keyed?curKey.k:""))return;
+    if(tag!==regKey+"|"+(reg().keyed?curKey.k:""))return;
     const l=decStrArrTop(lh);
-    liveOwner="0x"+strip(oh).slice(-40);
-    live=true; liveErr="";
+    liveOwner="0x"+strip(oh).slice(-40); live=true; liveErr="";
     const edited=JSON.stringify(onchain)!==JSON.stringify(working);
     onchain=l.slice(); if(!edited)working=l.slice();
     render();
-  }catch(e){ live=false; liveErr=/Failed to fetch|NetworkError|load failed/i.test(e.message)
-      ? "no read node reachable from here" : e.message; render() }
+  }catch(e){ live=false;
+    liveErr=/Failed to fetch|NetworkError|load failed|Content Security/i.test(e.message||"")
+      ? "no read path until a wallet is connected" : ((e&&e.message)||"read failed").slice(0,90);
+    render() }
 }
 
 /* -------- plan -------- */
@@ -379,20 +386,22 @@ function render(){
   $("epsKeyWrap").hidden=!r.keyed;
   $("whyPanel").hidden=regKey!=="rpc";
   $("btnRecommend").hidden=regKey!=="rpc";
-  $("ownerBox").textContent=ownerOf()+(live?"  (read live)":"  (snapshot \u2014 "+esc(liveErr||"not refreshed")+")");
-  const owner=ownerOf(), known=live&&!!liveOwner, isOwner=!!account&&owner&&account.toLowerCase()===owner.toLowerCase();
+  const owner=ownerOf(), known=live&&!!liveOwner;
+  const isOwner=!!account&&!!owner&&account.toLowerCase()===owner.toLowerCase();
   const netOk=walletChain===1;
+  $("ownerBox").textContent=owner+(live?"   (read live)":"   (snapshot, block "+SNAP.block+")");
   $("chOwner").textContent=owner?"curator "+short(owner):"curator \u2014";
   $("chYou").textContent=account?short(account):"not connected";
   $("chYou").className="chip"+(account?(!known?" warn":isOwner?" ok":" no"):"");
-  $("chSnap").textContent=live?("live \u00b7 "+readUrl.replace("https://","")):("snapshot \u00b7 block "+SNAP.block);
+  $("chSnap").textContent=live?"live":"snapshot \u00b7 block "+SNAP.block;
+  $("chSnap").className="chip"+(live?" ok":" warn");
   $("btnConnect").textContent=account?"Connected":"Connect wallet";
   $("btnConnect").disabled=!!account;
   const nb=$("banner"); nb.textContent="";
   const add=(c,h)=>{const d=document.createElement("div");d.className=c;d.innerHTML=h;nb.append(d)};
-  if(!live) add("warnbox",`<strong>Showing the snapshot from block ${SNAP.block}.</strong> The chain could not be read (${esc(liveErr||"not tried")}). Serve this file over http://localhost, or run the reads yourself and paste the result below \u2014 do not send anything built on stale state.`);
-  if(!account) add("warnbox","Connect the curating wallet to simulate and send, or copy any call's calldata and execute it from a Safe or an explorer.");
-  else if(!netOk) add("warnbox",`Your wallet is on chain ${walletChain||"?"}. Both registries are on Ethereum mainnet. <button id="btnSwitch" style="margin-left:8px">Switch</button>`);
+  if(!account) add("warnbox",`<strong>Connect the curating wallet.</strong> Reads and the send both go through it, so nothing here needs the page to reach a node itself. Until then this shows the snapshot from block ${SNAP.block}.`);
+  else if(!netOk) add("warnbox",`Your wallet is on chain ${walletChain||"?"}. Both registries are on Ethereum mainnet. <button id="btnSwitch" style="margin-left:8px">Switch to mainnet</button>`);
+  else if(!live) add("warnbox",`Connected, but the chain has not been read yet${liveErr?` (${esc(liveErr)})`:""}. Send stays disabled until it is \u2014 nothing should be signed against a snapshot.`);
   else if(known&&!isOwner) add("badbox",`<strong>${short(account)} does not curate this registry.</strong> Every call here reverts <code>NotOwner()</code>. The curator is <code>${esc(owner)}</code>.`);
   const sw=$("btnSwitch"); if(sw) sw.onclick=switchNet;
   $("rows").innerHTML=working.length?working.map(rowHtml).join(""):`<div class="empty">This list is empty.</div>`;
@@ -416,7 +425,7 @@ function renderPlan(){
       <div class="head"><span class="fn">${esc(sigOf(c))}</span>
         <span style="margin-left:auto;display:flex;gap:6px">
           <button data-copy="${i}">Copy</button>
-          <button class="primary" data-send="${i}" ${account?"":"disabled"}>Send</button></span></div>
+          <button class="primary" data-send="${i}" ${(account&&live)?"":"disabled"}>Send</button></span></div>
       <div class="body"><dl class="kv"><dt>to</dt><dd>${esc(e.to)}</dd>${args}</dl>
         <div class="cd">${esc("0x"+strip(e.data))}</div></div></div>`}).join("");
   $("plan").querySelectorAll("[data-copy]").forEach(b=>b.onclick=()=>{
@@ -430,39 +439,51 @@ function copy(text,btn){
 }
 
 /* -------- wallet -------- */
+function pickProvider(){
+  if(provider) return provider;
+  if(wallets.length===1) return wallets[0].provider;
+  if(wallets.length>1){
+    const which=prompt("Which wallet?\n"+wallets.map((x,i)=>i+": "+x.info.name).join("\n"),"0");
+    if(which===null) return null;
+    return (wallets[+which]||wallets[0]).provider;
+  }
+  return window.ethereum||null;
+}
 async function connect(){
+  const p=pickProvider();
+  if(!p){ const d=document.createElement("div"); d.className="badbox";
+    d.innerHTML="No wallet is reachable from this page. Open <code>deploy/roster-console.html</code> from the repo, or copy a call's calldata and execute it from a Safe.";
+    $("banner").prepend(d); return }
   try{
-    provider = provider || (wallets[0]&&wallets[0].provider) || window.ethereum;
-    if(!provider) return alert("No wallet found. Open this file in a browser with your wallet extension.");
-    if(wallets.length>1){
-      const names=wallets.map((x,i)=>i+": "+x.info.name).join("\n");
-      const pick=prompt("Which wallet?\n"+names,"0");
-      if(pick===null)return; provider=(wallets[+pick]||wallets[0]).provider;
-    }
-    account=(await provider.request({method:"eth_requestAccounts"}))[0]||"";
-    walletChain=parseInt(await provider.request({method:"eth_chainId"}),16)||0;
-    provider.on&&provider.on("accountsChanged",a=>{account=(a&&a[0])||"";render()});
-    provider.on&&provider.on("chainChanged",c=>{walletChain=parseInt(c,16)||0;render()});
-    render();
-  }catch(e){ alert("Wallet refused: "+e.message) }}
+    const accs=await p.request({method:"eth_requestAccounts"});
+    provider=p; account=(accs&&accs[0])||"";
+    walletChain=parseInt(await p.request({method:"eth_chainId"}),16)||0;
+    p.on&&p.on("accountsChanged",a=>{account=(a&&a[0])||"";render();refresh()});
+    p.on&&p.on("chainChanged",c=>{walletChain=parseInt(c,16)||0;render();refresh()});
+    render(); refresh();
+  }catch(e){ const d=document.createElement("div");d.className="badbox";d.textContent=explainRevert(e);$("banner").prepend(d) }
+}
 async function switchNet(){
   try{ await provider.request({method:"wallet_switchEthereumChain",params:[{chainId:"0x1"}]});
-       walletChain=1; render() }catch(e){ alert(e.message) }}
+       walletChain=1; render(); refresh() }
+  catch(e){ const d=document.createElement("div");d.className="badbox";d.textContent=explainRevert(e);$("banner").prepend(d) }
+}
 async function send(call,btn){
   const label=btn.textContent; btn.disabled=true; btn.textContent="Simulating\u2026";
+  const say=(cls,html)=>{const d=document.createElement("div");d.className=cls;d.innerHTML=html;$("banner").prepend(d)};
   try{
-    if(!live) throw new Error("The chain has not been read \u2014 refusing to send against a snapshot.");
+    if(!live) throw new Error("The chain has not been read \u2014 refusing to sign against a snapshot.");
     if(walletChain!==1) throw new Error("Switch your wallet to Ethereum mainnet first.");
     const e=encodeCall(call);
-    await ethCall(e.to,e.data,account);          // dry run: catches NotOwner / BadIndex before gas
-    btn.textContent="Check wallet\u2026";
-    const hash=await provider.request({method:"eth_sendTransaction",params:[{from:account,to:e.to,data:"0x"+strip(e.data)}]});
+    await ethCall(e.to,e.data,account);            // dry run: NotOwner / BadIndex cost nothing
+    btn.textContent="Check your wallet\u2026";
+    const hash=await provider.request({method:"eth_sendTransaction",
+      params:[{from:account,to:e.to,data:"0x"+strip(e.data)}]});
     btn.textContent="Sent";
-    const d=document.createElement("div");d.className="okbox";
-    d.innerHTML=`Submitted <a href="https://etherscan.io/tx/${hash}" target="_blank" rel="noreferrer">${short(hash)}</a>. Refresh once it confirms.`;
-    $("banner").prepend(d);
-  }catch(err){ btn.disabled=false; btn.textContent=label;
-    const d=document.createElement("div");d.className="badbox";d.textContent=explainRevert(err);$("banner").prepend(d) }}
+    say("okbox",`Submitted <a href="https://etherscan.io/tx/${hash}" target="_blank" rel="noreferrer">${short(hash)}</a>. It will disappear from this plan once it confirms and the roster is re-read.`);
+    setTimeout(refresh,15000);
+  }catch(err){ btn.disabled=false; btn.textContent=label; say("badbox",esc(explainRevert(err))) }
+}
 
 /* -------- events -------- */
 $("btnConnect").onclick=connect;
