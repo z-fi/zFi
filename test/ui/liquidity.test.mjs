@@ -216,6 +216,27 @@ describe('withdrawing', () => {
     p.close();
   });
 
+  test('takes a part of the position when one is chosen, priced on that part', async () => {
+    // A band used to be all-or-nothing, which made it the coarsest control in
+    // the panel once the farm's stake could move in quarters.
+    const p = await setup();
+    await p.waitFor(() => btn(p, 'w'), { label: 'withdraw button' });
+    const pick = btn(p, 'w').parentElement.querySelector('.lqwp');
+    pick.value = '25';
+    p.click(btn(p, 'w'));
+    await p.waitFor(() => p.chain.sent.length, { label: 'withdraw tx' });
+    await p.settle();
+
+    const tx = p.chain.sent.at(-1);
+    const body = '0x' + tx.data.replace(/^0x/, '').slice(8);
+    assert.equal(tx.data.replace(/^0x/, '').slice(0, 8), SEL.REMOVE);
+    assert.equal(word(body, 0), 10n ** 20n / 4n, 'a quarter of the position');
+    // The floors follow the quarter, not the whole: a preview of the part.
+    assert.ok(word(body, 1) < 10n * ETH * 9950n / 10000n, 'the ETH floor is not the whole position\'s');
+    assert.ok(word(body, 1) > 0n && word(body, 2) > 0n, 'both sides still carry a floor');
+    p.close();
+  });
+
   test('follows the slippage control the swap tile already has', async () => {
     const p = await setup();
     await p.waitFor(() => btn(p, 'w'), { label: 'withdraw button' });

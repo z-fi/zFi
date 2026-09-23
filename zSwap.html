@@ -5715,7 +5715,7 @@ o.cbps>0n?` — ${(Number(o.fee)*(10000-Number(o.cbps))/10000/10000).toFixed(2)}
 +`</div>`
 +(mine?`<div class="lqmine">yours ${trimAmt(o.mine0,t0.dec)} ${t0.sym} + ${trimAmt(o.mine1,t1.dec)} ${t1.sym}</div>`:"")
 +`<div class="lqacts">${o.liq>0n?`<button class="lqbtn" data-act="a" ${p}>Add</button>`:""}`
-+(mine?`<button class="lqbtn" data-act="w" ${p}>Withdraw all</button>`:"")
++(mine?`<select class="pfsp lqwp" aria-label="How much to withdraw"><option value="100">all</option><option value="75">75%</option><option value="50">50%</option><option value="25">25%</option></select><button class="lqbtn" data-act="w" ${p}>Withdraw</button>`:"")
 +`</div>`
 +`<div class="lqadd hide">`
 +(o.liq>0n
@@ -6328,9 +6328,10 @@ if(!box.classList.contains("hide"))box.querySelector(".lqin").focus();
 return;
 }
 if(act==="w"){
-if(row.shares===0n)return;
+const sh=row.shares*BigInt(b.parentElement.querySelector(".lqwp")?.value||100)/100n;
+if(sh===0n)return;
 ++busy;b.disabled=true;
-try{await doRemove(pool,row.shares,t0,t1)}finally{--busy;b.disabled=false}
+try{await doRemove(pool,sh,t0,t1)}finally{--busy;b.disabled=false}
 return;
 }
 if(act==="ac"){
