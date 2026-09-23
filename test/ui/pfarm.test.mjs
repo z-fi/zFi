@@ -83,8 +83,9 @@ describe('the TAC/ETH farm line', () => {
     assert.match(t, /TAC\/ETH farm · 554 TAC\/day/);
     // Nothing staked yet: 553.8888 x 365 x (ETH per TAC) on a 1 ETH entry.
     const apr = Math.round(553.8888 * 365 * (1 / (119510621510568635147 / 1e18) ** 2) * 100).toLocaleString();
-    assert.ok(t.includes(`~${apr}% APR`), t);
-    // The line stays quiet; the day rate, the 1 ETH basis and the end date are in its tooltip.
+    // A percentage means nothing without the entry it assumes, and a phone has no
+    // tooltip to reveal it, so the basis rides on the line itself.
+    assert.ok(t.includes(`~${apr}% APR on 1 ETH`), t);
     const tip = p.$('pfEl').title;
     assert.ok(tip.includes(`~${apr}% APR on 1 ETH`) && /until \w+/.test(tip), tip);
     assert.equal(p.$('pfEl').querySelector('[data-pf="go"]').textContent, 'Farm');
@@ -193,6 +194,20 @@ describe('the farm on its band', () => {
     await p.waitFor(() => farmTx(p), { label: 'the stake' });
     assert.equal(sel(farmTx(p).data), 'ecd9ba82');
     assert.equal(word(args(farmTx(p).data), 0), 5n * 10n ** 17n);
+    p.close();
+  });
+
+  test('part of a wallet LP balance can be staked, like part of a stake can be withdrawn', async () => {
+    const p = await open({ lp: 5n * 10n ** 17n });
+    const r = await openBand(p);
+    await p.waitFor(() => r.querySelector('.pfsp'), { label: 'the stake amount picker' });
+    r.querySelector('.pfsp').value = '25';
+    r.querySelector('.pfsp').dispatchEvent(new p.window.Event('change'));
+    assert.match(r.querySelector('[data-pf="st"]').textContent, /Stake 0\.125 LP/, 'the button says what it will stake');
+    p.click(r.querySelector('[data-pf="st"]'));
+    await p.waitFor(() => farmTx(p), { label: 'the stake' });
+    assert.equal(sel(farmTx(p).data), 'a694fc3a', 'a plain stake, no permit is set up here');
+    assert.equal(word(args(farmTx(p).data), 0), 125n * 10n ** 15n, 'a quarter of the balance');
     p.close();
   });
 
