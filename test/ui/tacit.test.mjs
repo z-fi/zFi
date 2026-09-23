@@ -135,7 +135,7 @@ describe('Tacit farms', () => {
     const p = await open({ chain });
     await p.waitFor(() => !p.$('pvFarm').classList.contains('hide'), { label: 'the farm line' });
     const chips = [...p.$('pvFarm').querySelectorAll('.fmc')];
-    assert.deepEqual(chips.map(c => c.textContent), ['TAC/tETH 554 TAC/day', 'tETH/cUSD 332 TAC/day', 'tETH/cBTC 222 TAC/day'], 'cETH reads as tETH, as everywhere else on the page');
+    assert.deepEqual(chips.map(c => c.querySelector('.fmn').textContent), ['TAC/tETH 554 TAC/day', 'tETH/cUSD 332 TAC/day', 'tETH/cBTC 222 TAC/day'], 'cETH reads as tETH, as everywhere else on the page');
     assert.equal(chips[0].querySelectorAll('img').length, 2, 'a listed pair shows both logos');
     assert.equal(p.$('pvFarm').querySelector('a').getAttribute('href'), 'https://tacit.finance');
     p.close();
@@ -159,9 +159,12 @@ describe('Tacit farms', () => {
     const px = Number(rE) / Number(rT), st = 2 * Number(rE) / 1e8 * staked / Number(sh);
     const apr = Math.round(553.8888 * 365 * px / (st + 1) * 100).toLocaleString();
     const chips = [...p.$('pvFarm').querySelectorAll('.fmc')];
-    assert.equal(chips[0].textContent, `TAC/tETH 554 TAC/day · ~${apr}% APR on 1 ETH`);
+    assert.equal(chips[0].querySelector('.fmn').textContent, 'TAC/tETH 554 TAC/day');
+    // The basis rides on the line itself: a phone has no tooltip to reveal it.
+    assert.equal(chips[0].querySelector('.fma').textContent, `~${apr}% APR on 1 ETH`);
     assert.match(chips[0].title, /TAC\/tETH pool price/);
-    assert.equal(chips[1].textContent, 'tETH/cUSD 332 TAC/day', 'a pool the page cannot match to its LP asset shows no APR');
+    assert.equal(chips[1].querySelector('.fmn').textContent, 'tETH/cUSD 332 TAC/day');
+    assert.equal(chips[1].querySelector('.fma'), null, 'a pool the page cannot match to its LP asset shows no APR');
     assert.match(p.text('pvFarm'), /until /, 'the stream end is named');
     p.close();
   });
@@ -179,7 +182,8 @@ describe('Tacit farms', () => {
     const p = await open({ chain });
     await p.waitFor(() => /APR/.test(p.text('pvFarm')), { label: 'the APR' });
     const apr = Math.round(553.8888 * 365 * (rE / rT) / (2 * rE / 1e8 * staked / sh + 1) * 100).toLocaleString();
-    assert.equal(p.$('pvFarm').querySelector('.fmc').textContent, `TAC/tETH 554 TAC/day · ~${apr}% APR on 1 ETH`);
+    assert.equal(p.$('pvFarm').querySelector('.fmn').textContent, 'TAC/tETH 554 TAC/day');
+    assert.equal(p.$('pvFarm').querySelector('.fma').textContent, `~${apr}% APR on 1 ETH`);
     assert.equal(poolReads, 0, 'the reserves came with the program');
     p.close();
   });
