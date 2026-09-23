@@ -12,7 +12,7 @@ Serve the dapp — wallets do not inject over file://:
 
 Verify the quoter bytecode before signing:
 
-    forge build --contracts src/zQuoterBase.sol --skip 'test/**'
+    forge build src/zQuoterBase.sol --skip 'test/**'
     # keccak of .bytecode.object from out/zQuoterBase.sol/zQuoterBase.json
     # must equal 0x1b866653a38f2517d362b8a0c50b0f580a622301351b7acc9eccded93d3f8168
 

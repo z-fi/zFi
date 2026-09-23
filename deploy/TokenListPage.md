@@ -30,7 +30,7 @@ Total 13.79M gas across 5 transactions, ~0.00175 ETH at ~0.10 gwei.
 
 ```sh
 node script/build-tokenlist-chunks.mjs
-forge build --force --contracts src/utils/TokenListPage.sol   # optimizer_runs=20, via_ir
+forge build --force src/utils/TokenListPage.sol   # optimizer_runs=20, via_ir
 node script/build-tokenlist-page-deploy.mjs 0xaa58adcb8cf6c1b2b97df155fb95f16770d74a65a513ac22753506cd62669013
 ```
 
