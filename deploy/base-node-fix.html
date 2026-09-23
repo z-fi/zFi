@@ -1,0 +1,336 @@
+<title>Base Read Node Fix</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --ground:#eef2f5; --surface:#fff; --raise:#f7f9fb;
+  --ink:#0f1720; --muted:#5b6774; --faint:#8a95a1;
+  --line:#d3dbe3; --line-soft:#e4eaf0;
+  --accent:#2f6fe4; --accent-ink:#fff; --accent-soft:#e7effc;
+  --good:#127a46; --good-soft:#e2f4ea;
+  --warn:#8a6200; --warn-soft:#fbf0d8;
+  --bad:#ad2a1e; --bad-soft:#fbe6e3;
+  --shadow:0 1px 2px rgba(15,23,32,.06),0 8px 24px -14px rgba(15,23,32,.25);
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,Segoe UI,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --ground:#0b1015; --surface:#141b23; --raise:#1a222b;
+  --ink:#e4eaf1; --muted:#8e9cab; --faint:#6b7885;
+  --line:#26313c; --line-soft:#1e2731;
+  --accent:#5e9bff; --accent-ink:#08121f; --accent-soft:#16283f;
+  --good:#3fd18b; --good-soft:#10291f;
+  --warn:#e5ab33; --warn-soft:#2b2312;
+  --bad:#ff6f61; --bad-soft:#2e1613;
+  --shadow:0 1px 2px rgba(0,0,0,.5),0 10px 30px -18px rgba(0,0,0,.8);
+}}
+:root[data-theme="dark"]{
+  --ground:#0b1015; --surface:#141b23; --raise:#1a222b;
+  --ink:#e4eaf1; --muted:#8e9cab; --faint:#6b7885;
+  --line:#26313c; --line-soft:#1e2731;
+  --accent:#5e9bff; --accent-ink:#08121f; --accent-soft:#16283f;
+  --good:#3fd18b; --good-soft:#10291f;
+  --warn:#e5ab33; --warn-soft:#2b2312;
+  --bad:#ff6f61; --bad-soft:#2e1613;
+  --shadow:0 1px 2px rgba(0,0,0,.5),0 10px 30px -18px rgba(0,0,0,.8);
+}
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.55;margin:0}
+.wrap{max-width:760px;margin:0 auto;padding-inline:16px;padding-block:0 56px}
+h1,h2{text-wrap:balance;margin:0}
+code{font-family:var(--mono);font-size:.94em}
+button{font:inherit;font-family:var(--sans);cursor:pointer;border-radius:7px;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:7px 13px}
+button:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+button:disabled{opacity:.4;cursor:not-allowed}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+button.primary:hover:not(:disabled){filter:brightness(1.08);color:var(--accent-ink)}
+button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+a{color:var(--accent)}
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:40;background:var(--surface);border-bottom:1px solid var(--line);margin-bottom:22px}
+.bar-in{max-width:760px;margin:0 auto;padding-inline:16px;padding-block:10px;display:flex;gap:11px;align-items:center;flex-wrap:wrap}
+.brand{font-weight:700;margin-right:auto;letter-spacing:-.01em}
+.brand small{display:block;font-weight:400;font-size:11.5px;color:var(--muted)}
+.chip{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:12px;padding:4px 9px;border-radius:999px;border:1px solid var(--line);background:var(--raise);white-space:nowrap}
+.chip.ok{border-color:var(--good);background:var(--good-soft);color:var(--good)}
+.chip.no{border-color:var(--bad);background:var(--bad-soft);color:var(--bad)}
+.chip.warn{border-color:var(--warn);background:var(--warn-soft);color:var(--warn)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);margin-bottom:16px}
+.panel>header{padding:13px 16px;border-bottom:1px solid var(--line-soft);display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.panel>header h2{font-size:15px;font-weight:600;letter-spacing:-.01em}
+.panel>header .sub{font-size:12px;color:var(--muted);font-family:var(--mono);margin-left:auto}
+.pad{padding:14px 16px}
+.note{font-size:13px;color:var(--muted)}
+.note strong{color:var(--ink);font-weight:600}
+table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px}
+th{text-align:left;font-weight:600;color:var(--faint);font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;padding:0 8px 6px 0}
+td{padding:5px 8px 5px 0;border-top:1px solid var(--line-soft);vertical-align:top}
+td.n{color:var(--faint);font-variant-numeric:tabular-nums;width:1.6em}
+.y{color:var(--good)} .x{color:var(--bad)}
+.step{display:grid;grid-template-columns:30px minmax(0,1fr);gap:12px;padding:14px 16px;border-top:1px solid var(--line-soft)}
+.step:first-of-type{border-top:0}
+.num{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-family:var(--mono);font-size:12px;font-weight:600;border:1px solid var(--line);color:var(--muted);background:var(--raise)}
+.step.now .num{border-color:var(--accent);background:var(--accent);color:var(--accent-ink)}
+.step.done .num{border-color:var(--good);background:var(--good-soft);color:var(--good)}
+.step.wait{opacity:.55}
+.sig{font-family:var(--mono);font-size:12.5px;font-weight:500;word-break:break-all;margin-bottom:5px}
+.cd{font-family:var(--mono);font-size:10.5px;word-break:break-all;background:var(--raise);border:1px solid var(--line-soft);border-radius:6px;padding:7px 8px;max-height:96px;overflow:auto;line-height:1.5;margin:8px 0}
+.acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:4px}
+.warnbox{border:1px solid var(--warn);background:var(--warn-soft);color:var(--warn);border-radius:9px;padding:10px 12px;font-size:12.5px}
+.badbox{border:1px solid var(--bad);background:var(--bad-soft);color:var(--bad);border-radius:9px;padding:10px 12px;font-size:12.5px}
+.okbox{border:1px solid var(--good);background:var(--good-soft);color:var(--good);border-radius:9px;padding:10px 12px;font-size:12.5px}
+.stack{display:flex;flex-direction:column;gap:10px}
+.list{font-family:var(--mono);font-size:12px;line-height:1.7}
+.list b{color:var(--accent)}
+details>summary{cursor:pointer;font-size:12.5px;color:var(--muted)}
+details>summary:hover{color:var(--accent)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="bar"><div class="bar-in">
+  <div class="brand">Base Read Node Fix<small>zEndpoints · rpc · chain 8453</small></div>
+  <span class="chip" id="chState">snapshot</span>
+  <span class="chip" id="chYou">not connected</span>
+  <button id="btnConnect" class="primary">Connect wallet</button>
+</div></div>
+
+<div class="wrap">
+  <div id="banner" class="stack" style="margin-bottom:16px"></div>
+
+  <div class="panel">
+    <header><h2>What this changes, and why</h2></header>
+    <div class="pad stack">
+      <p class="note" style="margin:0">Every Base read node currently curated runs out of gas on the
+        <code>split B</code> quote, so a Base visitor without a wallet never gets that route priced.
+        Reordering cannot fix it — no node in the list can answer. Adding one that can, at the front,
+        is the whole fix.</p>
+      <table>
+        <thead><tr><th></th><th>node</th><th>single-hop</th><th>routed</th><th>split A</th><th>split B</th></tr></thead>
+        <tbody>
+          <tr><td class="n">0</td><td>base-rpc.publicnode.com</td><td class="y">ok</td><td class="y">ok</td><td class="y">ok</td><td class="x">OOG</td></tr>
+          <tr><td class="n">1</td><td>base.rpc.blxrbdn.com</td><td class="y">ok</td><td class="y">ok</td><td class="y">ok</td><td class="x">OOG</td></tr>
+          <tr><td class="n">2</td><td>base.drpc.org</td><td class="y">ok</td><td class="y">ok</td><td class="y">ok</td><td class="x">OOG</td></tr>
+          <tr><td class="n">→</td><td><strong>mainnet.base.org</strong></td><td class="y">ok</td><td class="y">ok</td><td class="y">ok</td><td class="y">ok</td></tr>
+        </tbody>
+      </table>
+      <p class="note" style="margin:0">Measured against the dapp's own quote calldata, ETH → USDC for
+        1 ETH, and stable over five rounds. <code>mainnet.base.org</code> is Base's own public endpoint
+        and needs no key. <code>base.gateway.tenderly.co</code> also answers all four if you prefer it.</p>
+    </div>
+  </div>
+
+  <div class="panel">
+    <header><h2>The list</h2><span class="sub" id="srcTag"></span></header>
+    <div class="pad">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px" id="lists"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <header><h2>Two calls, in order</h2><span class="sub" id="stepTag"></span></header>
+    <div id="steps"></div>
+    <div class="pad" style="border-top:1px solid var(--line-soft)">
+      <p class="note" style="margin:0"><strong>The second only becomes valid after the first confirms.</strong>
+        Index 3 does not exist until the append lands, so <code>move</code> reverts
+        <code>BadIndex()</code> before then — this page keeps it disabled rather than letting you spend
+        gas discovering that.</p>
+    </div>
+  </div>
+
+  <div class="panel">
+    <header><h2>Curator</h2></header>
+    <div class="pad stack">
+      <div class="cd" id="ownerBox" style="margin:0"></div>
+      <p class="note" style="margin:0">Both calls must come from this address — a 7702-delegated EOA.
+        Anything else reverts <code>NotOwner()</code>, selector <code>0x30cd7471</code>. Each Send is
+        dry-run from your address first, so a wrong account costs nothing.</p>
+      <details><summary>Rather run it from a Safe?</summary>
+        <p class="note" style="margin:8px 0 0">Copy on each step gives
+          <code>{to, value, data}</code> ready to paste. Send them in order and wait for the first to
+          confirm.</p></details>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const EPS="0x00000051F365d898132f4ebF345Cd3968e02F288";
+const SEL={list:"0xe8edb32f",add:"0x63a418e3",move:"0xfd530b5e",owner:"0x8da5cb5b"};
+const SVC="rpc", CHAIN=8453, NEW="https://mainnet.base.org";
+const SNAP=["https://base-rpc.publicnode.com","https://base.rpc.blxrbdn.com","https://base.drpc.org"];
+const SNAP_OWNER="0x1c0aa8ccd568d90d61659f060d1bfb1e6f855a20";
+const READ_POOL=["https://eth.drpc.org","https://ethereum-rpc.publicnode.com","https://cloudflare-eth.com"];
+const ERRS={"30cd7471":"NotOwner — this address does not curate zEndpoints",
+            "ef3ff4ae":"BadIndex — that position does not exist yet; send step 1 first",
+            "ff633a38":"LengthMismatch"};
+
+const strip=h=>String(h||"").replace(/^0x/,"");
+const u256=n=>BigInt(n).toString(16).padStart(64,"0");
+const utf8=s=>{const o=[];for(let i=0;i<s.length;i++){let c=s.charCodeAt(i);
+  if(c<128)o.push(c); else if(c<2048){o.push(192|c>>6,128|c&63)}
+  else if(c<55296||c>57343){o.push(224|c>>12,128|(c>>6&63),128|c&63)}
+  else{c=65536+(((c&1023)<<10)|(s.charCodeAt(++i)&1023));o.push(240|c>>18,128|(c>>12&63),128|(c>>6&63),128|c&63)}}
+  return o};
+const hexOf=s=>utf8(s).map(b=>b.toString(16).padStart(2,"0")).join("");
+const b32=s=>{const h=hexOf(s);if(h.length>64)throw Error("too long");return h.padEnd(64,"0")};
+const strEnc=s=>{const h=hexOf(s);return u256(h.length/2)+h.padEnd(Math.ceil(h.length/64)*64,"0")};
+const W=(h,i)=>parseInt(h.slice(i*64,i*64+64),16);
+function decStrArr(hex){const h=strip(hex),b=W(h,0)/32,n=W(h,b),out=[];
+  if(!Number.isInteger(b)||!(n>=0&&n<512))throw Error("not a string[]");
+  for(let k=0;k<n;k++){const p=b+1+W(h,b+1+k)/32,len=W(h,p);let s="";
+    for(let j=0;j<len;j++)s+=String.fromCharCode(parseInt(h.slice((p+1)*64+j*2,(p+1)*64+j*2+2),16));
+    out.push(s)}return out}
+
+const CALLS=[
+  {n:1, sig:`add("${SVC}", ${CHAIN}, "${NEW}")`,
+        why:"appends it at the end of the list",
+        data:SEL.add+b32(SVC)+u256(CHAIN)+u256(96)+strEnc(NEW)},
+  {n:2, sig:`move("${SVC}", ${CHAIN}, 3, 0)`,
+        why:"splices it to the front, shifting the other three down one",
+        data:SEL.move+b32(SVC)+u256(CHAIN)+u256(3)+u256(0)},
+];
+
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[<>&"']/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;","'":"&#39;"}[c]));
+const short=a=>a?a.slice(0,6)+"…"+a.slice(-4):"—";
+
+let provider=null, account="", walletChain=0;
+let list=SNAP.slice(), owner=SNAP_OWNER, live=false, liveErr="", busy=false;
+const wallets=[];
+addEventListener("eip6963:announceProvider",e=>{
+  if(e.detail&&e.detail.provider&&!wallets.some(x=>x.info.uuid===e.detail.info.uuid))wallets.push(e.detail)});
+try{ dispatchEvent(new Event("eip6963:requestProvider")) }catch(_){}
+
+async function rpcCall(method,params){
+  if(provider) return provider.request({method,params});
+  let last;
+  for(const u of READ_POOL){
+    try{ const r=await fetch(u,{method:"POST",headers:{"content-type":"application/json"},
+           body:JSON.stringify({id:1,jsonrpc:"2.0",method,params})});
+         const j=await r.json();
+         if(j.error) throw Object.assign(new Error(j.error.message),{data:j.error.data,rpc:true});
+         return j.result }
+    catch(e){ last=e; if(e.rpc) throw e } }
+  throw last||new Error("no read path");
+}
+const ethCall=(data,from)=>rpcCall("eth_call",[from?{from,to:EPS,data}:{to:EPS,data},"latest"]);
+function explain(e){
+  const raw=String((e&&e.data&&(e.data.data||e.data))||(e&&e.message)||"");
+  const m=/0x([0-9a-fA-F]{8})/.exec(raw);
+  if(m&&ERRS[m[1].toLowerCase()])return ERRS[m[1].toLowerCase()];
+  if(e&&e.code===4001)return "You rejected it in the wallet.";
+  return ((e&&e.message)||"call failed").slice(0,150);
+}
+const idx=()=>list.indexOf(NEW);
+const doneAll=()=>idx()===0;
+const step1Done=()=>idx()>=0;
+
+async function refresh(){
+  try{
+    const [lh,oh]=await Promise.all([
+      ethCall(SEL.list+b32(SVC)+u256(CHAIN)), ethCall(SEL.owner)]);
+    list=decStrArr(lh); owner="0x"+strip(oh).slice(-40); live=true; liveErr="";
+  }catch(e){ live=false;
+    liveErr=/Failed to fetch|NetworkError|load failed|Content Security/i.test(e.message||"")
+      ? "no read path until a wallet is connected" : explain(e); }
+  render();
+}
+async function connect(){
+  let p=provider;
+  if(!p){
+    if(wallets.length===1)p=wallets[0].provider;
+    else if(wallets.length>1){
+      const k=prompt("Which wallet?\n"+wallets.map((x,i)=>i+": "+x.info.name).join("\n"),"0");
+      if(k===null)return; p=(wallets[+k]||wallets[0]).provider;
+    } else p=window.ethereum;
+  }
+  if(!p) return say("badbox","No wallet is reachable from this page. Serve <code>deploy/roster-console.html</code> on localhost, or copy the calldata and run it from a Safe.");
+  try{
+    const a=await p.request({method:"eth_requestAccounts"});
+    provider=p; account=(a&&a[0])||"";
+    walletChain=parseInt(await p.request({method:"eth_chainId"}),16)||0;
+    p.on&&p.on("accountsChanged",x=>{account=(x&&x[0])||"";render()});
+    p.on&&p.on("chainChanged",c=>{walletChain=parseInt(c,16)||0;render();refresh()});
+    render(); refresh();
+  }catch(e){ say("badbox",esc(explain(e))) }
+}
+async function switchNet(){
+  try{ await provider.request({method:"wallet_switchEthereumChain",params:[{chainId:"0x1"}]});
+       walletChain=1; render(); refresh() }catch(e){ say("badbox",esc(explain(e))) }
+}
+function say(cls,html){const d=document.createElement("div");d.className=cls;d.innerHTML=html;$("banner").prepend(d)}
+function copy(text,btn){const t=btn.textContent;
+  const done=ok=>{btn.textContent=ok?"Copied":"Copy blocked";setTimeout(()=>btn.textContent=t,1600)};
+  try{navigator.clipboard.writeText(text).then(()=>done(true),()=>done(false))}catch(_){done(false)}}
+
+async function send(call,btn){
+  const label=btn.textContent; btn.disabled=true; busy=true; btn.textContent="Simulating…";
+  try{
+    if(!live) throw new Error("The list has not been read from chain — refusing to sign against the snapshot.");
+    if(walletChain!==1) throw new Error("zEndpoints is on Ethereum mainnet. Switch your wallet there first.");
+    await ethCall(call.data,account);
+    btn.textContent="Check your wallet…";
+    const hash=await provider.request({method:"eth_sendTransaction",
+      params:[{from:account,to:EPS,data:"0x"+strip(call.data)}]});
+    btn.textContent="Sent";
+    say("okbox",`Step ${call.n} submitted — <a href="https://etherscan.io/tx/${hash}" target="_blank" rel="noreferrer">${short(hash)}</a>. Re-reading the list; the next step unlocks once it confirms.`);
+    for(const d of [8000,20000,40000]) setTimeout(refresh,d);
+  }catch(e){ btn.textContent=label; say("badbox",esc(explain(e))) }
+  finally{ busy=false; render() }
+}
+
+function render(){
+  const known=live, isOwner=!!account&&!!owner&&account.toLowerCase()===owner.toLowerCase();
+  const netOk=walletChain===1;
+  $("chState").textContent=live?"live":"snapshot";
+  $("chState").className="chip"+(live?" ok":" warn");
+  $("chYou").textContent=account?short(account):"not connected";
+  $("chYou").className="chip"+(account?(!known?" warn":isOwner?" ok":" no"):"");
+  $("btnConnect").textContent=account?"Connected":"Connect wallet";
+  $("btnConnect").disabled=!!account;
+  $("ownerBox").textContent=owner+(live?"   (read live)":"   (snapshot)");
+  $("srcTag").textContent=live?"read from chain":"snapshot — connect to read live";
+
+  const target=[NEW,...SNAP];
+  $("lists").innerHTML=
+    `<div><div class="note" style="margin-bottom:6px">Now</div><div class="list">`
+    +list.map((u,i)=>`${i}. ${u===NEW?"<b>"+esc(u)+"</b>":esc(u)}`).join("<br>")+`</div></div>`
+    +`<div><div class="note" style="margin-bottom:6px">After both calls</div><div class="list">`
+    +target.map((u,i)=>`${i}. ${u===NEW?"<b>"+esc(u)+"</b>":esc(u)}`).join("<br>")+`</div></div>`;
+
+  const nb=$("banner");
+  [...nb.querySelectorAll("[data-standing]")].forEach(n=>n.remove());
+  const add=(c,h)=>{const d=document.createElement("div");d.className=c;d.dataset.standing="1";d.innerHTML=h;nb.append(d)};
+  if(doneAll()) add("okbox","<strong>Done.</strong> mainnet.base.org is at position 0 and the list is four long. Base visitors get the split-B quote on the next page load — nothing further to send.");
+  else if(!account) add("warnbox",`<strong>Connect the curating wallet.</strong> Reads and sends both go through it. Until then this shows a snapshot.`);
+  else if(!netOk) add("warnbox",`Your wallet is on chain ${walletChain||"?"}. zEndpoints lives on Ethereum mainnet, even though this list serves Base. <button id="btnSwitch" style="margin-left:8px">Switch to mainnet</button>`);
+  else if(!live) add("warnbox",`Connected, but the list has not been read yet${liveErr?` (${esc(liveErr)})`:""}. Sending stays disabled until it is.`);
+  else if(known&&!isOwner) add("badbox",`<strong>${short(account)} does not curate zEndpoints.</strong> Both calls would revert <code>NotOwner()</code>. The curator is <code>${esc(owner)}</code>.`);
+  const sw=$("btnSwitch"); if(sw) sw.onclick=switchNet;
+
+  const state=c=>{
+    if(c.n===1) return step1Done()?"done":"now";
+    return doneAll()?"done":step1Done()?"now":"wait";
+  };
+  $("stepTag").textContent = doneAll()?"both landed":step1Done()?"1 of 2 landed":"none sent";
+  $("steps").innerHTML=CALLS.map(c=>{
+    const st=state(c), armed = st==="now" && !!account && live && netOk && !busy;
+    return `<div class="step ${st}">
+      <div class="num">${st==="done"?"✓":c.n}</div>
+      <div>
+        <div class="sig">${esc(c.sig)}</div>
+        <div class="note">${esc(c.why)}${st==="wait"?" — waits for step 1":st==="done"?" — already reflected on chain":""}</div>
+        <div class="cd">${esc("0x"+strip(c.data))}</div>
+        <div class="acts">
+          <button data-copy="${c.n}">Copy</button>
+          <button class="primary" data-send="${c.n}" ${armed?"":"disabled"}>${st==="done"?"Done":"Send"}</button>
+        </div>
+      </div></div>`}).join("");
+  $("steps").querySelectorAll("[data-copy]").forEach(b=>b.onclick=()=>{
+    const c=CALLS[+b.dataset.copy-1];
+    copy(JSON.stringify({to:EPS,value:"0",data:"0x"+strip(c.data)},null,2),b)});
+  $("steps").querySelectorAll("[data-send]").forEach(b=>b.onclick=()=>send(CALLS[+b.dataset.send-1],b));
+}
+
+$("btnConnect").onclick=connect;
+render(); refresh();
+</script>
