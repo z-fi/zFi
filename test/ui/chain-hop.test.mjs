@@ -282,3 +282,34 @@ describe('Deepstate', () => {
     p.close();
   });
 });
+
+describe('the chart', () => {
+  /**
+   * chFloorFor/chSyncPeriod/chSyncOrientation each memoise on the pair key
+   * alone, and the key is two token addresses with no chain in it. A pair that
+   * reads the same on two chains — ether against a token deployed to one
+   * address on both, which is what CREATE2 gives you — therefore matched the
+   * memo across a hop, and the guard returned before re-reading anything. The
+   * floor line and the market cap under the chart went on quoting the chain
+   * the page had left.
+   */
+  test('forgets the floor, the supply and the timeframe it read on the last chain', async () => {
+    const p = await loadPage({ walletless: true, hash: null });
+    await p.settle();
+
+    // Base's ETH/WETH key, seeded while the page is still on Ethereum: the
+    // stand-in for a pair whose two addresses are the same on both chains.
+    const key = p.window.eval('chPairKey([TOKENS[0],CHAINS[8453].tokens[1]])');
+    p.window.eval(`chFloorKey=${JSON.stringify(key)};chFloor=7;chSupply=9;chCoin1=1;`
+      + `chTfKey=${JSON.stringify(key)};chPeriod=86400`);
+
+    await hopTo(p, 8453);
+
+    assert.equal(p.window.eval('chFloor'), 0, 'the floor price is dropped');
+    assert.equal(p.window.eval('chSupply'), 0, 'the supply is dropped');
+    assert.equal(p.window.eval('chCoin1'), 0, 'the side the coin sits on is dropped');
+    assert.notEqual(p.window.eval('chFloorKey'), key, 'the floor memo no longer matches');
+    assert.notEqual(p.window.eval('chTfKey'), key, 'the timeframe memo no longer matches');
+    p.close();
+  });
+});

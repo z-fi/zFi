@@ -366,3 +366,38 @@ describe('listing a climbing bid in the book', () => {
     p.close();
   });
 });
+
+describe('a floor scan that could not be read', () => {
+  /**
+   * A page of bids that never arrives is not the same fact as a book with no
+   * bids in it, and the swap panel has a line for saying so. The cursor loop
+   * used to break on the failed read and then report completeness from the
+   * cursor alone, which a failed FIRST read leaves at zero — so an unreachable
+   * lens routed around every standing bid and told the user nothing.
+   */
+  const deafen = c => { c.floorLens = () => { throw Error('node refused the call'); }; };
+
+  it('reports itself incomplete rather than empty', async () => {
+    const p = await setup(c => { c.floorBids = [bidWethForUsdc()]; });
+    const at = await p.window.eval('blockNow()');
+
+    const ok = await p.window.floorCandidates(A.ZERO, A.USDC, at);
+    assert.equal(ok.length, 1, 'the bid is readable to begin with');
+    assert.equal(ok.incomplete, false, 'and a scan that read every page is complete');
+
+    deafen(p.chain);
+    const lost = await p.window.floorCandidates(A.ZERO, A.USDC, at);
+    assert.equal(lost.length, 0, 'nothing could be read');
+    assert.equal(lost.incomplete, true, 'so the scan must not claim it saw the whole book');
+    p.close();
+  });
+
+  it('carries that up to the candidate set the router plans from', async () => {
+    const p = await setup(c => { c.floorBids = [bidWethForUsdc()]; });
+    deafen(p.chain);
+    const rows = await p.window.swapCandidates(A.ZERO, A.USDC, await p.window.eval('blockNow()'));
+    assert.equal(rows.incomplete, true,
+      "swapCandidates has to inherit the floor scan's doubt, not just its emptiness");
+    p.close();
+  });
+});

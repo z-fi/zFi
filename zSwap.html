@@ -745,8 +745,9 @@ return true;
 function chainWipe(){pvFarm.classList.add("hide");pvFarm._t=0;
 solversJob=null;solversRetry=0;solverLanes=null;solverFill=null;solverExec=null;
 _laneHit.clear();_laneWait.clear();_strikes.clear();laneOverride=null;laneOverrideFor="";
-bnVal="";bnAt=0;bnJob=null;
+bnVal="";bnAt=0;bnJob=null;nqOff=0;
 candCache={};chCache={};metaCache.clear();fwdCache.clear();deadOutputs.clear();
+chFloorKey="";chInvKey="";chTfKey="";chFloor=0;chSupply=0;chCoin1=0;chPeriod=FINE;
 for(const o of[codeSeen,logoCache,cbSeen,fcPool,fcFloorPx,cardCache])for(const k in o)delete o[k];
 mc3Cap=mc3Clamp(Number(LS[MC3_KEY()]));
 ++seq;++bSeq;++b1Seq;++bookSeq;++posSeq;++lqSeq;++chSeq;++floorSeq;++fcSeq;++cbSeq;
@@ -4211,11 +4212,11 @@ return rows.filter(r=>r.anyId&&r.remaining>0n&&r.initial>0n&&r.price>0n)
 }
 async function floorCandidates(tokenIn,tokenOut,block){
 const bin=tokenIn===ZERO?WETH:tokenIn,bout=tokenOut===ZERO?WETH:tokenOut;
-const out=[];let cur=0n,t=0;
+const out=[];let cur=0n,t=0,lost=false;
 do{
 const raw=await rpc(C,[{to:FLOORVIEW,data:"0x"+SEL_FLOOR_CANDS+encAddr(FLOOR)+encAddr(bin)+encAddr(bout)
 +encUint(cur)+encUint(64)+encUint(512)},block]).catch(()=>null);
-if(!raw)break;
+if(!raw){lost=true;break}
 cur=BigInt("0x"+(strip0x(raw).slice(64,128)||0));
 for(const b of decBidRows(raw)){
 if(b.isNFT||b.remaining<=0n||b.initial<=0n||b.price<=0n||b.proceeds<=0n)continue;
@@ -4230,7 +4231,7 @@ price:b.price,initial:b.initial,
 });
 }
 }while(cur&&++t<8);
-out.incomplete=!!cur;
+out.incomplete=lost||!!cur;
 return out;
 }
 function floorGet(o,pay){return o.price*pay/o.initial}
@@ -6045,7 +6046,7 @@ if(!fp){stat.textContent="Not a Precision pool — refusing to send.";return}
 ++busy;
 try{
 await checkWallet();
-const aps=[...await apSeq(t0.addr,pool,a0),...await apSeq(t1.addr,pool,a1)];
+const aps=(await Promise.all([apSeq(t0.addr,pool,a0),apSeq(t1.addr,pool,a1)])).flat();
 const value=t0.addr===ZERO?a0:0n;
 const req={from:account,to:pool,value:toHex(value),
 data:"0x"+SEL_ADDEXACT+encUint(0)+encUint(a0)+encUint(a1)+encUint(lessSlip(pv.lp))+encAddr(to)};
@@ -6293,7 +6294,7 @@ if(lp<=0n){out.textContent="Preview the band first.";return}
 const minLP=lp*(10000n-bps)/10000n;
 const market=lqMarket(t0.addr,t1.addr,sl,sh,fee);
 const native=t0.addr===ZERO;
-await checkWallet();const aps=[...await apSeq(t0.addr,PFACTORY,a0),...await apSeq(t1.addr,PFACTORY,a1)];
+await checkWallet();const aps=(await Promise.all([apSeq(t0.addr,PFACTORY,a0),apSeq(t1.addr,PFACTORY,a1)])).flat();
 const data="0x"+SEL_CREATE_SEED+market+encUint(sp)+encUint(a0)+encUint(a1)
 +encUint(minLP)+encAddr(to);
 const tx={from:account,to:PFACTORY,data,value:native?toHex(a0):"0x0"};
