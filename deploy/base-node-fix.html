@@ -1,4 +1,4 @@
-<title>Base Read Node Fix</title>
+<title>Base Node Correction</title>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
 <style>
@@ -87,7 +87,7 @@ details>summary:hover{color:var(--accent)}
 </style>
 
 <div class="bar"><div class="bar-in">
-  <div class="brand">Base Read Node Fix<small>zEndpoints · rpc · chain 8453</small></div>
+  <div class="brand">Base Node Correction<small>zEndpoints · rpc · chain 8453</small></div>
   <span class="chip" id="chState">snapshot</span>
   <span class="chip" id="chYou">not connected</span>
   <button id="btnConnect" class="primary">Connect wallet</button>
@@ -99,22 +99,25 @@ details>summary:hover{color:var(--accent)}
   <div class="panel">
     <header><h2>What this changes, and why</h2></header>
     <div class="pad stack">
-      <p class="note" style="margin:0">Every Base read node currently curated runs out of gas on the
-        <code>split B</code> quote, so a Base visitor without a wallet never gets that route priced.
-        Reordering cannot fix it — no node in the list can answer. Adding one that can, at the front,
-        is the whole fix.</p>
+      <div class="warnbox">The previous change put <code>mainnet.base.org</code> at position 0 because
+        it answers every quote shape. It does — but only one call at a time. Under the burst a real
+        quote fires it is throttled hard, losing calls the nodes it displaced would have answered.
+        This replaces it in place.</div>
+      <p class="note" style="margin:0">A single quote fires roughly thirteen <code>eth_call</code>s at
+        once. That, not shape coverage alone, is what position 0 has to survive:</p>
       <table>
-        <thead><tr><th></th><th>node</th><th>single-hop</th><th>routed</th><th>split A</th><th>split B</th></tr></thead>
+        <thead><tr><th>node</th><th>13-call burst, 3 runs</th><th>split B</th><th>verdict</th></tr></thead>
         <tbody>
-          <tr><td class="n">0</td><td>base-rpc.publicnode.com</td><td class="y">ok</td><td class="y">ok</td><td class="y">ok</td><td class="x">OOG</td></tr>
-          <tr><td class="n">1</td><td>base.rpc.blxrbdn.com</td><td class="y">ok</td><td class="y">ok</td><td class="y">ok</td><td class="x">OOG</td></tr>
-          <tr><td class="n">2</td><td>base.drpc.org</td><td class="y">ok</td><td class="y">ok</td><td class="y">ok</td><td class="x">OOG</td></tr>
-          <tr><td class="n">→</td><td><strong>mainnet.base.org</strong></td><td class="y">ok</td><td class="y">ok</td><td class="y">ok</td><td class="y">ok</td></tr>
+          <tr><td>mainnet.base.org</td><td class="x">5, 5, 0 answered</td><td class="y">ok</td><td class="x">throttled (HTTP 429)</td></tr>
+          <tr><td><strong>base.gateway.tenderly.co</strong></td><td class="y">12, 13, 13</td><td class="y">ok</td><td class="y">answers everything, survives load</td></tr>
+          <tr><td>base-rpc.publicnode.com</td><td class="y">10, 10, 10</td><td class="x">OOG</td><td>reliable, cannot price split B</td></tr>
+          <tr><td>base.rpc.blxrbdn.com</td><td class="y">10</td><td class="x">OOG</td><td>reliable, cannot price split B</td></tr>
+          <tr><td>base.drpc.org</td><td class="y">10</td><td class="x">OOG</td><td>reliable, cannot price split B</td></tr>
         </tbody>
       </table>
-      <p class="note" style="margin:0">Measured against the dapp's own quote calldata, ETH → USDC for
-        1 ETH, and stable over five rounds. <code>mainnet.base.org</code> is Base's own public endpoint
-        and needs no key. <code>base.gateway.tenderly.co</code> also answers all four if you prefer it.</p>
+      <p class="note" style="margin:0">The three incumbents never throttle — their only misses are the
+        split-B calls, which they cannot afford the gas for. Tenderly's keyless Base gateway is the one
+        node that does both.</p>
     </div>
   </div>
 
@@ -126,13 +129,11 @@ details>summary:hover{color:var(--accent)}
   </div>
 
   <div class="panel">
-    <header><h2>Two calls, in order</h2><span class="sub" id="stepTag"></span></header>
+    <header><h2>One call</h2><span class="sub" id="stepTag"></span></header>
     <div id="steps"></div>
     <div class="pad" style="border-top:1px solid var(--line-soft)">
-      <p class="note" style="margin:0"><strong>The second only becomes valid after the first confirms.</strong>
-        Index 3 does not exist until the append lands, so <code>move</code> reverts
-        <code>BadIndex()</code> before then — this page keeps it disabled rather than letting you spend
-        gas discovering that.</p>
+      <p class="note" style="margin:0"><code>setAt</code> replaces the entry where it stands, so the
+        other three keep their positions and nothing is added or dropped. The list stays four long.</p>
     </div>
   </div>
 
@@ -154,9 +155,9 @@ details>summary:hover{color:var(--accent)}
 <script>
 "use strict";
 const EPS="0x00000051F365d898132f4ebF345Cd3968e02F288";
-const SEL={list:"0xe8edb32f",add:"0x63a418e3",move:"0xfd530b5e",owner:"0x8da5cb5b"};
-const SVC="rpc", CHAIN=8453, NEW="https://mainnet.base.org";
-const SNAP=["https://base-rpc.publicnode.com","https://base.rpc.blxrbdn.com","https://base.drpc.org"];
+const SEL={list:"0xe8edb32f",setAt:"0x1dbd5943",owner:"0x8da5cb5b"};
+const SVC="rpc", CHAIN=8453, NEW="https://base.gateway.tenderly.co", OLD="https://mainnet.base.org";
+const SNAP=["https://mainnet.base.org","https://base-rpc.publicnode.com","https://base.rpc.blxrbdn.com","https://base.drpc.org"];
 const SNAP_OWNER="0x1c0aa8ccd568d90d61659f060d1bfb1e6f855a20";
 const READ_POOL=["https://eth.drpc.org","https://ethereum-rpc.publicnode.com","https://cloudflare-eth.com"];
 const ERRS={"30cd7471":"NotOwner — this address does not curate zEndpoints",
@@ -181,12 +182,9 @@ function decStrArr(hex){const h=strip(hex),b=W(h,0)/32,n=W(h,b),out=[];
     out.push(s)}return out}
 
 const CALLS=[
-  {n:1, sig:`add("${SVC}", ${CHAIN}, "${NEW}")`,
-        why:"appends it at the end of the list",
-        data:SEL.add+b32(SVC)+u256(CHAIN)+u256(96)+strEnc(NEW)},
-  {n:2, sig:`move("${SVC}", ${CHAIN}, 3, 0)`,
-        why:"splices it to the front, shifting the other three down one",
-        data:SEL.move+b32(SVC)+u256(CHAIN)+u256(3)+u256(0)},
+  {n:1, sig:`setAt("${SVC}", ${CHAIN}, 0, "${NEW}")`,
+        why:"replaces position 0 in place \u2014 nothing else moves",
+        data:SEL.setAt+b32(SVC)+u256(CHAIN)+u256(0)+u256(128)+strEnc(NEW)},
 ];
 
 const $=id=>document.getElementById(id);
@@ -222,7 +220,7 @@ function explain(e){
 }
 const idx=()=>list.indexOf(NEW);
 const doneAll=()=>idx()===0;
-const step1Done=()=>idx()>=0;
+const step1Done=()=>idx()===0;
 
 async function refresh(){
   try{
@@ -272,7 +270,7 @@ async function send(call,btn){
     const hash=await provider.request({method:"eth_sendTransaction",
       params:[{from:account,to:EPS,data:"0x"+strip(call.data)}]});
     btn.textContent="Sent";
-    say("okbox",`Step ${call.n} submitted — <a href="https://etherscan.io/tx/${hash}" target="_blank" rel="noreferrer">${short(hash)}</a>. Re-reading the list; the next step unlocks once it confirms.`);
+    say("okbox",`Submitted — <a href="https://etherscan.io/tx/${hash}" target="_blank" rel="noreferrer">${short(hash)}</a>. Re-reading the list once it confirms.`);
     for(const d of [8000,20000,40000]) setTimeout(refresh,d);
   }catch(e){ btn.textContent=label; say("badbox",esc(explain(e))) }
   finally{ busy=false; render() }
@@ -290,30 +288,27 @@ function render(){
   $("ownerBox").textContent=owner+(live?"   (read live)":"   (snapshot)");
   $("srcTag").textContent=live?"read from chain":"snapshot — connect to read live";
 
-  const target=[NEW,...SNAP];
+  const target=[NEW,...SNAP.slice(1)];
   $("lists").innerHTML=
     `<div><div class="note" style="margin-bottom:6px">Now</div><div class="list">`
     +list.map((u,i)=>`${i}. ${u===NEW?"<b>"+esc(u)+"</b>":esc(u)}`).join("<br>")+`</div></div>`
-    +`<div><div class="note" style="margin-bottom:6px">After both calls</div><div class="list">`
+    +`<div><div class="note" style="margin-bottom:6px">After this call</div><div class="list">`
     +target.map((u,i)=>`${i}. ${u===NEW?"<b>"+esc(u)+"</b>":esc(u)}`).join("<br>")+`</div></div>`;
 
   const nb=$("banner");
   [...nb.querySelectorAll("[data-standing]")].forEach(n=>n.remove());
   const add=(c,h)=>{const d=document.createElement("div");d.className=c;d.dataset.standing="1";d.innerHTML=h;nb.append(d)};
-  if(doneAll()) add("okbox","<strong>Done.</strong> mainnet.base.org is at position 0 and the list is four long. Base visitors get the split-B quote on the next page load — nothing further to send.");
+  if(doneAll()) add("okbox","<strong>Done.</strong> base.gateway.tenderly.co leads the Base list \u2014 it prices every quote shape and holds up under the burst. Nothing further to send.");
   else if(!account) add("warnbox",`<strong>Connect the curating wallet.</strong> Reads and sends both go through it. Until then this shows a snapshot.`);
   else if(!netOk) add("warnbox",`Your wallet is on chain ${walletChain||"?"}. zEndpoints lives on Ethereum mainnet, even though this list serves Base. <button id="btnSwitch" style="margin-left:8px">Switch to mainnet</button>`);
   else if(!live) add("warnbox",`Connected, but the list has not been read yet${liveErr?` (${esc(liveErr)})`:""}. Sending stays disabled until it is.`);
   else if(known&&!isOwner) add("badbox",`<strong>${short(account)} does not curate zEndpoints.</strong> Both calls would revert <code>NotOwner()</code>. The curator is <code>${esc(owner)}</code>.`);
   const sw=$("btnSwitch"); if(sw) sw.onclick=switchNet;
 
-  const state=c=>{
-    if(c.n===1) return step1Done()?"done":"now";
-    return doneAll()?"done":step1Done()?"now":"wait";
-  };
-  $("stepTag").textContent = doneAll()?"both landed":step1Done()?"1 of 2 landed":"none sent";
+  const state=()=>doneAll()?"done":"now";
+  $("stepTag").textContent = doneAll()?"landed":"not sent";
   $("steps").innerHTML=CALLS.map(c=>{
-    const st=state(c), armed = st==="now" && !!account && live && netOk && !busy;
+    const st=state(), armed = st==="now" && !!account && live && netOk && !busy;
     return `<div class="step ${st}">
       <div class="num">${st==="done"?"✓":c.n}</div>
       <div>
