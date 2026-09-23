@@ -437,7 +437,7 @@ background:var(--e);margin:.5em auto .1em}
 <label class="dly">Arrives on<select id="pvChain"><option value="1">Ethereum (withdraw)</option><option value="8453">Base</option><option value="4663">Robinhood</option></select></label>
 <label class="dly" title="The address credited on the chain chosen above. Leave blank for this wallet, which links the exit to the deposit. On Robinhood the unused gas budget refunds here too, so a contract wallet gets its refund at an aliased address.">Recipient<input id="pvTo" placeholder="0x… on that chain, defaults to you" autocomplete="off" spellcheck="false"></label>
 <label class="dly hide" id="pvRcL" title="The recipient's Tacit address (tacit1…; zSwap shows it beside “your address”, tacit.finance under Wallet) or their 33-byte Tacit key. A 0x with no Tacit address becomes a public payout.">To<input id="pvRc" placeholder="tacit1…, name or 0x" autocomplete="off" spellcheck="false"></label>
-<label class="dly" title="Through the relay: it proves and settles, paying its own gas; an exit costs a flat fee. An exit to an L2 then needs one activate transaction; sending it from this wallet links the exit to it, so import the key and notes into another wallet to activate there. From this wallet: the relay still proves it, so it sees the same link either way; you send the settle yourself, fee-free, but from this wallet. Applies to deposits, exits and payments.">Settle<select id="pvPath"><option value="relay">Through the relay</option><option value="self">From this wallet</option></select></label>
+<label class="dly" title="Through the relay: it proves and settles, paying its own gas; an exit costs a flat fee. An exit to an L2 then needs one activate transaction; sending it from this wallet links the exit to it, so import the key and notes into another wallet to activate there. From this wallet: the relay still proves it, so it sees the same link either way; you send the settle yourself, fee-free, but from this wallet. Applies to deposits, exits and payments.">Settle<select id="pvPath"><option value="relay">Through the relay</option><option value="self">From this wallet</option></select></label><label class="dly hide" id="pvTipL" title="A deposit costs the relay gas and a proof, and nothing in the pool makes you pay for it. On by default at the relay's own quoted cost, never more than 3% of the deposit. Untick and the deposit still settles.">Tip the relay<input id="pvTip" type="checkbox" checked></label>
 <small id="pvPrev" class="hide"></small>
 <small id="pvKey"></small>
 <div id="pvList"></div>
@@ -7779,9 +7779,23 @@ const cpNote=(i,k)=>{const v=k.value,a=k.asset,cb=cpBinding(),ctx=cpCtx("tacit-w
 const r={i,v:String(v),at:Math.floor(Date.now()/1000),memo:cpSeal(cpPub,k,cpRandom()),
 op:{chainBinding:cb,asset:a,value:String(v),cx:k.cx,cy:k.cy,owner:k.owner,sigR:sig.R,sigZ:sig.z}};if(a!==CP_ETH)r.a=a;return r};
 const cpTokBal=async A=>BigInt(await rpc(C,[{to:A.tok,data:balOf(account)},L])||"0x0");
-const cpDepositOne=async(v,label,A=CP_ETH_AS)=>{const{i,k}=await cpFresh(v,A.id),n=cpNote(i,k),amt=v*A.scale;
-const req={from:account,to:CP_POOL,value:A.tok===ZERO?toHex(amt):"0x0",data:"0x"+SEL_CPWRAP+pad32(A.id)+encUint(amt)+pad32(cpDepCommit(k.cx,k.cy,k.owner))};
-await rpc(C,[req,L]);
+const CP_TIPFWD="0x000000D218B03db5837943b0b05DeA2965AE956e",CP_TIPTO="0x68575B073DE49a94e3E3ACf6F3A0d6E3b66267C7",SEL_CPWTIP="fc24c435",TIPOFF="zswap:cptip";
+const cpTipOn=()=>{try{return LS[TIPOFF]!=="0"}catch{return true}};
+const cpTipSync=()=>{pvTip.checked=cpTipOn();pvTipL.classList.toggle("hide",!(pvAct.value==="dep"&&cpSel().tok===ZERO&&pvPath.value!=="self"))};
+pvTip.onchange=()=>{sBlip();try{LS[TIPOFF]=pvTip.checked?"1":"0"}catch{}pvPrevSoon()};
+const cpTipFor=async wei=>{if(!cpTipOn()||pvPath.value==="self"||!(wei>0n))return 0n;
+const g=10n**BigInt(Math.max(0,String(wei).length-3)),qw=wei/g*g||wei;
+try{const j=await relayFetch("/confidential/quote?asset="+CP_ETH+"&amountWei="+qw),r=String(j&&j.recommendedWrapTipWei||"");
+if(!/^\d{1,30}$/.test(r))return 0n;let t=BigInt(r);if(t<=0n)return 0n;
+for(const c of [(await gasNow())*1400000n,wei*300n/10000n,2000000000000000n])if(t>c)t=c;
+return t>0n?t:0n}catch{return 0n}};
+const cpDepositOne=async(v,label,A=CP_ETH_AS)=>{const{i,k}=await cpFresh(v,A.id),n=cpNote(i,k),amt=v*A.scale,cm=cpDepCommit(k.cx,k.cy,k.owner);
+const req={from:account,to:CP_POOL,value:A.tok===ZERO?toHex(amt):"0x0",data:"0x"+SEL_CPWRAP+pad32(A.id)+encUint(amt)+pad32(cm)};
+let tip=0n;
+if(A.tok===ZERO&&A.id===CP_ETH)try{tip=await cpTipFor(amt);
+if(tip>0n){const tr={from:account,to:CP_TIPFWD,value:toHex(amt+tip),data:"0x"+SEL_CPWTIP+pad32(cm)+encUint(amt)+encAddr(CP_TIPTO)};
+await rpc(C,[tr,L]);req.to=tr.to;req.value=tr.value;req.data=tr.data}}catch{tip=0n}
+if(!tip)await rpc(C,[req,L]);
 n.tx=await sendTx([req]);pvAmt.value="";cpNotes.push(n);cpSaveNotes();cpPaint();
 await settle(n.tx,true);
 stat.textContent=label+" Asking the relay to settle it…";
@@ -8167,7 +8181,10 @@ let pvPS=0;const pvPrevNow=async()=>{const my=++pvPS,A=cpSel(),e=A.tok===ZERO,P=
 if(!account||!cpSeed||CHAIN_ID!==1)return void pvPrev.classList.add("hide");
 try{const r=pvWei()/A.scale;let Q=[];
 if(v==="dep"){const b=e?BigInt(await rpc("eth_getBalance",[account,L])||"0x0"):await cpTokBal(A);Q.push(trimAmt(b,A.dec)+" "+P+" in this wallet"+(r?" → you'll hold "+s(r):"")+(r*A.scale>b?" · more than this wallet holds":""));
-Q.push(pvPath.value==="self"?"You settle it from this wallet.":"Settling is free, usually 1–3 min after the deposit confirms (at most about 8).")}
+if(pvPath.value==="self")Q.push("You settle it from this wallet.");
+else{const tp=e&&A.id===CP_ETH&&r>0n?await cpTipFor(r*A.scale):0n;
+Q.push(tp>0n?"Relay tip "+trimAmt(tp,18)+" ETH ("+(Number(tp*10000n/(r*A.scale))/100).toFixed(2)+"%), which covers the settle — untick Tip the relay to skip it.":"Settling costs you nothing.");
+Q.push("It settles 1–3 min after the deposit confirms (at most about 8).")}}
 else{const sh=pvShV(A);Q.push(s(sh)+" shielded and ready");
 if(r){const fe=await pvCost(r,A),ch=v==="out"&&e?+pvChain.value:1;
 if(fe===null)Q.push("The relay does not take a fee in "+A.sym+": choose Settle: from this wallet.");
@@ -8183,7 +8200,7 @@ try{if(pvAct.value==="dep"){const b=e?BigInt(await rpc("eth_getBalance",[account
 else{v=pvShV(A);const fe=await pvCost(v,A);if(fe)v=v>fe?v-fe:0n}}catch(x){return err(x)}
 pvAmt.value=v>0n?f0(v*A.scale,A.dec):"";pvPrevSoon()};
 const f0=(w,d)=>{const s=formatUnits(w,d);return s.includes(".")?s.replace(/\.?0+$/,""):s};
-const pvHintSync=()=>{const v=pvAct.value,A=cpSel(),e=A.tok===ZERO,P=A.pub,on=e?" on Ethereum, Base or Robinhood":" on Ethereum";pvHint.textContent=v==="send"?"Send "+(e?"tETH, or plain ETH straight from this wallet,":"shielded "+A.sym)+" to a tacit1 address or name. The amount and the recipient stay hidden; they claim it into their own notes.":v==="out"?"Pay out shielded "+A.sym+" as "+P+" to any 0x"+on+". You stay hidden as the sender; the amount and the recipient are public.":(e?"Deposit plain ETH from this wallet. It becomes tETH, private ETH, so you need no tETH first.":"Deposit "+P+" from this wallet. It becomes shielded "+A.sym+".")+" From there, send it privately or withdraw it as "+P+" to any 0x"+on+"."+(A.id===CP_CBTC?"\ncBTC is bitcoin locked on Bitcoin. "+(cpSeed?"Use lock btc under more on the key row below":"Unlock your key below, then use lock btc under more")+", or deposit tacBTC.":A.id===CP_CUSD?"\ncUSD is borrowed against shielded cBTC: use borrow cUSD on a cBTC note, or deposit tacUSD.":"");pvHint.textContent+="\n"+(pvPath.value==="self"?"Settling from this wallet: after the "+(v==="dep"?"deposit":"first")+" transaction you send the settle yourself, with no relay fee.":v==="dep"?"The relay proves and settles your deposit, free, paying its own gas.":"The relay proves and settles it, paying its own gas, for a flat fee taken from the amount.");if(cpRet)pvHint.textContent=CP_RET+"\n"+pvHint.textContent};
+const pvHintSync=()=>{cpTipSync();const v=pvAct.value,A=cpSel(),e=A.tok===ZERO,P=A.pub,on=e?" on Ethereum, Base or Robinhood":" on Ethereum";pvHint.textContent=v==="send"?"Send "+(e?"tETH, or plain ETH straight from this wallet,":"shielded "+A.sym)+" to a tacit1 address or name. The amount and the recipient stay hidden; they claim it into their own notes.":v==="out"?"Pay out shielded "+A.sym+" as "+P+" to any 0x"+on+". You stay hidden as the sender; the amount and the recipient are public.":(e?"Deposit plain ETH from this wallet. It becomes tETH, private ETH, so you need no tETH first.":"Deposit "+P+" from this wallet. It becomes shielded "+A.sym+".")+" From there, send it privately or withdraw it as "+P+" to any 0x"+on+"."+(A.id===CP_CBTC?"\ncBTC is bitcoin locked on Bitcoin. "+(cpSeed?"Use lock btc under more on the key row below":"Unlock your key below, then use lock btc under more")+", or deposit tacBTC.":A.id===CP_CUSD?"\ncUSD is borrowed against shielded cBTC: use borrow cUSD on a cBTC note, or deposit tacUSD.":"");pvHint.textContent+="\n"+(pvPath.value==="self"?"Settling from this wallet: after the "+(v==="dep"?"deposit":"first")+" transaction you send the settle yourself, with no relay fee.":v==="dep"?"The relay proves and settles your deposit, free, paying its own gas.":"The relay proves and settles it, paying its own gas, for a flat fee taken from the amount.");if(cpRet)pvHint.textContent=CP_RET+"\n"+pvHint.textContent};
 pvAct.onchange=()=>{sBlip();pvActSync();cpPaint()};
 pvPath.onchange=()=>{sBlip();pvHintSync()};
 const cpExplorerLink=(base,value,label,kind)=>{

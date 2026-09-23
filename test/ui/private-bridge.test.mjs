@@ -1452,6 +1452,106 @@ describe('deposits the relay or the pool turn away', () => {
   });
 });
 
+/**
+ * The relay eats a deposit's gas and proof and nothing in the pool can make a
+ * depositor pay for it — passesFloor short-circuits every wrap-type job, and
+ * the tip lives outside the proof where a fee gate structurally cannot see it.
+ * So the tip is a default, not a rule: it rides WrapTipForwarder as plain ETH
+ * on top of msg.value, the relay's own quote sizes it, the page bounds it, and
+ * any trouble on that path falls back to the wrap we have always sent.
+ */
+describe('tipping the relay for a deposit', () => {
+  const TIPFWD = '0x000000d218b03db5837943b0b05dea2965ae956e';
+  const TIPTO = '0x68575b073de49a94e3e3acf6f3a0d6e3b66267c7';
+  const SEL_WTIP = 'fc24c435';
+  // The relay quotes a tip, and the forwarder answers its pre-flight. Without the
+  // second half the page falls back to the plain wrap — which is the behaviour
+  // 'a quote the relay will not answer' covers deliberately.
+  const quoting = (p, tipWei) => {
+    Object.defineProperty(p.chain.lanes, RELAY + '/confidential/quote', {
+      configurable: true, enumerable: true,
+      get: () => ({ ticker: 'cETH', assetId: F.ethAssetId, relayFeeEligible: true, recommendedWrapTipWei: String(tipWei) }),
+    });
+    p.chain.answer(TIPFWD, SEL_WTIP, '0x');
+  };
+
+  test('the deposit rides the forwarder, amount to the pool and the tip on top', async () => {
+    const p = await open();
+    quoting(p, 30000000000000n);          // 0.00003 ETH, 3% of a 0.001 deposit
+    await unlock(p);
+    p.type('pvAmt', '0.001');
+    await p.waitFor(() => /Relay tip/.test(p.text('pvPrev')), { label: 'the tip in the preview', ...SLOW });
+    assert.match(p.text('pvPrev'), /Relay tip 0\.00003 ETH \(3\.00%\), which covers the settle/);
+    assert.match(p.text('pvPrev'), /untick Tip the relay to skip it/);
+    p.click('pvGo');
+    await p.waitFor(() => p.chain.sent.length === 1, { label: 'the deposit to be sent', ...SLOW });
+    const tx = p.chain.sent[0];
+    assert.equal(String(tx.to).toLowerCase(), TIPFWD, 'through the forwarder, not straight at the pool');
+    assert.equal(BigInt(tx.value), 10n ** 15n + 30000000000000n, 'amount plus tip');
+    assert.equal(tx.data.slice(2, 10), SEL_WTIP, 'wrapWithTip(bytes32,uint256,address)');
+    assert.equal(BigInt('0x' + tx.data.slice(74, 138)), 10n ** 15n, 'the wrap amount, tip excluded');
+    assert.match(tx.data.slice(138).toLowerCase(), new RegExp(TIPTO.slice(2) + '$'), 'the relay wallet is paid');
+    p.close();
+  });
+
+  test('unticking it sends the plain wrap this page has always sent', async () => {
+    const p = await open();
+    quoting(p, 30000000000000n);
+    await unlock(p);
+    p.type('pvAmt', '0.001');
+    await p.waitFor(() => /Relay tip/.test(p.text('pvPrev')), { label: 'the tip', ...SLOW });
+    p.$('pvTip').checked = false;
+    p.$('pvTip').dispatchEvent(new p.window.Event('change', { bubbles: true }));
+    await p.waitFor(() => /Settling costs you nothing/.test(p.text('pvPrev')), { label: 'the tip to go' });
+    p.click('pvGo');
+    await p.waitFor(() => p.chain.sent.length === 1, { label: 'the deposit', ...SLOW });
+    const tx = p.chain.sent[0];
+    assert.equal(String(tx.to).toLowerCase(), POOL.toLowerCase(), 'straight at the pool');
+    assert.equal(BigInt(tx.value), 10n ** 15n, 'no tip on top');
+    assert.equal(p.window.localStorage['zswap:cptip'], '0', 'the refusal is remembered');
+    p.close();
+  });
+
+  test('a relay that quotes an absurd tip is bounded to 3% of the deposit', async () => {
+    const p = await open();
+    quoting(p, 10n ** 18n);               // one whole ether, for a 0.001 deposit
+    await unlock(p);
+    p.type('pvAmt', '0.001');
+    await p.waitFor(() => /Relay tip/.test(p.text('pvPrev')), { label: 'the bounded tip', ...SLOW });
+    assert.match(p.text('pvPrev'), /\(3\.00%\)/, 'the page clamps what the relay asks for');
+    p.click('pvGo');
+    await p.waitFor(() => p.chain.sent.length === 1, { label: 'the deposit', ...SLOW });
+    assert.equal(BigInt(p.chain.sent[0].value), 10n ** 15n + 30000000000000n,
+      'a relay cannot decide how much ether leaves this wallet');
+    p.close();
+  });
+
+  test('a quote the relay will not answer leaves the deposit exactly as it was', async () => {
+    const p = await open();                // no quote lane at all: the endpoint 404s
+    await unlock(p);
+    p.type('pvAmt', '0.001');
+    await p.waitFor(() => /you'll hold/.test(p.text('pvPrev')), { label: 'the preview', ...SLOW });
+    assert.doesNotMatch(p.text('pvPrev'), /Relay tip/);
+    p.click('pvGo');
+    await p.waitFor(() => p.chain.sent.length === 1, { label: 'the deposit', ...SLOW });
+    assert.equal(String(p.chain.sent[0].to).toLowerCase(), POOL.toLowerCase(), 'no tip path, no new failure');
+    assert.equal(BigInt(p.chain.sent[0].value), 10n ** 15n);
+    p.close();
+  });
+
+  test('settling from this wallet is never tipped', async () => {
+    const p = await open();
+    quoting(p, 30000000000000n);
+    await unlock(p);
+    p.select('pvPath', 'self');
+    p.type('pvAmt', '0.001');
+    await p.waitFor(() => /You settle it from this wallet/.test(p.text('pvPrev')), { label: 'the self-settle preview', ...SLOW });
+    assert.ok(p.$('pvTipL').classList.contains('hide'));
+    assert.doesNotMatch(p.text('pvPrev'), /Relay tip/);
+    p.close();
+  });
+});
+
 describe('the private form tells you before you press', () => {
   test('a deposit previews the wallet balance, what you will hold, and how long settling takes', async () => {
     const p = await open();
@@ -1459,7 +1559,9 @@ describe('the private form tells you before you press', () => {
     p.type('pvAmt', '0.01');
     await p.waitFor(() => /you'll hold 0\.01 tETH/.test(p.text('pvPrev')), { label: 'the deposit preview' });
     assert.match(p.text('pvPrev'), /10 ETH in this wallet/);
-    assert.match(p.text('pvPrev'), /Settling is free, usually 1–3 min/);
+    assert.match(p.text('pvPrev'), /Settling costs you nothing\./,
+      'no tip quoted, so the deposit is free to the depositor');
+    assert.match(p.text('pvPrev'), /settles 1–3 min after the deposit confirms/);
     p.type('pvAmt', '11');
     await p.waitFor(() => /more than this wallet holds/.test(p.text('pvPrev')), { label: 'the over-balance note' });
     p.close();

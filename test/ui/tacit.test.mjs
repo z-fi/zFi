@@ -233,6 +233,9 @@ describe('the shielded assets come from the token list', () => {
     assert.equal(p.text('pvAssetB'), 'TAC');
     assert.equal(p.text('pvUnit'), 'TAC');
     assert.equal(p.$('pvChain').value, '1', 'a token withdraws on Ethereum');
+    p.select('pvAct', 'dep');
+    assert.ok(p.$('pvTipL').classList.contains('hide'),
+      'no relay tip for a token: the forwarder splits msg.value, which a token wrap forbids');
     assert.match(p.text('pvHint'), /withdraw it as TAC to any 0x on Ethereum/);
     p.select('pvAct', 'send');
     assert.match(p.text('pvHint'), /stay hidden/);
