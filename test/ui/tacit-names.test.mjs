@@ -71,6 +71,22 @@ describe('paying a name privately', () => {
   });
 });
 
+describe('seeing your own address', () => {
+  test('the panel shows the tacit1 address in short, and the modal gives it in full', async () => {
+    const p = await open(new MockChain());
+    const addr = p.window.eval('cpTacAddr(cpSeed)');
+    const shown = p.$('pvKey').querySelector('.pvkm').textContent;
+    assert.equal(shown, addr.slice(0, 12) + '\u2026' + addr.slice(-6), 'the short form comes from the key itself');
+    assert.ok(addr.startsWith(shown.split('\u2026')[0]) && addr.endsWith(shown.split('\u2026')[1]), 'both ends are the real address');
+    p.click(p.$('pvKey').querySelector('button[data-a="addr"]'));
+    await p.waitFor(() => {
+      const ta = p.$('wkList').querySelector('textarea');
+      return ta && ta.value === addr;
+    }, { label: 'the full address, ready to copy', ...SLOW });
+    p.close();
+  });
+});
+
 describe('publishing to a name', () => {
   const owned = (chain, name) => { chain.names.set(name, A.ACCOUNT); return chain; };
 
