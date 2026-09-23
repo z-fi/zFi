@@ -8328,8 +8328,13 @@ clearInterval(mkTimer);
 if(on){loadEthUsd();mkTick=0;mkLoad(1);mkTimer=setInterval(()=>{if(!document.hidden&&mkMode&&!mkBusy)mkLoad(++mkTick%4===0)},30000)}
 fcSync()}
 mk.onclick=()=>{sBlip();mkSet(!mkMode);if(!mkMode)update()};
-const mkIco=(b,t)=>{b.textContent="";if(t.icon){const im=new Image(16,16);im.src=t.icon;im.alt="";b.append(im)}else{const sp=document.createElement("span");sp.innerHTML=genIcon(t.sym);b.append(sp.firstChild)}b.append(safeSym(t.sym))};
-const mkPickA=async(sel,as,hdr)=>{sBlip();const c=await wkPick(as.map(a=>{const t=mkTok(a);return{name:safeSym(t.sym),sub:t.sub||"",icon:t.icon||"",svg:t.icon?"":genIcon(t.sym),on:a===sel.value,id:a}}),hdr);if(c&&c.id!==sel.value){sel.value=c.id;sel.dispatchEvent(new Event("change",{bubbles:true}))}};
+const mkMk=i=>/^<(img|svg)[\s>]/.test(i||"");
+const mkIco=(b,t)=>{b.textContent="";const i=t.icon||"",sp=document.createElement("span");
+if(mkMk(i)){sp.innerHTML=i;b.append(sp.firstChild)}
+else if(i){const im=new Image(16,16);im.src=i;im.alt="";b.append(im)}
+else{sp.innerHTML=genIcon(t.sym);b.append(sp.firstChild)}
+b.append(safeSym(t.sym))};
+const mkPickA=async(sel,as,hdr)=>{sBlip();const c=await wkPick(as.map(a=>{const t=mkTok(a),i=t.icon||"",mk=mkMk(i);return{name:safeSym(t.sym),sub:t.sub||"",icon:mk?"":i,svg:mk?i:(i?"":genIcon(t.sym)),on:a===sel.value,id:a}}),hdr);if(c&&c.id!==sel.value){sel.value=c.id;sel.dispatchEvent(new Event("change",{bubbles:true}))}};
 mkAsset.innerHTML=MK_AS.map(t=>`<option value="${t.addr}">${t.sym}</option>`).join("");
 mkAsset.onchange=()=>mkIco(mkAssetB,mkTok(mkAsset.value));mkAsset.onchange();
 mkAssetB.onclick=()=>mkPickA(mkAsset,MK_AS.map(t=>t.addr),"Pot in");

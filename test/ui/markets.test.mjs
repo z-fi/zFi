@@ -292,12 +292,18 @@ test('markets mode', async (t) => {
     const p = await openMarkets(pmChain());
     p.click('mkGo');
     assert.match(p.$('mkAssetB').textContent, /ETH/);
-    assert.ok(p.$('mkAssetB').querySelector('img'), 'the asset button carries its icon');
+    // A listed token's icon is a data URL (an img); a built-in's is inline markup (an svg).
+    // Feeding markup to an img src is what made every built-in render as a broken image.
+    assert.ok(p.$('mkAssetB').querySelector('img,svg'), 'the asset button carries its icon');
     p.click('mkAssetB');
     await p.waitFor(() => !p.$('wkWrap').classList.contains('hide'), { label: 'asset dialog' });
     const rowsA = [...p.$('wkList').querySelectorAll('.tkr')];
     assert.equal(rowsA.length, 5);
     assert.ok(rowsA.every((r) => r.firstChild.nodeName === 'IMG' || r.firstChild.classList?.contains('wki')), 'every asset row leads with an icon');
+    // The defect: markup handed to an img src, which the browser cannot load.
+    assert.ok([...p.$('wkList').querySelectorAll('img')].every((i) => !/^\s*</.test(i.getAttribute('src') || '')),
+      'no row asks the browser to load inline markup as an image');
+    assert.ok(rowsA.some((r) => r.querySelector('svg')), 'a built-in token draws its inline logo');
     rowsA.find((r) => /BOLD/.test(r.textContent)).click();
     await p.settle();
     assert.equal(p.$('mkAsset').value, BOLD);
