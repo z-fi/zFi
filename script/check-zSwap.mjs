@@ -28,7 +28,7 @@ import path from 'node:path';
 import vm from 'node:vm';
 import nodecrypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { AbiCoder, Interface } from 'ethers';
+import { AbiCoder, Interface, keccak256 } from 'ethers';
 import { strip } from './strip-zSwap.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -115,6 +115,39 @@ check('the registry calldata carries THIS page', () => {
       + `${page.length.toLocaleString('en-US')} B — run: node script/build-zSwapRegistry-call.mjs`);
   }
   return `${len.toLocaleString('en-US')} B, byte-identical to the page`;
+});
+
+check('the Foundry pins carry THIS page', () => {
+  // The page's length and hash are pinned a THIRD time, in Solidity, and
+  // nothing but `forge test` reads them. An edit that regenerates the chunks
+  // and the registry calldata still leaves these stale, so the page ships
+  // green here and red there. Same failure the chunk-count guard exists for.
+  const file = path.join(ROOT, 'test', 'zSwap.t.sol');
+  const sol = fs.readFileSync(file, 'utf8');
+  const page = fs.readFileSync(HTML_PATH);
+  const want = { len: page.length, hash: keccak256(page).toLowerCase() };
+  const got = {
+    len: Number((sol.match(/EXPECTED_LEN = (\d+);/) || [])[1]),
+    hash: String((sol.match(/EXPECTED_HASH = (0x[0-9a-fA-F]{64});/) || [])[1]).toLowerCase(),
+  };
+  if (!got.len || got.hash === 'undefined') throw Error('could not read EXPECTED_LEN/EXPECTED_HASH out of test/zSwap.t.sol');
+  const fix = 'update EXPECTED_LEN and EXPECTED_HASH in test/zSwap.t.sol (the recipe is in its comment)';
+  if (got.len !== want.len) throw Error(`EXPECTED_LEN is ${got.len.toLocaleString('en-US')} B, the page is ${want.len.toLocaleString('en-US')} B — ${fix}`);
+  if (got.hash !== want.hash) throw Error(`EXPECTED_HASH is ${got.hash}, the page hashes to ${want.hash} — ${fix}`);
+  // zSwap.sol's own architecture note is what a verifier reads on Etherscan,
+  // and it carried "26 data contracts" for a whole chunk bump while saying 27
+  // two lines further down.
+  const doc = fs.readFileSync(path.join(ROOT, 'src', 'zSwap.sol'), 'utf8');
+  const arity = Number((doc.match(/constructor\(address dao, address previous, address\[(\d+)\] memory d\)/) || [])[1]);
+  if (arity !== CHUNKS) throw Error(`zSwap.sol's constructor takes ${arity} chunks, this check expects ${CHUNKS}`);
+  const said = Number((doc.match(/HTML payload \((\d+) B\)/) || [])[1]);
+  if (said && said !== want.len) throw Error(`src/zSwap.sol says the payload is ${said.toLocaleString('en-US')} B, it is ${want.len.toLocaleString('en-US')} B`);
+  for (const n of doc.match(/(\d+) data contracts/g) || [])
+    if (Number(n.split(' ')[0]) !== arity) throw Error(`src/zSwap.sol's docstring says "${n}", the constructor takes ${arity}`);
+  const head = Number((doc.match(/(\d+) B headroom/) || [])[1]);
+  const real = CHUNKS * 24576 - want.len;
+  if (head && head !== real) throw Error(`src/zSwap.sol claims ${head.toLocaleString('en-US')} B headroom, there is ${real.toLocaleString('en-US')} B`);
+  return `${want.len.toLocaleString('en-US')} B, ${want.hash.slice(0, 10)}… and ${arity} chunks agree in Solidity`;
 });
 
 check('actionable quotes expire after 45 seconds', () => {
