@@ -23,7 +23,16 @@ The page and all its on-chain dependencies are ready. What remains is deploying 
    - Use a dedicated funded key, **not** `0x68575B07…`: it signs Tacit's header relay and reflection, and Tacit asked that it not be used.
 3. **Successor.** Run `node script/build-zSwapNext.mjs <28 chunk addresses>`. It emits the initcode and the calldata for the DAO's `deployNext` on the current tip.
 4. **DAO** executes `deployNext`. Then record the wrapper address in README / `docs/src/README.md` and rerun `node script/check-zSwap.mjs`.
-5. **Old version.** Nothing to change. Its "newer →" link finds the successor once it matures (MATURITY = 3 days).
+   - `deployNext` works once per version: a second call reverts `AlreadySucceeded()`. Before the vote, `eth_call` the emitted calldata from the DAO to the tip with `cast call --from 0x5E58BA0e… <tip> <calldata>`. It must return the mined successor address, and `forge test --match-path 'test/zSwapNext*.t.sol'` must pass. A wrong initcode or salt cannot be redone from v0.2.
+   - `TIP` in `build-zSwapNext.mjs` is v0.2 `0xe6869528…`. Its `successor()` read zero on 2026-09-25; re-read it before the vote.
+5. **Old version.** v0.2's "newer →" link finds the successor once it matures (MATURITY = 3 days).
+6. **Repoint `zswap.wei`.** It serves `0x000063Af…`, a standalone v0.3 whose `PREVIOUS()` is zero. It sits outside the v0.2 lineage, so nothing carries its visitors to the successor. Point the WNS addr record at the new wrapper, and update or clear the IPFS contenthash, which gateways may prefer.
+
+## If a step fails
+
+- **A chunk deploy dies part-way.** Every confirmed chunk is recorded in `out/zSwap.chunks.deployed.json` and re-verified byte for byte on a re-run, so re-running resumes where it stopped. A chunk whose on-chain code does not match is redeployed, never reused. Chunks are inert data, so a half-finished set costs only its gas. If the page changes before the set is complete, rebuild the chunks and deploy a fresh set; the old ones are simply abandoned.
+- **`build-zSwapNext` refuses.** It reads every chunk back from chain first. Fix the chunk list; nothing has been spent on the successor yet.
+- **The DAO vote has not executed.** The proposal can be replaced freely until then. Once `deployNext` has run, v0.2 has no second slot. Fix forward from the new version's own `deployNext`, and the live v0.2 keeps serving meanwhile.
 
 ## Operational switches (independent of the deploy)
 

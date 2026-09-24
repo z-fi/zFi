@@ -599,8 +599,8 @@ if (exported) {
       const txt = fs.readFileSync(path.join(ROOT, 'script', f + '.mjs'), 'utf8');
       for (const m of txt.matchAll(/\b(?:const|let)\s+(?:N|n|CHUNKS)\s*=\s*(\d+)\s*;/g))
         if (Number(m[1]) !== CHUNKS) bad.push(`script/${f}.mjs: "${m[0]}"`);
-      for (const m of txt.matchAll(/<(\d+) chunk addresses>/g))
-        if (Number(m[1]) !== CHUNKS) bad.push(`script/${f}.mjs: "${m[0]}"`);
+      for (const m of txt.matchAll(/<(\d+) chunk addresses>|address\[(\d+)\]/g))
+        if (Number(m[1] ?? m[2]) !== CHUNKS) bad.push(`script/${f}.mjs: "${m[0]}"`);
     }
     const run = fs.readFileSync(path.join(ROOT, 'deploy', 'zSwap-v0.3-LAUNCH.md'), 'utf8');
     for (const m of run.matchAll(/(\d+) (?:transactions|chunk addresses|chunks)\b/g))
