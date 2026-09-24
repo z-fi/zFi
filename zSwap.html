@@ -3232,11 +3232,11 @@ let curveOnlyOut=false;
 const exactOutSafe=y=>{if(isIn||!y.sources||!y.sources.includes(SRC_CURVE))return true;curveOnlyOut=true;return false};
 const pick=y=>{if(!y)return;if(!exactOutSafe(y))return;const v=isIn?y.best.amountOut:y.best.amountIn;if(!v)return;
 if(!r||(isIn?v>r.best.amountOut:v<r.best.amountIn))r=y};
-const tl0=encBool(!isIn)+encAddr(f.addr)+encAddr(t.addr)+encUint(swapAmt)+encUint(0n)+encUint(deadline);
+const tl0=encBool(!isIn)+encAddr(f.addr)+encAddr(t.addr)+encUint(swapAmt)+encUint(0n)+encUint(deadline),no3=CHAIN_ID===1&&(f.addr===ZERO||t.addr===ZERO);
 const jobs=[
 [Q("e7798987",a+tl,0,4,0,0,6)],
 [Q("e453166e",a+rf+tl0,4,9),Q("e453166e",a+rf+tl,4,9)],
-...(isIn||!rcv?[[Q("4c464f59",a+tl0,8,13,0,0,0,H3),Q("4c464f59",a+tl,8,13,0,0,0,H3)]]:[])];
+...((isIn||!rcv)&&!no3?[[Q("4c464f59",a+tl0,8,13,0,0,0,H3),Q("4c464f59",a+tl,8,13,0,0,0,H3)]]:[])];
 let splitSlip=0n;
 if(isIn){
 const w=slipBps*3n,SS=w<150n?150n:w>500n?500n:w;
@@ -3247,7 +3247,7 @@ const tailStep=swapAmt/100n||1n,tailAmt=swapAmt>tailStep?swapAmt-tailStep:0n;
 const tailJobs=[];
 if(tailAmt&&acct){
 const z=encBool(!isIn)+encAddr(f.addr)+encAddr(t.addr)+encUint(tailAmt)+encUint(isIn?0n:slipBps)+encUint(deadline);
-tailJobs.push(Q("e453166e",a+rf+z,4,9),Q("4c464f59",a+z,8,13,0,0,0,H3));
+tailJobs.push(Q("e453166e",a+rf+z,4,9));if(!no3)tailJobs.push(Q("4c464f59",a+z,8,13,0,0,0,H3));
 if(isIn)for(const x of["892af013","85f86a90"]){
 const b=x==="892af013"?slipBps:splitSlip;
 tailJobs.push(Q(x,a+encAddr(f.addr)+encAddr(t.addr)+encUint(tailAmt)+encUint(b)+encUint(deadline),4,8,tailAmt,b));
@@ -3264,7 +3264,7 @@ const dec=_rq.map((q,i)=>{try{return mcRaw[i]?decQ(mcRaw[i],q.sb||slipBps,!isIn,
 const hubSafe=y=>{if(!y||CHAIN_ID!==1||!isIn||y.sources.length<2)return y;const x=[f.addr,t.addr].map(s=>s.toLowerCase()),hs=HUBS().filter(h=>!x.includes(h.toLowerCase()));return{...y,callData:encCalls([...hs.map(h=>encSweep(h,0n,acct||ZERO)),y.callData])}};
 for(const g of jobs)pick(hubSafe(g.length>1?merge(dec[g[0]],dec[g[1]],!isIn):dec[g[0]]));
 const zr=r;
-if(isIn&&!(dec[jobs[1][0]]||dec[jobs[1][1]]||dec[jobs[2][0]]||dec[jobs[2][1]])){
+if(isIn&&![...jobs[1],...(no3?[]:jobs[2])].some(i=>dec[i])){
 const hq=await hubRoute(f,t,swapAmt,slipBps,deadline,rcv||acct||ZERO,acct||ZERO,quoteBlock).catch(()=>null);
 if(my!==seq)return;
 if(hq)pick(hq);
@@ -3364,7 +3364,7 @@ qs.push({to,data:"0x"+sel+data,u,v,S,sb});return qs.length-1};
 const z0=encBool(eo)+encAddr(f.addr)+encAddr(t.addr)+encUint(x)+encUint(0n)+encUint(deadline);
 const zs=encBool(eo)+encAddr(f.addr)+encAddr(t.addr)+encUint(x)+encUint(slipBps)+encUint(deadline);
 groups.push([add("e453166e",a+rf+z0,4,9),add("e453166e",a+rf+zs,4,9)]);
-if(!eo||!rcv){const h=CHAIN_ID===1?ZQUOTER:Z3H;groups.push([add("4c464f59",a+z0,8,13,0,0,h),add("4c464f59",a+zs,8,13,0,0,h)])}
+if((!eo||!rcv)&&!(CHAIN_ID===1&&(f.addr===ZERO||t.addr===ZERO))){const h=CHAIN_ID===1?ZQUOTER:Z3H;groups.push([add("4c464f59",a+z0,8,13,0,0,h),add("4c464f59",a+zs,8,13,0,0,h)])}
 if(!eo){
 const w=slipBps*3n,ss=w<150n?150n:w>500n?500n:w;
 for(const sel of["892af013","85f86a90"]){const b=sel==="892af013"?slipBps:ss;groups.push([add(sel,a+encAddr(f.addr)+encAddr(t.addr)+encUint(x)+encUint(b)+encUint(deadline),4,8,x,b)])}

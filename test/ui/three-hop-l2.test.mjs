@@ -16,15 +16,17 @@ after(closeAllPages);
 const ETH = 10n ** 18n;
 const lower = a => a.toLowerCase();
 
-async function quoteOn(chainId) {
+async function quoteOn(chainId, pair) {
   const chain = new MockChain({ chainId });
   chain.setNative(A.ACCOUNT, 10n * ETH);
   chain.quoteHandler = fixedRateQuoter({ rate: 3000n * ETH });
   const p = await loadPage({ chain });
   await p.connect(chainId === '0x1' ? undefined : { pin: false });
   await p.settle();
-  p.pickToken('fromSel', 'ETH');
-  p.pickToken('toSel', chainId === '0x1237' ? 'NVDA' : 'USDC');
+  const [from, to] = pair || ['ETH', chainId === '0x1237' ? 'NVDA' : 'USDC'];
+  p.pickToken('toSel', to);
+  p.pickToken('fromSel', from);
+  p.pickToken('toSel', to);
   await p.settle();
   await p.typeAmount('amt', '1');
   await p.settle();
@@ -44,9 +46,19 @@ describe('three-hop routes', () => {
   }
 
   test('on Ethereum, are asked of zQuoter itself', async () => {
-    const { p, hops } = await quoteOn('0x1');
+    const { p, hops } = await quoteOn('0x1', ['USDC', 'WBTC']);
     assert.ok(hops.length > 0, 'no three-hop route was asked for');
     assert.ok(hops.every(c => lower(c.to) === lower(A.ZQUOTER)), 'mainnet keeps its own builder');
+    p.close();
+  });
+
+  // zQuoter's 3-hop search with ether at either end runs past 500M gas on
+  // mainnet, beyond what the read nodes serve, so asking only produces
+  // out-of-gas answers and a false "some venues unreachable".
+  test('on Ethereum, are not asked for a pair with ether at either end', async () => {
+    const { p, hops } = await quoteOn('0x1');
+    assert.equal(hops.length, 0);
+    assert.doesNotMatch(p.text('rate'), /unreachable/);
     p.close();
   });
 });
