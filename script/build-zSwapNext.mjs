@@ -9,7 +9,7 @@
  * `deployNext`. Nothing here signs or sends; it does READ the chain, to verify
  * the chunk list before anything is emitted.
  *
- * Usage: ETH_RPC_URL=https://… node script/build-zSwapNext.mjs <27 chunk addresses> [--salt 0x..]
+ * Usage: ETH_RPC_URL=https://… node script/build-zSwapNext.mjs <28 chunk addresses> [--salt 0x..]
  */
 import fs from 'node:fs';
 import path from 'node:path';

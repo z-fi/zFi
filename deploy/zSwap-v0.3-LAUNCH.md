@@ -19,9 +19,9 @@ The page and all its on-chain dependencies are ready. What remains is deploying 
 
 1. **Commit the tree.** It also holds work from other sessions (v0.3 polish, private bridge, zEndpoints, chunk count, audit fixes). Note that anything under `dapp/` auto-deploys to zfi.wei.is on push.
 2. **Chunks.** `node script/build-zSwap-chunks.mjs` then `PRIVATE_KEY=… ETH_RPC_URL=… node script/deploy-zSwap-chunks.mjs`.
-   - Cost: 27 transactions at about 5.15M gas each (eth_estimateGas on mainnet), about 139M gas in total: about 0.012 ETH at 0.09 gwei (2026-09-22), 0.069 ETH at 0.5 gwei, 0.14 ETH at 1 gwei. Fund the key with about 2× the figure at the gas price of the day.
+   - Cost: 28 transactions at about 5.24M gas each (`--dry-run` on mainnet, 2026-09-25), about 147M gas in total: about 0.013 ETH at 0.09 gwei, 0.074 ETH at 0.5 gwei, 0.147 ETH at 1 gwei. Fund the key with about 2× the figure at the gas price of the day.
    - Use a dedicated funded key, **not** `0x68575B07…`: it signs Tacit's header relay and reflection, and Tacit asked that it not be used.
-3. **Successor.** Run `node script/build-zSwapNext.mjs <27 chunk addresses>`. It emits the initcode and the calldata for the DAO's `deployNext` on the current tip.
+3. **Successor.** Run `node script/build-zSwapNext.mjs <28 chunk addresses>`. It emits the initcode and the calldata for the DAO's `deployNext` on the current tip.
 4. **DAO** executes `deployNext`. Then record the wrapper address in README / `docs/src/README.md` and rerun `node script/check-zSwap.mjs`.
 5. **Old version.** Nothing to change. Its "newer →" link finds the successor once it matures (MATURITY = 3 days).
 

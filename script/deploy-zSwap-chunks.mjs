@@ -22,7 +22,12 @@ import { fileURLToPath } from 'node:url';
 import { JsonRpcProvider, Wallet, formatEther } from 'ethers';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const N = 27;
+// The wrapper's constructor arity is the one count that cannot be changed after the
+// chunks are paid for, so read it rather than restate it.
+const ARITY = fs.readFileSync(path.join(ROOT, 'src', 'zSwap.sol'), 'utf8')
+  .match(/constructor\(address dao, address previous, address\[(\d+)\] memory d\)/);
+if (!ARITY) throw new Error("could not read zSwap.sol's constructor arity");
+const N = Number(ARITY[1]);
 const DRY = process.argv.includes('--dry-run');
 const tipAt = process.argv.indexOf('--min-tip-gwei');
 const FLOOR = BigInt(Math.round(Number(tipAt > -1 ? process.argv[tipAt + 1] : '0.5') * 1e9));

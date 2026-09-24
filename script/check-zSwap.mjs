@@ -593,6 +593,22 @@ if (exported) {
     return `both READMEs and zSwap.sol agree on ${want} (${CHUNKS})`;
   });
 
+  check('the release scripts and the launch runbook agree about the chunk count', () => {
+    const bad = [];
+    for (const f of ['build-zSwap', 'build-zSwap-chunks', 'deploy-zSwap-chunks', 'build-zSwapNext', 'deploy-zSwapNext', 'strip-zSwap', 'sync-zSwap-artifacts']) {
+      const txt = fs.readFileSync(path.join(ROOT, 'script', f + '.mjs'), 'utf8');
+      for (const m of txt.matchAll(/\b(?:const|let)\s+(?:N|n|CHUNKS)\s*=\s*(\d+)\s*;/g))
+        if (Number(m[1]) !== CHUNKS) bad.push(`script/${f}.mjs: "${m[0]}"`);
+      for (const m of txt.matchAll(/<(\d+) chunk addresses>/g))
+        if (Number(m[1]) !== CHUNKS) bad.push(`script/${f}.mjs: "${m[0]}"`);
+    }
+    const run = fs.readFileSync(path.join(ROOT, 'deploy', 'zSwap-v0.3-LAUNCH.md'), 'utf8');
+    for (const m of run.matchAll(/(\d+) (?:transactions|chunk addresses|chunks)\b/g))
+      if (Number(m[1]) !== CHUNKS) bad.push(`deploy/zSwap-v0.3-LAUNCH.md: "${m[0]}"`);
+    if (bad.length) throw Error(`these contradict CHUNKS=${CHUNKS}:\n      ${bad.join('\n      ')}`);
+    return `seven release scripts and the launch runbook agree on ${CHUNKS}`;
+  });
+
   check('the game keeps its score out of reach of the console', () => {
     // `sc = 999999` in devtools does nothing only because the game lives inside
     // invPlay(): the assignment makes an unrelated global. Hoist any of this to
