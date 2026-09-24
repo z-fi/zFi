@@ -1460,6 +1460,67 @@ describe('deposits the relay or the pool turn away', () => {
  * on top of msg.value, the relay's own quote sizes it, the page bounds it, and
  * any trouble on that path falls back to the wrap we have always sent.
  */
+/**
+ * The failure path of ec36f6d. A pool whose history will not load is not a pool
+ * with nothing in it, but the page used to render it that way: notes read as
+ * "deposit not seen" over a "Shielded 0" summary, with a destructive "forget"
+ * beside them. A read that failed must never be presented as a fact about
+ * someone's money — so this drives the failure rather than the happy path.
+ */
+describe('a pool history that will not load', () => {
+  // Every route the page has to the log history: the wallet RPC that cfgRead
+  // uses, and each CP_LOGS fallback it reaches for over fetch.
+  // Returns a restore(). Patching the page's transport without putting it back
+  // leaks in-flight work into teardown, where the window's globals are gone.
+  const noHistory = (p) => {
+    const req = p.chain.request.bind(p.chain), inner = p.window.fetch, now = p.window.Date.now;
+    p.chain.request = async (a) => {
+      if (a && a.method === 'eth_getLogs') throw Error('node unavailable');
+      return req(a);
+    };
+    p.window.fetch = async (u, init) => {
+      if (init && init.body && String(init.body).includes('eth_getLogs')) throw new p.window.TypeError('failed to fetch');
+      return inner(u, init);
+    };
+    return async () => { p.chain.request = req; p.window.fetch = inner; p.window.Date.now = now; await p.settle(); };
+  };
+
+  test('says it has not been read, rather than reporting the notes as missing', async () => {
+    const p = await open();
+    const restore = noHistory(p);          // before anything syncs, so cpPool is never populated
+    await unlock(p);
+    await deposit(p);
+    // Past the ten minutes that used to turn an unseen deposit into "deposit not seen".
+    const real = p.window.Date.now;
+    p.window.Date.now = () => real() + 700 * 1000;
+    poke(p);
+    await p.waitFor(() => /Reading the pool/.test(p.text('pvList')), { label: 'the unread-pool state', ...SLOW });
+    const list = p.text('pvList');
+    assert.doesNotMatch(list, /deposit not seen/, 'a failed read is not a missing deposit');
+    assert.doesNotMatch(list, /Shielded/, 'and it does not claim a balance it could not read');
+    assert.equal(p.$('pvList').querySelector('button[data-a="forget"]'), null,
+      'nothing offers to discard a record the page could not check');
+    await restore();
+    p.close();
+  });
+
+  test('the note comes back as itself once the history loads', async () => {
+    const p = await open();
+    const restore = noHistory(p);
+    await unlock(p);
+    await deposit(p);
+    poke(p);
+    await p.waitFor(() => /Reading the pool/.test(p.text('pvList')), { label: 'the unread state', ...SLOW });
+    // Restore the history and let it settle: the same note must read as ready.
+    await restore();
+    settleDeposit(p);
+    poke(p);
+    await p.waitFor(() => !!p.$('pvList').querySelector('button[data-a="exit"]'), { label: 'the note to come back', timeout: 20000 });
+    assert.doesNotMatch(p.text('pvList'), /Reading the pool/);
+    p.close();
+  });
+});
+
 describe('tipping the relay for a deposit', () => {
   const TIPFWD = '0x000000d218b03db5837943b0b05dea2965ae956e';
   const TIPTO = '0x68575b073de49a94e3e3acf6f3a0d6e3b66267c7';
