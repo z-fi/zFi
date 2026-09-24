@@ -398,6 +398,7 @@ const HELPERS = [
   'sha2', 'pmul', 'pcomp', 'cpDerive', 'cpOwner', 'cpCommit', 'cpXY', 'cpLeaf', 'cpDepCommit', 'cpDepId',
   'cpBinding', 'cpCtx', 'cpNonce', 'cpSigma', 'cpSeal', 'cpTree', 'cpNu', 'cpLadder', 'cpRecipe', 'cpEscrow',
   'cpEncRecipe', 'cpActData', 'cpReclData', 'cpExitData', 'cpRescue', 'cpUse', 'cpVerifySigma', 'cpSettleData',
+  'cpEhTipData',
   'cpScalar', 'cpBtcOf', 'cpWif', 'cpOpen', 'cpSeg', 'bLock', 'bKeys', 'bOp', 'cdpSecrets', 'cdpBuildOp', 'cdpLeaf',
   'bAnchor', 'bEcdhSeed', 'bKs', 'bOpenOut',
   'cpXferOp', 'cpWtOp', 'cpLockOp', 'cpClaimOp', 'cpRefundOp', 'cpSOpen', 'cpTacAddr', 'cpRecip', 'cpWtData', 'cpCalls', 'cpSTail', 'cpSuOp', 'bNoteLeaf',
@@ -838,6 +839,16 @@ if (exported) {
     // pool.settle(bytes,bytes,bytes[]) for a self-settled withdrawal, against ethers' coder.
     const want = '0x717fd7f2' + AbiCoder.defaultAbiCoder().encode(['bytes', 'bytes', 'bytes[]'], ['0x1234', '0xabcdef', []]).slice(2);
     eq(X.cpSettleData('0x1234', '0xabcdef'), want, 'settle calldata');
+    // The escrow post and the cBTC mint's settle ride ONE transaction, and the tip
+    // rides it too: only `stake` reaches the helper, the rest of msg.value is the
+    // tip. Six head words, so a layout copied from the four-word bare call would
+    // point every bytes offset at the wrong place.
+    const ehWant = '0xef3dc43b' + AbiCoder.defaultAbiCoder().encode(
+      ['bytes32', 'uint256', 'bytes', 'bytes', 'bytes[]', 'address'],
+      ['0x' + '11'.repeat(32), 4000000000000000n, '0x1234', '0xabcdef', ['0x'],
+       '0x68575B073DE49a94e3E3ACf6F3A0d6E3b66267C7']).slice(2);
+    eq(X.cpEhTipData('0x' + '11'.repeat(32), 4000000000000000n, '0x1234', '0xabcdef', ['0x'],
+      '0x68575B073DE49a94e3E3ACf6F3A0d6E3b66267C7'), ehWant, 'escrow-post-with-tip calldata');
     // A pool-minted token note (TAC): the asset id enters the derivation, the leaf, the deposit id,
     // the memo and both opening contexts, so each is checked under the token's id, not ether's.
     const T = F.tac, ta = T.assetId, dt = X.cpDerive(F.seed, 0, ta);

@@ -7627,8 +7627,11 @@ const cpLockPoll=async l=>{const st=await relayFetch("/confidential/status?id="+
 if(st.status==="proven"&&/^0x[0-9a-fA-F]+$/.test(st.publicValues||"")&&/^0x[0-9a-fA-F]+$/.test(pr||"")&&st.publicValues.toLowerCase().includes(strip0x(bOp(l)))){l.pv=st.publicValues;l.pr=pr}cpSaveLocks()};
 const cpLockSettle=async l=>{if(!(l.pv&&l.pr))throw Error(PNR);const add=l.one?await cpEscrowNeed(l):0n,eth=add?await cpEthFor(add):0n;
 if(eth&&!await sure("Post the escrow with "+trimAmt(eth,18)+" ETH and mint the cBTC in the same transaction? This wallet can take the escrow back once the lock is redeemed."))return;
-const a=encBytes(l.pv),b=encBytes(l.pr),m=encUint(1)+encUint(32)+encBytes("0x"),req=eth?{from:account,to:CP_EH,value:toHex(eth),gas:toHex(1100000),
-data:"0x2bb12527"+pad32(bOp(l))+encUint(128)+encUint(128+a.length/2)+encUint(128+(a.length+b.length)/2)+a+b+m}:await cpSettleReq(l.pv,l.pr,["0x"],700000);if(eth)l.eh=1;
+const a=encBytes(l.pv),b=encBytes(l.pr),m=encUint(1)+encUint(32)+encBytes("0x");
+let req;if(eth){const t=await cpEhTip();req=t>0n?{from:account,to:CP_TIPFWD_E,value:toHex(eth+t),gas:toHex(1160000),data:cpEhTipData(bOp(l),eth,l.pv,l.pr,["0x"],CP_TIPTO)}
+:{from:account,to:CP_EH,value:toHex(eth),gas:toHex(1100000),
+data:"0x2bb12527"+pad32(bOp(l))+encUint(128)+encUint(128+a.length/2)+encUint(128+(a.length+b.length)/2)+a+b+m}}
+else req=await cpSettleReq(l.pv,l.pr,["0x"],700000);if(eth)l.eh=1;
 await rpc(C,[req,L]);l.stx=await sendTx([req]);cpSaveLocks();await settle(l.stx);l.js="settled";cpSaveLocks();await cpLockSync();stat.textContent="cBTC minted."};
 const cpEscrowBack=async l=>{const req={from:account,to:CP_EH,value:"0x0",data:"0xc5211d27"+pad32(bOp(l))};await rpc(C,[req,L]);l.rtx=await sendTx([req]);cpSaveLocks();await settle(l.rtx);await cpLockSync();stat.textContent="Escrow returned to this wallet."};
 const CP_CUSD="0x8f4490dd3728b0ee904d7a67c11b37ffd463a5c7f08b79810006995ee8a9679d",CP_CDPS="zswap:cpc:",CDP_MINTED="0x232c7d098ca44092999087e6ee530a2171f95f9ecb1caa363f6dcf448fb7dd57",Z32="0x"+"00".repeat(32);
@@ -7841,6 +7844,10 @@ const cpTipOn=()=>cpTipRost()&&cpTipPref();
 const cpTipSync=()=>{pvTip.checked=cpTipPref();pvTipL.classList.toggle("hide",!(pvAct.value==="dep"&&pvPath.value!=="self"&&cpTipRost()))};
 pvTip.onchange=()=>{sBlip();try{LS[TIPOFF]=pvTip.checked?"1":"0"}catch{}pvPrevSoon()};
 const CP_TIPFWD_T="0x0000007b1d93d72f698A861aA86Ac675D6AF7216",SEL_CPWTIPT="801f0234";
+const CP_TIPFWD_E="0x000000fB551f7Ef4936a59ECdD431ae253139E8d",SEL_CPETIP="ef3dc43b";
+const cpEhTip=async()=>{try{return await cpProveTip()}catch{return 0n}};
+const cpEhTipData=(op,stake,pv,pr,ms,to)=>{const a=encBytes(pv),b=encBytes(pr),t=ms.map(encBytes);let off=t.length*32,hd=encUint(t.length);for(const x of t){hd+=encUint(off);off+=x.length/2}
+return"0x"+SEL_CPETIP+pad32(op)+encUint(stake)+encUint(192)+encUint(192+a.length/2)+encUint(192+(a.length+b.length)/2)+encAddr(to)+a+b+hd+t.join("")};
 const cpTipTok=async A=>{if(!cpTipOn()||pvPath.value==="self")return 0n;
 try{const j=await relayFetch("/confidential/quote?asset="+A.id),r=String(j&&j.recommendedWrapTipWei||"");
 if(!cpTipTo(j)||!/^\d{1,30}$/.test(r))return 0n;let t=BigInt(r);if(t<=0n)return 0n;
