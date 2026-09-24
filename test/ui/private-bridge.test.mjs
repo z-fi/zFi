@@ -1698,6 +1698,39 @@ describe('the points a wallet has been credited', () => {
     p.close();
   });
 
+  test('names the deposits a Privacy Pools withdrawal boosted', async () => {
+    const p = await open();
+    serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 11, deposit_count: 3,
+      deposits: [{ pp_boosted: true }, { pp_boosted: false }, { pp_boosted: true }] });
+    await unlock(p);
+    await p.waitFor(() => /counted/.test(p.text('pvKey')), { label: 'the points row', ...SLOW });
+    assert.match(p.text('pvKey'), /11 from 3 deposits counted, 2 at 1\.2\u00d7/, p.text('pvKey'));
+    p.close();
+  });
+
+  test('a wallet boosted on every deposit says all of them, not a count', async () => {
+    const p = await open();
+    serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 6, deposit_count: 1,
+      deposits: [{ pp_boosted: true }] });
+    await unlock(p);
+    await p.waitFor(() => /counted/.test(p.text('pvKey')), { label: 'the points row', ...SLOW });
+    assert.match(p.text('pvKey'), /1 deposit counted, all at 1\.2\u00d7/, p.text('pvKey'));
+    p.close();
+  });
+
+  // An endpoint that predates the multiplier sends no `pp_boosted` at all, and
+  // one that sends no `deposits` array is the shape every other test here uses.
+  test('an endpoint that does not publish the boost claims no boost', async () => {
+    const p = await open();
+    serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 5, deposit_count: 2,
+      deposits: [{ tx_hash: '0x' + 'ab'.repeat(32) }, { pp_boosted: 'yes' }] });
+    await unlock(p);
+    await p.waitFor(() => /counted/.test(p.text('pvKey')), { label: 'the points row', ...SLOW });
+    assert.match(p.text('pvKey'), /5 from 2 deposits counted/);
+    assert.doesNotMatch(p.text('pvKey'), /1\.2|boost/i, 'a truthy string is not the flag');
+    p.close();
+  });
+
   test('shows before the Tacit key is unlocked: points follow the wallet, not the key', async () => {
     const p = await open();
     serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 5, deposit_count: 1 });
