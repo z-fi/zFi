@@ -168,8 +168,9 @@ describe('quoting', () => {
     // \s, not a literal space: the venue and its fee tier are joined with a
     // non-breaking space so a narrow card cannot split "UniV3" from "0.3%".
     assert.match(rate, /UniV3\s0\.3%/, 'names the venue and its fee tier');
-    // default slippage is 0.5%, so the floor is 3000 * 0.995
-    assert.match(rate, /Min 2985 USDC/);
+    // default slippage is 0.5%; only the two-leg builder answers here, and it is
+    // asked at half the setting per leg, so the floor is 3000 * 0.9975
+    assert.match(rate, /Min 2992\.5 USDC/);
     p.close();
   });
 
@@ -232,7 +233,7 @@ describe('quoting', () => {
   test('exact-in bounds the output and names no maximum', async () => {
     const p = await setup();
     await p.typeAmount('amt', '1');
-    assert.match(p.text('rate'), /Min 2985 USDC/, 'exact-in floors what arrives');
+    assert.match(p.text('rate'), /Min 2992\.5 USDC/, 'exact-in floors what arrives');
     assert.ok(!/Max /.test(p.text('rate')), 'the input is fixed, so there is no maximum to show');
     assert.equal(p.$('rate').title, '', 'and no exact-maximum tooltip');
     p.close();
@@ -243,7 +244,7 @@ describe('quoting', () => {
     await p.typeAmount('outAmt', '3000');
     assert.equal(p.value('amt'), '1');
     const rate = p.text('rate');
-    assert.match(rate, /Max 1\.005 ETH/, 'exact-out bounds the input, not the output');
+    assert.match(rate, /Max 1\.0025 ETH/, 'exact-out bounds the input, not the output');
     assert.match(p.$('rate').title, /^Exact maximum: /,
       'the displayed max is rounded up, so the exact figure stays available');
     p.close();
@@ -292,11 +293,11 @@ describe('quoting', () => {
   test('slippage changes the floor', async () => {
     const p = await setup();
     await p.typeAmount('amt', '1');
-    assert.match(p.text('rate'), /Min 2985 USDC/);
+    assert.match(p.text('rate'), /Min 2992\.5 USDC/);
     p.type('slip', '5');
     await new Promise(r => p.window.setTimeout(r, 320));
     await p.settle();
-    await p.waitFor(() => /Min 2850 USDC/.test(p.text('rate')), { label: '5% floor' });
+    await p.waitFor(() => /Min 2925 USDC/.test(p.text('rate')), { label: '5% floor' });
     p.close();
   });
 

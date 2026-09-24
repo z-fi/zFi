@@ -164,9 +164,9 @@ const HOPSWEEP = 'dc2c256f';
  */
 const SLACK = 50n;
 const bidOut = out => out - (out * SLACK) / 10000n - 1n;
-const bidWord = word => {
+const bidWord = (word, k = SLACK) => {
   const M = (1n << 160n) - 1n, w = BigInt(word), q = (w >> 64n) & M;
-  return (w & ~(M << 64n) | (q - (q * SLACK) / 10000n) << 64n).toString(16).padStart(64, '0');
+  return (w & ~(M << 64n) | (q - (q * k) / 10000n) << 64n).toString(16).padStart(64, '0');
 };
 
 function hopChain({ rate = 2500n * ETH } = {}) {
@@ -201,7 +201,7 @@ test('ETH to DEEP composes an AMM leg into the book', async () => {
 
   const built = await p.window.eval('last.callData');
   assert.ok(built.includes(SWAPDEEP), 'no swapDeep leg in the composed calldata');
-  assert.ok(built.includes(bidWord(ORDER.slice(0, 66))), 'the book leg carries the lens word, its bid quantity cut by the slack');
+  assert.ok(built.includes(bidWord(ORDER.slice(0, 66), SLACK / 2n)), 'the book leg carries the lens word, its bid quantity cut by the slack');
   assert.ok(built.includes(HOPSWEEP), 'the surplus of the intermediate must be swept back');
   assert.equal(await p.window.eval('last.msgValue.toString()'), (10n ** 18n).toString(),
     'the ether leg is paid with the transaction value');
@@ -221,9 +221,10 @@ test('the book leg is sized at the AMM floor, never at its expected output', asy
   await p.typeAmount('amt', '1');
   const priced = seen.filter(a => a.tokenIn.toLowerCase() === USDG && a.amount > 0n).pop();
   assert.ok(priced, 'the book was never asked to price the second leg');
-  // 1 ETH at the fixture rate, less the 0.5% the AMM leg is allowed to slip.
+  // 1 ETH at the fixture rate, less the 0.25% the AMM leg is allowed to slip
+  // (half the 0.5% setting: the hop has two legs).
   const expected = 2500n * 10n ** 6n;
-  const floor = expected * 9950n / 10000n;
+  const floor = expected * 9975n / 10000n;
   assert.ok(priced.amount <= floor,
     `the book was sized at ${priced.amount}, above the AMM floor ${floor} - a short fill would revert`);
   assert.ok(priced.amount > floor * 9990n / 10000n,
