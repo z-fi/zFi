@@ -64,6 +64,8 @@ function pmChain({ held = {}, ...extra } = {}) {
   });
   c.answer(PM, '124d6efc', (d) => '0x' + w(word(d, 2)) + w(word(d, 2) * 2n));
   c.answer(PM, 'ffecc085', '0x' + w(0));
+  // resolverFeeBps(address): OTHER takes 2%, ACCOUNT takes nothing.
+  c.answer(PM, '4d5e9db0', (d) => '0x' + w(('0x' + d.slice(34, 74)).toLowerCase() === A.OTHER.toLowerCase() ? 200 : 0));
   c.answer(WST, 'bb2952fc', (d) => '0x' + w((word(d, 0) * 8n) / 10n));
   for (const sel of ['c2b5b4c8', '28ccbb45', '2a304886', 'b390d8b5', '6f406fa1', 'ddd5e1b2', '0fc95438', 'ae418095', '52a34b05', '5ea2145b'])
     c.answer(PM, sel, '0x' + w(1));
@@ -161,6 +163,53 @@ test('markets mode', async (t) => {
     assert.equal(win.getComputedStyle(sell).whiteSpace, 'normal',
       'actions in the markets panel wrap instead of overflowing the card');
     loose.remove();
+  });
+
+  await t.test('names the cut the chosen resolver takes, before the market exists', async () => {
+    // createMarket snapshots resolverFeeBps[resolver] and freezes it, and the
+    // resolver sets that themselves. A creator who cannot see it is agreeing to
+    // give away up to MAX_FEE_BPS of the pot without being told.
+    const p = await openMarkets(pmChain());
+    p.click('mkGo');
+    await p.waitFor(() => !p.$('mkForm').classList.contains('hide'), { label: 'the create form' });
+    await p.waitFor(() => /takes no fee/.test(p.text('mkResEl')), { label: 'your own fee, by default' });
+    p.type('mkRes', A.OTHER);
+    await p.waitFor(() => /takes 2% of the pot/.test(p.text('mkResEl')), { label: "the resolver's fee" });
+    assert.match(p.text('mkResEl'), /^\u2192 0x/, 'the address it resolved to is still there');
+  });
+
+  await t.test('a tax reads as what it costs now, and the fee says whose it is', async () => {
+    const t0 = now();
+    const chain = pmChain();
+    // Exactly half way to close with a 10% late tax: the ramp stands at 5%,
+    // which is above the 2% exit floor, so exiting now costs the ramp.
+    chain.__extra = [{ id: 0xf0n, d: 'Ramped market', r: A.OTHER, a: A.ZERO, o: t0 - 50 * 3600, c: t0 + 50 * 3600, f: 200, x: 200, l: 1000, y: ONE, n: ONE, p: 2n * ONE }];
+    const p = await openMarkets(chain);
+    await pick(p, 0xf0n);
+    const fine = p.$('mkInfo').querySelector('.mkfp').textContent;
+    assert.match(fine, /resolver fee 2% of the pot/, 'the fee is attributed, not a third tax');
+    assert.match(fine, /late tax 5(\.\d+)?% now, 10% at close/, 'the ramp says where it stands');
+    assert.match(fine, /exit tax 5(\.\d+)?%/, 'exiting costs max(floor, ramp), not the 2% floor');
+  });
+
+  await t.test('winnings waiting on you are counted where you would look', async () => {
+    const p = await openMarkets(pmChain({ held: { [BALL]: [ONE, 0n, 2n * ONE] } }));
+    await p.waitFor(() => /Mine \(1\)/.test(p.$('mkChips').textContent), { label: 'the claim count' });
+    assert.match(p.text('mkSub'), /1 to claim/);
+  });
+
+  await t.test('the subtitle says which markets loaded, not how they are ordered', async () => {
+    const p = await openMarkets(pmChain());
+    assert.match(p.text('mkSub'), /^4 markets/, 'under the cap it just counts them');
+    assert.doesNotMatch(p.text('mkSub'), /newest first/, 'the sort control says how they are ordered');
+  });
+
+  await t.test('a row activates on Space as well as Enter, being a button', async () => {
+    const p = await openMarkets(pmChain());
+    const row = p.$('mkList').querySelector(`.mkr[data-k="${RAIN}"]`);
+    row.dispatchEvent(new row.ownerDocument.defaultView.KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true }));
+    await p.waitFor(() => !p.$('mkDet').classList.contains('hide'), { label: 'Space opens the detail' });
+    assert.match(p.text('mkT'), /rain in Lisbon/);
   });
 
   await t.test('buys YES with ETH in a wstETH market through betETH and the Lido route', async () => {
