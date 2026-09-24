@@ -230,12 +230,12 @@ margin-top:.55em;padding-top:.55em;border-top:1px solid var(--e);color:var(--f)}
 #wnRollEl{display:block;font-size:.72em;line-height:1.55;color:var(--m)}
 #lnNote,#floorNote,#wnNote,#mkNote{display:block;font-size:.7em;line-height:1.45;color:var(--m);text-align:center;text-wrap:balance;margin:.55em .2em 0}
 #lnNote:empty,#floorNote:empty,#wnNote:empty,#mkNote:empty{display:none}
-.mkbar{height:3px;background:var(--e);margin:.4em 0 .15em}
+.mkbar{height:4px;background:var(--m);margin:.45em 0 .2em}
 .mkbar i{display:block;height:100%;background:var(--f)}
 .mkr{cursor:pointer}
 .mkr.on{border-color:var(--f);position:relative}
 #mkList{max-height:22em;overflow:auto;margin:.2em 0 .5em}
-.mkd{display:block;font-size:.72em;line-height:1.55;color:var(--m);margin:.3em 0}
+.mkd{display:block;font-size:.72em;line-height:1.55;color:var(--m);margin:.3em 0}.mkhd{display:flex;flex-wrap:wrap;justify-content:space-between;gap:.15em .8em;font-size:1.15em;color:var(--f);margin-bottom:.45em}.mkhd>b{font-weight:600}.mkfp{display:block}.mkyou{display:block;margin-top:.4em;color:var(--f)}#mkQ{color:var(--f)}#mkDet{border-top:1px solid var(--e);margin-top:.2em;padding-top:.15em}#mkActs>.lqbtn{flex:1 1 8em;white-space:normal;line-height:1.25}.mkr .lqmeta>span:first-child{color:var(--f)}.mkr .lqmeta>span+span:not(.lqtag)::before{content:"\00b7";margin-right:.32em;color:var(--dm)}.mkr .lqtag{margin-left:auto}
 .mkd:empty{display:none}
 #mkT{text-transform:none;letter-spacing:0;font-size:.82em;color:var(--f)}
 #mkChips{align-items:center}
@@ -447,7 +447,7 @@ background:var(--e);margin:.5em auto .1em}
 <div id="mkPanel" class="hide">
 <div class="hdr lnhdr"><small>Markets</small><small id="mkSub"></small></div>
 <input id="mkFind" class="rcpt" aria-label="Search markets" placeholder="Search markets" autocomplete="off" spellcheck="false">
-<div class="bkf" id="mkChips"><button type="button" class="bkc on" data-f="open">Open</button><button type="button" class="bkc" data-f="done">Settled</button><button type="button" class="bkc" data-f="mine">Mine</button><select id="mkSort" aria-label="Sort markets"><option value="pot">Liquidity ▾</option><option value="new">Newest ▾</option><option value="end">Ending soon ▾</option></select></div>
+<div class="bkf" id="mkChips"><button type="button" class="bkc on" data-f="open">Open</button><button type="button" class="bkc" data-f="done">Settled</button><button type="button" class="bkc" data-f="mine">Mine</button><select id="mkSort" aria-label="Sort markets"><option value="pot">Most liquid ▾</option><option value="new">Newest ▾</option><option value="end">Ending soon ▾</option></select></div>
 <div id="mkList"></div>
 <div id="mkDet" class="hide">
 <div class="lngap" id="mkT"></div>
@@ -461,7 +461,7 @@ background:var(--e);margin:.5em auto .1em}
 <textarea id="mkDesc" class="mkq" maxlength="1024" rows="2" aria-label="Question" placeholder="A yes / no question, e.g. Will ETH close above $5k on Dec 31?"></textarea>
 <label class="dly" title="Settles the market. An address, or a .eth / .wei / .gwei name.">Resolver<input id="mkRes" placeholder="you, 0x or name" autocomplete="off" spellcheck="false"></label>
 <small id="mkResEl" class="mkd"></small>
-<label class="dly">Pot in<select id="mkAsset" class="hide" aria-label="Pot asset"></select><button type="button" id="mkAssetB" aria-haspopup="dialog" aria-label="Pot asset"></button></label>
+<label class="dly" title="The token the pot and every bet on this market are denominated in.">Pot in<select id="mkAsset" class="hide" aria-label="Pot asset"></select><button type="button" id="mkAssetB" aria-haspopup="dialog" aria-label="Pot asset"></button></label>
 <label class="dly">Closes<select id="mkClose"><option value="86400">in a day</option><option value="604800" selected>in a week</option><option value="2592000">in a month</option><option value="7776000">in 3 months</option><option value="0">at…</option></select></label>
 <input id="mkAt" type="datetime-local" class="rcpt hide" aria-label="Close at">
 <details id="mkAdv"><summary>Advanced<em id="mkAdvS"></em></summary>
@@ -8311,7 +8311,7 @@ mkSub.textContent=mkAll.length?mkAll.length+(mkAll.length>1?" markets":" market"
 const mkDetPaint=()=>{if(!mkMode)return;const m=mkSel;mkDet.classList.toggle("hide",!m);if(!m)return;
 const t=mkTok(m.a),me=mkPos[m.id]||{y:0n,n:0n,c:0n},live=mkLive(m),isR=!!account&&m.r===account.toLowerCase(),net=m.p-m.p*BigInt(m.f)/10000n,X=s=>s?"×"+(Number(net*1000n/s)/1000).toFixed(2):"—",S=safeSym(t.sym),lapsed=nowS()>=m.c+2592000;
 mkT.textContent=m.d;
-mkInfo.innerHTML=`Pot ${sigAmt(m.p,t.dec,6)} ${S} · ${m.s?`${m.s===3?"each share returns":"each winning share pays"} ${m.w?"×"+(Number(m.p*1000n/m.w)/1000).toFixed(2):"—"}`:`YES pays ${X(m.y)} · NO pays ${X(m.n)}`}<br>${m.s?mkWhen(m):live?"Closes "+new Date(m.c*1e3).toLocaleString():"Closed — awaiting the resolver"} · resolver <span id="mkRv">${m.r.slice(0,6)}…${m.r.slice(-4)}</span>${m.f?` · fee ${m.f/100}%`:""}${m.x?` · exit tax ${m.x/100}%`:" · bets final"}${m.l?` · late tax to ${m.l/100}%`:""}${me.y||me.n?`<br>You hold ${sigAmt(me.y,t.dec,6)} YES · ${sigAmt(me.n,t.dec,6)} NO`:""}`;
+mkInfo.innerHTML=`<span class="mkhd">${m.s?`<b>${m.s===3?"each share returns":"each winning share pays"} ${m.w?"×"+(Number(m.p*1000n/m.w)/1000).toFixed(2):"—"}</b>`:`<b>YES pays ${X(m.y)}</b><b>NO pays ${X(m.n)}</b>`}</span><span class="mkfp">Pot ${sigAmt(m.p,t.dec,6)} ${S} · ${m.s?mkWhen(m):live?"closes "+new Date(m.c*1e3).toLocaleString():"closed — awaiting the resolver"} · resolver <span id="mkRv">${m.r.slice(0,6)}…${m.r.slice(-4)}</span>${m.f?` · fee ${m.f/100}%`:""}${m.x?` · exit tax ${m.x/100}%`:" · bets final"}${m.l?` · late tax to ${m.l/100}%`:""}</span>${me.y||me.n?`<span class="mkyou">You hold ${sigAmt(me.y,t.dec,6)} YES · ${sigAmt(me.n,t.dec,6)} NO</span>`:""}`;
 nameRev(m.r).then(n=>{if(n&&mkSel===m)mkRv.textContent=safeSym(n,48)}).catch(()=>{});
 mkAmtL.classList.toggle("hide",!live);
 if(mkPay._k!==String(m.id)){mkPay._k=String(m.id);mkPay.innerHTML=(m.a===ZERO?[ZERO]:m.a===MK_WST?[ZERO,MK_WST]:[m.a]).map(a=>`<option value="${a}">${safeSym(mkTok(a).sym)}</option>`).join("");mkAmt.value="";mkQ.textContent="";mkQv=null;mkPayB.disabled=mkPay.options.length<2;mkIco(mkPayB,mkTok(mkPay.value))}
