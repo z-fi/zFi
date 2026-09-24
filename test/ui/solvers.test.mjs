@@ -402,6 +402,29 @@ describe('the solver lanes', () => {
     p.close();
   });
 
+  test('with an executor deployed, an exact-output fill carries the deadline leg too', async () => {
+    const chain = chainWithQuote();
+    chain.code.set(SX, '0x6000');
+    const GUARD = PAGE.match(/GUARD="(0x[0-9a-fA-F]{40})"/)[1].toLowerCase();
+    chain.code.set(GUARD, '0x6000');
+    wire(chain, [lane('0x', 'https://sxo.example', FILL)]);
+    chain.lanes = {
+      'sxo.example': {
+        estimatedNetSellAmount: (9n * 10n ** 17n).toString(),
+        maxSellAmount: (95n * 10n ** 16n).toString(),
+        allowanceTarget: ROUTER,
+        transaction: { to: ROUTER, data: '0xfeed' },
+      },
+    };
+    const p = await loadPage({ chain, url: 'https://' + SELF + '.1.w3link.io/', hash: 'token=ETH&out=USDC', patch: withSx });
+    await p.connect();
+    await p.typeAmount('outAmt', '3000');
+    const q = p.window.eval('last');
+    assert.equal(q.source, p.window.eval('SRC_SOLVER'), 'the lane won');
+    assert.ok(q.callData.includes('10c2e3cd'), 'the zGuard deadline leg rides in front of the fill');
+    p.close();
+  });
+
   test('a code read the wallet could not answer never hands the lane to the fill contract', async () => {
     const chain = chainWithQuote();
     chain.code.set(SX, '0x6000');
