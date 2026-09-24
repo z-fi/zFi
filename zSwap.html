@@ -7788,6 +7788,7 @@ const cpNote=(i,k)=>{const v=k.value,a=k.asset,cb=cpBinding(),ctx=cpCtx("tacit-w
 const r={i,v:String(v),at:Math.floor(Date.now()/1000),memo:cpSeal(cpPub,k,cpRandom()),
 op:{chainBinding:cb,asset:a,value:String(v),cx:k.cx,cy:k.cy,owner:k.owner,sigR:sig.R,sigZ:sig.z}};if(a!==CP_ETH)r.a=a;return r};
 const cpTokBal=async A=>BigInt(await rpc(C,[{to:A.tok,data:balOf(account)},L])||"0x0");
+const CP_SETTLE_GAS=540000n;
 const CP_TIPFWD="0x000000D218B03db5837943b0b05DeA2965AE956e",CP_TIPTO="0x68575B073DE49a94e3E3ACf6F3A0d6E3b66267C7",SEL_CPWTIP="fc24c435",TIPOFF="zswap:cptip";
 const cpTipOn=()=>{try{return LS[TIPOFF]!=="0"}catch{return true}};
 const cpTipSync=()=>{pvTip.checked=cpTipOn();pvTipL.classList.toggle("hide",!(pvAct.value==="dep"&&cpSel().tok===ZERO&&pvPath.value!=="self"))};
@@ -8192,7 +8193,8 @@ try{const r=pvWei()/A.scale;let Q=[];
 if(v==="dep"){const b=e?BigInt(await rpc("eth_getBalance",[account,L])||"0x0"):await cpTokBal(A);Q.push(trimAmt(b,A.dec)+" "+P+" in this wallet"+(r?" → you'll hold "+s(r):"")+(r*A.scale>b?" · more than this wallet holds":""));
 if(pvPath.value==="self")Q.push("You settle it from this wallet.");
 else{const tp=e&&A.id===CP_ETH&&r>0n?await cpTipFor(r*A.scale):0n;
-Q.push(tp>0n?"Relay tip "+trimAmt(tp,18)+" ETH ("+(Number(tp*10000n/(r*A.scale))/100).toFixed(2)+"%), which covers the settle — untick Tip the relay to skip it.":"Settling costs you nothing.");
+let gp=0n;if(tp>0n)try{gp=await gasNow()}catch{}
+Q.push(tp>0n?"Relay tip "+trimAmt(tp,18)+" ETH ("+(Number(tp*10000n/(r*A.scale))/100).toFixed(2)+"%), "+(gp>0n&&tp>=gp*CP_SETTLE_GAS?"which covers the settle":"part of what the settle costs")+" — untick Tip the relay to skip it.":"Settling costs you nothing.");
 Q.push("It settles 1–3 min after the deposit confirms (at most about 8).")}}
 else{const sh=pvShV(A);Q.push(s(sh)+" shielded and ready");
 if(r){const fe=await pvCost(r,A),ch=v==="out"&&e?+pvChain.value:1;

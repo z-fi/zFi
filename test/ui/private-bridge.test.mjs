@@ -1536,13 +1536,41 @@ describe('tipping the relay for a deposit', () => {
     p.chain.answer(TIPFWD, SEL_WTIP, '0x');
   };
 
+  test('a tip that does cover the settle says so', async () => {
+    const p = await open();
+    quoting(p, 115000000000000n);         // the relay's flat floor, 0.000115 ETH
+    await unlock(p);
+    p.type('pvAmt', '0.01');
+    await p.waitFor(() => /Relay tip/.test(p.text('pvPrev')), { label: 'the tip', ...SLOW });
+    assert.match(p.text('pvPrev'), /Relay tip 0\.000115 ETH \(1\.15%\), which covers the settle/, p.text('pvPrev'));
+    p.close();
+  });
+
+  test('with no gas price to judge by, no tip is taken and nothing is claimed', async () => {
+    // cpTipFor clamps the tip by gas x 1.4M, so an unreadable price clamps it to
+    // nothing: the unknown is handled by not charging, not by a hopeful sentence.
+    const p = await open();
+    quoting(p, 115000000000000n);
+    p.chain.gasPrice = 0n;
+    p.window.eval('gpC[CHAIN_ID]=null');  // gasNow caches per chain
+    await unlock(p);
+    p.type('pvAmt', '0.01');
+    await p.waitFor(() => /Settling costs you nothing/.test(p.text('pvPrev')), { label: 'the untipped preview', ...SLOW });
+    assert.doesNotMatch(p.text('pvPrev'), /Relay tip/);
+    assert.doesNotMatch(p.text('pvPrev'), /covers the settle/);
+    p.close();
+  });
+
   test('the deposit rides the forwarder, amount to the pool and the tip on top', async () => {
     const p = await open();
     quoting(p, 30000000000000n);          // 0.00003 ETH, 3% of a 0.001 deposit
     await unlock(p);
     p.type('pvAmt', '0.001');
     await p.waitFor(() => /Relay tip/.test(p.text('pvPrev')), { label: 'the tip in the preview', ...SLOW });
-    assert.match(p.text('pvPrev'), /Relay tip 0\.00003 ETH \(3\.00%\), which covers the settle/);
+    // The tip is min(the relay's floor, 3% of the deposit), so on a small deposit
+    // it is a fraction of the settle - about 540k gas, 0.000054 ETH at this price.
+    // The line says which it is rather than claiming cover it has not established.
+    assert.match(p.text('pvPrev'), /Relay tip 0\.00003 ETH \(3\.00%\), part of what the settle costs/);
     assert.match(p.text('pvPrev'), /untick Tip the relay to skip it/);
     p.click('pvGo');
     await p.waitFor(() => p.chain.sent.length === 1, { label: 'the deposit to be sent', ...SLOW });
