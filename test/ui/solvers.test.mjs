@@ -316,12 +316,13 @@ describe('the solver lanes', () => {
     p.close();
   });
 
-  // Where a chain names a solver executor (`sx`) that has code, the winning
+  // Where a chain's solver executor (`sx`) has code, the winning
   // lane runs through zRouter.snwap: the user's existing router approval or
   // Permit2 funds it, the router checks the floor at the recipient, and the
   // executor is the lane's taker. Without one the pinned fill contract stays.
-  const SX = '0x' + '5e'.repeat(20);
-  const withSx = [['slvId:"1",slvSlug:"ethereum"', `slvId:"1",slvSlug:"ethereum",sx:"${SX}"`]];
+  // Read from the page, so a redeploy moves the tests with it.
+  const SX = PAGE.match(/slvSlug:"ethereum",sx:"(0x[0-9a-fA-F]{40})"/)[1].toLowerCase();
+  const withSx = [];
   const SNWAP = new Interface([
     'function snwap(address tokenIn,uint256 amountIn,address recipient,address tokenOut,uint256 amountOutMin,address executor,bytes executorData)',
     'function multicall(bytes[] data)',

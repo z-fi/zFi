@@ -256,9 +256,9 @@ contract zSolverFillTest is Test {
         address b = address(tOut);
         address r = address(router);
         address f = address(fill);
-        address[4][8] memory bad = [
+        address[4][9] memory bad = [
             [f, r, payee, user], [a, r, payee, user], [b, r, payee, user], [r, f, payee, user],
-            [r, a, payee, user], [r, b, payee, user], [r, r, f, user], [r, r, payee, f]
+            [r, a, payee, user], [r, b, payee, user], [r, r, f, user], [r, r, payee, f], [r, r, address(0), user]
         ];
         for (uint256 i; i < bad.length; ++i) {
             vm.expectRevert(zSolverFill.BadTarget.selector);
