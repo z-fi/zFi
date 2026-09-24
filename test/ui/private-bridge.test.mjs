@@ -1482,6 +1482,68 @@ describe('the points a wallet has been credited', () => {
     });
   };
 
+  const DIST = '0x000000c918e44a3a443937fa7594ea4f7c95d6b9';
+  const PROOF = ['0x' + '11'.repeat(32), '0x' + '22'.repeat(32)];
+  // The distributor answers its own pre-flight; without that the page declines
+  // to send, which is 'a claim the chain would refuse is not offered'.
+  const claiming = (p, host, body) => {
+    Object.defineProperty(p.chain.lanes, host + '/claim/', {
+      configurable: true, enumerable: true, get: () => body,
+    });
+    p.chain.answer(DIST, '2f52ebb7', '0x');
+  };
+
+  test('offers the TAC the points earned, and claims it with its proof', async () => {
+    const p = await open();
+    serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 5, deposit_count: 1 });
+    claiming(p, RELAY, { address: A.ACCOUNT.toLowerCase(), distributor: DIST,
+      cumulativeAmount: '926845047264463185251', claimedWei: '0',
+      unclaimedWei: '926845047264463185251', proof: PROOF });
+    await unlock(p);
+    await p.waitFor(() => !!p.$('pvKey').querySelector('button[data-a="ptsclaim"]'), { label: 'the claim button', ...SLOW });
+    assert.match(p.text('pvKey'), /claim 926\.845/);
+    p.click(p.$('pvKey').querySelector('button[data-a="ptsclaim"]'));
+    await p.waitFor(() => p.chain.sentTo(DIST).length === 1, { label: 'the claim to be sent', ...SLOW });
+    const tx = p.chain.sentTo(DIST)[0];
+    assert.equal(tx.data.slice(2, 10), '2f52ebb7', 'claim(uint256,bytes32[])');
+    assert.equal(BigInt('0x' + tx.data.slice(10, 74)), 926845047264463185251n, 'the cumulative amount, not the unclaimed one');
+    assert.equal(BigInt('0x' + tx.data.slice(138, 202)), 2n, 'both proof elements');
+    assert.equal('0x' + tx.data.slice(202, 266), PROOF[0]);
+    p.close();
+  });
+
+  test('nothing to claim offers no button', async () => {
+    const p = await open();
+    serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 5, deposit_count: 1 });
+    claiming(p, RELAY, { address: A.ACCOUNT.toLowerCase(), distributor: DIST,
+      cumulativeAmount: '0', claimedWei: '0', unclaimedWei: '0', proof: null });
+    await unlock(p);
+    await p.waitFor(() => /counted/.test(p.text('pvKey')), { label: 'the points row', ...SLOW });
+    assert.equal(p.$('pvKey').querySelector('button[data-a="ptsclaim"]'), null);
+    p.close();
+  });
+
+  test('a proof that is not a proof is refused', async () => {
+    const p = await open();
+    serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 5, deposit_count: 1 });
+    claiming(p, RELAY, { address: A.ACCOUNT.toLowerCase(), distributor: DIST,
+      cumulativeAmount: '1000', claimedWei: '0', unclaimedWei: '1000', proof: ['not-a-hash'] });
+    await unlock(p);
+    await p.waitFor(() => /counted/.test(p.text('pvKey')), { label: 'the points row', ...SLOW });
+    assert.equal(p.$('pvKey').querySelector('button[data-a="ptsclaim"]'), null, 'no claim built on markup');
+    p.close();
+  });
+
+  test('a wallet that never wrapped shows no points row at all', async () => {
+    const p = await open();
+    serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 0, deposit_count: 0, amount_wei: '0', deposits: [] });
+    await unlock(p);
+    await p.waitFor(() => /Key unlocked/.test(p.text('pvKey')), { label: 'the key row' });
+    await p.settle();
+    assert.doesNotMatch(p.text('pvKey'), /Points/, 'a zeroed row is not worth a line');
+    p.close();
+  });
+
   test('shows what the program counted, from the relay host', async () => {
     const p = await open();
     serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 5, deposit_count: 1 });
