@@ -8509,7 +8509,8 @@ if(a==="recover")return pvRun(async()=>{const f=await cpRecover();stat.textConte
 if(a==="lockbtc")return pvRun(cpLockBtc,"Building the lock…");
 if(a==="addr")return pvRun(async()=>{await cpCopy("Your Tacit address. Anyone can send to it privately, from zSwap or tacit.finance; what arrives shows up here.",cpTacAddr(cpSeed))},"Check your wallet for the message to sign.");
 if(a==="verify")return pvRun(async()=>{},"Check your wallet for the message to sign.");
-if(a==="ptsclaim")return pvRun(async()=>{if(!cpClm)throw Error("Nothing to claim right now.");
+if(a==="ptsclaim")return pvRun(async()=>{await cpClaimRead(cpRelayBase()).catch(()=>{});
+if(!cpClm)throw Error("Nothing to claim right now.");
 const pr=cpClm.p,tail=encUint(pr.length)+pr.map(x=>pad32(x)).join("");
 const req={from:account,to:cpClm.d,value:"0x0",data:"0x"+SEL_PCLAIM+encUint(cpClm.c)+pad32("40")+tail};
 await rpc(C,[req,L]);await settle(await sendTx([req]));
