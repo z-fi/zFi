@@ -402,6 +402,26 @@ describe('the solver lanes', () => {
     p.close();
   });
 
+  test('a code read the wallet could not answer never hands the lane to the fill contract', async () => {
+    const chain = chainWithQuote();
+    chain.code.set(SX, '0x6000');
+    let failed = 0;
+    chain.code.get = function (k) {
+      if (k === SX && !failed++) throw Object.assign(Error('rate limited'), { code: -32005 });
+      return Map.prototype.get.call(this, k);
+    };
+    wire(chain, [lane('0x', 'https://sx4.example', FILL)]);
+    chain.lanes = {
+      'sx4.example': { buyAmount: (3600n * USDC).toString(), transaction: { to: ROUTER, data: '0x1234' } },
+    };
+    const p = await loadPage({ chain, url: 'https://' + SELF + '.1.w3link.io/', hash: 'token=ETH&out=USDC', patch: withSx });
+    await p.connect();
+    await p.typeAmount('amt', '1');
+    assert.equal(failed > 0, true, 'the code read did fail');
+    assert.notEqual(String(p.window.eval('last')?.to).toLowerCase(), FILL, 'the pinned fill contract is not chosen on a failed read');
+    p.close();
+  });
+
   // Somebody who asks for a venue by name gets it, even when its floor is
   // lower - and is told, so the trade-off is visible rather than silent.
   test('a hand-picked venue overrules the floor comparison, and says so', async () => {

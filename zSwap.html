@@ -1331,7 +1331,7 @@ try{
 const list=SOLVERS_PIN,id=CHAIN_ID;
 solverFill=SOLVER_FILL_PIN;
 const sx=chainCfg().sx,rj=CHAIN_ID===1?cfgRead("eth_call",[{to:list,data:"0x"+SEL_SLIST},L]):quorum2(L1_RPCS,{to:list,data:"0x"+SEL_SLIST}).then(x=>{if(!x)throw 0;return x});rj.catch(()=>{});
-if(sx&&await hasCode(sx).catch(()=>false)){if(id!==CHAIN_ID)return;solverFill=solverExec=sx}else{
+const hc=sx?await hasCode(sx).catch(()=>null):false;if(id!==CHAIN_ID)return;if(hc==null){solversRetry=Date.now()+SOLVER_COOL;solversJob=null;return}if(hc)solverFill=solverExec=sx;else{
 const ex=await nodeRead("eth_call",[{to:solverFill,data:"0x"+SEL_EXEC},L]).catch(()=>null);
 if(id!==CHAIN_ID)return;const exec="0x"+strip0x(ex||"0x").slice(24);
 if(!isAddr(exec)){solversRetry=Date.now()+SOLVER_COOL;solversJob=null;return}
@@ -6560,7 +6560,7 @@ if(acts.childNodes.length)el.append(acts)}
 function fmPf(){pvFarm.querySelector(".fmpf")?.remove();if(!pfS||!pfOn()||pvFarm.classList.contains("hide"))return;
 const c=pfBtn("go","","fmc fmpf"),nm=document.createElement("span"),a=pfApr();pfIcon(c,16,"");nm.className="fmn";nm.textContent="TAC/ETH zSwap "+Math.round(pfDay()).toLocaleString()+" TAC/day";c.append(nm);
 if(a){const e=document.createElement("i");e.className="fma";e.textContent=a;c.append(e)}pvFarm.insertBefore(c,pvFarm.querySelector("a"))}
-function pfGo(){pairUser=false;if(location.hash==="#farm")applyLink(1);else location.hash="farm"}
+function pfGo(){pairUser=false;pairFree=1;if(location.hash==="#farm")applyLink(1);else location.hash="farm"}
 const pfTx=async(data,val,verb)=>settle(await sendWith([],{from:account,to:PFARM,data,value:toHex(val)},verb));
 async function pfTok(tok,amt,plain,withP,val,verb){const dl=BigInt(nowS()+1800),aps=await apSeq(tok,PFARM,amt);
 if(aps.length){const pi=await permitInfo(tok,account);if(pi)try{stat.textContent="Sign approval…";const d=withP(dl,await pmSig(tok,pi,account,amt,dl,PFARM));
@@ -8429,7 +8429,7 @@ else if(mkFee[fk]>0n){mkActs.insertAdjacentHTML("beforeend",B("fees",`Fees ${sig
 const mkQuote=async()=>{const m=mkSel,my=++mkQSeq;mkQv=null;if(!m||!mkLive(m))return mkQ.textContent="";
 const t=mkTok(m.a),pay=mkPay.value;let v;try{v=parseUnits(mkAmt.value||"0",mkTok(pay).dec)}catch(e){return mkQ.textContent=e.message}
 if(!v)return mkQ.textContent="";
-try{const a=pay===m.a?v:BigInt(await rpc(C,[{to:MK_WST,data:"0xbb2952fc"+encUint(v)},L])),[hy,hn]=await mc3Deep([true,false].map(y=>({to:PM,data:"0x124d6efc"+encUint(m.id)+encBool(y)+encUint(a)})));if(my!==mkQSeq)return;
+try{const a=pay===m.a?v:BigInt(await rpc(C,[{to:MK_WST,data:"0xb0e38900"+encUint(v)},L])),[hy,hn]=await mc3Deep([true,false].map(y=>({to:PM,data:"0x124d6efc"+encUint(m.id)+encBool(y)+encUint(a)})));if(my!==mkQSeq)return;
 const d=h=>{h=strip0x(h||"");return[BigInt("0x"+(h.slice(0,64)||"0")),BigInt("0x"+(h.slice(64,128)||"0"))]},[sy,py]=d(hy),[sn,pn]=d(hn),S=safeSym(t.sym);
 mkQv={v,sy,sn};mkQ.textContent=`Wins ${sigAmt(py,t.dec,6)} ${S} if YES · ${sigAmt(pn,t.dec,6)} ${S} if NO`}catch{if(my===mkQSeq)mkQ.textContent="Could not quote."}};
 const mkSend=async(req,verb)=>{stat.textContent=verb;await rpc(C,[req,L]);await settle(await sendTx([req]));mkCount=-1;mkLoad(1)};
@@ -8438,7 +8438,7 @@ const v=q.v,min=(yes?q.sy:q.sn)*BigInt(1e4-Math.round(slipPct()*100))/10000n,H=e
 if(pay===ZERO)return mkSend({from:account,to:PM,data:"0xc2b5b4c8"+H+encAddr(account)+encUint(min)+pad32("a0")+encUint(0),value:toHex(v)},V);
 const b=H+encUint(v)+encAddr(account)+encUint(min),dl=BigInt(nowS()+1800),aps=await apSeq(pay,PM,v);
 if(!aps.length)return mkSend(T("0x28ccbb45"+b),V);
-const tryReq=async f=>{try{stat.textContent="Sign approval…";const r=T(await f());await rpc(C,[r,L]);return r}catch(e){if(isRejection(e))throw e;return null}};
+const tryReq=async f=>{try{stat.textContent="Sign approval…";const r=T(await f());await rpc(C,[r,L]);return r}catch(e){if(isRejection(e)||/7dd37f70|e2c865df|cbca5aa2|f170c67f/.test(JSON.stringify(e?.data??e?.message??"")))throw e;return null}};
 const pi=await permitInfo(pay,account),r1=pi&&await tryReq(async()=>"0x2a304886"+b+encUint(dl)+await pmSig(pay,pi,account,v,dl,PM));
 if(r1)return mkSend(r1,V);
 const r2=(await Promise.all([rpc(C,[{to:pay,data:balOf(account)},L]).then(BigInt),p2Ready(pay,account)])).every(x=>x>=v)&&await tryReq(async()=>{const[n,tl]=await p2Sig(pay,account,v,dl,PM);return"0xb390d8b5"+b+encUint(n)+encUint(dl)+pad32("100")+tl});
@@ -9282,12 +9282,12 @@ const go=document.createElement("button");go.type="button";go.textContent="Play 
 go.onclick=()=>{sBlip();invPlay()};
 scEl.appendChild(go);
 };
-let lSeq=0,listReady=false,linkChain=0,dlyUser=false,pairUser=false;
+let lSeq=0,listReady=false,linkChain=0,dlyUser=false,pairUser=false,pairFree=0;
 const lkWrote=Object.create(null);
 let lkEv=0,lkArm=0;
 const lkKeep=(el,v)=>{const w=lkWrote[el.id];
 if((el.value!==(el.options?.[0].value??"")||el===dly)&&el.value!==w&&(w!==undefined||el!==dly||dlyUser))return false;
-if(lkEv&&el.value!==v&&(el===rc||el===amt||el===outAmt))lkArm=Date.now()+2500;
+if(lkEv&&el.value!==v)lkArm=Date.now()+2500;
 el.value=v;lkWrote[el.id]=v;return true;
 };
 async function applyLink(e){if(e&&(busy||txLive))return void idle(()=>applyLink(e));lkEv=!!e;
@@ -9328,11 +9328,11 @@ if(!listReady){
 const named=["token","out"].map(k=>(q.get(k)||"").trim()).filter(Boolean);
 if(named.some(v=>!/^0x[0-9a-f]{40}$/i.test(v)&&!symAddr(v.toLowerCase())))return;
 }
-const fi=at(fa),oi=at(ta);
+const fi=at(fa),oi=at(ta),pairHeld=lkEv&&!pairFree&&amt.value!==""&&amt.value!==lkWrote.amt;pairFree=0;
 if(fi>=0||oi>=0)pairChosen=true;
 rebuild();
-if(fi>=0&&!pairUser){fromSel.value=fi;fromSel.dataset.prev=fromSel.value}
-if(oi>=0&&oi!==fi&&!pairUser){toSel.value=oi;toSel.dataset.prev=toSel.value}
+if(fi>=0&&!pairUser&&!pairHeld){fromSel.value=fi;fromSel.dataset.prev=fromSel.value}
+if(oi>=0&&oi!==fi&&!pairUser&&!pairHeld){toSel.value=oi;toSel.dataset.prev=toSel.value}
 if(q.get("score"))scShow(q.get("score"));else scEl.classList.add("hide");
 const to=q.get("to"),lk=lsecs(q.get("lock")),want=q.get("tab"),n=q.get("amount");
 const t=want==="swap"||want==="send"||want==="book"?want

@@ -66,7 +66,8 @@ function pmChain({ held = {}, ...extra } = {}) {
   c.answer(PM, 'ffecc085', '0x' + w(0));
   // resolverFeeBps(address): OTHER takes 2%, ACCOUNT takes nothing.
   c.answer(PM, '4d5e9db0', (d) => '0x' + w(('0x' + d.slice(34, 74)).toLowerCase() === A.OTHER.toLowerCase() ? 200 : 0));
-  c.answer(WST, 'bb2952fc', (d) => '0x' + w((word(d, 0) * 8n) / 10n));
+  c.answer(WST, 'b0e38900', (d) => '0x' + w((word(d, 0) * 8n) / 10n));
+  c.answer(WST, 'bb2952fc', (d) => '0x' + w((word(d, 0) * 5n) / 4n));
   for (const sel of ['c2b5b4c8', '28ccbb45', '2a304886', 'b390d8b5', '6f406fa1', 'ddd5e1b2', '0fc95438', 'ae418095', '52a34b05', '5ea2145b'])
     c.answer(PM, sel, '0x' + w(1));
   return c;
@@ -358,6 +359,22 @@ test('markets mode', async (t) => {
     assert.equal(td.message.spender.toLowerCase(), PM);
     assert.equal(td.message.permitted.token.toLowerCase(), BOLD);
     assert.equal(word(tx.data, 5), BigInt(td.message.nonce), 'nonce carried');
+  });
+
+  await t.test('a bet PM itself refuses stops at the signature, with no approve sent', async () => {
+    const chain = pmChain();
+    chain.setToken(BOLD, { symbol: 'BOLD', decimals: 18, name: 'BOLD Stablecoin', domainSeparator: domainSeparator('BOLD Stablecoin', '1', BOLD) });
+    chain.setAllowance(BOLD, A.ACCOUNT, A.PERMIT2, 2n ** 256n - 1n);
+    for (const sel of ['2a304886', 'b390d8b5']) {
+      chain.answers.delete(`${PM}:${sel}`);
+      chain.revertOn(PM, sel, { data: '0x7dd37f70' });
+    }
+    const p = await tokenBet(chain);
+    await p.waitFor(() => /slippage/i.test(p.text('stat')), { label: 'refusal shown', timeout: 15000 });
+    await p.settle();
+    assert.equal(chain.sentTo(BOLD).length, 0, 'no approval left behind');
+    assert.equal(chain.sentTo(PM).length, 0);
+    assert.equal(chain.signed.length, 1, 'one signature asked, not a second one for Permit2');
   });
 
   await t.test('batches approve + bet when the wallet can, with no signature', async () => {

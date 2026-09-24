@@ -338,6 +338,18 @@ describe('navigating between links', () => {
     p.close();
   });
 
+  test('a later link never swaps the pair under an amount the user typed', async () => {
+    const p = await open('token=ETH&out=USDC&amount=1');
+    p.type('amt', '5');
+    p.window.location.hash = 'token=WBTC&out=ETH&amount=9&to=' + A.OTHER;
+    await p.waitFor(() => p.value('rc') !== '', { label: 'pushed link applied' });
+    await p.settle();
+    assert.equal(p.value('amt'), '5');
+    assert.equal(symOf(p, 'fromSel'), 'ETH', 'the typed amount keeps the token it was typed in');
+    assert.equal(symOf(p, 'toSel'), 'USDC');
+    p.close();
+  });
+
   /**
    * Back off a link lands on a bare `#`, which used to hit `applyLink`'s empty
    * early return and change nothing - so the amount and recipient a link had
