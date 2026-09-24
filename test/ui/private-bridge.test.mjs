@@ -1474,6 +1474,79 @@ describe('deposits the relay or the pool turn away', () => {
  * at all — must leave the panel saying nothing rather than saying zero: a
  * deposit the program has not counted is not a deposit worth nothing.
  */
+/**
+ * Settling from this wallet still costs Tacit a proof — the pool pays fees to
+ * msg.sender, which under self-settle is the depositor, so nothing inside the
+ * proof can reach the relay. The tip therefore rides the settle transaction the
+ * wallet is already sending, and the relay quotes it separately from a wrap's.
+ * A relay that quotes no prove figure, or a forwarder that is not there yet,
+ * sends the settle exactly as this page has always sent it.
+ */
+describe('tipping the relay for a proof it did not charge for', () => {
+  const SFWD = '0x0000008353ee6dea1236544938c546e27010416d';
+  const quoteProve = (p, wei) => {
+    Object.defineProperty(p.chain.lanes, RELAY + '/confidential/quote', {
+      configurable: true, enumerable: true,
+      get: () => ({ ticker: 'cETH', relayFeeEligible: true, recommendedProveTipWei: String(wei) }),
+    });
+    p.chain.answer(SFWD, '70b16a7d', '0x');
+  };
+
+  test('an absurd prove quote is bounded absolutely, not by the gas price', async () => {
+    const p = await open();
+    p.$('pvPath').value = 'self';
+    quoteProve(p, 10n ** 18n);                   // one ether to prove one settle
+    await unlock(p);
+    await deposit(p);
+    p.chain.relay.status = { status: 'proven', publicValues: '0x' + F.depositId.slice(2), proof: '0x' + 'ab'.repeat(32) };
+    poke(p);
+    await p.waitFor(() => !!p.$('pvList').querySelector('button[data-a="wrapsend"]'), { label: 'the settle button', timeout: 20000 });
+    p.click(p.$('pvList').querySelector('button[data-a="wrapsend"]'));
+    await p.waitFor(() => p.chain.sentTo(SFWD).length === 1, { label: 'the tipped settle', timeout: 20000 });
+    assert.equal(BigInt(p.chain.sentTo(SFWD)[0].value), 300000000000000n, 'clamped to the absolute ceiling');
+    p.close();
+  });
+
+  test('a self-settled deposit pays for its proof through the forwarder', async () => {
+    const p = await open();
+    p.$('pvPath').value = 'self';
+    quoteProve(p, 90000000000000n);
+    await unlock(p);
+    await deposit(p);
+    p.chain.relay.status = { status: 'proven', publicValues: '0x' + F.depositId.slice(2), proof: '0x' + 'ab'.repeat(32) };
+    poke(p);
+    await p.waitFor(() => !!p.$('pvList').querySelector('button[data-a="wrapsend"]'), { label: 'the settle button', timeout: 20000 });
+    p.click(p.$('pvList').querySelector('button[data-a="wrapsend"]'));
+    await p.waitFor(() => p.chain.sentTo(SFWD).length === 1, { label: 'the tipped settle', timeout: 20000 });
+    const tx = p.chain.sentTo(SFWD)[0];
+    assert.equal(tx.data.slice(2, 10), '70b16a7d', 'settleWithTip(bytes,bytes,bytes[],address)');
+    assert.equal(BigInt(tx.value), 90000000000000n,
+      'the whole value is the tip: settle has no amount leg, and a prove tip is not bounded by gas');
+    assert.equal(BigInt('0x' + tx.data.slice(10, 74)), 128n, 'four head words before the first bytes');
+    assert.match(tx.data.slice(10 + 3 * 64).toLowerCase(), new RegExp('^0{24}' + '68575b073de49a94e3e3acf6f3a0d6e3b66267c7'), 'the relay is named as recipient');
+    assert.equal(p.chain.sentTo(POOL).length, 1, 'only the deposit itself went to the pool');
+    p.close();
+  });
+
+  test('no prove figure quoted sends the settle straight to the pool', async () => {
+    const p = await open();
+    p.$('pvPath').value = 'self';
+    Object.defineProperty(p.chain.lanes, RELAY + '/confidential/quote', {
+      configurable: true, enumerable: true,
+      get: () => ({ ticker: 'cETH', relayFeeEligible: true }),   // no prove figure
+    });
+    await unlock(p);
+    await deposit(p);
+    p.chain.relay.status = { status: 'proven', publicValues: '0x' + F.depositId.slice(2), proof: '0x' + 'ab'.repeat(32) };
+    poke(p);
+    await p.waitFor(() => !!p.$('pvList').querySelector('button[data-a="wrapsend"]'), { label: 'the settle button', timeout: 20000 });
+    p.click(p.$('pvList').querySelector('button[data-a="wrapsend"]'));
+    await p.waitFor(() => p.chain.sentTo(POOL).length === 2, { label: 'the plain settle', timeout: 20000 });
+    assert.equal(p.chain.sentTo(SFWD).length, 0, 'no forwarder call without a quoted prove tip');
+    p.close();
+  });
+});
+
 describe('the points a wallet has been credited', () => {
   const PTS = 'tacit-points.onrender.com';
   const serve = (p, host, body) => {

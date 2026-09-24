@@ -7462,6 +7462,17 @@ const cpVerifySigma=(cx,cy,v,Rh,zh,ctx)=>{const x=BigInt(cx),y=BigInt(cy);if(!cp
 const R=pfromx(BigInt("0x"+strip0x(Rh).slice(2)),strip0x(Rh).slice(0,2)==="03");if(!R||!/^0x0[23][0-9a-fA-F]{64}$/.test(Rh))return false;
 const Cc=[x,y,1n],e=fmod(big(hexToBytes(keccak(cpCat(cpU8("tacit-open-sigma-v1"),beN(v,8),b32(ctx),hexToBytes(pcomp(Cc)),hexToBytes(pcomp(R)))))),FN);
 const X=padd(Cc,pneg(pmul(cpH,BigInt(v))));return pcomp(pmul(GP,BigInt(zh)))===pcomp(padd(R,pmul(X,e)))};
+const CP_TIPFWD_S="0x0000008353ee6Dea1236544938C546E27010416D",SEL_CPSTIP="70b16a7d";
+const cpProveTip=async()=>{if(!cpTipOn())return 0n;
+try{const j=await relayFetch("/confidential/quote?asset="+CP_ETH),r=String(j&&j.recommendedProveTipWei||"");
+if(!/^\d{1,30}$/.test(r))return 0n;let t=BigInt(r);if(t<=0n)return 0n;
+if(t>300000000000000n)t=300000000000000n;return t}catch{return 0n}};
+const cpSettleReq=async(pv,pr,ms,gas)=>{const base={from:account,to:CP_POOL,value:"0x0",data:cpSettleData(pv,pr,ms),gas:toHex(gas)};
+try{const t=await cpProveTip();if(t<=0n)return base;
+const a=encBytes(pv),b=encBytes(pr),tl=ms.map(encBytes);let off=ms.length*32,hd=encUint(ms.length);for(const x of tl){hd+=encUint(off);off+=x.length/2}
+const mo=128+(a.length+b.length)/2,req={from:account,to:CP_TIPFWD_S,value:toHex(t),gas:toHex(gas+60000),
+data:"0x"+SEL_CPSTIP+encUint(128)+encUint(128+a.length/2)+encUint(mo)+encAddr(CP_TIPTO)+a+b+hd+tl.join("")};
+await rpc(C,[req,L]);return req}catch{return base}};
 const cpSettleData=(pv,pr,ms=[])=>{const a=encBytes(pv),b=encBytes(pr),t=ms.map(encBytes);let off=ms.length*32,hd=encUint(ms.length);for(const x of t){hd+=encUint(off);off+=x.length/2}
 return"0x"+SEL_CPSETTLE+pad32("60")+encUint(96+a.length/2)+encUint(96+(a.length+b.length)/2)+a+b+hd+t.join("")};
 const NOKEEP="this browser will not keep the escrow's terms, and taking it back needs them — free some storage, or leave private browsing";
@@ -7786,7 +7797,7 @@ const cpSettleWrap=async n=>{try{if(BigInt(await cfgRead(C,[{to:CP_POOL,data:"0x
 if(!r.jobId)throw Error("The relay did not take the deposit.");n.job=r.jobId;n.js=r.status||"pending";n.rb=rb;n.self=self?1:0;delete n.stx;cpSaveNotes()};
 const cpMine=async(o,f)=>{try{await settle(o[f])}catch(e){delete o[f];cpSaveNotes();throw e}};
 const cpSelfWrap=async n=>{if(!(n.pv&&n.pr))throw Error(PNR);
-const req={from:account,to:CP_POOL,value:"0x0",data:cpSettleData(n.pv,n.pr,[n.memo]),gas:toHex(700000)};
+const req=await cpSettleReq(n.pv,n.pr,[n.memo],700000);
 await rpc(C,[req,L]);await cpGasOk(req);
 n.stx=await sendTx([req]);cpSaveNotes();cpPaint();
 await cpMine(n,"stx");n.js="settled";cpSaveNotes();stat.textContent=n.p?"Paid and settled.":"Settled into the pool."};
@@ -7927,7 +7938,7 @@ x.job=r2.jobId;x.js=r2.status||"pending";x.rb=rb2;cpSaveNotes();
 stat.textContent=(self?"Proving. Press send when it appears.":ch===1?"The relay is settling the withdrawal.":"The relay is settling the exit, then bridging it; this wallet sends nothing. Export your notes now: until it is bridged, this exit exists only in this browser. If the relay cannot bridge it, its row offers activate; activating from this wallet links the exit to your deposit.")+(ch!==1&&to.toLowerCase()===String(account).toLowerCase()?" It also exits to this same wallet, which links it too.":"")+(warn?" "+warn:"");
 const h=cpHint(v,A);if(h)pvNote.textContent=(pvNote.textContent?pvNote.textContent+" ":"")+h};
 const cpSelfSend=async n=>{const x=n.ex;
-const req=x.ch===1?{from:account,to:CP_POOL,value:"0x0",data:cpSettleData(x.pv,x.pr,x.m||[]),gas:toHex(700000)}
+const req=x.ch===1?await cpSettleReq(x.pv,x.pr,x.m||[],700000)
 :{from:account,to:CP_ROUTER,value:"0x0",data:cpExitData(x.pv,x.pr,cpRecipe(x),x.m||[]),gas:toHex(2000000)};
 await rpc(C,[req,L]);
 x.ptx=await sendTx([req]);cpSaveNotes();cpPaint();
@@ -8077,7 +8088,7 @@ return{v:n.v,b:k.blinding,s:n.z?"0x"+"00".repeat(32):k.secret,owner:k.owner,cx:k
 const cpJob=async(t,op,m,self,nd)=>{const{j:r,rb}=await relaySub({type:t,op,memos:m,mode:self?"prove":"settle"});if(!r.jobId)throw Error("The relay did not take it.");return{job:r.jobId,js:r.status||"pending",rb,self:self?1:0,t,op,m,nd}};
 const cpJobPoll=async j=>{if(!j||!j.job||j.stx||j.pv||j.js==="settled"||j.js==="failed")return;const st=await relayFetch("/confidential/status?id="+encodeURIComponent(j.job),null,j.rb),pr=st.proof||st.proofBytes;j.js=st.status||"unknown";if(st.error)j.err=String(st.error).slice(0,120);
 if(st.status==="proven"&&/^0x[0-9a-fA-F]+$/.test(st.publicValues||"")&&/^0x[0-9a-fA-F]+$/.test(pr||"")&&st.publicValues.toLowerCase().includes(strip0x(j.nd).toLowerCase())){j.pv=st.publicValues;j.pr=pr}};
-const cpJobSend=async(j,gas)=>{if(!(j&&j.pv&&j.pr))throw Error(PNR);const req=j.t==="wraptransfer"?{from:account,to:CP_ROUTER,value:toHex(BigInt(j.w)),data:cpWtData(BigInt(j.w),j.cm,j.pv,j.pr,j.m),gas:toHex(1400000)}:{from:account,to:CP_POOL,value:"0x0",data:cpSettleData(j.pv,j.pr,j.m),gas:toHex(gas||900000)};
+const cpJobSend=async(j,gas)=>{if(!(j&&j.pv&&j.pr))throw Error(PNR);const req=j.t==="wraptransfer"?{from:account,to:CP_ROUTER,value:toHex(BigInt(j.w)),data:cpWtData(BigInt(j.w),j.cm,j.pv,j.pr,j.m),gas:toHex(1400000)}:await cpSettleReq(j.pv,j.pr,j.m,gas||900000);
 await rpc(C,[req,L]);await cpGasOk(req);j.stx=await sendTx([req]);cpSaveS();cpSaveI();cpPaint();try{await settle(j.stx)}catch(e){delete j.stx;cpSaveS();cpSaveI();throw e}j.js="settled";cpSaveS();cpSaveI()};
 const cpAddOut=(o,a,sid)=>{const r={i:-1,v:o.v,s:o.s,b:o.b,at:nowS(),sid};if(a!==CP_ETH)r.a=a;const k=cpKeyOf(r);if(!cpNotes.some(n=>cpKeyOf(n)===k))cpNotes.push(r);return k};
 const cpDropOut=sid=>{cpNotes=cpNotes.filter(n=>n.sid!==sid||!!cpPool&&cpPool.leaves.includes(cpNoteOf(n).leaf));cpSaveNotes(1)};
