@@ -20,7 +20,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AbiCoder, keccak256, toUtf8Bytes } from 'ethers';
-import { A, MockChain, loadPage, closeAllPages, fixedRateQuoter, word, wordAddr, selectorOf, CP_BLOCK } from './harness.mjs';
+import { A, MockChain, loadPage, closeAllPages, fixedRateQuoter, word, wordAddr, selectorOf, CP_BLOCK, domainSeparator } from './harness.mjs';
 
 after(closeAllPages);
 
@@ -234,8 +234,8 @@ describe('the shielded assets come from the token list', () => {
     assert.equal(p.text('pvUnit'), 'TAC');
     assert.equal(p.$('pvChain').value, '1', 'a token withdraws on Ethereum');
     p.select('pvAct', 'dep');
-    assert.ok(p.$('pvTipL').classList.contains('hide'),
-      'no relay tip for a token: the forwarder splits msg.value, which a token wrap forbids');
+    assert.ok(!p.$('pvTipL').classList.contains('hide'),
+      'a token deposit can tip too: WrapTokenTipForwarder takes the whole msg.value as the tip');
     assert.match(p.text('pvHint'), /withdraw it as TAC to any 0x on Ethereum/);
     p.select('pvAct', 'send');
     assert.match(p.text('pvHint'), /stay hidden/);
@@ -256,6 +256,47 @@ describe('shielding TAC', () => {
     assert.equal(p.chain.sentTo(TAC).length, 0, 'nothing is sent to the token: the pool burns it as its minter');
     assert.deepEqual(p.window.__relayPosts[0].op, F.tac.wrapOp, 'the wrap witness is Tacit\'s');
     assert.match(p.text('pvList'), /100 TAC/);
+    p.close();
+  });
+
+  test('a tipped token deposit rides the forwarder on one permit signature', async () => {
+    const chain = tacitChain();
+    chain.setErc20(TAC, A.ACCOUNT, 500n * ETH);
+    const FWD = '0x0000007b1d93d72f698a861aa86ac675d6af7216';
+    chain.answer(FWD, '801f0234', '0x');
+    // TAC really does implement EIP-2612, so the mock must too or the page
+    // correctly declines to tip and sends the plain wrap instead.
+    chain.setToken(TAC, { symbol: 'TAC', name: 'Tacit Token', decimals: 18,
+      domainSeparator: domainSeparator('Tacit Token', '1', TAC),
+      permitTypehash: '0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9' });
+    const p = await open({ chain });
+    Object.defineProperty(p.chain.lanes, 'api.tacit.finance/confidential/quote', {
+      configurable: true, enumerable: true,
+      get: () => ({ ticker: 'cTAC', relayFeeEligible: true, recommendedWrapTipWei: '150000000000000' }),
+    });
+    await unlock(p);
+    p.select('pvAsset', TAC_ID);
+    await p.settle();
+    p.type('pvAmt', '100');
+    await p.waitFor(() => /Relay tip/.test(p.text('pvPrev')), { label: 'the tip in the preview', timeout: 15000 });
+    // the relay asked 0.00015; the page's own gas ceiling bounds it lower
+    assert.match(p.text('pvPrev'), /Relay tip 0\.00014 ETH,/, p.text('pvPrev'));
+    assert.doesNotMatch(p.text('pvPrev'), /%\)/, 'no share-of-deposit figure: the tip is ether, the deposit is TAC');
+    p.click('pvGo');
+    await p.waitFor(() => p.chain.sentTo(FWD).length === 1, { label: 'the forwarder call', timeout: 15000 });
+    const tx = p.chain.sentTo(FWD)[0];
+    assert.equal(tx.data.slice(2, 10), '801f0234', 'wrapWithTip for a token asset');
+    assert.equal(BigInt(tx.value), 140000000000000n, 'the whole msg.value is the tip, locally bounded; the wrap takes none');
+    assert.equal('0x' + tx.data.slice(10, 74), TAC_ID, 'the asset id');
+    assert.equal(BigInt('0x' + tx.data.slice(74, 138)), 100n * ETH, 'the wrap amount');
+    const off = BigInt('0x' + tx.data.slice(10 + 14 * 64, 10 + 15 * 64));
+    assert.equal(off, 480n, 'the bytes offset sits past fifteen head words');
+    assert.equal(BigInt('0x' + tx.data.slice(10 + 15 * 64, 10 + 16 * 64)), 0n, 'no Permit2 signature: 2612 carried it');
+    assert.equal(p.chain.sentTo(TAC).length, 0, 'no approval transaction: the permit was a signature');
+    assert.equal(p.chain.signed.length, 1, 'exactly one EIP-712 permit was signed, no approval tx');
+    const td = p.chain.signed[0];
+    const ty = typeof td === 'string' ? JSON.parse(td) : (td.typedData ?? td.data ?? td);
+    assert.equal((typeof ty === 'string' ? JSON.parse(ty) : ty).primaryType, 'Permit', 'a 2612 permit, not a Permit2 one');
     p.close();
   });
 
