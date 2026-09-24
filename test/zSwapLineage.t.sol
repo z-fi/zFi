@@ -18,7 +18,7 @@ contract zSwapLineageTest is Test {
     address dao = makeAddr("dao");
     address stranger = makeAddr("stranger");
 
-    uint256 constant CHUNKS = 27;
+    uint256 constant CHUNKS = 28;
 
     address[CHUNKS] chunks;
 

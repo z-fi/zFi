@@ -5,7 +5,7 @@
  * WHY THIS EXISTS. The page's bytes are pinned in four places, and an edit
  * invalidates all of them at once:
  *
- *   out/zSwap.chunk*.creation.txt          the 27 data contracts
+ *   out/zSwap.chunk*.creation.txt          the 28 data contracts
  *   script/zSwapRegistry-*.calldata.txt    the DAO call that serves the page
  *   test/zSwap.t.sol                       EXPECTED_LEN and EXPECTED_HASH
  *   src/zSwap.sol                          the payload size and headroom in its
@@ -41,7 +41,7 @@ import { keccak256 } from 'ethers';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const HEAD = process.argv.includes('--committed');
 const CHECK = HEAD || process.argv.includes('--check');
-const CHUNKS = 27;
+const CHUNKS = 28;
 const EIP170 = 24576;
 
 const show = f => execFileSync('git', ['show', `HEAD:${f}`], { cwd: ROOT, maxBuffer: 1 << 28 });
