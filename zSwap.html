@@ -8542,7 +8542,7 @@ if(a==="btckey"){await ask("The Bitcoin key (WIF) for "+cpBtc+", to import into 
 if(a==="import"){const s=(await ask("Paste a private-bridge key (0x + 64 hex), or an exported note list.")||"").trim();
 if(/^\[/.test(s)){let arr;try{arr=JSON.parse(s)}catch{}
 if(!Array.isArray(arr))return void(stat.textContent="That is not a note list.");
-let add=0;for(const r of arr)if(cpRecOk(r)){const m=cpNotes.find(n=>cpKeyOf(n)===cpKeyOf(r));if(!m){cpNotes.push(r);add++}else if(r.ex&&!m.ex){m.ex=r.ex;add++}}
+let add=0;for(const r of arr)if(cpRecOk(r)){const{ex:_x,rb:_r,...q}=r,m=cpNotes.find(n=>cpKeyOf(n)===cpKeyOf(q));if(!m){cpNotes.push(q);add++}}
 cpNotes.sort((a,b)=>a.i-b.i);cpSaveNotes();cpPaint();pvRefresh();stat.textContent=add?"Imported "+add+" note"+(add>1?"s":"")+".":"Nothing new in that list.";return}
 if(!/^0x[0-9a-fA-F]{64}$/.test(s))return void(stat.textContent="That is not a key.");if(cpBusy)return pvRun();if(s.toLowerCase()!==cpSeed&&!await sure("Replace this wallet's key? Back up the current one first."))return;
 try{LS[CP_KEY+account.toLowerCase()]=s.toLowerCase()}catch{}cpUse(s.toLowerCase());cpVer=1;cpPaint();pvRefresh();return}

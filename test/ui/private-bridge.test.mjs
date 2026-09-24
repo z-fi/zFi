@@ -1584,6 +1584,72 @@ describe('tipping the relay for a proof it did not charge for', () => {
   });
 });
 
+// An exported note list describes notes. It used to be able to describe a
+// DESTINATION too: a record whose i:v:a matched a local note had its `ex` adopted
+// onto it, and a resumed exit takes `to`, `fee` and `self` from that record. On
+// chain 1 the relay settles such an exit with no wallet transaction at all, so a
+// crafted list plus one press of "retry" moved someone else's note. Adoption is
+// gone, and an imported record's `ex`/`rb` are stripped rather than the whole note
+// being dropped - a browser restoring notes mid-exit still gets its notes back.
+describe('a note list that names a destination', () => {
+  const ATTACKER = '0x00000000000000000000000000000000000000ff';
+  const stored = (p) => {
+    const raw = Object.entries(p.window.localStorage)
+      .find(([k]) => k.startsWith('zswap:cpn:'));
+    return raw ? JSON.parse(raw[1]) : [];
+  };
+  const paste = async (p, list, want) => {
+    p.window.prompt = () => JSON.stringify(list);
+    p.click(p.$('pvKey').querySelector('button[data-a="more"]'));
+    await p.settle();
+    p.click(p.$('pvKey').querySelector('button[data-a="import"]'));
+    await p.waitFor(() => want.test(p.text('stat')), { label: 'the import to report', ...SLOW });
+  };
+
+  test('an exit in an imported record never reaches the notes', async () => {
+    const p = await open();
+    await unlock(p);
+    await paste(p, [{ i: 0, v: '1000000000000000',
+      ex: { ch: 1, to: ATTACKER, du: '9999999999', fee: '0', v: '1000000000000000' } }], /Imported 1 note/);
+    assert.ok(stored(p).length >= 1, 'the note itself was kept');
+    assert.ok(stored(p).every(n => !n.ex), 'and carries no exit');
+    assert.doesNotMatch(JSON.stringify(stored(p)), new RegExp(ATTACKER.slice(2), 'i'), 'the address is nowhere');
+    await p.settle();
+    assert.doesNotMatch(p.text('pvList'), /relay failed/, 'so no row offers to retry one');
+    p.close();
+  });
+
+  test('an exit already in flight here is not disturbed by an import', async () => {
+    const p = await open();
+    await unlock(p);
+    await deposit(p);
+    settleDeposit(p);
+    poke(p);
+    await p.waitFor(() => /exit/.test(p.text('pvList')), SLOW);
+    p.select('pvChain', '1');
+    p.type('pvTo', A.OTHER);
+    p.select('pvAct', 'out');
+    p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
+    await p.waitFor(() => p.window.__relayPosts.length === 2, SLOW);
+    const mine = stored(p).find(n => n.ex);
+    assert.ok(mine, 'this browser made an exit');
+    // A record matching that same note offers a different destination.
+    await paste(p, [{ i: mine.i, v: mine.v, a: mine.a,
+      ex: { ch: 1, to: ATTACKER, du: '9999999999', fee: '0' } }], /Nothing new in that list/);
+    assert.equal(stored(p).find(n => n.ex).ex.to.toLowerCase(), A.OTHER.toLowerCase(), 'the destination is still mine');
+    p.close();
+  });
+
+  test('a relay base in an imported record never becomes a fetch base', async () => {
+    const p = await open();
+    await unlock(p);
+    await paste(p, [{ i: 9, v: '1000', rb: 'https://relay.attacker.example' }], /Imported 1 note/);
+    assert.ok(stored(p).every(n => !n.rb), 'stripped');
+    assert.doesNotMatch(JSON.stringify(stored(p)), /attacker/, 'and not stored anywhere');
+    p.close();
+  });
+});
+
 describe('the points a wallet has been credited', () => {
   const PTS = 'tacit-points.onrender.com';
   const serve = (p, host, body) => {
