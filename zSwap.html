@@ -3208,7 +3208,7 @@ const pct=slipPct();
 const slipBps=BigInt(Math.round(pct*100));
 const deadline=BigInt(nowS()+600);
 outEl.value="...";fitFont(outEl);quoting=true;render();
-const acct=account;qBlind=[rcv];
+const acct=account;qBlind=[...new Set([rcv,...qBlind].filter(Boolean))].slice(0,8);
 const gaveUp0=mcGaveUp,ok0=mcOk,failed0=mcFailed;
 loadSolvers().then(()=>{if(my!==seq||!solverLanes||!solverFill||!solverExec)return;const S0=isIn?SOLVER_SHAPES:SOLVER_SHAPES_OUT,ck=(isIn?"":"o|")+`${CHAIN_ID}|${f.addr}|${t.addr}|${swapAmt}|${slipBps}`;
 for(const x of solverLanes)if(!laneDown(x.name)&&S0[x.name])try{laneCached(`${x.name}|${ck}`,()=>S0[x.name](x.endpoint,f.addr,t.addr,swapAmt,Number(slipBps),SOLVER_DEADLINE,f.dec,t.dec)).catch(()=>{})}catch{}}).catch(()=>{});
@@ -3381,7 +3381,7 @@ if(eo&&y.sources&&y.sources.includes(SRC_CURVE))continue;
 const v=eo?y.best.amountIn:y.best.amountOut;
 if(v&&(!best||(eo?v<best.best.amountIn:v>best.best.amountOut)))best=y;
 }
-return best;
+return hubSafe(best);
 };
 const gasValue=async wei=>{
 const token=isIn?t.addr:f.addr;
@@ -6739,7 +6739,7 @@ if(!hit&&real(f)){const h=await cbLook(f.addr);if(my!==cbSeq)return;
 if(h.dao){hit=h,tok=f}}
 if(!hit||!hit.shares||!tok){cbEl.classList.add("hide");return}
 let eth=0n,sup=0n,price=0n,dl=0n,left=0n,cap=0n;
-let rqOff=false;
+let rqOff=false,owed=0n;
 const now2=BigInt(Math.floor(Date.now()/1000));
 cbReady=0n;
 try{
@@ -6771,6 +6771,7 @@ const allow=BigInt(r[5]||"0x0");
 if(rate>0n&&now2>lastC){
 let av=(now2-lastC)*rate;
 if(av>allow)av=allow;
+owed=av;
 if(av>eth)av=eth;
 cbReady=av/rate*rate;
 }}
@@ -6830,8 +6831,9 @@ if(units<=0n){cbEl.classList.add("hide");return}
 cbAmt=units;
 cbTok=tok.addr;
 cbCost=(units*price+CONE-1n)/CONE;
+const pot=eth+cbCost,gone=owed<pot?owed:pot;
 return paint(act(`Back with ${trimAmt(cbCost,18)} ETH for `
-+`${trimAmt(units,tok.dec)} ${safeSym(tok.sym)}`,"Back"),CB_TIP);
++`${trimAmt(units,tok.dec)} ${safeSym(tok.sym)}`+(gone>0n?` · ${trimAmt(gone,18)} ETH is already owed to the cause, so this burns back for ~${trimAmt((pot-gone)*units/(sup+units),18)} ETH`:""),"Back"),CB_TIP);
 }
 if(rqOff)
 return paint(msg(`Burn-back has been switched off by this cause — ${safeSym(tok.sym)} cannot be redeemed`),

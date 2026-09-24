@@ -218,6 +218,18 @@ test('backing a cause', async (t) => {
     assert.ok(parseFloat(m[1]) <= 3.6, `promised ${m[1]} ETH against a 3.6 ETH treasury`);
   });
 
+  await t.test('a tap backlog the treasury cannot cover is named before backing', async () => {
+    // A year of accrual against an empty treasury: anyone can release a new
+    // backer's ether to the cause at once, so it burns back for about nothing.
+    const p = await openBacking(causeChain({
+      treasury: 0n,
+      lastClaim: BigInt(Math.floor(Date.now() / 1000) - 31556952),
+    }));
+    p.type('amt', '1');
+    await p.waitFor(() => /Back with/.test(p.text('cbEl')), { label: 'the backing quote' });
+    assert.match(p.text('cbEl'), /already owed to the cause, so this burns back for ~0 ETH/);
+  });
+
   await t.test('says nothing about a tap with nothing vested', async () => {
     const p = await openBacking(causeChain({ ratePerSec: 0n }));
     assert.doesNotMatch(p.text('cbEl'), /vested/);
