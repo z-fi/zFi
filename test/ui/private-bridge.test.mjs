@@ -1654,6 +1654,59 @@ describe('the points a wallet has been credited', () => {
     p.close();
   });
 
+  test("names a share of today's pot once the day has points to divide by", async () => {
+    const p = await open();
+    serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 5, deposit_count: 1,
+      today: { points: 3, totalPoints: 14, dayBudgetWei: '1111111111111111111111' } });
+    await unlock(p);
+    await p.waitFor(() => /Points/.test(p.text('pvKey')), { label: 'the points row', ...SLOW });
+    // 3/14 of 1111.11 = 238.09, and it must read as an estimate that moves
+    assert.match(p.text('pvKey'), /your 3 of today's 14 points — about 238\.09[0-9]* TAC at the current split/, p.text('pvKey'));
+    p.close();
+  });
+
+  test('a day with no points yet divides by nothing and says so', async () => {
+    const p = await open();
+    serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 5, deposit_count: 1,
+      today: { points: 0, totalPoints: 0, dayBudgetWei: '1111111111111111111111' } });
+    await unlock(p);
+    await p.waitFor(() => /Points/.test(p.text('pvKey')), { label: 'the points row', ...SLOW });
+    assert.match(p.text('pvKey'), /none today of 1111\.11 TAC shared/);
+    assert.doesNotMatch(p.text('pvKey'), /NaN|Infinity|current split/);
+    p.close();
+  });
+
+  test("names today's whole budget, and never a share of it", async () => {
+    const p = await open();
+    serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 5, deposit_count: 1,
+      today: { points: 0, dayBudgetWei: '1111111111111111111111' } });
+    await unlock(p);
+    await p.waitFor(() => /Points/.test(p.text('pvKey')), { label: 'the points row', ...SLOW });
+    assert.match(p.text('pvKey'), /none today of 1111\.11 TAC shared/, p.text('pvKey'));
+    // the day's TOTAL points are not published, so no per-point value may be implied
+    assert.doesNotMatch(p.text('pvKey'), /worth|per point|you will (get|earn)/i);
+    p.close();
+  });
+
+  test('a budget it cannot read is simply not mentioned', async () => {
+    const p = await open();
+    serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 5, deposit_count: 1,
+      today: { points: 2, dayBudgetWei: 'soon' } });
+    await unlock(p);
+    await p.waitFor(() => /counted/.test(p.text('pvKey')), { label: 'the points row', ...SLOW });
+    assert.doesNotMatch(p.text('pvKey'), /today/, 'no half-formed claim about today');
+    p.close();
+  });
+
+  test('shows before the Tacit key is unlocked: points follow the wallet, not the key', async () => {
+    const p = await open();
+    serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 5, deposit_count: 1 });
+    await p.waitFor(() => /Points/.test(p.text('pvKey')), { label: 'the points row before unlock', ...SLOW });
+    assert.match(p.text('pvKey'), /Sign once to unlock/, 'still asking for the key');
+    assert.match(p.text('pvKey'), /5 from 1 deposit counted/, 'and already showing what the wallet earned');
+    p.close();
+  });
+
   test('shows what the program counted, from the relay host', async () => {
     const p = await open();
     serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 5, deposit_count: 1 });
