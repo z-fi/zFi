@@ -1688,6 +1688,35 @@ describe('the points a wallet has been credited', () => {
     p.close();
   });
 
+  // The claim is a transaction to an address. Taking that address from the same
+  // response that supplies the proof means the endpoint chooses where the page
+  // sends it, so the distributor is compiled in and the response must agree.
+  test('a claim against a distributor the page was not built with is not offered', async () => {
+    const p = await open();
+    serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 5, deposit_count: 1 });
+    claiming(p, RELAY, { address: A.ACCOUNT.toLowerCase(), distributor: '0x' + 'ee'.repeat(20),
+      cumulativeAmount: '926845047264463185251', claimedWei: '0',
+      unclaimedWei: '926845047264463185251', proof: PROOF });
+    await unlock(p);
+    await p.waitFor(() => /claim at tacit\.finance/.test(p.text('pvKey')), { label: 'the refusal', ...SLOW });
+    assert.equal(p.$('pvKey').querySelector('button[data-a="ptsclaim"]'), null, 'no button to press');
+    assert.equal(p.chain.sentTo('0x' + 'ee'.repeat(20)).length, 0);
+    p.close();
+  });
+
+  test('the claim goes to the compiled-in distributor, not the one echoed back', async () => {
+    const p = await open();
+    serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 5, deposit_count: 1 });
+    claiming(p, RELAY, { address: A.ACCOUNT.toLowerCase(), distributor: DIST.toUpperCase().replace('0X', '0x'),
+      cumulativeAmount: '926845047264463185251', claimedWei: '0',
+      unclaimedWei: '926845047264463185251', proof: PROOF });
+    await unlock(p);
+    await p.waitFor(() => !!p.$('pvKey').querySelector('button[data-a="ptsclaim"]'), { label: 'the claim button', ...SLOW });
+    p.click(p.$('pvKey').querySelector('button[data-a="ptsclaim"]'));
+    await p.waitFor(() => p.chain.sentTo(DIST).length === 1, { label: 'the claim', ...SLOW });
+    p.close();
+  });
+
   test('nothing to claim offers no button', async () => {
     const p = await open();
     serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 5, deposit_count: 1 });
@@ -2205,6 +2234,28 @@ describe('the private form tells you before you press', () => {
     p.close();
   });
 
+  // A withdrawal with no exactly-sized note merges first, and the merge is its own
+  // relay job with its own fee. The preview used to quote ONE fee sized for a single
+  // job, so at the relay's flat floor the wallet was shown about half what it paid.
+  test('a withdrawal that must merge first previews both relay fees, and names them', async () => {
+    const p = await open();
+    await unlock(p);
+    await deposit(p);
+    settleDeposit(p);
+    poke(p);
+    await p.waitFor(() => /exit/.test(p.text('pvList')), SLOW);
+    p.select('pvChain', '1');
+    p.select('pvAct', 'out');
+    p.type('pvAmt', '0.004');            // no note is exactly this, so it merges
+    await p.waitFor(() => /Relay fee/.test(p.text('pvPrev')), { label: 'the preview', ...SLOW });
+    const t = p.text('pvPrev');
+    assert.match(t, /in two: [\d.]+ tETH to merge your notes, then [\d.]+ tETH to withdraw/, t);
+    const line = t.split('\n').find(l => /^Relay fee/.test(l));
+    const [total, merge, exit] = [...line.matchAll(/([\d.]+) tETH/g)].map(m => Number(m[1]));
+    assert.ok(Math.abs(total - (merge + exit)) < 1e-9, `the total is the two legs: ${total} vs ${merge}+${exit}`);
+    p.close();
+  });
+
   test('a withdrawal to an L2 previews the fee, what arrives, the timing, and warns when it goes back to this wallet', async () => {
     const p = await open();
     await unlock(p);
@@ -2212,7 +2263,7 @@ describe('the private form tells you before you press', () => {
     p.select('pvChain', '8453');
     p.type('pvAmt', '0.01');
     await p.waitFor(() => /arrives on Base, usually 4–8 min/.test(p.text('pvPrev')), { label: 'the withdrawal preview' });
-    assert.match(p.text('pvPrev'), /Relay fee [\d.]+ tETH · ≈[\d.]+ ETH arrives on Base/);
+    assert.match(p.text('pvPrev'), /Relay fee [\d.]+ tETH.*≈[\d.]+ ETH arrives on Base/);
     assert.match(p.text('pvPrev'), /links it to your deposit/);
     p.type('pvTo', A.OTHER);
     await p.waitFor(() => !/links it to your deposit/.test(p.text('pvPrev')), { label: 'the note to go for a fresh recipient' });

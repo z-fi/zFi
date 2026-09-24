@@ -484,6 +484,37 @@ describe('private sends', () => {
     p.close();
   });
 
+  // A relay that ACCEPTS a job and then stops answering used to leave the row at
+  // "funding…" for good: the poll error was swallowed, the state never advanced, and
+  // cpBusyK kept the input notes out of the spendable balance with nothing to press.
+  // Funds were never at risk; the page simply had no way forward.
+  test('a relay that accepts a send then stops answering offers a way out', async () => {
+    const p = await open(poolChain());
+    p.select('pvAct', 'send');
+    p.type('pvAmt', '0.005');
+    p.type('pvRc', S.lock.recipient);
+    p.queueConfirm(true);
+    useStream(p, S.wt.tag);
+    p.click('pvGo');
+    await p.waitFor(() => posts(p).some(x => x.type === 'wraptransfer'), { label: 'the job', ...SLOW });
+    // The relay goes dark: every status read throws from here on.
+    Object.defineProperty(p.chain.relay, 'status', {
+      configurable: true, get: () => { throw new Error('ECONNREFUSED'); },
+    });
+    await until(p, () => /relay not answering/.test(p.text('pvList')), 'the row to admit it');
+    assert.ok(p.$('pvList').querySelector('button[data-a="spoll"]'), 'retry is offered');
+    assert.ok(p.$('pvList').querySelector('button[data-a="sforget"]'), 'and so is forget');
+    // Forget must warn, because the relay could still land the job afterwards.
+    p.queueConfirm(false);
+    p.click(p.$('pvList').querySelector('button[data-a="sforget"]'));
+    await p.settle();
+    assert.match(p.text('pvList'), /relay not answering/, 'declining the warning keeps the send');
+    p.queueConfirm(true);
+    p.click(p.$('pvList').querySelector('button[data-a="sforget"]'));
+    await p.waitFor(() => !/relay not answering/.test(p.text('pvList')), { label: 'the send to be released', ...SLOW });
+    p.close();
+  });
+
   test('with nothing shielded, a send wraps and transfers in one transaction, then locks', async () => {
     const p = await open(poolChain());
     p.select('pvAct', 'send');

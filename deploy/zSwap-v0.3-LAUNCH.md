@@ -2,14 +2,14 @@
 
 The page and all its on-chain dependencies are ready. What remains is deploying the page itself and a few operational switches.
 
-## Status (2026-09-23)
+## Status (2026-09-25)
 
 | | |
 |---|---|
-| Page | `zSwap.html`, 666,528 B, 28 chunks (21,600 B headroom) |
+| Page | `zSwap.html`, 668,207 B, 28 chunks (19,921 B headroom) |
 | Identity | `CP_MSG` is Tacit's shared identity message (tacit 2abd65b0, `dapp/identity-message.js`), byte-equal; the derivation is unchanged |
 | Checks | `script/check-zSwap.mjs` all pass; `check-create2-artifacts.mjs` 27/27 reproduce |
-| Tests | UI suite 83 files; Foundry zSwap 83, zGuard 18, Precision fork 19; browser 30 |
+| Tests | UI suite 86 files, run one file at a time; Foundry zSwap 83, zSolverFill 17, PM 76 (without the default mainnet fork), zGuard 18, Precision fork 19; browser 30 |
 | Live smoke (read-only, real Chromium) | quotes land on 1 / 8453 / 4663 in 7–10 s, no page errors |
 | Markets | PM LIVE `0x0000003b…aB5C5` on mainnet, verified (Etherscan + Sourcify); the page's `#mk` mode (mainnet only) |
 | zGuard | LIVE `0x00000057…2b1961` on 1/8453/4663, verified (Sourcify + Etherscan) |
@@ -24,6 +24,7 @@ The page and all its on-chain dependencies are ready. What remains is deploying 
 3. **Successor.** Run `node script/build-zSwapNext.mjs <28 chunk addresses>`. It emits the initcode and the calldata for the DAO's `deployNext` on the current tip.
 4. **DAO** executes `deployNext`. Then record the wrapper address in README / `docs/src/README.md` and rerun `node script/check-zSwap.mjs`.
    - `deployNext` works once per version: a second call reverts `AlreadySucceeded()`. Before the vote, `eth_call` the emitted calldata from the DAO to the tip with `cast call --from 0x5E58BA0e… <tip> <calldata>`. It must return the mined successor address, and `forge test --match-path 'test/zSwapNext*.t.sol'` must pass. A wrong initcode or salt cannot be redone from v0.2.
+   - Immediately before the vote, and again after it passes but before execution, run `node script/sync-zSwap-artifacts.mjs --committed`. It must report that every pinned copy agrees with the committed page, so the calldata you `eth_call` is the calldata you execute.
    - `TIP` in `build-zSwapNext.mjs` is v0.2 `0xe6869528…`. Its `successor()` read zero on 2026-09-25; re-read it before the vote.
 5. **Old version.** v0.2's "newer →" link finds the successor once it matures (MATURITY = 3 days).
 6. **Repoint `zswap.wei`.** It serves `0x000063Af…`, a standalone v0.3 whose `PREVIOUS()` is zero. It sits outside the v0.2 lineage, so nothing carries its visitors to the successor. Point the WNS addr record at the new wrapper, and update or clear the IPFS contenthash, which gateways may prefer.
@@ -59,7 +60,7 @@ The page and all its on-chain dependencies are ready. What remains is deploying 
 
 ## Known limits (by design, not blockers)
 
-- **Solver-lane fills** go straight to the solver contract, so they carry no zGuard deadline. Many aggregators embed their own.
+- **Solver-lane fills** run through `zRouter.snwap` with the zSolverFill executor `0x0000004c…3E85`. The router checks the minimum at the recipient, and a zGuard deadline leg goes in front of the fill.
 - **zGuard's `snap`/`floor` end-to-end minimum** is live, but the page does not use it yet. A future page could use it to replace the widened bounds on split and two-hop ERC-20 routes.
 - **Private payments** go to `tacit1…` addresses, Tacit keys, and names that publish `finance.tacit`. A bare 0x address with a published record is paid privately. Without one, it gets a public payout from the pool.
 - **The next router** should add a standalone `deadline(uint256)` guard; see `deploy/zGuard.md`.
