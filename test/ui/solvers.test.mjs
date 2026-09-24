@@ -316,6 +316,91 @@ describe('the solver lanes', () => {
     p.close();
   });
 
+  // Where a chain names a solver executor (`sx`) that has code, the winning
+  // lane runs through zRouter.snwap: the user's existing router approval or
+  // Permit2 funds it, the router checks the floor at the recipient, and the
+  // executor is the lane's taker. Without one the pinned fill contract stays.
+  const SX = '0x' + '5e'.repeat(20);
+  const withSx = [['slvId:"1",slvSlug:"ethereum"', `slvId:"1",slvSlug:"ethereum",sx:"${SX}"`]];
+  const SNWAP = new Interface([
+    'function snwap(address tokenIn,uint256 amountIn,address recipient,address tokenOut,uint256 amountOutMin,address executor,bytes executorData)',
+    'function multicall(bytes[] data)',
+    'function sweep(address token,uint256 id,uint256 amount,address to)',
+  ]);
+  const SXFILL = new Interface([
+    'function fill(address target,address spender,address tokenIn,address tokenOut,address to,address refundTo,bytes data)',
+  ]);
+
+  test('with an executor deployed, the winning lane runs through the router', async () => {
+    const chain = chainWithQuote();
+    chain.code.set(SX, '0x6000');
+    wire(chain, [lane('0x', 'https://sx.example', FILL)]);
+    chain.lanes = {
+      'sx.example': { buyAmount: (3600n * USDC).toString(), transaction: { to: ROUTER, data: '0xdeadbeefcafe' } },
+    };
+    const p = await loadPage({ chain, url: 'https://' + SELF + '.1.w3link.io/', hash: 'token=ETH&out=USDC', patch: withSx });
+    await p.connect();
+    await p.typeAmount('amt', '1');
+    assert.equal(p.value('outAmt'), '3600');
+    const hit = (chain.httpLog || []).find(h => String(h.url).includes('sx.example'));
+    assert.ok(String(hit.url).toLowerCase().includes(SX.slice(2)), 'the executor is the taker');
+
+    const q = p.window.eval('last');
+    assert.equal(q.to, null, 'the route goes to zRouter');
+    assert.equal(q.msgValue, 10n ** 18n);
+    const d = SNWAP.parseTransaction({ data: q.callData });
+    assert.equal(d.name, 'snwap');
+    assert.equal(d.args.executor.toLowerCase(), SX);
+    assert.equal(d.args.recipient.toLowerCase(), A.ACCOUNT.toLowerCase());
+    assert.ok(d.args.amountOutMin > 0n && d.args.amountOutMin < 3600n * USDC, 'the router checks the floor');
+    const x = SXFILL.parseTransaction({ data: d.args.executorData });
+    assert.equal(x.args.target.toLowerCase(), ROUTER.toLowerCase());
+    assert.equal(x.args.to.toLowerCase(), A.ACCOUNT.toLowerCase());
+    assert.equal(x.args.refundTo.toLowerCase(), A.ACCOUNT.toLowerCase());
+    assert.equal(x.args.data, '0xdeadbeefcafe');
+    p.close();
+  });
+
+  test('with an executor deployed, a token input is approved to the router and can be Permit2-funded', async () => {
+    const chain = chainWithQuote();
+    chain.code.set(SX, '0x6000');
+    wire(chain, [lane('0x', 'https://sx2.example', FILL)]);
+    chain.lanes = {
+      'sx2.example': { buyAmount: (2n * 10n ** 18n).toString(), transaction: { to: ROUTER, data: '0x1234' } },
+    };
+    chain.quoteHandler = fixedRateQuoter({ rate: 10n ** 18n / 3000n, decIn: 6, decOut: 18 });
+    const p = await loadPage({ chain, url: 'https://' + SELF + '.1.w3link.io/', patch: withSx });
+    await p.connect();
+    p.pickToken('toSel', 'WBTC');
+    p.pickToken('fromSel', 'USDC');
+    p.pickToken('toSel', 'ETH');
+    await p.settle();
+    await p.typeAmount('amt', '3000');
+    const q = p.window.eval('last');
+    assert.equal(q.source, p.window.eval('SRC_SOLVER'), 'the lane won');
+    assert.equal(q.spender.toLowerCase(), A.ZROUTER.toLowerCase(), 'the approval is the router\'s, not a separate contract\'s');
+    const fd = SNWAP.parseTransaction({ data: q.fundedCallData });
+    assert.equal(fd.name, 'multicall');
+    const legs = fd.args[0].map(c => SNWAP.parseTransaction({ data: c }));
+    const sweep = legs.find(l => l.name === 'sweep'), sn = legs.find(l => l.name === 'snwap');
+    assert.equal(sweep.args.to.toLowerCase(), SX, 'the funded input is handed to the executor');
+    assert.equal(sn.args.tokenIn, '0x0000000000000000000000000000000000000000', 'and the snwap pulls nothing more');
+    p.close();
+  });
+
+  test('an executor named but not deployed leaves the fill contract in place', async () => {
+    const chain = chainWithQuote();
+    wire(chain, [lane('0x', 'https://sx3.example', FILL)]);
+    chain.lanes = {
+      'sx3.example': { buyAmount: (3600n * USDC).toString(), transaction: { to: ROUTER, data: '0x1234' } },
+    };
+    const p = await loadPage({ chain, url: 'https://' + SELF + '.1.w3link.io/', hash: 'token=ETH&out=USDC', patch: withSx });
+    await p.connect();
+    await p.typeAmount('amt', '1');
+    assert.equal(p.window.eval('last').to.toLowerCase(), FILL, 'no code at the executor: the pinned fill contract runs');
+    p.close();
+  });
+
   // Somebody who asks for a venue by name gets it, even when its floor is
   // lower - and is told, so the trade-off is visible rather than silent.
   test('a hand-picked venue overrules the floor comparison, and says so', async () => {

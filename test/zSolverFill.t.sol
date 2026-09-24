@@ -2,11 +2,21 @@
 pragma solidity ^0.8.36;
 
 import {Test} from "../lib/forge-std/src/Test.sol";
-import {zSolverFill, zSolverExec} from "../src/utils/zSolverFill.sol";
+import {zSolverFill} from "../src/utils/zSolverFill.sol";
+
+interface IzRouter {
+    function snwap(
+        address tokenIn,
+        uint256 amountIn,
+        address recipient,
+        address tokenOut,
+        uint256 amountOutMin,
+        address executor,
+        bytes calldata executorData
+    ) external payable returns (uint256 amountOut);
+}
 
 contract MockERC20 {
-    string public name = "Mock";
-    uint8 public decimals = 18;
     mapping(address => uint256) public balanceOf;
     mapping(address => mapping(address => uint256)) public allowance;
 
@@ -34,595 +44,271 @@ contract MockERC20 {
     }
 }
 
-/// @dev Takes 1% on every transfer, so what the adapter measures and what the
-///      recipient receives are deliberately different numbers.
+/// @dev Takes 1% on every transfer.
 contract FeeToken is MockERC20 {
     function transfer(address to, uint256 v) public override returns (bool) {
-        uint256 fee = v / 100;
         balanceOf[msg.sender] -= v;
-        balanceOf[to] += v - fee;
+        balanceOf[to] += v - v / 100;
         return true;
     }
 }
 
-/// @dev An honest router: pulls the input, pays the output to whoever the
-///      calldata names.
-contract GoodRouter {
+/// @dev Pulls `aIn` of the input from the caller and pays `aOut` to `to`.
+contract Router {
     function swap(address tIn, uint256 aIn, address tOut, uint256 aOut, address to) public payable {
         if (tIn != address(0)) MockERC20(tIn).transferFrom(msg.sender, address(this), aIn);
         if (tOut == address(0)) payable(to).transfer(aOut);
         else MockERC20(tOut).transfer(to, aOut);
     }
-}
 
-/// @dev Takes the input and pays nothing.
-contract ThiefRouter {
-    function swap(address tIn, uint256 aIn) public payable {
+    /// @dev Takes the input and pays nothing.
+    function take(address tIn, uint256 aIn) public payable {
         if (tIn != address(0)) MockERC20(tIn).transferFrom(msg.sender, address(this), aIn);
     }
+
+    /// @dev Plants one unit of `tOut` into `fill` during the route.
+    function plant(address tOut, address fill) public {
+        MockERC20(tOut).transfer(fill, 1);
+    }
+
+    function bomb() public pure {
+        assembly ("memory-safe") {
+            revert(0x00, 0x10000)
+        }
+    }
+
+    receive() external payable {}
 }
 
 contract Reenterer {
-    zSolverFill public fill;
-
-    function set(zSolverFill f) public {
-        fill = f;
-    }
-
-    address public tIn;
-    address public tOut;
-
-    function arm(address a, address b) public {
-        tIn = a;
-        tOut = b;
-    }
-
-    /// A WELL-FORMED inner call, so the only thing that can refuse it is the
-    /// lock. The old one passed `tokenIn = ETH, amountIn = 1` with no value and
-    /// died on `BadValue` - which meant the test passed with the lock deleted.
-    function swap() public payable {
-        fill.fill(tIn, tIn, tIn, 1, tOut, 1, address(this), "");
+    function swap(zSolverFill f, address tIn, address tOut) public {
+        f.fill(address(1), address(1), tIn, tOut, address(this), address(this), "");
     }
 }
 
-/// @dev A `tokenOut` that REDUCES the recipient's balance during transfer -
-///      the reflection / anti-whale shape. It is what turned an `unchecked`
-///      subtraction into a bypass of the only bound this contract enforces.
-contract ShrinkToken is MockERC20 {
-    uint256 public constant CAP = 60 ether;
-
-    function transfer(address to, uint256 v) public override returns (bool) {
-        balanceOf[msg.sender] -= v;
-        balanceOf[to] += v;
-        if (balanceOf[to] > CAP) balanceOf[to] /= 2;
-        return true;
-    }
-}
-
-/// @dev The route plants the "output" ITSELF, straight into the adapter, in the
-///      window between the adapter's before and after reads. This is what made
-///      measuring the adapter's own balance wrong: the untrusted call runs
-///      between those two reads and can write to the thing being measured.
-///      It records a flag so a test can tell whether the arbitrary call's side
-///      effects were committed, rather than asserting on something incidental.
-contract PlantIntoFill {
-    bool public sideEffectCommitted;
-
-    function attack(address tokenOut, address fill) public payable {
-        sideEffectCommitted = true;
-        if (tokenOut == address(0)) payable(fill).transfer(1);
-        else MockERC20(tokenOut).transfer(fill, 1);
-    }
-}
-
-/// @dev The route an attacker actually wants: it spends a victim's standing
-///      approval to the ADAPTER. It fails only because the call runs as the
-///      executor, which no one has approved - the blacklist has nothing to do
-///      with it, which is why testing the blacklist proved nothing.
-contract AllowanceThief {
-    function steal(address token, address victim, address to, uint256 amount) public {
-        MockERC20(token).transferFrom(victim, to, amount);
-    }
-}
-
-/// @dev A contract with no payable receive - the shape the ETH sweep used to
-///      brick for one wei.
-contract BlindCaller {
-    function go(zSolverFill f, address router, address tIn, uint256 aIn, address tOut, uint256 min, bytes memory d)
-        public
-        returns (uint256)
-    {
-        MockERC20(tIn).approve(address(f), aIn);
-        return f.fill(router, router, tIn, aIn, tOut, min, address(this), d);
-    }
-}
-
-/// @notice The adapter's whole job is to make an untrusted solver's route safe
-///         to execute. These tests are written from the attacker's side: the
-///         route is hostile until proven otherwise, and the properties below
-///         are the ones that have to survive that.
 contract zSolverFillTest is Test {
-    zSolverFill fill;
-    zSolverExec exec;
-    MockERC20 tokenIn;
-    MockERC20 tokenOut;
-    GoodRouter router;
+    IzRouter constant ROUTER = IzRouter(0x000000000000FB114709235f1ccBFfb925F600e4);
 
-    address user = address(0xF00D);
-    address attacker = address(0xBAD);
+    zSolverFill fill;
+    Router router;
+    MockERC20 tIn;
+    MockERC20 tOut;
+    address user = address(0xA11CE);
+    address payee = address(0xB0B);
+
+    event Filled(
+        address indexed target,
+        address indexed tokenIn,
+        address indexed tokenOut,
+        address to,
+        uint256 spent,
+        uint256 amountOut
+    );
 
     function setUp() public {
         fill = new zSolverFill();
-        exec = zSolverExec(payable(fill.EXEC()));
-        tokenIn = new MockERC20();
-        tokenOut = new MockERC20();
-        router = new GoodRouter();
-        tokenIn.mint(user, 100 ether);
-        tokenOut.mint(address(router), 1_000 ether);
+        vm.deal(address(fill), 0);
+        router = new Router();
+        tIn = new MockERC20();
+        tOut = new MockERC20();
+        tIn.mint(user, 100 ether);
+        tOut.mint(address(router), 1_000 ether);
         vm.deal(address(router), 100 ether);
         vm.deal(user, 100 ether);
-    }
-
-    function _route(uint256 aIn, uint256 aOut, address tOut) internal view returns (bytes memory) {
-        // The route pays EXEC, which is where the page must point it.
-        return abi.encodeCall(GoodRouter.swap, (address(tokenIn), aIn, tOut, aOut, address(exec)));
-    }
-
-    // ------------------------------------------------- THE HAPPY PATH
-
-    function test_anHonestRouteFillsAndPaysTheUser() public {
-        vm.startPrank(user);
-        tokenIn.approve(address(fill), 1 ether);
-        uint256 out = fill.fill(
-            address(router),
-            address(router),
-            address(tokenIn),
-            1 ether,
-            address(tokenOut),
-            3 ether,
-            user,
-            _route(1 ether, 3 ether, address(tokenOut))
-        );
-        vm.stopPrank();
-        assertEq(out, 3 ether);
-        assertEq(tokenOut.balanceOf(user), 3 ether);
-        assertEq(tokenIn.balanceOf(user), 99 ether);
-    }
-
-    // ------------------------------------ THE HOLE THAT BROKE THE FIRST DRAFT
-    //
-    // The original adapter guarded `target` against tokenIn/tokenOut/itself -
-    // but the caller chooses tokenIn and tokenOut, so the guard excluded
-    // nothing. `tokenIn = ETH, amountIn = 0, minOut = 0` and a tokenOut whose
-    // balance never moves made every check pass, the measurement compare zero
-    // against zero, and the contract call anything for anyone. These are the
-    // tests that exploit is now expected to fail.
-
-    function test_theFreeArbitraryCallIsRefused() public {
-        vm.prank(attacker);
-        vm.expectRevert(zSolverFill.NothingToDo.selector);
-        fill.fill(
-            address(router),
-            address(router),
-            address(0), // ETH in
-            0, // nothing in
-            address(tokenOut),
-            0, // no bound
-            attacker,
-            abi.encodeCall(MockERC20.transfer, (attacker, 1 ether))
-        );
-    }
-
-    function test_aStandingAllowanceToTheAdapterIsNotSpendableByAnAttacker() public {
-        // The user does the thing every front end teaches: an infinite approval.
         vm.prank(user);
-        tokenIn.approve(address(fill), type(uint256).max);
-
-        // The attacker tries to spend it through a funded fill, aiming the
-        // route at the token itself.
-        tokenIn.mint(attacker, 1 ether);
-        vm.startPrank(attacker);
-        tokenIn.approve(address(fill), 1 ether);
-        vm.expectRevert(zSolverFill.BadTarget.selector);
-        fill.fill(
-            address(tokenIn), // the asset is not a router
-            address(tokenIn),
-            address(tokenIn),
-            1 ether,
-            address(tokenOut),
-            1,
-            attacker,
-            abi.encodeCall(MockERC20.transferFrom, (user, attacker, 100 ether))
-        );
-        vm.stopPrank();
-        assertEq(tokenIn.balanceOf(user), 100 ether, "the standing allowance was spent");
+        tIn.approve(address(ROUTER), type(uint256).max);
     }
 
-    function test_aVictimsStandingApprovalCannotBeSpentByARoute() public {
-        // The real form of the original exploit. The old test only checked
-        // `target == tokenIn -> BadTarget`, i.e. the blacklist the file's own
-        // comment says fixes nothing, and its trailing balance assertion was
-        // incidental because the call reverted before touching anything.
-        vm.prank(user);
-        tokenIn.approve(address(fill), type(uint256).max); // what every front end teaches
+    function _data(address target, address spender, address a, address b, address to, bytes memory d)
+        internal
+        view
+        returns (bytes memory)
+    {
+        return abi.encodeCall(zSolverFill.fill, (target, spender, a, b, to, user, d));
+    }
 
-        AllowanceThief thief = new AllowanceThief();
-        tokenIn.mint(attacker, 1 ether);
-        vm.startPrank(attacker);
-        tokenIn.approve(address(fill), 1 ether);
+    function _swap(address a, uint256 aIn, address b, uint256 aOut) internal view returns (bytes memory) {
+        return abi.encodeCall(Router.swap, (a, aIn, b, aOut, address(fill)));
+    }
+
+    function _snwap(address a, uint256 aIn, address b, uint256 min, bytes memory route, uint256 value)
+        internal
+        returns (uint256)
+    {
+        vm.prank(user);
+        return ROUTER.snwap{value: value}(
+            a, aIn, payee, b, min, address(fill), _data(address(router), address(router), a, b, payee, route)
+        );
+    }
+
+    function _assertEmpty() internal view {
+        assertEq(tIn.balanceOf(address(fill)), 0, "input left in fill");
+        assertEq(tOut.balanceOf(address(fill)), 0, "output left in fill");
+        assertEq(address(fill).balance, 0, "ether left in fill");
+        assertEq(tIn.allowance(address(fill), address(router)), 0, "approval left standing");
+    }
+
+    function test_TokenToToken() public {
+        uint256 out = _snwap(address(tIn), 10 ether, address(tOut), 25 ether, _swap(address(tIn), 10 ether, address(tOut), 30 ether), 0);
+        assertEq(out, 30 ether);
+        assertEq(tOut.balanceOf(payee), 30 ether);
+        assertEq(tIn.balanceOf(user), 90 ether);
+        _assertEmpty();
+    }
+
+    function test_UnspentInputRefunded() public {
+        vm.expectEmit(true, true, true, true, address(fill));
+        emit Filled(address(router), address(tIn), address(tOut), payee, 4 ether, 30 ether);
+        _snwap(address(tIn), 10 ether, address(tOut), 1, _swap(address(tIn), 4 ether, address(tOut), 30 ether), 0);
+        assertEq(tIn.balanceOf(user), 96 ether, "unspent input returns to refundTo");
+        _assertEmpty();
+    }
+
+    function test_EthToToken() public {
+        _snwap(address(0), 1 ether, address(tOut), 3 ether, _swap(address(0), 0, address(tOut), 3 ether), 1 ether);
+        assertEq(tOut.balanceOf(payee), 3 ether);
+        _assertEmpty();
+    }
+
+    function test_EthChangeRefunded() public {
+        // The route keeps 0.4 ETH and bounces 0.6 back to the fill.
+        vm.prank(user);
+        ROUTER.snwap{value: 1 ether}(address(0), 0, payee, address(tOut), 0, address(fill), abi.encodeCall(
+            zSolverFill.fill, (address(this), address(this), address(0), address(tOut), payee, user, abi.encodeCall(this.bounce, (address(fill))))
+        ));
+        assertEq(user.balance, 99.6 ether, "unspent ether returns to refundTo");
+        assertEq(tOut.balanceOf(payee), 1 ether);
+        _assertEmpty();
+    }
+
+    function bounce(address f) public payable {
+        tOut.mint(f, 1 ether);
+        payable(f).transfer(0.6 ether);
+    }
+
+    function test_TokenToEth() public {
+        _snwap(address(tIn), 10 ether, address(0), 2 ether, _swap(address(tIn), 10 ether, address(0), 2 ether), 0);
+        assertEq(payee.balance, 2 ether);
+        _assertEmpty();
+    }
+
+    function test_StandingEtherIsNotOutput() public {
+        vm.deal(address(fill), 5 ether);
+        bytes memory route = abi.encodeCall(Router.take, (address(tIn), 10 ether));
+        vm.expectRevert(zSolverFill.NoOutput.selector);
+        _snwap(address(tIn), 10 ether, address(0), 1, route, 0);
+        _snwap(address(tIn), 10 ether, address(0), 2 ether, _swap(address(tIn), 10 ether, address(0), 2 ether), 0);
+        assertEq(payee.balance, 2 ether, "only the route's ether is output");
+        assertEq(address(fill).balance, 5 ether);
+    }
+
+    function test_ShortRouteRevertsAtTheRouter() public {
+        bytes memory route = _swap(address(tIn), 10 ether, address(tOut), 20 ether);
         vm.expectRevert();
-        fill.fill(
-            address(thief),
-            address(thief),
-            address(tokenIn),
-            1 ether,
-            address(tokenOut),
-            1,
-            attacker,
-            abi.encodeCall(AllowanceThief.steal, (address(tokenIn), user, attacker, 100 ether))
-        );
-        vm.stopPrank();
-        assertEq(tokenIn.balanceOf(user), 100 ether, "the standing approval was spent");
-        assertEq(tokenIn.allowance(user, address(exec)), 0, "the executor holds an approval");
+        _snwap(address(tIn), 10 ether, address(tOut), 25 ether, route, 0);
+        assertEq(tIn.balanceOf(user), 100 ether);
     }
 
-    function test_theExecutorHoldsNothingAfterAnHonestFill() public {
-        // This asserted four `setUp` values and ran no fill at all - it passed
-        // with the contract deleted, and it survived being named as vacuous in
-        // a prior audit. The property worth holding is that the executor is
-        // empty AFTER doing its job, because that is what makes reaching its
-        // arbitrary call worthless.
-        vm.startPrank(user);
-        tokenIn.approve(address(fill), 1 ether);
-        fill.fill(
-            address(router),
-            address(router),
-            address(tokenIn),
-            1 ether,
-            address(tokenOut),
-            3 ether,
-            user,
-            _route(1 ether, 3 ether, address(tokenOut))
-        );
-        vm.stopPrank();
-        assertEq(tokenIn.balanceOf(address(exec)), 0, "executor kept input");
-        assertEq(tokenOut.balanceOf(address(exec)), 0, "executor kept output");
-        assertEq(address(exec).balance, 0, "executor kept ether");
-        assertEq(tokenIn.allowance(address(exec), address(router)), 0, "approval survived the call");
+    function test_RouteThatPaysNothingReverts() public {
+        bytes memory route = abi.encodeCall(Router.take, (address(tIn), 10 ether));
+        vm.expectRevert(zSolverFill.NoOutput.selector);
+        _snwap(address(tIn), 10 ether, address(tOut), 1, route, 0);
     }
 
-    function test_nobodyButTheAdapterCanDriveTheExecutor() public {
-        vm.prank(attacker);
-        vm.expectRevert(zSolverExec.NotFill.selector);
-        exec.run(
-            address(tokenIn),
-            address(tokenIn),
-            address(tokenIn),
-            0,
-            address(tokenOut),
-            abi.encodeCall(MockERC20.transfer, (attacker, 1 ether))
-        );
+    function test_PlantedOutputIsNotOutput() public {
+        tOut.mint(address(fill), 5 ether);
+        bytes memory route = abi.encodeCall(Router.take, (address(tIn), 10 ether));
+        vm.expectRevert(zSolverFill.NoOutput.selector);
+        _snwap(address(tIn), 10 ether, address(tOut), 1, route, 0);
     }
 
-    // ------------------------------------------------------- THE BOUND
-
-    function test_aRouteThatKeepsTheOutputReverts() public {
-        ThiefRouter thief = new ThiefRouter();
-        vm.startPrank(user);
-        tokenIn.approve(address(fill), 1 ether);
-        vm.expectRevert(abi.encodeWithSelector(zSolverFill.Insufficient.selector, 0, 3 ether));
-        fill.fill(
-            address(thief),
-            address(thief),
-            address(tokenIn),
-            1 ether,
-            address(tokenOut),
-            3 ether,
-            user,
-            abi.encodeCall(ThiefRouter.swap, (address(tokenIn), 1 ether))
-        );
-        vm.stopPrank();
-        assertEq(tokenIn.balanceOf(user), 100 ether, "the user lost their input to a failed fill");
+    function test_OutputPlantedMidRouteStillCounts_ButOnlyForTheRoute() public {
+        // A unit sent to the fill during the route is route output; it cannot
+        // clear a real bound, which the router checks at the recipient.
+        bytes memory route = abi.encodeCall(Router.plant, (address(tOut), address(fill)));
+        vm.expectRevert();
+        _snwap(address(tIn), 10 ether, address(tOut), 25 ether, route, 0);
     }
 
-    function test_aRouteThatUnderdeliversReverts() public {
-        vm.startPrank(user);
-        tokenIn.approve(address(fill), 1 ether);
-        vm.expectRevert(abi.encodeWithSelector(zSolverFill.Insufficient.selector, 2 ether, 3 ether));
-        fill.fill(
-            address(router),
-            address(router),
-            address(tokenIn),
-            1 ether,
-            address(tokenOut),
-            3 ether,
-            user,
-            _route(1 ether, 2 ether, address(tokenOut))
-        );
-        vm.stopPrank();
+    function test_RouteThatPaysTheUserDirectlyReverts() public {
+        bytes memory route = abi.encodeCall(Router.swap, (address(tIn), 10 ether, address(tOut), 30 ether, payee));
+        vm.expectRevert(zSolverFill.NoOutput.selector);
+        _snwap(address(tIn), 10 ether, address(tOut), 1, route, 0);
     }
 
-    function test_aRouteThatPaysTheUserDirectlyMeasuresNothingAndReverts() public {
-        // A safe failure, and a loud one: the delta must be measured somewhere
-        // an unrelated inbound transfer cannot forge it.
-        bytes memory direct = abi.encodeCall(GoodRouter.swap, (address(tokenIn), 1 ether, address(tokenOut), 3 ether, user));
-        vm.startPrank(user);
-        tokenIn.approve(address(fill), 1 ether);
-        vm.expectRevert(abi.encodeWithSelector(zSolverFill.Insufficient.selector, 0, 3 ether));
-        fill.fill(
-            address(router), address(router), address(tokenIn), 1 ether, address(tokenOut), 3 ether, user, direct
-        );
-        vm.stopPrank();
-    }
-
-    /// The bound is what the RECIPIENT receives, not what the adapter caught.
-    /// For a fee-on-transfer output those are different numbers, and it is the
-    /// first one people are relying on.
-    function test_aFeeOnTransferOutputFillsAndIsBoundedAtTheRecipient() public {
-        // This used to be a bare `vm.expectRevert()` and it passed - on
-        // `TransferFailed`, because the adapter could not pay a fee-on-transfer
-        // output AT ALL. It asserted the bound worked while hiding the fact
-        // that no such fill could ever succeed. Two properties now, separately:
-        // a fee-bearing output FILLS, and it is still bounded by what the
-        // RECIPIENT receives rather than by what the adapter caught.
+    function test_FeeOnTransferOutputIsCheckedAtTheRecipient() public {
         FeeToken fee = new FeeToken();
-        fee.mint(address(router), 1_000 ether);
-
-        // 3 ether leaves the router, each hop takes 1%.
-        uint256 before = fee.balanceOf(user);
-        vm.startPrank(user);
-        tokenIn.approve(address(fill), 2 ether);
-        uint256 got = fill.fill(
-            address(router),
-            address(router),
-            address(tokenIn),
-            1 ether,
-            address(fee),
-            2.9 ether,
-            user,
-            _route(1 ether, 3 ether, address(fee))
-        );
-        vm.stopPrank();
-        assertGt(got, 0, "a fee-on-transfer output could not be filled at all");
-        assertEq(fee.balanceOf(user) - before, got, "reported output is not what the user received");
-        assertGe(got, 2.9 ether, "filled below the bound");
-
-        // And the bound still binds: ask for more than the fees can deliver.
-        vm.startPrank(user);
-        tokenIn.approve(address(fill), 1 ether);
-        vm.expectRevert();
-        fill.fill(
-            address(router),
-            address(router),
-            address(tokenIn),
-            1 ether,
-            address(fee),
-            3 ether,
-            user,
-            _route(1 ether, 3 ether, address(fee))
-        );
-        vm.stopPrank();
-    }
-
-    // ------------------------- THE SECOND HOLE, FOUND AFTER THE FIRST FIX
-    //
-    // The split fixed the ALLOWANCE half of the original flaw. It did not fix
-    // the free-arbitrary-call half: `run` swept EXEC's whole tokenOut balance,
-    // so one wei planted there in an earlier transaction read as a complete
-    // fill. `amountIn = 1, minOut = 1` cleared every guard, the route did
-    // nothing, and the input came back as dust - net cost, gas.
-
-    function test_aPlantedBalanceAtTheExecutorIsNotCreditedToAFill() public {
-        tokenOut.mint(address(exec), 1); // the plant, one wei, anyone can do it
-        tokenIn.mint(attacker, 1);
-
-        vm.startPrank(attacker);
-        tokenIn.approve(address(fill), 1);
-        vm.expectRevert(abi.encodeWithSelector(zSolverFill.Insufficient.selector, 0, 1));
-        fill.fill(
-            address(0xDEAD), // an EOA: no code, the call trivially "succeeds"
-            address(0xDEAD),
-            address(tokenIn),
-            1,
-            address(tokenOut),
-            1,
-            attacker,
-            ""
-        );
-        vm.stopPrank();
-    }
-
-    function test_aRouteCannotPlantItsOwnOutputIntoTheAdapter() public {
-        // THE HOLE THE FIRST FIX MISSED. Snapshotting inside the executor was
-        // the prescribed change and it closed nothing on its own, because the
-        // adapter still derived the fill from its OWN balance - which the
-        // route can write to directly, skipping the executor entirely.
-        PlantIntoFill p = new PlantIntoFill();
-        tokenOut.mint(address(p), 10);
-        tokenIn.mint(attacker, 1);
-
-        vm.startPrank(attacker);
-        tokenIn.approve(address(fill), 1);
-        vm.expectRevert(abi.encodeWithSelector(zSolverFill.Insufficient.selector, 0, 1));
-        fill.fill(
-            address(p),
-            address(p),
-            address(tokenIn),
-            1,
-            address(tokenOut),
-            1,
-            attacker,
-            abi.encodeCall(PlantIntoFill.attack, (address(tokenOut), address(fill)))
-        );
-        vm.stopPrank();
-        assertFalse(p.sideEffectCommitted(), "the arbitrary call's side effects were committed");
-    }
-
-    function test_aRouteCannotPlantEthIntoTheAdapterEither() public {
-        // Same shape on the ETH-out branch, which measured the same way.
-        PlantIntoFill p = new PlantIntoFill();
-        vm.deal(address(p), 10);
-        tokenIn.mint(attacker, 1);
-
-        vm.startPrank(attacker);
-        tokenIn.approve(address(fill), 1);
-        vm.expectRevert(abi.encodeWithSelector(zSolverFill.Insufficient.selector, 0, 1));
-        fill.fill(
-            address(p),
-            address(p),
-            address(tokenIn),
-            1,
-            address(0),
-            1,
-            attacker,
-            abi.encodeCall(PlantIntoFill.attack, (address(0), address(fill)))
-        );
-        vm.stopPrank();
-        assertFalse(p.sideEffectCommitted(), "the ETH-out branch committed the side effects");
-    }
-
-    function test_ethDonatedToTheExecutorIsNotFillOutput() public {
-        vm.deal(address(exec), 5 ether);
-        vm.startPrank(user);
-        tokenIn.approve(address(fill), 1 ether);
-        vm.expectRevert();
-        fill.fill(
-            address(router),
-            address(router),
-            address(tokenIn),
-            1 ether,
-            address(0),
-            1 ether,
-            user,
-            abi.encodeCall(GoodRouter.swap, (address(tokenIn), 1 ether, address(0), 0, address(exec)))
-        );
-        vm.stopPrank();
-    }
-
-    function test_aShrinkingRecipientCannotUnderflowPastTheBound() public {
-        // `unchecked` made this wrap to ~2**256 and clear any bound while the
-        // recipient ended the call POORER. Checked arithmetic reverts instead.
-        ShrinkToken shrink = new ShrinkToken();
-        shrink.mint(address(router), 1_000 ether);
-        shrink.mint(user, 100 ether); // already above the token's cap
-
-        vm.startPrank(user);
-        tokenIn.approve(address(fill), 1 ether);
-        vm.expectRevert();
-        fill.fill(
-            address(router),
-            address(router),
-            address(tokenIn),
-            1 ether,
-            address(shrink),
-            50 ether,
-            user,
-            _route(1 ether, 3 ether, address(shrink))
-        );
-        vm.stopPrank();
-        assertEq(shrink.balanceOf(user), 100 ether, "the user was left poorer by a fill that reported success");
-    }
-
-    function test_theMeasurementEndpointsCannotBeTheRecipient() public {
-        vm.startPrank(user);
-        tokenIn.approve(address(fill), 1 ether);
-        bytes memory d = _route(1 ether, 3 ether, address(tokenOut));
-        vm.expectRevert(zSolverFill.BadTarget.selector);
-        fill.fill(address(router), address(router), address(tokenIn), 1 ether, address(tokenOut), 1, address(exec), d);
-        vm.expectRevert(zSolverFill.BadTarget.selector);
-        fill.fill(address(router), address(router), address(tokenIn), 1 ether, address(tokenOut), 1, address(fill), d);
-        vm.expectRevert(zSolverFill.BadTarget.selector);
-        fill.fill(address(router), address(router), address(tokenIn), 1 ether, address(tokenOut), 1, address(0), d);
-        vm.stopPrank();
-    }
-
-    // ------------------------------------------------------ THE GUARDS
-
-    function test_theSameTokenBothSidesIsRefused() public {
+        fee.mint(address(router), 100 ether);
+        bytes memory route = _swap(address(tIn), 10 ether, address(fee), 30 ether);
         vm.prank(user);
+        vm.expectRevert();
+        ROUTER.snwap(address(tIn), 10 ether, payee, address(fee), 30 ether, address(fill),
+            _data(address(router), address(router), address(tIn), address(fee), payee, route));
+        vm.prank(user);
+        uint256 out = ROUTER.snwap(address(tIn), 10 ether, payee, address(fee), 29 ether, address(fill),
+            _data(address(router), address(router), address(tIn), address(fee), payee, route));
+        assertEq(out, fee.balanceOf(payee));
+        assertLt(out, 30 ether);
+    }
+
+    function test_BadTargets() public {
+        address a = address(tIn);
+        address b = address(tOut);
+        address r = address(router);
+        address f = address(fill);
+        address[4][8] memory bad = [
+            [f, r, payee, user], [a, r, payee, user], [b, r, payee, user], [r, f, payee, user],
+            [r, a, payee, user], [r, b, payee, user], [r, r, f, user], [r, r, payee, f]
+        ];
+        for (uint256 i; i < bad.length; ++i) {
+            vm.expectRevert(zSolverFill.BadTarget.selector);
+            fill.fill(bad[i][0], bad[i][1], a, b, bad[i][2], bad[i][3], "");
+        }
         vm.expectRevert(zSolverFill.SameToken.selector);
-        fill.fill(
-            address(router), address(router), address(tokenIn), 1 ether, address(tokenIn), 1, user, ""
-        );
+        fill.fill(r, r, a, a, payee, user, "");
     }
 
-    function test_mismatchedValueIsRefused() public {
-        vm.deal(user, 10 ether);
+    function test_Reentrancy() public {
+        Reenterer re = new Reenterer();
+        bytes memory route = abi.encodeCall(Reenterer.swap, (fill, address(tIn), address(tOut)));
         vm.prank(user);
-        vm.expectRevert(zSolverFill.BadValue.selector);
-        fill.fill{value: 1 ether}(
-            address(router), address(router), address(tokenIn), 1 ether, address(tokenOut), 1, user, ""
-        );
-    }
-
-    function test_reentrancyIsRefused() public {
-        Reenterer r = new Reenterer();
-        r.set(fill);
-        r.arm(address(tokenIn), address(tokenOut));
-        vm.startPrank(user);
-        tokenIn.approve(address(fill), 1 ether);
         vm.expectRevert(zSolverFill.Reentrancy.selector);
-        fill.fill(
-            address(r),
-            address(r),
-            address(tokenIn),
-            1 ether,
-            address(tokenOut),
-            1,
-            user,
-            abi.encodeCall(Reenterer.swap, ())
-        );
-        vm.stopPrank();
+        ROUTER.snwap(address(tIn), 10 ether, payee, address(tOut), 1, address(fill),
+            _data(address(re), address(router), address(tIn), address(tOut), payee, route));
     }
 
-    // --------------------------------------------- THE ONE-WEI BRICK
-    //
-    // The ETH refund used to be a plain transfer to msg.sender, so any
-    // integrator without a payable receive was one stray wei away from every
-    // fill reverting, permanently, at an attacker's cost of one wei.
-
-    function test_aDonatedWeiCannotBrickAContractIntegrator() public {
-        BlindCaller caller = new BlindCaller();
-        tokenIn.mint(address(caller), 10 ether);
-
-        uint256 pre = address(fill).balance;
-        payable(address(fill)).transfer(1 wei); // the grief
-        assertEq(address(fill).balance, pre + 1 wei, "the donation did not land");
-
-        uint256 out = caller.go(
-            fill,
-            address(router),
-            address(tokenIn),
-            1 ether,
-            address(tokenOut),
-            3 ether,
-            _route(1 ether, 3 ether, address(tokenOut))
-        );
-        assertEq(out, 3 ether, "a contract without a payable receive could not fill");
-    }
-
-    // ------------------------------------------------------ ETH PATHS
-
-    function test_anEthInputFills() public {
-        bytes memory data =
-            abi.encodeCall(GoodRouter.swap, (address(0), 1 ether, address(tokenOut), 3 ether, address(exec)));
+    function test_RevertDataIsCapped() public {
+        bytes memory route = abi.encodeCall(Router.bomb, ());
         vm.prank(user);
-        uint256 out = fill.fill{value: 1 ether}(
-            address(router), address(router), address(0), 1 ether, address(tokenOut), 3 ether, user, data
-        );
-        assertEq(out, 3 ether);
+        (bool ok, bytes memory ret) = address(ROUTER).call(abi.encodeCall(IzRouter.snwap, (
+            address(tIn), 10 ether, payee, address(tOut), 1, address(fill),
+            _data(address(router), address(router), address(tIn), address(tOut), payee, route))));
+        assertFalse(ok);
+        assertLe(ret.length, 0x100);
     }
 
-    function test_anEthOutputFills() public {
-        bytes memory data =
-            abi.encodeCall(GoodRouter.swap, (address(tokenIn), 1 ether, address(0), 2 ether, address(exec)));
-        uint256 before = user.balance;
-        vm.startPrank(user);
-        tokenIn.approve(address(fill), 1 ether);
-        uint256 out =
-            fill.fill(address(router), address(router), address(tokenIn), 1 ether, address(0), 2 ether, user, data);
-        vm.stopPrank();
-        assertEq(out, 2 ether);
-        assertEq(user.balance - before, 2 ether, "the ETH output was swept instead of paid");
+    function test_NoOneCanSpendTheRouterApprovalThroughTheFill() public {
+        // The user's standing approval is to zRouter. The fill's arbitrary call
+        // runs as the fill, which no one has approved, so aiming it at a token's
+        // transferFrom reaches nothing.
+        MockERC20 other = new MockERC20();
+        other.mint(user, 1 ether);
+        vm.prank(user);
+        other.approve(address(ROUTER), type(uint256).max);
+        bytes memory steal = abi.encodeCall(MockERC20.transferFrom, (user, address(this), 1 ether));
+        vm.expectRevert();
+        fill.fill(address(other), address(other), address(0), address(tOut), payee, user, steal);
+        assertEq(other.balanceOf(user), 1 ether);
+        assertEq(tIn.balanceOf(user), 100 ether);
+    }
+
+    function testFuzz_RefundAndOutput(uint96 aIn, uint96 spend, uint96 aOut) public {
+        aIn = uint96(bound(aIn, 1, 100 ether));
+        spend = uint96(bound(spend, 0, aIn));
+        aOut = uint96(bound(aOut, 1, 1_000 ether));
+        _snwap(address(tIn), aIn, address(tOut), aOut, _swap(address(tIn), spend, address(tOut), aOut), 0);
+        assertEq(tOut.balanceOf(payee), aOut);
+        assertEq(tIn.balanceOf(user), 100 ether - spend);
+        _assertEmpty();
     }
 }

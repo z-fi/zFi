@@ -1326,12 +1326,13 @@ const loadSolvers=()=>solversJob||(Date.now()<solversRetry?Promise.resolve():sol
 try{
 const list=SOLVERS_PIN,id=CHAIN_ID;
 solverFill=SOLVER_FILL_PIN;
-const rj=CHAIN_ID===1?cfgRead("eth_call",[{to:list,data:"0x"+SEL_SLIST},L]):quorum2(L1_RPCS,{to:list,data:"0x"+SEL_SLIST}).then(x=>{if(!x)throw 0;return x});rj.catch(()=>{});
+const sx=chainCfg().sx,rj=CHAIN_ID===1?cfgRead("eth_call",[{to:list,data:"0x"+SEL_SLIST},L]):quorum2(L1_RPCS,{to:list,data:"0x"+SEL_SLIST}).then(x=>{if(!x)throw 0;return x});rj.catch(()=>{});
+if(sx&&await hasCode(sx).catch(()=>false)){if(id!==CHAIN_ID)return;solverFill=solverExec=sx}else{
 const ex=await nodeRead("eth_call",[{to:solverFill,data:"0x"+SEL_EXEC},L]).catch(()=>null);
 if(id!==CHAIN_ID)return;const exec="0x"+strip0x(ex||"0x").slice(24);
 if(!isAddr(exec)){solversRetry=Date.now()+SOLVER_COOL;solversJob=null;return}
 if(exec.toLowerCase()!==SOLVER_EXEC_PIN.toLowerCase()){solverLanes=[];return}
-solverExec=SOLVER_EXEC_PIN;
+solverExec=SOLVER_EXEC_PIN}
 const raw=await rj;if(id!==CHAIN_ID)return;
 solverLanes=decSolvers(raw).filter(x=>x.enabled
 &&x.adapter.toLowerCase()===SOLVER_ROW_TAG.toLowerCase()
@@ -3472,6 +3473,14 @@ plannerBounded=plannerBounded||!!p.bounded;
 }
 }
 }
+const sxRoute=async(w,amtIn,floor)=>{const sx=chainCfg().sx;if(!sx||solverFill!==sx)return{};
+const d=strip0x(w.data),eth=f.addr===ZERO,to_=rcv||acct||ZERO,
+fd="0x"+SEL_SXFILL+encAddr(w.target)+encAddr(w.spender||w.target)+encAddr(f.addr)+encAddr(t.addr)+encAddr(to_)+encAddr(acct||to_)
++encUint(224n)+encUint(BigInt(d.length/2))+d+"0".repeat((64-d.length%64)%64),
+gl=glJob?await glJob.catch(()=>[]):[],leg=encSnwap(f.addr,amtIn,to_,t.addr,floor,sx,fd);
+return{callData:gl.length?encCalls([...gl,leg]):leg,
+fundedCallData:eth?null:encCalls([...gl,encSweep(f.addr,amtIn,sx),encSnwap(ZERO,0n,to_,t.addr,floor,sx,fd)]),
+msgValue:eth?amtIn:0n,to:null,spender:eth?null:ZROUTER}};
 const pin=lanePin();
 if(!isIn&&r&&r.amountLimit>0n){
 try{
@@ -3516,6 +3525,7 @@ callData:"0x"+SEL_FILL+encAddr(win.target)+encAddr(win.spender)+encAddr(f.addr)
 fundedCallData:null,amountLimit:win.ceil,
 msgValue:ethIn?win.ceil:0n,
 to:solverFill,spender:ethIn?null:solverFill};
+Object.assign(r,await sxRoute(win,win.ceil,swapAmt));if(my!==seq)return;
 hybrid=null;
 }
 }
@@ -3564,6 +3574,7 @@ callData:"0x"+SEL_FILL+encAddr(win.target)+encAddr(win.spender)+encAddr(f.addr)
 fundedCallData:null,amountLimit:win.floor,
 msgValue:ethIn?swapAmt:0n,
 to:solverFill,spender:ethIn?null:solverFill};
+Object.assign(r,await sxRoute(win,swapAmt,win.floor));if(my!==seq)return;
 hybrid=null;
 }
 }
@@ -3979,7 +3990,7 @@ let DUTCH=MB.du;
 let ORDERBOL=MB.ob;
 let FLOOR=MB.fl;
 const FLOORVIEW="0x0000004E376e9dB5D9EC28E6711E1a64997C6ba7";
-const SEL_FROZEN="e9ac0440",SEL_NEXTID="2a58b330",SEL_NEXTID2="61b8ce8c",SEL_GETORDERS="03652027",SEL_CANCELORD="514fcac7",SEL_EXPIRED="d6c3de07",
+const SEL_SXFILL="e241fd08",SEL_FROZEN="e9ac0440",SEL_NEXTID="2a58b330",SEL_NEXTID2="61b8ce8c",SEL_GETORDERS="03652027",SEL_CANCELORD="514fcac7",SEL_EXPIRED="d6c3de07",
 SEL_WITHDRAW="ef3d3521",SEL_REPLACE="84343d3a";
 const SEL_FILL2="9d136c7f",SEL_FILL2_UNWRAP="3987baf4",SEL_FILL2_ETH="6f608bab";
 const SEL_RECENT="6a9849c1",SEL_RECENT_DUTCH="98035c9a",SEL_DUTCH_FILL="ae7a8260",SEL_DUTCH_CANCEL="40e58ee5";
