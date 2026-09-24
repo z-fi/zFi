@@ -432,6 +432,58 @@ describe('private sends', () => {
     p.close();
   });
 
+  // ConfidentialRouter._relaySettle reverts on an in-proof fee, so wrapAndSettleETH's
+  // own feeRecipient - msg.value above the wrap - is the ONLY way to pay for this
+  // proof. Passing the zero address makes the relay a loss-leader.
+  test('a one-transaction send pays the relay for the proof, above the wrap', async () => {
+    const p = await open(poolChain());
+    Object.defineProperty(p.chain.lanes, 'api.tacit.finance/confidential/quote', {
+      configurable: true, enumerable: true,
+      get: () => ({ ticker: 'cETH', relayFeeEligible: true, recommendedProveTipWei: '90000000000000' }),
+    });
+    p.select('pvAct', 'send');
+    p.type('pvAmt', '0.005');
+    p.type('pvRc', S.lock.recipient);
+    p.queueConfirm(true);
+    useStream(p, S.wt.tag);
+    p.click('pvGo');
+    await p.waitFor(() => posts(p).some(x => x.type === 'wraptransfer'), { label: 'the wrap-and-transfer', ...SLOW });
+    const pv = '0x' + '00'.repeat(32) + S.wt.depositId.slice(2), proof = '0xabcdef';
+    p.chain.relay.status = { status: 'proven', publicValues: pv, proof };
+    await until(p, () => p.$('pvList').querySelector('button[data-a="sgo"]'), 'the wrap to be sendable');
+    p.click(p.$('pvList').querySelector('button[data-a="sgo"]'));
+    await p.waitFor(() => p.chain.sentTo(ROUTER).length === 1, { label: 'the router transaction', ...SLOW });
+    const tx = p.chain.sentTo(ROUTER)[0], wei = BigInt(S.wt.value) * 10n ** 10n;
+    assert.equal(BigInt(tx.value), wei + 90000000000000n, 'the wrap, plus the tip the router skims');
+    assert.equal(tx.data, '0x' + SEL.WT + coder.encode(
+      ['uint256', 'bytes32', 'bytes', 'bytes', 'bytes[]', 'address'],
+      [wei, S.wt.commit, pv, proof, S.wt.memos, '0x68575B073DE49a94e3E3ACf6F3A0d6E3b66267C7']).slice(2),
+      'wrapAmount stays the wrap; the recipient is named');
+    p.close();
+  });
+
+  test('a relay that will not quote is not paid, and the send still goes', async () => {
+    const p = await open(poolChain());
+    p.select('pvAct', 'send');
+    p.type('pvAmt', '0.005');
+    p.type('pvRc', S.lock.recipient);
+    p.queueConfirm(true);
+    useStream(p, S.wt.tag);
+    p.click('pvGo');
+    await p.waitFor(() => posts(p).some(x => x.type === 'wraptransfer'), { label: 'the wrap-and-transfer', ...SLOW });
+    const pv = '0x' + '00'.repeat(32) + S.wt.depositId.slice(2), proof = '0xabcdef';
+    p.chain.relay.status = { status: 'proven', publicValues: pv, proof };
+    await until(p, () => p.$('pvList').querySelector('button[data-a="sgo"]'), 'the wrap to be sendable');
+    p.click(p.$('pvList').querySelector('button[data-a="sgo"]'));
+    await p.waitFor(() => p.chain.sentTo(ROUTER).length === 1, { label: 'the router transaction', ...SLOW });
+    const tx = p.chain.sentTo(ROUTER)[0], wei = BigInt(S.wt.value) * 10n ** 10n;
+    assert.equal(BigInt(tx.value), wei, 'exactly the deposit, no fee on top');
+    assert.equal(tx.data, '0x' + SEL.WT + coder.encode(
+      ['uint256', 'bytes32', 'bytes', 'bytes', 'bytes[]', 'address'],
+      [wei, S.wt.commit, pv, proof, S.wt.memos, A.ZERO]).slice(2), 'and no recipient named');
+    p.close();
+  });
+
   test('with nothing shielded, a send wraps and transfers in one transaction, then locks', async () => {
     const p = await open(poolChain());
     p.select('pvAct', 'send');

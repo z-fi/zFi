@@ -8076,8 +8076,8 @@ if(b<need)throw Object.assign(Error("This wallet holds too little ETH to submit 
 const cpRecip=s=>{s=String(s||"").trim();let h;
 if(/^tacit1/i.test(s)){const r=cpTacDec(s);if(!r||r.h!=="tacit"||r.b.length!==101||r.b[0]||!(r.b[1]&2))throw Error("That Tacit address does not carry an Ethereum lane.");h=cpHex(r.b.slice(68))}
 else if(/^(0x)?0[23][0-9a-f]{64}$/i.test(s))h=strip0x(s).toLowerCase();else throw Error("Send to a Tacit address (tacit1…), a name, a 0x or a 33-byte Tacit key.");cpPt(h);return h};
-const cpWtData=(w,cm,pv,pr,ms)=>{const a=encBytes(pv),b=encBytes(pr),t=ms.map(encBytes);let off=ms.length*32,hd=encUint(ms.length);for(const x of t){hd+=encUint(off);off+=x.length/2}
-return"0x"+SEL_CPWT+encUint(w)+pad32(cm)+encUint(192)+encUint(192+a.length/2)+encUint(192+(a.length+b.length)/2)+pad32("0")+a+b+hd+t.join("")};
+const cpWtData=(w,cm,pv,pr,ms,to)=>{const a=encBytes(pv),b=encBytes(pr),t=ms.map(encBytes);let off=ms.length*32,hd=encUint(ms.length);for(const x of t){hd+=encUint(off);off+=x.length/2}
+return"0x"+SEL_CPWT+encUint(w)+pad32(cm)+encUint(192)+encUint(192+a.length/2)+encUint(192+(a.length+b.length)/2)+(to?encAddr(to):pad32("0"))+a+b+hd+t.join("")};
 const CP_RELAYER="0x000000009c28617ac88b52eae5efaacdd4ac34c3",CP_LKBAD="This page's copy of the pool's lock set does not match the chain, so anything built on it would fail. Press recover and try again, or use tacit.finance.",
 cpSlot=(k,s)=>keccak(cpCat(b32(k),b32(BigInt(s)))),cpStor=(s,t)=>cfgRead("eth_getStorageAt",[CP_POOL,typeof s==="string"?s:toHex(s),t||L]);
 const cpCalls=inp=>{const h=strip0x(inp).toLowerCase(),sel=h.slice(0,8),d=h.slice(8),W=(s,o)=>{const x=BigInt("0x"+(s.slice(o*2,o*2+64)||"0"));if(x>1n<<24n)throw Error("pv");return Number(x)},N=x=>{if(x>4096)throw Error("pv");return x},
@@ -8109,7 +8109,8 @@ return{v:n.v,b:k.blinding,s:n.z?"0x"+"00".repeat(32):k.secret,owner:k.owner,cx:k
 const cpJob=async(t,op,m,self,nd)=>{const{j:r,rb}=await relaySub({type:t,op,memos:m,mode:self?"prove":"settle"});if(!r.jobId)throw Error("The relay did not take it.");return{job:r.jobId,js:r.status||"pending",rb,self:self?1:0,t,op,m,nd}};
 const cpJobPoll=async j=>{if(!j||!j.job||j.stx||j.pv||j.js==="settled"||j.js==="failed")return;const st=await relayFetch("/confidential/status?id="+encodeURIComponent(j.job),null,j.rb),pr=st.proof||st.proofBytes;j.js=st.status||"unknown";if(st.error)j.err=String(st.error).slice(0,120);
 if(st.status==="proven"&&/^0x[0-9a-fA-F]+$/.test(st.publicValues||"")&&/^0x[0-9a-fA-F]+$/.test(pr||"")&&st.publicValues.toLowerCase().includes(strip0x(j.nd).toLowerCase())){j.pv=st.publicValues;j.pr=pr}};
-const cpJobSend=async(j,gas)=>{if(!(j&&j.pv&&j.pr))throw Error(PNR);const req=j.t==="wraptransfer"?{from:account,to:CP_ROUTER,value:toHex(BigInt(j.w)),data:cpWtData(BigInt(j.w),j.cm,j.pv,j.pr,j.m),gas:toHex(1400000)}:await cpSettleReq(j.pv,j.pr,j.m,gas||900000,j.op&&j.op.fee);
+const cpJobSend=async(j,gas)=>{if(!(j&&j.pv&&j.pr))throw Error(PNR);let wt=0n;if(j.t==="wraptransfer")try{wt=await cpProveTip()}catch{wt=0n}
+const req=j.t==="wraptransfer"?{from:account,to:CP_ROUTER,value:toHex(BigInt(j.w)+wt),data:cpWtData(BigInt(j.w),j.cm,j.pv,j.pr,j.m,wt>0n?CP_TIPTO:""),gas:toHex(1400000)}:await cpSettleReq(j.pv,j.pr,j.m,gas||900000,j.op&&j.op.fee);
 await rpc(C,[req,L]);await cpGasOk(req);j.stx=await sendTx([req]);cpSaveS();cpSaveI();cpPaint();try{await settle(j.stx)}catch(e){delete j.stx;cpSaveS();cpSaveI();throw e}j.js="settled";cpSaveS();cpSaveI()};
 const cpAddOut=(o,a,sid)=>{const r={i:-1,v:o.v,s:o.s,b:o.b,at:nowS(),sid};if(a!==CP_ETH)r.a=a;const k=cpKeyOf(r);if(!cpNotes.some(n=>cpKeyOf(n)===k))cpNotes.push(r);return k};
 const cpDropOut=sid=>{cpNotes=cpNotes.filter(n=>n.sid!==sid||!!cpPool&&cpPool.leaves.includes(cpNoteOf(n).leaf));cpSaveNotes(1)};
