@@ -957,13 +957,13 @@ ph=real.map(()=>[...crypto.getRandomValues(new Uint8Array(20))].map(b=>b.toStrin
 let data=c.data.toLowerCase();real.forEach((x,i)=>{data=data.split(x).join(ph[i])});
 if(real.some(x=>data.includes(x)))throw Error("blind");
 const q=[{to:c.to,data},tag||L];
-let r=await nodeRead(C,q).catch(()=>tag&&tag!==L?nodeRead(C,[q[0],L]):null);
-r=await hexOk(r);r=r.toLowerCase();ph.forEach((x,i)=>{r=r.split(x).join(real[i])});return r};
-const qOne=async(c,tag,k=0)=>{try{const r=await mc3Gate(()=>rpc(C,[{to:c.to,data:c.data},tag||L]));mcOk++;return r}catch(e){const m=String(e&&e.message||""),rl=e&&(e.code===-32005||e.code===429)||/rate.?limit|too many|\b429\b/i.test(m);
+let r=await agreeRead(q).catch(()=>tag&&tag!==L?agreeRead([q[0],L]):null);
+r=await hexOk(r);ph.forEach((x,i)=>{r=r.split(x).join(real[i])});return r};
+const qOne=async(c,tag,k=0)=>{const q=[{to:c.to,data:c.data},tag||L];try{const r=await mc3Gate(()=>prov()&&prov().sw?agreeRead(q):rpc(C,q));mcOk++;return r}catch(e){const d=e&&e.data&&typeof e.data==="object"?e.data:{},m=String(e&&e.message||"")+" "+String(d.message||""),cd=[e&&e.code,d.code],rl=cd.some(x=>x===-32005||x===429)||/rate.?limit|too many|\b429\b/i.test(m);
 if(rl&&k<3){await new Promise(r=>setTimeout(r,700*(k+1)+Math.random()*500));return qOne(c,tag,k+1)}
-const gone=rl||e&&(e.offChain||e.code===-32003)||/out of gas|gas required|failed to fetch|network/i.test(m);
+const gone=rl||e&&e.offChain||cd.includes(-32003)||/out of gas|gas required|failed to fetch|network/i.test(m);
 if(gone&&prov()){const b=await blindRead(c,tag).catch(()=>null);if(b){mcOk++;return b}}
-if(gone||e&&e.noWallet)mcGaveUp++;else if(!strip0x(String(e&&e.data||"")).length)mcFailed++;return null}};
+if(gone||e&&e.noWallet)mcGaveUp++;else if(!strip0x(String((d.message?d.data:e&&e.data)||"")).length)mcFailed++;return null}};
 const qWave=async(cs,tag)=>Promise.all(cs.map(c=>qOne(c,tag)));
 const SEL_BBS="e7798987";
 const HUBS=()=>chainCfg().hubs||[WETH,...NUMERAIRES,"0x2260fac5e5542a773aa44fbcfedf7c193bc2c599","0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0"];
@@ -1485,6 +1485,9 @@ if(!curated)loadCurated().catch(()=>{});
 return r}
 catch(e){last=e;if(!e.retry)throw e}}
 throw last||Error("no read node answered")};
+const agreeRead=async q=>{const us=[...new Set([rpcPin(),...rpcPool.slice(rpcPi),...rpcPool.slice(0,rpcPi)])].filter(Boolean).slice(0,6);let i=0;
+const one=async()=>{let last;while(i<us.length){try{return(await hexOk(await httpRead(us[i++],C,q))).toLowerCase()}catch(e){last=e;if(!e.retry)throw e}}throw last||Error("no read node answered")};
+const[a,b]=await Promise.all([one(),one()]);if(a!==b)throw Error("the read nodes disagree");return a};
 const isSign=m=>m===S||m.indexOf("wallet_")===0||m==="eth_requestAccounts"||m==="eth_accounts"||WC_SIGN.indexOf(m)>=0;
 const hexOk=r=>typeof r==="string"&&/^0x[0-9a-fA-F]*$/.test(r)?r:Promise.reject(Error("bad hex from node"));
 const rpc=(method,params)=>{const e=prov();
