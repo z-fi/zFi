@@ -125,7 +125,12 @@ test('a pair only the book prices still quotes, with no AMM route to compare', a
   await p.settle();
   await p.typeAmount('amt', '1');
   assert.equal(p.text('stat'), '', 'the book alone must not read as "no route"');
-  assert.equal(p.value('outAmt'), '666', 'and it is the book price that is shown');
+  const shown = Number(p.value('outAmt'));
+  assert.ok(Math.abs(shown - 666 * 0.995) < 0.01, `the book price, less the bid's slack, is shown: ${shown}`);
+  const built = await p.window.eval('last.callData');
+  assert.ok(built.includes(bidWord(ORDER.slice(0, 66))), 'the bid names its quantity less the slack');
+  assert.equal(await p.window.eval('last.limit.toString()'), bidOut(666n * ETH).toString(),
+    "a bid's floor is its exact output, not that output less slippage again");
   p.close();
 });
 
@@ -147,6 +152,22 @@ test('a pair only the book prices still quotes, with no AMM route to compare', a
  * is what makes the composition safe, and that is what these pin.
  */
 const HOPSWEEP = 'dc2c256f';
+
+/**
+ * A BID names the base quantity it buys, at the widest price limit, with the
+ * budget as its only bound. Named at exactly what the budget buys today, any
+ * uptick on the asks makes it cost more than the budget and the fill reverts,
+ * whatever the slippage setting. So the page names a bid SLACK smaller -
+ * min(slippage, 0.5%) - and takes the change back: the unspent input is
+ * refunded by the router (or swept, inside a hop). Its output is then exact
+ * (less a unit of rounding), so a bid's floor is that output itself.
+ */
+const SLACK = 50n;
+const bidOut = out => out - (out * SLACK) / 10000n - 1n;
+const bidWord = word => {
+  const M = (1n << 160n) - 1n, w = BigInt(word), q = (w >> 64n) & M;
+  return (w & ~(M << 64n) | (q - (q * SLACK) / 10000n) << 64n).toString(16).padStart(64, '0');
+};
 
 function hopChain({ rate = 2500n * ETH } = {}) {
   const chain = new MockChain({ chainId: '0x1237' });
@@ -180,7 +201,7 @@ test('ETH to DEEP composes an AMM leg into the book', async () => {
 
   const built = await p.window.eval('last.callData');
   assert.ok(built.includes(SWAPDEEP), 'no swapDeep leg in the composed calldata');
-  assert.ok(built.includes(ORDER.slice(2, 66)), 'the book leg must carry the order word the lens priced');
+  assert.ok(built.includes(bidWord(ORDER.slice(0, 66))), 'the book leg carries the lens word, its bid quantity cut by the slack');
   assert.ok(built.includes(HOPSWEEP), 'the surplus of the intermediate must be swept back');
   assert.equal(await p.window.eval('last.msgValue.toString()'), (10n ** 18n).toString(),
     'the ether leg is paid with the transaction value');
@@ -308,7 +329,7 @@ test('a pair only two books can reach is routed through both', async () => {
   assert.equal(hop.msgValue, '0', 'selling a token attaches no value');
   // 5000 DEEP -> 6.25 USDG, less 0.5% slippage and the basis point, times 50.
   const mid = (5000n * ETH / 10n ** 12n / 800n) * 9950n / 10000n;
-  const expected = (mid - mid / 10000n) * 10n ** 12n * 50n;
+  const expected = bidOut((mid - mid / 10000n) * 10n ** 12n * 50n);
   assert.equal(hop.out, expected.toString(), 'the second book must price what the first one guarantees');
   p.close();
 });
@@ -371,7 +392,7 @@ test('the book takes the second leg when it pays more than the pool', async () =
   const hop = await askHop(p);
   assert.ok(hop, 'a route exists through either second leg');
   assert.equal(hop.books, 2, 'the better-paying book must take the second leg, not the pool');
-  assert.equal(hop.out, (MID_MIN * 10n ** 12n * 50n).toString(), 'and its price is what is quoted');
+  assert.equal(hop.out, bidOut(MID_MIN * 10n ** 12n * 50n).toString(), 'and its price, less the bid slack, is what is quoted');
   p.close();
 });
 

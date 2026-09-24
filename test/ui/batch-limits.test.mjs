@@ -24,7 +24,7 @@
  */
 import { test, describe, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { A, SEL, MockChain, loadPage, fixedRateQuoter, closeAllPages } from './harness.mjs';
+import { A, SEL, MockChain, loadPage, fixedRateQuoter, closeAllPages, encodeQuote } from './harness.mjs';
 
 after(closeAllPages);
 
@@ -149,6 +149,65 @@ describe('a capped RPC provider', () => {
     await p.typeAmount('amt', '1');
     await p.waitFor(() => /No route/i.test(p.text('stat')), { label: 'no route' });
     assert.ok(!/RPC could not complete/i.test(p.text('stat')));
+    p.close();
+  });
+});
+
+/**
+ * A connected wallet's node that cannot run the quoter.
+ *
+ * The mainnet quoter needs 50-250M gas for common pairs and most nodes stop at
+ * 50M. A connected user's reads stay with their wallet's provider, so when the
+ * provider cannot answer, the quote is asked of the public pool with the
+ * account and the recipient replaced by fresh random addresses, and the real
+ * ones put back into the calldata that comes home. The pool learns a pair and
+ * an amount, never who is trading.
+ */
+describe('a connected wallet whose node cannot run the quoter', () => {
+  const ACCT = A.ACCOUNT.slice(2).toLowerCase();
+  function setup() {
+    const wallet = new MockChain();
+    wallet.setNative(A.ACCOUNT, 10n * ETH);
+    wallet.quoteHandler = () => { throw Object.assign(Error('out of gas: gas required exceeds allowance'), { code: -32003 }); };
+    const pool = new MockChain();
+    const seen = [];
+    pool.quoteHandler = ({ selector, data }) => {
+      seen.push(data.toLowerCase());
+      if (selector !== SEL.QUOTE) return null;
+      const body = data.replace(/^0x/, '').slice(8);
+      const recipient = body.slice(24, 64);
+      const amountIn = BigInt('0x' + body.slice(5 * 64, 6 * 64));
+      if (!amountIn) return null;
+      const out = amountIn * 3000n / 10n ** 12n;
+      // The route names its recipient, as a real one does.
+      return encodeQuote({ u: 4, legs: [{ source: 3, feeBps: 30n, amountIn, amountOut: out }],
+        callData: '0x' + SEL.MULTICALL + '00'.repeat(12) + recipient, msgValue: amountIn });
+    };
+    wallet.remotes = { publicnode: pool, blastapi: pool, mevblocker: pool };
+    return { wallet, seen };
+  }
+
+  test('still quotes, from the pool, without the pool learning the account', async () => {
+    const { wallet, seen } = setup();
+    const p = await loadPage({ chain: wallet });
+    await p.connect();
+    await p.typeAmount('amt', '1');
+    assert.equal(p.value('outAmt'), '3000', 'the pool answered the quote the wallet could not');
+    assert.ok(seen.length > 0, 'the pool was asked');
+    for (const d of seen) assert.ok(!d.includes(ACCT), 'the account reached a public node');
+    const cd = await p.window.eval('last.callData');
+    assert.ok(cd.toLowerCase().includes(ACCT), 'the route pays the real account');
+    p.close();
+  });
+
+  test('two quotes blind the account differently', async () => {
+    const { wallet, seen } = setup();
+    const p = await loadPage({ chain: wallet });
+    await p.connect();
+    await p.typeAmount('amt', '1');
+    await p.typeAmount('amt', '2');
+    const rcpts = new Set(seen.filter(d => d.startsWith('0x' + SEL.QUOTE)).map(d => d.slice(10 + 24, 10 + 64)));
+    assert.ok(rcpts.size > 1, 'a fixed placeholder would link one user\'s quotes together');
     p.close();
   });
 });

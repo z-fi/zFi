@@ -946,9 +946,20 @@ fee=fa+fb-(fa*fb)/1000000n;
 return {pools:win.pools,out:win.out,fee,capped:win.n>LQ_SCAN,
 tokenIn:f.addr,tokenOut:t.addr,unwrap:0n,wrap:0n,outDiffers:false};
 }
+let qBlind=[];
+const blindRead=async(c,tag)=>{
+const real=[...new Set([account,...qBlind].filter(x=>isAddr(x||"")).map(x=>strip0x(x).toLowerCase()))],
+ph=real.map(()=>[...crypto.getRandomValues(new Uint8Array(20))].map(b=>b.toString(16).padStart(2,"0")).join(""));
+let data=c.data.toLowerCase();real.forEach((x,i)=>{data=data.split(x).join(ph[i])});
+if(real.some(x=>data.includes(x)))throw Error("blind");
+const q=[{to:c.to,data},tag||L];
+let r=await nodeRead(C,q).catch(()=>tag&&tag!==L?nodeRead(C,[q[0],L]):null);
+r=await hexOk(r);r=r.toLowerCase();ph.forEach((x,i)=>{r=r.split(x).join(real[i])});return r};
 const qOne=async(c,tag,k=0)=>{try{const r=await mc3Gate(()=>rpc(C,[{to:c.to,data:c.data},tag||L]));mcOk++;return r}catch(e){const m=String(e&&e.message||""),rl=e&&(e.code===-32005||e.code===429)||/rate.?limit|too many|\b429\b/i.test(m);
 if(rl&&k<3){await new Promise(r=>setTimeout(r,700*(k+1)+Math.random()*500));return qOne(c,tag,k+1)}
-if(rl||e&&(e.offChain||e.noWallet||e.code===-32003)||/out of gas|gas required|failed to fetch|network/i.test(m))mcGaveUp++;else if(!strip0x(String(e&&e.data||"")).length)mcFailed++;return null}};
+const gone=rl||e&&(e.offChain||e.code===-32003)||/out of gas|gas required|failed to fetch|network/i.test(m);
+if(gone&&prov()){const b=await blindRead(c,tag).catch(()=>null);if(b){mcOk++;return b}}
+if(gone||e&&e.noWallet)mcGaveUp++;else if(!strip0x(String(e&&e.data||"")).length)mcFailed++;return null}};
 const qWave=async(cs,tag)=>Promise.all(cs.map(c=>qOne(c,tag)));
 const SEL_BBS="e7798987";
 const HUBS=()=>chainCfg().hubs||[WETH,...NUMERAIRES,"0x2260fac5e5542a773aa44fbcfedf7c193bc2c599","0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0"];
@@ -3188,7 +3199,7 @@ const pct=slipPct();
 const slipBps=BigInt(Math.round(pct*100));
 const deadline=BigInt(nowS()+600);
 outEl.value="...";fitFont(outEl);quoting=true;render();
-const acct=account;
+const acct=account;qBlind=[rcv];
 const gaveUp0=mcGaveUp,ok0=mcOk,failed0=mcFailed;
 loadSolvers().then(()=>{if(my!==seq||!solverLanes||!solverFill||!solverExec)return;const S0=isIn?SOLVER_SHAPES:SOLVER_SHAPES_OUT,ck=(isIn?"":"o|")+`${CHAIN_ID}|${f.addr}|${t.addr}|${swapAmt}|${slipBps}`;
 for(const x of solverLanes)if(!laneDown(x.name)&&S0[x.name])try{laneCached(`${x.name}|${ck}`,()=>S0[x.name](x.endpoint,f.addr,t.addr,swapAmt,Number(slipBps),SOLVER_DEADLINE,f.dec,t.dec)).catch(()=>{})}catch{}}).catch(()=>{});
@@ -3208,7 +3219,7 @@ const gasPriceJob=acct?gasNow().catch(()=>0n):Promise.resolve(0n);
 let venueLost=false;
 const v4Job=isIn?quoteV4Pools(f,t,swapAmt,quoteBlock).catch(()=>{venueLost=true;return null}):Promise.resolve(null);
 const preJob=isIn?quotePrecision(f,t,swapAmt,PROUTE,quoteBlock).catch(()=>{venueLost=true;return null}):Promise.resolve(null);
-const deepJob=isIn&&CHAIN_ID===4663&&f.addr!==ZERO&&t.addr!==ZERO?deepQuote(f.addr,t.addr,swapAmt,quoteBlock).catch(()=>null):Promise.resolve(null);
+const deepJob=isIn&&CHAIN_ID===4663&&f.addr!==ZERO&&t.addr!==ZERO?deepQuote(f.addr,t.addr,swapAmt,quoteBlock,deepK(slipBps)).catch(()=>null):Promise.resolve(null);
 const hopJob=isIn&&CHAIN_ID===4663?deepHop(f,t,swapAmt,slipBps,deadline,rcv||acct||ZERO,quoteBlock,acct).catch(()=>null):Promise.resolve(null);
 const tJob=isIn&&CHAIN_ID===1?tacitQuote(f,t,swapAmt,quoteBlock).catch(()=>null):Promise.resolve(null);
 const flJob=isIn&&f.launched&&(t.addr===ZERO||t.addr.toLowerCase()===WETH.toLowerCase())?quoteFloor(f.addr,swapAmt,quoteBlock).catch(()=>0n):null,glJob=isIn?gLegs(deadline):null;
@@ -3307,7 +3318,7 @@ let dc=null;
 const dq=await deepJob;
 if(my!==seq)return;
 if(dq&&dq.out>0n){
-const dMin=dq.out*(10000n-slipBps)/10000n;
+const dMin=deepMin(dq,slipBps);
 const dTo=rcv||acct||ZERO;
 const leg="0x"+SEL_SWAPDEEP+encAddr(dTo)+encAddr(dq.t0)+encAddr(dq.t1)+encUint(dq.epoch)
 +strip0x(dq.order)+encUint(dq.isBid?1:0)+encUint(swapAmt)+encUint(dMin)+encUint(deadline);
@@ -3730,7 +3741,7 @@ async function tacitQuote(f,t,amt,blk){const a=tacitId(f),b=tacitId(t),A=cpAs(a)
 const rs=await cfgBatch(TACIT_TIERS.map(fee=>({to:TACIT_AMM,data:"0x"+SEL_TQUOTE+pad32(a)+pad32(b)+encUint(fee)+encUint(amt)})),blk);let best=null;
 rs.forEach((h,i)=>{const s=strip0x(h||""),o=s.length===64?BigInt("0x"+s):0n;if(o>0n&&(!best||o>best.out))best={fee:TACIT_TIERS[i],out:o,a,b}});return best}
 const SEL_SWAPDEEP="ad33b1d0",SEL_DEEPQ="1a0dc93f";
-const deepQuote=async(fa,ta,amt,blk)=>{
+const deepQuote=async(fa,ta,amt,blk,k=0n)=>{
 if(CHAIN_ID!==4663||!amt||amt<=0n)return null;
 try{
 const r=await rpc(C,[{to:DEEPLENS,data:"0x"+SEL_DEEPQ+encAddr(fa)+encAddr(ta)+encUint(amt)},blk||L]);
@@ -3742,10 +3753,12 @@ const epoch=BigInt("0x"+b.slice(128,192));
 const order="0x"+b.slice(192,256);
 const isBid=BigInt("0x"+b.slice(256,320))===1n;
 const [t0,t1]=fa.toLowerCase()<ta.toLowerCase()?[fa,ta]:[ta,fa];
+if(isBid&&k>0n){const M=(1n<<160n)-1n,w=BigInt(order),q=(w>>64n)&M,o=out-out*k/10000n-1n;if(o<=0n)return null;
+return{inUsed:inUsed-inUsed*k/10000n,out:o,t0,t1,isBid,epoch,order:"0x"+(w&~(M<<64n)|(q-q*k/10000n)<<64n).toString(16).padStart(64,"0")}}
 return{inUsed,out,t0,t1,isBid,epoch,order};
 }catch{return null}
 };
-const HOP_HAIR=10000n;
+const HOP_HAIR=10000n,DEEP_SLACK=50n,deepK=s=>s<DEEP_SLACK?s:DEEP_SLACK,deepMin=(bk,s)=>bk.isBid?bk.out:bk.out*(10000n-s)/10000n;
 const hopAmm=async(fromA,toA,amt,slipBps,deadline,rcpt,blk,acct)=>{
 const tl=encBool(false)+encAddr(fromA)+encAddr(toA)+encUint(amt)+encUint(slipBps)+encUint(deadline);
 const qs=[{sel:"e453166e",d:encAddr(rcpt)+encAddr(acct||ZERO)+tl,u:4,v:9}];
@@ -3768,19 +3781,19 @@ wrap:0n,outDiffers:false,poolOut:t.addr,to:null,
 spender:f.addr===ZERO?null:ZROUTER,hopMid:mid});
 const legJob=hopAmm(f.addr,mid,swapAmt,slipBps,deadline,ZROUTER,blk,acct);legJob.catch(()=>{});
 if(f.addr!==ZERO){
-const bk=await deepQuote(f.addr,mid,swapAmt,blk);
+const bk=await deepQuote(f.addr,mid,swapAmt,blk,deepK(slipBps));
 if(bk&&bk.out>0n){
 const midMin=cut(bk.isBid?bk.out:bk.out*(10000n-slipBps)/10000n);
 const first=encDeepLeg(bk,ZROUTER,swapAmt,midMin,deadline);
 const [leg,bk2]=midMin>0n?await Promise.all([
 hopAmm(mid,t.addr,midMin,slipBps,deadline,to,blk,acct),
-deepQuote(mid,t.addr,midMin,blk)]):[null,null];
+deepQuote(mid,t.addr,midMin,blk,deepK(slipBps))]):[null,null];
 const ammOut=leg&&leg.best.amountOut>0n?leg.best.amountOut:0n;
-const bookOut=bk2&&bk2.out>0n&&bk2.inUsed>=midMin?bk2.out:0n;
+const bookOut=bk2&&bk2.out>0n&&bk2.inUsed>=(bk2.isBid?midMin*(10000n-deepK(slipBps))/10000n-1n:midMin)?bk2.out:0n;
 if(ammOut>0n&&ammOut>=bookOut)return cand(bk.inUsed,ammOut,leg.amountLimit,
 [first,leg.callData,...sw],0n);
 if(bookOut>0n){
-const om2=bookOut*(10000n-slipBps)/10000n;
+const om2=deepMin(bk2,slipBps);
 return cand(bk.inUsed,bookOut,om2,
 [first,encDeepLeg(bk2,to,midMin,om2,deadline),...sw],0n);
 }
@@ -3789,9 +3802,9 @@ const leg=await legJob;
 if(!leg)return null;
 const midIn=cut(leg.amountLimit);
 if(midIn<=0n)return null;
-const bk=await deepQuote(mid,t.addr,midIn,blk);
-if(!bk||bk.out<=0n||bk.inUsed<midIn)return null;
-const outMin=bk.out*(10000n-slipBps)/10000n;
+const bk=await deepQuote(mid,t.addr,midIn,blk,deepK(slipBps));
+if(!bk||bk.out<=0n||bk.inUsed<(bk.isBid?midIn*(10000n-deepK(slipBps))/10000n-1n:midIn))return null;
+const outMin=deepMin(bk,slipBps);
 return cand(swapAmt,bk.out,outMin,
 [leg.callData,encDeepLeg(bk,to,midIn,outMin,deadline),...sw],leg.msgValue);
 };

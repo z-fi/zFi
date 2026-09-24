@@ -698,6 +698,23 @@ if (exported) {
     return 'four fetches, each named; pool is walletless-only and refuses signing and accounts';
   });
 
+  check('a connected quote reaches the public pool only with its addresses blinded', () => {
+    // The one sanctioned exception to "a connected user's reads stay with the
+    // provider": a quoter build the provider could not run (gas cap, rate
+    // limit, wrong network). It may go to the pool only after the account and
+    // the recipient are replaced by fresh random addresses, and it is refused
+    // outright if either still appears in the request.
+    const fn = html.match(/const blindRead=async\(c,tag\)=>\{[\s\S]*?return r\};/);
+    if (!fn) throw Error('blindRead is missing');
+    if (!/\[account,\.\.\.qBlind\]/.test(fn[0])) throw Error('blindRead no longer blinds the connected account');
+    if (!/crypto\.getRandomValues/.test(fn[0])) throw Error('placeholders are not fresh random addresses');
+    if (!/if\(real\.some\(x=>data\.includes\(x\)\)\)throw/.test(fn[0])) throw Error('blindRead sends a request that still names the account');
+    if (!/qBlind=\[rcv\];/.test(html)) throw Error('the recipient is not blinded');
+    const calls = html.match(/blindRead\(/g) || [];
+    if (calls.length !== 1) throw Error(`blindRead is called from ${calls.length} places; only qOne may use it`);
+    return 'account and recipient replaced by fresh random addresses; refused if either survives';
+  });
+
   check('WalletConnect protocol tags match the spec', () => {
     const want = { T_PROPOSE: 1100, T_SETTLE_RES: 1103, T_REQ: 1108 };
     for (const [name, v] of Object.entries(want)) {
