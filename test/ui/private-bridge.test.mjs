@@ -1587,6 +1587,22 @@ describe('tipping the relay for a deposit', () => {
     p.close();
   });
 
+  test('max leaves room for the tip, so the whole balance still goes through', async () => {
+    const p = await open();
+    quoting(p, 30000000000000n);
+    await unlock(p);
+    p.click('pvMax');
+    await p.waitFor(() => !!p.$('pvAmt').value, { label: 'max to fill in', ...SLOW });
+    const amt = BigInt(Math.round(parseFloat(p.$('pvAmt').value) * 1e18));
+    p.click('pvGo');
+    await p.waitFor(() => p.chain.sent.length === 1, { label: 'the deposit', ...SLOW });
+    const tx = p.chain.sent[0];
+    assert.equal(String(tx.to).toLowerCase(), TIPFWD, 'max still takes the tipped path');
+    assert.ok(BigInt(tx.value) > amt, 'value carries a tip on top of the amount');
+    assert.ok(BigInt(tx.value) <= p.chain.native.get(A.ACCOUNT.toLowerCase()), 'and still fits the wallet');
+    p.close();
+  });
+
   test('a quote the relay will not answer leaves the deposit exactly as it was', async () => {
     const p = await open();                // no quote lane at all: the endpoint 404s
     await unlock(p);
