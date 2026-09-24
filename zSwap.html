@@ -291,7 +291,7 @@ margin-top:.55em;padding-top:.55em;border-top:1px solid var(--e);color:var(--f)}
 .rank i.w{color:var(--f);font-weight:600}
 .rank i.pin u{text-decoration:underline}
 .rank u{text-decoration:none;color:var(--m)}
-#rate .rk{cursor:pointer;padding:0 .25em;opacity:.6}
+#rate .rk{cursor:pointer;padding:0 .25em}
 #rate .rk:hover{opacity:1}
 #chBox{margin-top:.4em}
 .chtf{display:flex;flex-wrap:wrap;gap:.4em 1.1em;margin-bottom:.55em}
@@ -381,7 +381,7 @@ background:var(--e);margin:.5em auto .1em}
 .dly{padding:.4em .8em}
 .dly select,#pvAssetB,#mkAssetB,#mkPayB,.dly input:not([type=checkbox]),.dly a{padding-top:.7em;padding-bottom:.7em}
 .mkq{font-size:16px}
-#mkChips .bkc{padding:.75em .85em}
+.bkc{padding:.75em .85em}
 #mkSort{padding:.75em 0 .75em .6em}
 #mkAdv>summary{padding:1em .8em}
 #mkList{max-height:60dvh}
@@ -407,9 +407,9 @@ background:var(--e);margin:.5em auto .1em}
 <div class="card">
 <div class="meta"><span id="addr" role="button" tabindex="0" title="Connect a wallet">Connect</span><span class="mtl"><label id="slipL" title="Slippage"><span>Slippage </span><input id="slip" aria-label="Slippage" type="number" value="0.5" min="0.01" max="10" step="0.1">%</label><button id="lq" title="Liquidity for this pair" aria-label="Toggle liquidity mode" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.2c3.6 4 6 7.2 6 10.1a6 6 0 0 1-12 0c0-2.9 2.4-6.1 6-10.1z"/></svg></button><button id="ln" title="Launch a coin" aria-label="Toggle launch mode" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/></svg></button><button id="wn" title="Claim a .wei name" aria-label="Toggle names mode" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" fill-rule="evenodd" shape-rendering="crispEdges" aria-hidden="true"><path d="M3 1h1v1H3zM5 2h1v1H5zM10 2h1v1h-1zM12 1h1v1h-1zM4 4h8v1H4zM3 5h10v1H3zM2 6h12v3H2zM3 9h10v1H3zM4 10h8v1H4zM5 11h2v1H5zM9 11h2v1H9zM2 12h3v1H2zM7 12h2v1H7zM11 12h3v1h-3zM1 13h2v1H1zM13 13h2v1h-2zM3 6h3v2H3zM10 6h3v2h-3z"/></svg></button><button id="pv" title="Tacit private bridge: shield, send, withdraw or bridge" aria-label="Toggle private bridge mode" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6l7-3z"/><path d="M13 7.4L10.75 15.15Q10.75 16.4 13.25 15.9M9.25 9.4h5.5" stroke="#f7931a" stroke-width="1.9"/></svg></button><button id="mk" title="Prediction markets" aria-label="Toggle markets mode" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></svg></button><button id="lk" title="Copy shareable link" aria-label="Copy shareable link"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5.5 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v.5"/></svg></button><button id="th" title="Toggle theme" aria-label="Toggle theme"></button></span></div>
 <div class="tabs" role="tablist"><button id="tabSwap" class="on" role="tab" aria-selected="true">Swap</button><button id="tabSend" role="tab" aria-selected="false">Send</button><button id="tabBook" role="tab" aria-selected="false">Orders</button></div>
-<div class="panel"><div class="hdr"><small id="payL">You pay</small><span class="pill"><span id="fromIcon"></span><select id="fromSel" aria-labelledby="payL"></select><button type="button" class="tkb" id="fromPick" aria-haspopup="listbox" aria-expanded="false"><span class="tkbs"></span><span class="tkbc">▾</span></button></span></div><div class="row" id="amtRow"><input id="amt" type="text" inputmode="decimal" placeholder="0.0" aria-labelledby="payL" autocomplete="off" spellcheck="false"></div><small id="bal"></small><button type="button" class="fclink hide" id="shieldGo" title="Deposit it into Tacit's confidential pool as a shielded note">shield</button></div>
+<div class="panel"><div class="hdr"><small id="payL">You pay</small><span class="pill"><span id="fromIcon"></span><select id="fromSel" aria-labelledby="payL" tabindex=-1></select><button type="button" class="tkb" id="fromPick" aria-haspopup="listbox" aria-expanded="false"><span class="tkbs"></span><span class="tkbc">▾</span></button></span></div><div class="row" id="amtRow"><input id="amt" type="text" inputmode="decimal" placeholder="0.0" aria-labelledby="payL" autocomplete="off" spellcheck="false"></div><small id="bal"></small><button type="button" class="fclink hide" id="shieldGo" title="Deposit it into Tacit's confidential pool as a shielded note">shield</button></div>
 <button id="flip" class="flip" title="Flip tokens" aria-label="Flip tokens"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14m-5-5 5 5 5-5"/></svg></button>
-<div class="panel" id="rcvPanel"><div class="hdr"><small id="rcvHdr">You receive</small><span class="pill"><span id="toIcon"></span><select id="toSel" aria-labelledby="rcvHdr"></select><button type="button" class="tkb" id="toPick" aria-haspopup="listbox" aria-expanded="false"><span class="tkbs"></span><span class="tkbc">▾</span></button></span></div><div class="row" id="outRow"><input id="outAmt" type="text" inputmode="decimal" placeholder="0.0" aria-labelledby="rcvHdr" autocomplete="off" spellcheck="false"></div><small id="bal1" class="hide"></small><small id="rate" role="status" aria-live="polite"></small><small id="rankBox" class="rank hide"></small></div>
+<div class="panel" id="rcvPanel"><div class="hdr"><small id="rcvHdr">You receive</small><span class="pill"><span id="toIcon"></span><select id="toSel" aria-labelledby="rcvHdr" tabindex=-1></select><button type="button" class="tkb" id="toPick" aria-haspopup="listbox" aria-expanded="false"><span class="tkbs"></span><span class="tkbc">▾</span></button></span></div><div class="row" id="outRow"><input id="outAmt" type="text" inputmode="decimal" placeholder="0.0" aria-labelledby="rcvHdr" autocomplete="off" spellcheck="false"></div><small id="bal1" class="hide"></small><small id="rate" role="status" aria-live="polite"></small><small id="rankBox" class="rank hide"></small></div>
 <div id="lqPanel" class="hide"><div class="hdr"><small>Liquidity</small><small id="lqSub"></small></div><div id="lqList"></div></div>
 <div id="lnPanel" class="hide">
 <div class="hdr lnhdr"><small id="lnTitle">Launch a coin</small><small id="lnSub">0.4% of each trade goes to the creator</small></div>
@@ -2367,7 +2367,7 @@ swap.disabled=false;return;
 if(tab==="send"){
 if(!sendReady){
 let n=0n;try{n=parseUnits(amt.value.trim(),TOKENS[fromSel.value].dec)}catch{}
-swap.textContent=!n?"Enter an amount":rcvEl.textContent==="resolving…"?"Resolving name…":rc.value.trim()&&stat.textContent?"Can't send yet — see above":"Name a recipient";
+swap.textContent=!n?"Enter an amount":rcvEl.textContent==="resolving…"?"Resolving name…":rc.value.trim()&&stat.textContent?"Can't send yet — see below":"Name a recipient";
 swap.disabled=true;return}
 if(sendReady.amount>fromBalance){swap.textContent=IB;swap.disabled=true;return}
 if(sdBusy||tpBusy){swap.textContent=sdBusy?"Pricing delivery…":"Estimating tip…";swap.disabled=true;return}
@@ -5670,7 +5670,7 @@ tabBook.onclick=()=>{sBlip();setTab("book")};
 setInterval(()=>{if(account&&!document.hidden&&!busy){refreshBalance();loadPos();if(tab==="book")loadBook()}},3e4);
 setInterval(()=>{
 if(tab!=="swap"||!account||document.hidden||!last||swap.disabled||busy)return;
-if(Date.now()>=last.exp-5000&&autoQ++<AUTO_Q_MAX)update(1);
+if(Date.now()>=last.exp-5000)autoQ++<AUTO_Q_MAX?update(1):render();
 },5e3);
 document.addEventListener("visibilitychange",()=>{
 if(document.hidden)return;
