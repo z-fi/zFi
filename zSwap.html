@@ -7728,7 +7728,9 @@ const rc=BigInt(l.hs||"0")>0n&&(l.rd||!l.mi&&!(l.job&&l.js!=="failed"))?B("lrecl
 return`<div class="cpr"><span><b>${trimAmt(BigInt(l.v),8)} BTC</b> lock</span><span>${st}${rc}</span></div>`}).join("");
 const cpUse=s=>{cpBtcSat=null;cpBtcAt=0;cpSeed=s;cpFp=cpHex(sha2(cpU8("zswap-cp-v1:"+s))).slice(0,16);cpPub=pcomp(pmul(GP,BigInt(s)));cpBtc=cpBtcOf(cpPub);cpNotes=cpLoadNotes();cpLocks=cpLoadLocks();cpSends=cpLoadS();cpInbox=cpLoadI();try{const b=JSON.parse(LS["zswap:cpb:"+cpFp]||"[]");cpBtcNotes=Array.isArray(b)?b:[]}catch{cpBtcNotes=[]}};
 const cpSign=async()=>{const sig=await rpc("personal_sign",["0x"+cpHex(cpU8(CP_MSG)),account]);
-if(!/^0x[0-9a-fA-F]{130}$/.test(sig||""))throw Error("The wallet returned an unusable signature.");return sig.toLowerCase()};
+if(!/^0x[0-9a-fA-F]{130}$/.test(sig||""))throw Error("The wallet returned an unusable signature.");
+if(BigInt("0x"+sig.slice(66,130))>FN/2n)throw Error("This wallet signed the identity message in a form that has a second, equally valid spelling, so the key it derives is not reliably the same one. Use another wallet, or import a key you already hold.");
+return sig.toLowerCase()};
 const cpCw=async()=>{const code=await cfgRead("eth_getCode",[account,L]).catch(()=>"0x");return/^0x[0-9a-f]*$/i.test(code||"")&&!/^0x(0*|ef0100[0-9a-f]{40})$/i.test(code)};
 const cpOfSig=sig=>{const sb=hexToBytes(sig);if(sb[64]<2)sb[64]+=27;return"0x"+cpScalar(sha2(sb)).toString(16).padStart(64,"0")};
 const cpVerify=async()=>{if(cpVer||!cpSeed)return;if(await cpCw())return void(cpVer=1);
@@ -7789,7 +7791,7 @@ const cpLadder=v=>{let x=BigInt(v);if(x<=0n)return 0n;const d=x.toString().lengt
 const cpFeed=async f=>{try{const h=strip0x(await cfgRead(C,[{to:f,data:"0xfeaf968c"},L])||"");return h.length>=320?Number(BigInt("0x"+h.slice(64,128)))/1e8:0}catch{return 0}};
 const cpQ={},cpQuote=async A=>{const t=cpTicker(A),c=cpQ[t];if(c&&Date.now()-c.at<3e5)return c.q;let q=null;
 try{const j=await relayFetch("/confidential/quote?asset="+A.id);if(j&&typeof j.relayFeeEligible==="boolean"&&String(j.assetId||"").toLowerCase()===A.id)q=j}catch{}cpQ[t]={q,at:Date.now()};return q};
-const cpFee=async(v,A=CP_ETH_AS,g=450000n)=>{const q=await cpQuote(A);if(q&&!q.relayFeeEligible)throw Error("The relay takes no fee in "+A.sym+" — choose Settle: from this wallet.");
+const cpFee=async(v,A=CP_ETH_AS,g=323000n)=>{const q=await cpQuote(A);if(q&&!q.relayFeeEligible)throw Error("The relay takes no fee in "+A.sym+" — choose Settle: from this wallet.");
 const fl=q?[q.staticFloorUnits,q.gasAwareFloorUnits].filter(x=>/^\d{1,30}$/.test(x||"")).reduce((m,x)=>BigInt(x)>m?BigInt(x):m,0n):0n;
 const gp=BigInt(await cfgRead("eth_gasPrice",[])||"0x0"),cw=(g*gp+40000000000000n)*135n/100n,pol=CP_FEES[A.id];let fee;
 if(!pol){fee=cpLadder(cw/CP_SCALE);if(fee<10000n)fee=10000n}
@@ -7837,7 +7839,7 @@ if(st.txHash)tgt.jtx=st.txHash;if(st.error)tgt.jerr=String(st.error).slice(0,120
 if(st.activation)tgt.ja=String(st.activation);if(st.status==="settled"&&!tgt.jst)tgt.jst=Date.now();if(n.ex&&!n.ex.atx&&/^0x[0-9a-fA-F]{64}$/.test(st.activateTx||""))n.ex.atx=st.activateTx;
 const pr=st.proof||st.proofBytes;if(st.status==="proven"&&/^0x[0-9a-fA-F]+$/.test(st.publicValues||"")&&/^0x[0-9a-fA-F]+$/.test(pr||"")&&st.publicValues.toLowerCase().includes(strip0x(n.p?n.dep:cpNoteOf(n)[n.ex?"nu":"dep"]).toLowerCase())){tgt.pv=st.publicValues;tgt.pr=pr}
 cpSaveNotes()};
-const cpSettleWrap=async n=>{try{if(BigInt(await cfgRead(C,[{to:CP_POOL,data:"0x"+SEL_CPDEP+pad32(n.dep||cpNoteOf(n).dep)},L])||"0x0")===2n)return}catch{}const self=pvPath.value==="self",{j:r,rb}=await relaySub({type:"wrap",op:n.op,memos:[n.memo],mode:self?"prove":"settle"});
+const cpSettleWrap=async n=>{try{if(BigInt(await l1Read(C,[{to:CP_POOL,data:"0x"+SEL_CPDEP+pad32(n.dep||cpNoteOf(n).dep)},L])||"0x0")===2n)return}catch{}const self=pvPath.value==="self",{j:r,rb}=await relaySub({type:"wrap",op:n.op,memos:[n.memo],mode:self?"prove":"settle"});
 if(!r.jobId)throw Error("The relay did not take the deposit.");n.job=r.jobId;n.js=r.status||"pending";n.rb=rb;n.self=self?1:0;delete n.stx;cpSaveNotes()};
 const cpMine=async(o,f)=>{try{await settle(o[f])}catch(e){delete o[f];cpSaveNotes();throw e}};
 const cpSelfWrap=async n=>{if(!(n.pv&&n.pr))throw Error(PNR);
@@ -7852,14 +7854,14 @@ if(wei%(A.scale*BigInt(parts)))throw Error(parts>1?"That amount does not split e
 const v=wei/A.scale/BigInt(parts);if(v>=1n<<64n)throw Error("Too large for one note.");return{wei,v,A}};
 const cpFresh=async(v,a=CP_ETH)=>{if(!cpNotes.some(n=>!n.p))await cpFind(1).catch(()=>{});let i=[...cpNotes,...cpLoadNotes(),...cpSends.filter(S=>S.di!=null).map(S=>({i:S.di,a:S.a}))].reduce((m,n)=>Number.isInteger(n.i)&&n.i>=0&&(n.a||CP_ETH)===a?Math.max(m,n.i+1):m,0),k;
 for(let t=0;;i++){k=cpNoteOf(a===CP_ETH?{i,v:String(v)}:{i,v:String(v),a});
-const st=await cfgRead(C,[{to:CP_POOL,data:"0x"+SEL_CPDEP+pad32(k.dep)},L]);
+const st=await l1Read(C,[{to:CP_POOL,data:"0x"+SEL_CPDEP+pad32(k.dep)},L]);
 if(BigInt(st||"0x0")===0n)return{i,k};if(++t>20)throw Error("Could not find a fresh note slot.")}};
 const cpNote=(i,k)=>{const v=k.value,a=k.asset,cb=cpBinding(),ctx=cpCtx("tacit-wrap-intent-v1",cb,a,k.dep,[[k.cx,k.cy,k.owner]],[v]),sig=cpSigma(v,k.blinding,ctx,cpNonce(k.blinding,ctx,"wrap"));
 const r={i,v:String(v),at:Math.floor(Date.now()/1000),memo:cpSeal(cpPub,k,cpRandom()),
 op:{chainBinding:cb,asset:a,value:String(v),cx:k.cx,cy:k.cy,owner:k.owner,sigR:sig.R,sigZ:sig.z}};if(a!==CP_ETH)r.a=a;return r};
 const cpTokBal=async A=>BigInt(await rpc(C,[{to:A.tok,data:balOf(account)},L])||"0x0");
 const CP_SETTLE_GAS=540000n;
-const CP_TIPFWD="0x000000D218B03db5837943b0b05DeA2965AE956e",CP_TIPTO="0x68575B073DE49a94e3E3ACf6F3A0d6E3b66267C7",SEL_CPWTIP="fc24c435",TIPOFF="zswap:cptip";
+const CP_TIPFWD="0x000000D218B03db5837943b0b05DeA2965AE956e",CP_TIPTO="0x006CD14F36F65eCbB29b2519cCBe63A0DC8549F2",SEL_CPWTIP="fc24c435",TIPOFF="zswap:cptip";
 const cpTipRost=()=>CP_RELAYS.includes(cpRelayBase());
 const cpTipTo=j=>{const r=String(j&&j.recommendedTipRecipient||"");return!r||r.toLowerCase()===CP_TIPTO.toLowerCase()};
 const cpTipPref=()=>{try{return LS[TIPOFF]!=="0"}catch{return true}};
@@ -7930,7 +7932,7 @@ if(commit!==String(inv.commit).toLowerCase()||cpLeaf(inv.cx,inv.cy,inv.owner,A.i
 const ctx=cpCtx("tacit-wrap-intent-v1",inv.chainBinding,A.id,inv.depositId,[[inv.cx,inv.cy,inv.owner]],[v]);
 if(!cpVerifySigma(inv.cx,inv.cy,v,w.sigR,w.sigZ,ctx))throw Error("The request is not claimable by its author — refusing to pay it.");
 if(!/^0x0[23][0-9a-fA-F]{64}[0-9a-fA-F]{272}$/.test(inv.memo||""))throw Error("The request carries no recovery memo.");
-const st=await cfgRead(C,[{to:CP_POOL,data:"0x"+SEL_CPDEP+pad32(inv.depositId)},L]);
+const st=await l1Read(C,[{to:CP_POOL,data:"0x"+SEL_CPDEP+pad32(inv.depositId)},L]);
 if(BigInt(st||"0x0")!==0n)throw Error("This request was already paid.");
 if(A.tok!==ZERO&&await cpTokBal(A)<wei)throw Error("Not enough "+A.pub+" to pay this request.");
 if(!await sure("Pay "+trimAmt(wei,A.dec)+" "+A.pub+" into this private request (deposit "+cpShort(String(inv.depositId))+")? A request does not say who made it: pay only one you expected."))throw Error("Payment cancelled.");
@@ -7958,10 +7960,10 @@ if(c.leaves.length<20)pvNote.textContent="The pool holds only "+c.leaves.length+
 const impl=ch===1?ZERO:await cpPins(ch);
 let fee=o?BigInt(o.fee):0n,why="";
 if(!o&&!self){if(A.tok!==ZERO&&!CP_FEES[A.id])why="The relay takes no fee in "+A.sym;
-else{const w=part?"amount":"note";fee=await cpFee(v,A,(part?680000n:450000n)+(ch!==1?CP_L2[ch].gas/2n:0n));why=fee>=v?"This "+w+" is too small to pay the relay":fee*10000n/v>300n?"The relay fee would be "+(Number(fee*10000n/v)/100).toFixed(1)+"% of this "+w:""}
+else{const w=part?"amount":"note";fee=await cpFee(v,A,(part?600000n:323000n)+(ch!==1?CP_L2[ch].gas/2n:0n));why=fee>=v?"This "+w+" is too small to pay the relay":fee*10000n/v>300n?"The relay fee would be "+(Number(fee*10000n/v)/100).toFixed(1)+"% of this "+w:""}
 if(why){if(p.auto)throw Error(why);if(!await sure(why+". Settle it from this wallet instead? The relay still proves it; this wallet sends the settle, which links the exit to it."))throw Error(why+" — wait for cheaper gas, or settle it from this wallet.");self=true;fee=0n}}
 const net=v-fee,wei=net*A.scale;
-const x={ch,to,dl:String((Math.floor(Date.now()/86400000)+3)*86400),nonce:big(sha2(cpU8("zswap-exit-nonce-v1:"+cpFp+":"+(n.s?n.s+n.b:n.i)))).toString(),
+const x={ch,to,dl:String((Math.floor(Date.now()/86400000)+3)*86400),nonce:(o&&/^\d{1,80}$/.test(String(o.nonce||""))?String(o.nonce):big(sha2(cpU8("zswap-exit-nonce-v1:"+cpFp+":"+(n.s?n.s+n.b:n.i)))).toString()),
 fee:String(fee),wei:String(wei),self,fin:to};if(part)x.v=String(v);
 let esc=to.toLowerCase(),warn="";
 if(ch!==1){const code=await cfgRead("eth_getCode",[to,L]),l1=strip0x(code||"")!=="",l2=!l1&&!o&&strip0x(await cpL2Read(ch,"eth_getCode",[to,"latest"]).catch(()=>"0x")||"")!=="";
@@ -8109,7 +8111,7 @@ else if(/^(0x)?0[23][0-9a-f]{64}$/i.test(s))h=strip0x(s).toLowerCase();else thro
 const cpWtData=(w,cm,pv,pr,ms,to)=>{const a=encBytes(pv),b=encBytes(pr),t=ms.map(encBytes);let off=ms.length*32,hd=encUint(ms.length);for(const x of t){hd+=encUint(off);off+=x.length/2}
 return"0x"+SEL_CPWT+encUint(w)+pad32(cm)+encUint(192)+encUint(192+a.length/2)+encUint(192+(a.length+b.length)/2)+(to?encAddr(to):pad32("0"))+a+b+hd+t.join("")};
 const CP_RELAYER="0x000000009c28617ac88b52eae5efaacdd4ac34c3",CP_LKBAD="This page's copy of the pool's lock set does not match the chain, so anything built on it would fail. Press recover and try again, or use tacit.finance.",
-cpSlot=(k,s)=>keccak(cpCat(b32(k),b32(BigInt(s)))),cpStor=(s,t)=>cfgRead("eth_getStorageAt",[CP_POOL,typeof s==="string"?s:toHex(s),t||L]);
+cpSlot=(k,s)=>keccak(cpCat(b32(k),b32(BigInt(s)))),cpStor=(s,t)=>l1Read("eth_getStorageAt",[CP_POOL,typeof s==="string"?s:toHex(s),t||L]);
 const cpCalls=inp=>{const h=strip0x(inp).toLowerCase(),sel=h.slice(0,8),d=h.slice(8),W=(s,o)=>{const x=BigInt("0x"+(s.slice(o*2,o*2+64)||"0"));if(x>1n<<24n)throw Error("pv");return Number(x)},N=x=>{if(x>4096)throw Error("pv");return x},
 by=o=>"0x"+d.slice((o+32)*2,(o+32+W(d,o))*2),tup=o=>{const mo=o+W(d,o+64);return{pv:by(o+W(d,o)),ms:Array.from({length:N(W(d,mo))},(_,i)=>by(mo+32+W(d,mo+32+i*32)))}},
 arr=h0=>{const a=W(d,h0);return Array.from({length:N(W(d,a))},(_,i)=>tup(a+32+W(d,a+32+i*32)))},cs=sel===SEL_CPSETTLE?[tup(0)]:sel==="fcccb833"?arr(0):sel==="e2b28725"?arr(32):[];
@@ -8152,7 +8154,7 @@ Object.assign(S,{st:"lock",ins:[S.n],dl:String(dl),lf:x.lf,lb:x.lb,rk:x.rk,rp:x.
 const cpSend=async()=>{const A=cpSel(),{v}=cpAmount(1),to=await cpRecipAt(pvRc.value);if(to===cpPub)throw Error("That is this key's own address — split or merge a note instead.");
 const self=pvPath.value==="self",c=await cpSync(true,1),rd=cpReady(A.id).sort((x,y)=>BigInt(y.v)>BigInt(x.v)?1:BigInt(y.v)<BigInt(x.v)?-1:0),ex=rd.find(n=>BigInt(n.v)===v);
 if(ex){const S={...cpNewS(A,v,to,self),n:cpKeyOf(ex),ins:[cpKeyOf(ex)],st:"lock"};cpSends.push(S);await cpLockGo(S);stat.textContent=self?"The relay is proving the send; send it from its row when it is ready.":"Sent through the relay. The recipient finds it with their key and claims it.";return}
-let sf=self,fee=await cpFeeOk(v,A,self,"send",620000n);if(fee===null){sf=true;fee=0n}
+let sf=self,fee=await cpFeeOk(v,A,self,"send",600000n);if(fee===null){sf=true;fee=0n}
 const ins=[];let t=0n;for(const n of rd){if(t>=v+fee||ins.length===8)break;ins.push(n);t+=BigInt(n.v)}
 if(t>=v+fee){await cpXferGo(ins,v,fee,A,c,sf,to);stat.textContent="Splitting off "+cpFmt(v,A)+" "+A.sym+(fee?" (relay fee "+cpFmt(fee,A)+" "+A.sym+")":"")+"; it locks to the recipient once that settles.";return}
 if(A.tok!==ZERO)throw Error("Not enough shielded "+A.sym+" for that — shield some first.");
@@ -8177,9 +8179,9 @@ const A=cpAs(S.a);let self=pvPath.value==="self"||!A,fee=await cpFeeOk(BigInt(S.
 const t=cpTree(c.lk,li),x=cpRefundOp(S,cpSeed,cpBinding(),t.root,li,t.path,fee);S.rj=await cpJob("stealthrefund",x.op,x.memos,self,x.out.leaf);cpAddOut(x.out,S.a,S.id+"r");S.st="refund";cpSaveS();cpSaveNotes()};
 const cpSGo=S=>cpJobSend(S.st==="fund"?S.fj:S.st==="lock"?S.lj:S.rj,S.st==="fund"?900000:700000);
 const cpSplit=async n=>{const k=cpNoteOf(n),A=cpAs(k.asset);if(!A)throw Error("The pool's asset list did not load — try again.");const s=(await ask("Split off how much "+A.sym+"? The rest stays in a second note.")||"").trim();if(!s)return;
-const w=parseUnits(s,A.dec);if(w<=0n||w%A.scale)throw Error("That amount does not fit the pool's decimals.");const v=w/A.scale;let self=pvPath.value==="self",fee=await cpFeeOk(v,A,self,"note",620000n,k.value);if(fee===null){self=true;fee=0n}
+const w=parseUnits(s,A.dec);if(w<=0n||w%A.scale)throw Error("That amount does not fit the pool's decimals.");const v=w/A.scale;let self=pvPath.value==="self",fee=await cpFeeOk(v,A,self,"note",600000n,k.value);if(fee===null){self=true;fee=0n}
 if(v+fee>=k.value)throw Error("The note is not larger than that plus the relay fee ("+cpFmt(fee,A)+" "+A.sym+").");await cpXferGo([n],v,fee,A,await cpSync(true,1),self,cpPub);stat.textContent="Splitting through the relay."};
-const cpMergeGo=async a=>{const A=cpAs(a),rd=cpReady(a).slice(0,8);if(!A||rd.length<2)throw Error("Nothing to merge.");const t=rd.reduce((s,n)=>s+BigInt(n.v),0n);let self=pvPath.value==="self",fee=await cpFeeOk(t,A,self,"merge",620000n);if(fee===null){self=true;fee=0n}
+const cpMergeGo=async a=>{const A=cpAs(a),rd=cpReady(a).slice(0,8);if(!A||rd.length<2)throw Error("Nothing to merge.");const t=rd.reduce((s,n)=>s+BigInt(n.v),0n);let self=pvPath.value==="self",fee=await cpFeeOk(t,A,self,"merge",600000n);if(fee===null){self=true;fee=0n}
 if(fee>=t)throw Error("Too small to merge through the relay.");await cpXferGo(rd,t-fee,fee,A,await cpSync(true,1),self,cpPub);stat.textContent="Merging "+rd.length+" notes through the relay."};
 const cpSuOp=(n,amt,fee,to,dl,a,cb,sd,R=cpRandom)=>{amt=BigInt(amt);fee=BigInt(fee);const V=BigInt(n.v),ch=V-amt,pay=amt-fee;if(pay<=0n)throw Error("That amount does not cover the relay fee.");if(ch<=0n)throw Error("A partial withdrawal has to leave change in the note.");
 const pub=pcomp(pmul(GP,BigInt(sd))),rN=cpN(BigInt(n.b)),rc=cpNonce(rN,n.cx,"sendunwrap-change-v1"),idS=cpX64(cpNonce(rN,n.cx,"sendunwrap-change-nk-v1")),idO=cpOwner(idS),rcp="0x"+strip0x(to).toLowerCase(),
@@ -8194,7 +8196,7 @@ const re=isAddr(to)?rcErr(to):"x";if(re)throw Error(re==="x"?"The recipient must
 const c=await cpSync(true,1),rd=cpReady(A.id),tot=rd.reduce((s,n)=>s+BigInt(n.v),0n);if(tot<v)throw Error("Only "+cpFmt(tot,A)+" "+A.sym+" is shielded.");
 const ex=rd.find(n=>BigInt(n.v)===v);if(ex)return cpExit(ex,v,q);
 const one=rd.filter(n=>BigInt(n.v)>v).sort((x,y)=>BigInt(x.v)<BigInt(y.v)?-1:1)[0];if(one)return cpExit(one,v,q);
-let fee=await cpFeeOk(v,A,self,"withdrawal",620000n);if(fee===null){self=q.self=true;fee=0n}
+let fee=await cpFeeOk(v,A,self,"withdrawal",600000n);if(fee===null){self=q.self=true;fee=0n}
 const ins=[];let t=0n;for(const n of rd.sort((x,y)=>BigInt(y.v)>BigInt(x.v)?1:-1)){if(t>=v+fee||ins.length===8)break;ins.push(n);t+=BigInt(n.v)}
 if(t<v+fee)throw Error(ins.length===8?"That needs more than eight notes — merge some first.":"The notes do not cover that plus the relay fee ("+cpFmt(fee,A)+" "+A.sym+").");
 const S=await cpXferGo(ins,v,fee,A,c,self,cpPub);S.out=q;cpSaveS();stat.textContent="Merging "+ins.length+" notes into one of "+cpFmt(v,A)+" "+A.sym+(fee?" (relay fee "+cpFmt(fee,A)+" "+A.sym+")":"")+"; the withdrawal follows once that settles."};
@@ -8219,7 +8221,7 @@ for(const[id,amt,as]of c.wraps){const A=cpAs(as),wei=BigInt(amt),h=cpFp+id,dn=cp
 const t=cpK[g]||(cpK[g]=[]);for(let i=t.length;i<N;i++){const d=cpDerive(cpSeed,i,a);t[i]=[cpOwner(d.secret),pmul(GP,d.blinding)];await z()}
 if(!m[mk]){m[mk]={};const V=pmul(cpH,v);for(let i=N;i-->dn;){const{cx,cy}=cpXY(padd(V,t[i][1]));m[mk][cpDepId(v,cpDepCommit(cx,cy,t[i][0]),a)]=i;await z()}}
 const i=m[mk][id];if(i==null){cpK[h]=N;continue}if(own(id))continue;const r=cpNote(i,cpNoteOf(a===CP_ETH?{i,v:""+v}:{i,v:""+v,a}));
-if(!c.leaves.includes(cpNoteOf(r).leaf)&&BigInt(await cfgRead(C,[{to:CP_POOL,data:"0x"+SEL_CPDEP+pad32(id)},L]).catch(()=>"0x0")||"0x0")===2n){cpK[h]=1e9;continue}cpNotes.push({...r,at:0,rec:1});f++}
+if(!c.leaves.includes(cpNoteOf(r).leaf)&&BigInt(await l1Read(C,[{to:CP_POOL,data:"0x"+SEL_CPDEP+pad32(id)},L]).catch(()=>"0x0")||"0x0")===2n){cpK[h]=1e9;continue}cpNotes.push({...r,at:0,rec:1});f++}
 const mine=new Set(cpNotes.filter(n=>!n.p).map(n=>cpNoteOf(n).leaf));
 for(let li=full?0:cu.m;li<c.leaves.length;li++){const mm=c.memos[li],lf=c.leaves[li];if(!mm||!lf||mine.has(lf))continue;await z();
 const o=cpOpen(mm,lf,cpSeed);if(!o)continue;const r={i:-1,v:String(o.v),s:o.sec,b:"0x"+o.bl.toString(16).padStart(64,"0"),at:0,rec:1};if(o.as!==CP_ETH)r.a=o.as;cpNotes.push(r);mine.add(lf);f++}
@@ -8276,9 +8278,9 @@ const pvWei=()=>{try{return parseUnits(pvAmt.value||"0",cpSel().dec)}catch{retur
 const pvShV=A=>cpReady(A.id).reduce((s,n)=>s+BigInt(n.v),0n);
 const pvFeeFor=async(v,A,g)=>pvPath.value==="self"?0n:await cpFee(v,A,g).catch(()=>null);
 const pvCost=async(v,A)=>{const o=pvAct.value==="out",ch=A.tok===ZERO?+pvChain.value:1,x=cpReady(A.id).some(n=>BigInt(n.v)===v);
-if(!o)return x?0n:pvFeeFor(v,A,620000n);
-const xg=450000n+(ch!==1?CP_L2[ch].gas/2n:0n);if(x)return pvFeeFor(v,A,xg);
-const[m,w]=await Promise.all([pvFeeFor(v,A,620000n),pvFeeFor(v,A,xg)]);
+if(!o)return x?0n:pvFeeFor(v,A,600000n);
+const xg=323000n+(ch!==1?CP_L2[ch].gas/2n:0n);if(x)return pvFeeFor(v,A,xg);
+const[m,w]=await Promise.all([pvFeeFor(v,A,600000n),pvFeeFor(v,A,xg)]);
 return m===null||w===null?null:(pvLegs=[m,w],m+w)};let pvLegs=null;
 let pvPS=0;const pvPrevNow=async()=>{const my=++pvPS,A=cpSel(),e=A.tok===ZERO,P=A.pub,v=pvAct.value,f=cpFmt,s=a=>f(a,A)+" "+A.sym;
 if(!account||!cpSeed||CHAIN_ID!==1)return void pvPrev.classList.add("hide");
@@ -8582,7 +8584,7 @@ if(!nameOk(n)||!pubOk(n))throw Error("zSwap publishes to .wei, .gwei and .eth na
 const o=await nameFwd(n).catch(()=>"");
 if(!isAddr(o||"")||o.toLowerCase()!==account.toLowerCase())throw Error(n+" does not point at this wallet, so its records cannot be set from here.")}
 const addr=cpTacAddr(cpSeed);if(String(await nameText(n)||"").trim()===addr){pubName=n;cpPaint();return void(stat.textContent=n+" already points to your Tacit address.")}
-if(!await sure("Publish your Tacit address on "+n+"?\n\n"+addr+"\n\nAnyone can then pay you privately by typing "+n+". The record is public: it ties the name to this Tacit address, never to a balance."))return;
+if(!await sure("Publish your Tacit address on "+n+"?\n\n"+addr+"\n\nAnyone can then pay you privately by typing "+n+". The record is public: it ties the name to this Tacit address and to the Bitcoin address it carries, though never to a balance."))return;
 const req=await setTextReq(n);await rpc(C,[req,L]);await settle(await sendTx([req]));pubName=n;cpPaint();stat.textContent=n+" now points to your Tacit address — anyone can send to it privately by name."},"Checking your name…");
 if(a==="merge")return pvRun(()=>cpMergeGo(b.dataset.as),"Building the merge…");
 const sq=b.dataset.s!==undefined?cpSends.find(S=>S.id===b.dataset.s)||null:null;

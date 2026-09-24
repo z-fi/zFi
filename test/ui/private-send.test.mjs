@@ -457,7 +457,7 @@ describe('private sends', () => {
     assert.equal(BigInt(tx.value), wei + 90000000000000n, 'the wrap, plus the tip the router skims');
     assert.equal(tx.data, '0x' + SEL.WT + coder.encode(
       ['uint256', 'bytes32', 'bytes', 'bytes', 'bytes[]', 'address'],
-      [wei, S.wt.commit, pv, proof, S.wt.memos, '0x68575B073DE49a94e3E3ACf6F3A0d6E3b66267C7']).slice(2),
+      [wei, S.wt.commit, pv, proof, S.wt.memos, '0x006CD14F36F65eCbB29b2519cCBe63A0DC8549F2']).slice(2),
       'wrapAmount stays the wrap; the recipient is named');
     p.close();
   });

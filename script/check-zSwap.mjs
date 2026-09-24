@@ -726,7 +726,10 @@ if (exported) {
     if (!/\[account,\.\.\.qBlind\]/.test(fn[0])) throw Error('blindRead no longer blinds the connected account');
     if (!/crypto\.getRandomValues/.test(fn[0])) throw Error('placeholders are not fresh random addresses');
     if (!/if\(real\.some\(x=>data\.includes\(x\)\)\)throw/.test(fn[0])) throw Error('blindRead sends a request that still names the account');
-    if (!/qBlind=\[rcv\];/.test(html)) throw Error('the recipient is not blinded');
+    // The recipient must enter the blind list. It used to be the only member
+    // (`qBlind=[rcv];`); it is now accumulated with the others still in flight, so
+    // assert that `rcv` is in whatever qBlind is assigned rather than the old shape.
+    if (!/qBlind=\[[^\]]*\brcv\b/.test(html)) throw Error('the recipient is not blinded');
     const calls = html.match(/blindRead\(/g) || [];
     if (calls.length !== 1) throw Error(`blindRead is called from ${calls.length} places; only qOne may use it`);
     return 'account and recipient replaced by fresh random addresses; refused if either survives';

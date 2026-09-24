@@ -50,18 +50,18 @@ const B0 = CP_BLOCK + 0x100;
 const HEAD = '0x' + (B0 + 0x8).toString(16);
 // A relayed exit pays a flat, gas-priced fee, never below the relay's 0.0001
 // ETH floor, and the page refuses one above 3% of the note - an outlier fee is
-// a fingerprint. At the fixture's 1 gwei that fee is 6.7% of 0.01 ETH, so the
-// chain here runs at 0.1 gwei: the fee ladder (two significant digits, rounded
-// up) then quotes 0.00012 ETH, 1.2%.
+// a fingerprint. At the fixture's 1 gwei that fee is 5.0% of 0.01 ETH, so the
+// chain here runs at 0.1 gwei: the ladder computation there falls under the
+// relay's floor, so the floor itself sets the fee - 0.0001 ETH, 1.0%.
 const GAS = 10n ** 8n;
 const ladder = v => { const d = v.toString().length; if (d <= 2) return v; const s = 10n ** BigInt(d - 2); return (v + s - 1n) / s * s; };
 const feeFor = g => (f => f < 10000n ? 10000n : f)(ladder((g * GAS + 40000000000000n) * 135n / 100n / 10n ** 10n));
-const FEE = feeFor(450000n);
+const FEE = feeFor(323000n);
 const NET = BigInt(F.note.value) - FEE;
 // An exit to an L2 also pays for the relay's activateExit: half the page's
 // activation gas limit on top of the settle.
-const FEE_BASE = feeFor(450000n + 600000n), NET_BASE = BigInt(F.note.value) - FEE_BASE;
-const FEE_RH = feeFor(450000n + 500000n), NET_RH = BigInt(F.note.value) - FEE_RH;
+const FEE_BASE = feeFor(323000n + 600000n), NET_BASE = BigInt(F.note.value) - FEE_BASE;
+const FEE_RH = feeFor(323000n + 500000n), NET_RH = BigInt(F.note.value) - FEE_RH;
 const jsonOf = r => JSON.parse(JSON.stringify(r, (_, v) => typeof v === 'bigint' ? String(v) : typeof v === 'string' ? v.toLowerCase() : v));
 
 // ---- an independent recipe encoder (ethers), never the page's ----
@@ -385,7 +385,7 @@ describe('exiting to Base through the relay', () => {
     assert.deepEqual(op.path, F.path, 'the membership path for leaf 0');
     assert.equal(op.leafIndex, 0);
     assert.equal(op.fee, String(FEE_BASE), 'the flat, laddered relay fee, covering the settle and the activation');
-    assert.equal(FEE_BASE, 20000n);
+    assert.equal(FEE_BASE, 18000n);
     assert.deepEqual(jsonOf(post.exit), jsonOf(recipe), 'the recipe rides along for the relay to activate');
     assert.equal(op.value, F.note.value);
     assert.equal(op.nk, F.note.secret);
@@ -1004,7 +1004,7 @@ describe('withdrawing to Ethereum', () => {
     p.queueConfirm(false);
     p.select('pvAct', 'out');
     p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
-    await p.waitFor(() => /6\.7% of this note/.test(p.text('stat')), { label: 'the refusal', ...SLOW });
+    await p.waitFor(() => /5\.0% of this note/.test(p.text('stat')), { label: 'the refusal', ...SLOW });
     assert.equal(p.window.__relayPosts.length, 1, 'declined: nothing was proven');
     p.queueConfirm(true);
     p.select('pvAct', 'out');
@@ -1560,7 +1560,7 @@ describe('tipping the relay for a proof it did not charge for', () => {
     assert.equal(BigInt(tx.value), 90000000000000n,
       'the whole value is the tip: settle has no amount leg, and a prove tip is not bounded by gas');
     assert.equal(BigInt('0x' + tx.data.slice(10, 74)), 128n, 'four head words before the first bytes');
-    assert.match(tx.data.slice(10 + 3 * 64).toLowerCase(), new RegExp('^0{24}' + '68575b073de49a94e3e3acf6f3a0d6e3b66267c7'), 'the relay is named as recipient');
+    assert.match(tx.data.slice(10 + 3 * 64).toLowerCase(), new RegExp('^0{24}' + '006cd14f36f65ecbb29b2519ccbe63a0dc8549f2'), 'the relay is named as recipient');
     assert.equal(p.chain.sentTo(POOL).length, 1, 'only the deposit itself went to the pool');
     p.close();
   });
@@ -1996,7 +1996,7 @@ describe('a pool history that will not load', () => {
 
 describe('tipping the relay for a deposit', () => {
   const TIPFWD = '0x000000d218b03db5837943b0b05dea2965ae956e';
-  const TIPTO = '0x68575b073de49a94e3e3acf6f3a0d6e3b66267c7';
+  const TIPTO = '0x006cd14f36f65ecbb29b2519ccbe63a0dc8549f2';
   const SEL_WTIP = 'fc24c435';
   // The relay quotes a tip, and the forwarder answers its pre-flight. Without the
   // second half the page falls back to the plain wrap — which is the behaviour

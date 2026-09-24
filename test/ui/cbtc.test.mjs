@@ -237,7 +237,7 @@ describe('escrow through CbtcEscrowHelper', () => {
     assert.equal(pvOut, pv, 'the offsets still land on the proof, six head words in');
     assert.equal(prOut, pr);
     assert.deepEqual([...memos], ['0x']);
-    assert.equal(to.toLowerCase(), '0x68575b073de49a94e3e3acf6f3a0d6e3b66267c7', 'the payee the page carries');
+    assert.equal(to.toLowerCase(), '0x006cd14f36f65ecbb29b2519ccbe63a0dc8549f2', 'the payee the page carries');
     assert.equal(BigInt(tx.value) - stake, 90000000000000n, 'exactly the tip rides above the stake');
     assert.ok(stake > 0n, 'and the stake is what the helper receives');
     assert.equal(p.chain.sentTo(HELPER).length, 0, 'nothing goes to the helper directly');
