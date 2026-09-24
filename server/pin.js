@@ -62,6 +62,27 @@ function publicHttps(s) {
   return u.protocol === 'https:' && !INTERNAL_HOST.test(u.hostname);
 }
 
+// A public-looking name can still resolve to a private address (`127.0.0.1.nip.io`),
+// so every hop's host is resolved and refused unless all of its addresses are public.
+export function privateIp(ip) {
+  ip = String(ip).toLowerCase().replace(/^::ffff:/, '');
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(ip)) {
+    const [a, b] = ip.split('.').map(Number);
+    return a === 0 || a === 10 || a === 127 || a >= 224 || (a === 100 && b >= 64 && b < 128) ||
+      (a === 169 && b === 254) || (a === 172 && b >= 16 && b < 32) || (a === 192 && b === 168) ||
+      (a === 198 && (b === 18 || b === 19));
+  }
+  return ip === '::' || ip === '::1' || /^f[cd]/.test(ip) || /^fe[89ab]/.test(ip);
+}
+async function resolvesPublic(host) {
+  let dns;
+  try { dns = await import('node:dns'); } catch { return true; }
+  try {
+    const as = await dns.promises.lookup(host, { all: true, verbatim: true });
+    return as.length > 0 && as.every(a => !privateIp(a.address));
+  } catch { return false; }
+}
+
 function originAllowed(origin) {
   if (ALLOWED_ORIGINS.includes(origin)) return true;
   let u;
@@ -312,8 +333,8 @@ export default {
       try {
         let upstream;
         for (let hop = 0; ; hop++) {
-          if (!publicHttps(target)) return json(request, { error: 'https to a public host only' }, 400);
-          upstream = await fetch(target, { redirect: 'manual', cf: { cacheTtl: 300, cacheEverything: true } });
+          if (!publicHttps(target) || !(await resolvesPublic(new URL(target).hostname))) return json(request, { error: 'https to a public host only' }, 400);
+          upstream = await fetch(target, { redirect: 'manual', signal: AbortSignal.timeout(2 * UP_TIMEOUT), cf: { cacheTtl: 300, cacheEverything: true } });
           const loc = upstream.status >= 300 && upstream.status < 400 && upstream.headers.get('location');
           if (!loc) break;
           if (hop === MAX_HOPS) return json(request, { error: 'too many redirects' }, 502);
