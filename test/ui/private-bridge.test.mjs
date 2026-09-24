@@ -1731,6 +1731,64 @@ describe('the points a wallet has been credited', () => {
     p.close();
   });
 
+  test('every counted deposit can be listed, and folded away again', async () => {
+    const p = await open();
+    serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 11, deposit_count: 2, deposits: [
+      { tx_hash: '0x' + 'ab'.repeat(32), block_time: 1790166371, amount_wei: '1000000000000000', points: 5, tip_wei: '90000000000000', pp_boosted: false },
+      { tx_hash: '0x' + 'cd'.repeat(32), block_time: 1790252771, amount_wei: '2500000000000000', points: 6, tip_wei: null, pp_boosted: true },
+    ] });
+    await unlock(p);
+    await p.waitFor(() => /counted/.test(p.text('pvKey')), { label: 'the points row', ...SLOW });
+    const btn = () => p.$('pvKey').querySelector('button[data-a="ptshist"]');
+    assert.ok(btn(), 'the list is offered');
+    assert.equal(btn().getAttribute('aria-expanded'), 'false');
+    assert.equal(p.$('pvKey').querySelector('.pvkh'), null, 'and closed to begin with');
+    p.click(btn());
+    await p.waitFor(() => !!p.$('pvKey').querySelector('.pvkh'), { label: 'the list to open', ...SLOW });
+    const rows = [...p.$('pvKey').querySelectorAll('.pvkd')];
+    assert.equal(rows.length, 2, 'one row per deposit');
+    // Newest first, whatever order the endpoint sent them in.
+    assert.match(rows[0].textContent, /0\.0025 ETH/);
+    assert.match(rows[0].textContent, /6 points/);
+    assert.match(rows[0].textContent, /1\.2\u00d7/, 'the boosted one says so');
+    assert.doesNotMatch(rows[0].textContent, /tip/, 'and had no tip to report');
+    assert.match(rows[1].textContent, /0\.001 ETH/);
+    assert.match(rows[1].textContent, /tip 0\.00009 ETH/);
+    assert.doesNotMatch(rows[1].textContent, /1\.2/, 'the unboosted one claims nothing');
+    const link = rows[1].querySelector('a');
+    assert.equal(link.getAttribute('href'), 'https://etherscan.io/tx/0x' + 'ab'.repeat(32), 'mainnet, wherever the page is pointed');
+    p.click(btn());
+    await p.waitFor(() => !p.$('pvKey').querySelector('.pvkh'), { label: 'the list to fold away', ...SLOW });
+    p.close();
+  });
+
+  test('a wallet whose deposits the endpoint withholds is offered no list', async () => {
+    const p = await open();
+    serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 5, deposit_count: 1 });
+    await unlock(p);
+    await p.waitFor(() => /counted/.test(p.text('pvKey')), { label: 'the points row', ...SLOW });
+    assert.equal(p.$('pvKey').querySelector('button[data-a="ptshist"]'), null, 'nothing to list');
+    p.close();
+  });
+
+  test('a deposit row the endpoint half-sent is left out rather than guessed at', async () => {
+    const p = await open();
+    serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 5, deposit_count: 2, deposits: [
+      { tx_hash: 'not-a-hash', block_time: 0, amount_wei: '1000000000000000', points: 5 },
+      { block_time: 1790252771, points: 3 },
+    ] });
+    await unlock(p);
+    await p.waitFor(() => /counted/.test(p.text('pvKey')), { label: 'the points row', ...SLOW });
+    p.click(p.$('pvKey').querySelector('button[data-a="ptshist"]'));
+    await p.waitFor(() => !!p.$('pvKey').querySelector('.pvkh'), { label: 'the list', ...SLOW });
+    const rows = [...p.$('pvKey').querySelectorAll('.pvkd')];
+    assert.equal(rows.length, 1, 'the row with no amount is dropped');
+    assert.match(rows[0].textContent, /0\.001 ETH/);
+    assert.equal(rows[0].querySelector('a'), null, 'and a hash that is not one is not linked');
+    assert.match(rows[0].textContent, /—/, 'a missing time says so rather than showing 1970');
+    p.close();
+  });
+
   test('shows before the Tacit key is unlocked: points follow the wallet, not the key', async () => {
     const p = await open();
     serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 5, deposit_count: 1 });
