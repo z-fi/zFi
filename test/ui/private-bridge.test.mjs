@@ -1467,6 +1467,68 @@ describe('deposits the relay or the pool turn away', () => {
  * beside them. A read that failed must never be presented as a fact about
  * someone's money — so this drives the failure rather than the happy path.
  */
+/**
+ * Tacit's points program is read-only and lives on a host of its own, so the
+ * page tries the relay first and the indexer second. Every way that can fail —
+ * both hosts down, a row for a different address, an unparseable total, no row
+ * at all — must leave the panel saying nothing rather than saying zero: a
+ * deposit the program has not counted is not a deposit worth nothing.
+ */
+describe('the points a wallet has been credited', () => {
+  const PTS = 'tacit-points.onrender.com';
+  const serve = (p, host, body) => {
+    Object.defineProperty(p.chain.lanes, host + '/points/', {
+      configurable: true, enumerable: true, get: () => body,
+    });
+  };
+
+  test('shows what the program counted, from the relay host', async () => {
+    const p = await open();
+    serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 5, deposit_count: 1 });
+    await unlock(p);
+    await p.waitFor(() => /Points/.test(p.text('pvKey')), { label: 'the points row', ...SLOW });
+    assert.match(p.text('pvKey'), /5 from 1 deposit counted/);
+    p.close();
+  });
+
+  test('falls back to the indexer host when the relay does not serve it', async () => {
+    const p = await open();
+    serve(p, PTS, { address: A.ACCOUNT.toLowerCase(), points: 12.5, deposit_count: 3 });
+    await unlock(p);
+    await p.waitFor(() => /Points/.test(p.text('pvKey')), { label: 'the points row via fallback', ...SLOW });
+    assert.match(p.text('pvKey'), /12\.5 from 3 deposits counted/);
+    p.close();
+  });
+
+  test('says nothing at all when neither host answers', async () => {
+    const p = await open();                       // no lane for either host
+    await unlock(p);
+    await p.waitFor(() => /Key unlocked/.test(p.text('pvKey')), { label: 'the key row' });
+    await p.settle();
+    assert.doesNotMatch(p.text('pvKey'), /Points/, 'no row rather than a zero');
+    assert.doesNotMatch(p.text('pvKey'), /0 from 0/);
+    p.close();
+  });
+
+  test('refuses a row that belongs to another address', async () => {
+    const p = await open();
+    serve(p, RELAY, { address: A.OTHER.toLowerCase(), points: 999, deposit_count: 9 });
+    await unlock(p);
+    await p.settle();
+    assert.doesNotMatch(p.text('pvKey'), /999/, 'a row for someone else is not this wallet\'s total');
+    p.close();
+  });
+
+  test('refuses a total it cannot read', async () => {
+    const p = await open();
+    serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 'lots', deposit_count: 1 });
+    await unlock(p);
+    await p.settle();
+    assert.doesNotMatch(p.text('pvKey'), /Points/);
+    p.close();
+  });
+});
+
 describe('a pool history that will not load', () => {
   // Every route the page has to the log history: the wallet RPC that cfgRead
   // uses, and each CP_LOGS fallback it reaches for over fetch.
