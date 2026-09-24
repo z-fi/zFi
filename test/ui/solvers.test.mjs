@@ -157,6 +157,37 @@ describe('the solver lanes', () => {
     p.close();
   });
 
+  // A pair the on-chain quoter cannot price (no pool, or a node that runs the
+  // quoter out of gas) must still be asked of the lanes: the fill contract
+  // enforces the floor, so the lane needs no on-chain route to compare against.
+  test('with no on-chain route, a lane still answers the quote', async () => {
+    const chain = chainWithQuote();
+    chain.quoteHandler = () => null;
+    wire(chain, [lane('0x', 'https://only.example', FILL)]);
+    chain.lanes = {
+      'only.example': { buyAmount: (2900n * USDC).toString(), transaction: { to: ROUTER, data: '0x1234' } },
+    };
+    const p = await open(chain);
+    await p.typeAmount('amt', '1');
+    assert.equal(p.value('outAmt'), '2900', 'the lane was not asked once the chain had no route');
+    const line = p.$('rate').textContent;
+    assert.match(line, /0x solver/, line);
+    assert.match(line, /Min 2885\.5 USDC/, 'the floor is the lane quote less the 0.5% setting: ' + line);
+    p.close();
+  });
+
+  test('with no on-chain route and no lane answer, it still reads as no route', async () => {
+    const chain = chainWithQuote();
+    chain.quoteHandler = () => null;
+    wire(chain, [lane('0x', 'https://mute.example', FILL)]);
+    chain.lanes = { 'mute.example': 403 };
+    const p = await open(chain);
+    await p.typeAmount('amt', '1');
+    await p.waitFor(() => /No route|could not complete/.test(p.text('stat')), { label: 'the no-route message' });
+    assert.equal(p.value('outAmt'), '', 'a placeholder route leaked into the output');
+    p.close();
+  });
+
   // Every shape the page speaks, each asked to pay EXEC. A shape that quietly
   // stopped matching its aggregator's response would otherwise just go quiet -
   // the lane would lose every race and nothing would say why.

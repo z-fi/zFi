@@ -1616,6 +1616,10 @@ export class MockChain {
   }
 
   quote(sel, data) {
+    // The quoter is read one call at a time, outside any batch, so a node that
+    // refuses everything (`batchLimit` 0) or fails every call it runs refuses it too,
+    // the way a real capped node does: out of gas, not an empty answer.
+    if (this.batchLimit === 0 || this.failEveryCall) throw Error('out of gas: gas required exceeds allowance');
     if (!this.quoteHandler) throw Error('MockChain: no quoteHandler installed');
     const out = this.quoteHandler({ selector: sel, data: '0x' + data, chain: this });
     if (out == null) throw Error('no route');

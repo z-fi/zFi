@@ -156,8 +156,12 @@ check('actionable quotes expire after 45 seconds', () => {
   // shortcuts do not consult a venue, but they are still ACTIONABLE - each one
   // arms the button with calldata - so they expire on the same clock as
   // everything else. This read 2 until ETH -> WETH gained its own path.
+  // The routed quote is also capped at 30 s from when a solver lane answered,
+  // since a lane's calldata is reused as-is and ages from the lane's clock.
   const uses = html.match(/exp:Date\.now\(\)\+QUOTE_TTL/g) || [];
-  if (uses.length !== 3) throw Error(`expected 3 quote-expiry uses, found ${uses.length}`);
+  if (uses.length !== 2) throw Error(`expected 2 shortcut quote-expiry uses, found ${uses.length}`);
+  if (!html.includes('exp:r.best.at?Math.min(Date.now()+QUOTE_TTL,r.best.at+3e4):Date.now()+QUOTE_TTL'))
+    throw Error('the routed quote no longer expires on QUOTE_TTL capped by the lane answer');
   if (html.includes('Date.now()+1500000')) throw Error('legacy 25-minute quote expiry remains');
 });
 
@@ -1096,9 +1100,10 @@ if (exported) {
   });
 
   check('executable quote retains its real bound and value', () => {
-    const est = {best: {amountIn: 100n, amountOut: 200n}, amountLimit: 101n, msgValue: 0n};
+    const est = {best: {amountIn: 100n, amountOut: 200n, feeBps: 30n}, sources: [3, 0], amountLimit: 101n, msgValue: 0n};
     const exe = {
-      best: {amountIn: 103n, amountOut: 194n},
+      best: {amountIn: 103n, amountOut: 194n, feeBps: 30n},
+      sources: [3, 0],
       amountLimit: 107n,
       msgValue: 109n,
       callData: '0x1234',
@@ -1109,6 +1114,14 @@ if (exported) {
     eq(q.amountLimit, 107n, 'executable per-leg bound retained');
     eq(q.msgValue, 109n, 'executable msg.value retained');
     eq(q.callData, '0x1234', 'executable calldata retained');
+    // The zero-bound call may pick a different route than the executable one
+    // (a hub's margin shrinks with slippage): then its numbers describe a route
+    // that will not run, so the executable quote stands whole.
+    const other = merge(est, {...exe, sources: [3]});
+    eq(other.best.amountOut, 194n, 'a different executed route is shown as itself');
+    // Exact-out: the executable leg overbuys the intermediate by the slippage,
+    // which the user really pays, so the padded input is the honest figure.
+    eq(merge(est, exe, true).best.amountIn, 103n, 'exact-out shows what is really spent');
   });
 
   check('atomic batching honors mainnet and chain-global capabilities', () => {

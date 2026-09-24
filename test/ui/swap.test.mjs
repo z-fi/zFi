@@ -8,7 +8,7 @@ import { test, describe, after } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   A, SEL, MockChain, loadPage, fixedRateQuoter, cpammQuoter, domainSeparator,
-  assertAddressesMatchPage, word, wordAddr, selectorOf, closeAllPages, encodeSingleHop,
+  assertAddressesMatchPage, word, wordAddr, selectorOf, closeAllPages, encodeSingleHop, encodeQuote,
 } from './harness.mjs';
 
 // A failed assertion skips the test's own close(); without this the page's
@@ -174,12 +174,10 @@ describe('quoting', () => {
   });
 
   /**
-   * The split builders are asked at a WIDENED bound — clamp(slip * 3, 1.5%, 5%)
-   * — because two legs on the same pair move each other's price and the user's
-   * own setting would mostly just make the call revert. But the winner is then
-   * chosen on expected output alone, so a split that beats a direct route by a
-   * wei replaces a 0.5% worst case with a 1.5% one. The Min was always the
-   * honest widened figure; nothing said the setting had been overridden.
+   * buildSplitSwap puts its two legs on two DISTINCT pools, each priced on its
+   * own, so neither leg moves the other's price and the user's setting is the
+   * right bound. Only the hybrid (direct + two-hop) is asked at a widened bound,
+   * because its second hop is sized off the first; that one still says so.
    */
   const u = v => BigInt(v).toString(16).padStart(64, '0');
   const encodeSplitReturn = ({ legs, msgValue = 0n, callData = '0x' }) => {
@@ -195,12 +193,14 @@ describe('quoting', () => {
     return '0x' + head + u(d.length / 2) + d.padEnd(Math.ceil(d.length / 64) * 64, '0');
   };
 
-  test('a split route says the slippage bound was widened past the setting', async () => {
+  test("a split route is bounded by the user's own slippage setting", async () => {
     const direct = fixedRateQuoter({ rate: RATE });
+    const asked = [];
     const p = await setup({ chain: { quoteHandler: req => {
       if (req.selector !== SEL.SPLIT_A) return direct(req);   // SPLIT_B reverts
       const body = '0x' + req.data.replace(/^0x/, '').slice(8);
       const amountIn = word(body, 3);
+      asked.push(word(body, 4));
       if (amountIn === 0n) return null;
       // 1% better than the direct route, so the split wins on output alone.
       const out = (amountIn * RATE / 10n ** 18n) / 10n ** 12n * 101n / 100n;
@@ -215,10 +215,10 @@ describe('quoting', () => {
     } } });
     await p.typeAmount('amt', '1');
 
-    assert.match(p.text('rate'), /Split — bound widened to 1\.5%/,
-      'the user set 0.5%; the executed route bounds at 1.5%');
-    // 3030 USDC quoted, floored at the bound that will actually be enforced.
-    assert.match(p.text('rate'), /Min 2984\.55 USDC/, 'and the Min is that same widened figure');
+    assert.ok(asked.length && asked.every(b => b === 50n), 'the split is asked at the 0.5% setting: ' + asked);
+    assert.doesNotMatch(p.text('rate'), /bound widened/, p.text('rate'));
+    // 3030 USDC quoted, floored at the user's 0.5%.
+    assert.match(p.text('rate'), /Min 3014\.85 USDC/, p.text('rate'));
     p.close();
   });
 
@@ -549,6 +549,59 @@ describe('hub routing without the on-chain hub builder', () => {
       assert.equal(word(args, 2), 0n, 'amount 0 = whatever is actually left');
       assert.equal(wordAddr(args, 3).toLowerCase(), A.ACCOUNT.toLowerCase(), 'back to the payer');
     }
+    p.close();
+  });
+
+  // The mainnet router's later legs spend "whatever the router holds" of the
+  // hub (swapAmount 0), and only up to the credit leg 1 left counts as the
+  // caller's: one wei of the hub sitting in the router beforehand makes leg 2
+  // pull the whole amount from the wallet, and leave leg 1's output for anyone
+  // to sweep(). Clearing the hubs first, to the payer, closes that.
+  test('an on-chain two-leg route first clears the hubs to the payer', async () => {
+    const chain = new MockChain();
+    chain.setNative(A.ACCOUNT, 10n * ETH);
+    const inner = '0x' + SEL.MULTICALL + '00'.repeat(28);
+    chain.quoteHandler = ({ selector, data }) => {
+      if (selector !== SEL.QUOTE) return null;
+      const body = '0x' + data.replace(/^0x/, '').slice(8);
+      const amountIn = word(body, 5);
+      if (!amountIn) return null;
+      const mid = amountIn * 2n, out = amountIn * 3000n / 10n ** 12n;
+      return encodeQuote({ u: 4, legs: [
+        { source: 3, feeBps: 5n, amountIn, amountOut: mid },
+        { source: 3, feeBps: 30n, amountIn: mid, amountOut: out },
+      ], callData: inner, msgValue: amountIn });
+    };
+    const p = await loadPage({ chain });
+    await p.connect();
+    await p.typeAmount('amt', '1');
+    assert.equal(p.value('outAmt'), '3000');
+    p.click('swap');
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'swap tx' });
+    await p.settle();
+    const calls = decodeMulticall(p.chain.lastSent.data);
+    assert.equal(calls[calls.length - 1], inner, 'the quoted route runs last, unchanged');
+    const sweeps = calls.slice(0, -1);
+    assert.ok(sweeps.length >= 4, 'every hub is cleared first: ' + sweeps.length);
+    for (const c of sweeps) {
+      assert.equal(selectorOf(c), SEL.SWEEP);
+      const args = '0x' + c.slice(10);
+      assert.notEqual(wordAddr(args, 0).toLowerCase(), A.USDC.toLowerCase(), 'the output token is never swept');
+      assert.equal(word(args, 2), 0n, 'amount 0 = whatever is there');
+      assert.equal(wordAddr(args, 3).toLowerCase(), A.ACCOUNT.toLowerCase(), 'to the payer');
+    }
+    p.close();
+  });
+
+  test('a one-leg route carries no hub sweeps', async () => {
+    const p = await loadPage({ chain: (() => { const c = new MockChain(); c.setNative(A.ACCOUNT, 10n * ETH);
+      c.quoteHandler = fixedRateQuoter({ rate: RATE }); return c; })() });
+    await p.connect();
+    await p.typeAmount('amt', '1');
+    p.click('swap');
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'swap tx' });
+    await p.settle();
+    assert.ok(!decodeMulticall(p.chain.lastSent.data).some(c => selectorOf(c) === SEL.SWEEP), 'no gas spent on sweeps');
     p.close();
   });
 

@@ -166,6 +166,9 @@ async function filebasePut(env, key, body, contentType) {
 // one upstream hiccup into a lane that looks dead to everyone.
 const UP_TTL = 10_000;
 const UP_MAX = 400;
+// The page races a lane for 1.5 s; an upstream that hangs past this is dead to
+// every caller waiting on the same key, so give up and let them fall through.
+const UP_TIMEOUT = 4_000;
 const _up = new Map();
 const _upWait = new Map();
 
@@ -180,8 +183,13 @@ async function cachedUpstream(key, go) {
   if (inflight) return { ...(await inflight), cached: true };
 
   const p = (async () => {
-    const res = await go();
-    const body = Buffer.from(await res.arrayBuffer());
+    let res, body;
+    try {
+      res = await go(AbortSignal.timeout(UP_TIMEOUT));
+      body = Buffer.from(await res.arrayBuffer());
+    } catch {
+      return { body: Buffer.from('{"error":"upstream"}'), status: 502 };
+    }
     // Only successes are held. A cached 429 turns one upstream hiccup into a
     // lane that looks dead to every caller for the length of the TTL.
     if (res.ok) {
@@ -219,7 +227,8 @@ export default {
       const oxPath = url.pathname.slice(3); // strip "/0x" prefix
       if (!oxPath.startsWith('/swap/allowance-holder/')) return json(request, { error: 'forbidden path' }, 403);
       const oxUrl = `${OX_API}${oxPath}?${url.searchParams}`;
-      const r = await cachedUpstream(`0x|${oxUrl}`, () => fetch(oxUrl, {
+      const r = await cachedUpstream(`0x|${oxUrl}`, signal => fetch(oxUrl, {
+        signal,
         headers: { '0x-api-key': env.OX_API_KEY, '0x-version': 'v2' },
       }));
       return new Response(r.body, {
@@ -234,7 +243,8 @@ export default {
       const inchPath = url.pathname.slice(6); // strip "/1inch" prefix
       if (!inchPath.startsWith('/swap/')) return json(request, { error: 'forbidden path' }, 403);
       const inchUrl = `${INCH_API}${inchPath}?${url.searchParams}`;
-      const r = await cachedUpstream(`1inch|${inchUrl}`, () => fetch(inchUrl, {
+      const r = await cachedUpstream(`1inch|${inchUrl}`, signal => fetch(inchUrl, {
+        signal,
         headers: { 'Authorization': `Bearer ${env.INCH_API_KEY}` },
       }));
       return new Response(r.body, {
@@ -260,7 +270,8 @@ export default {
         await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(stringToSign)),
       )));
       const okxUrl = `${OKX_API}${requestPath}${qs ? '?' + qs : ''}`;
-      const r = await cachedUpstream(`okx|${okxUrl}`, () => fetch(okxUrl, {
+      const r = await cachedUpstream(`okx|${okxUrl}`, signal => fetch(okxUrl, {
+        signal,
         headers: {
           'OK-ACCESS-KEY': env.OKX_API_KEY,
           'OK-ACCESS-SIGN': sig,
@@ -283,7 +294,7 @@ export default {
       const headers = { 'Accept': 'application/json' };
       if (env.ENSO_API_KEY) headers['Authorization'] = `Bearer ${env.ENSO_API_KEY}`;
       const ensoUrl = `${ENSO_API}${ensoPath}?${url.searchParams}`;
-      const r = await cachedUpstream(`enso|${ensoUrl}`, () => fetch(ensoUrl, { headers }));
+      const r = await cachedUpstream(`enso|${ensoUrl}`, signal => fetch(ensoUrl, { headers, signal }));
       return new Response(r.body, {
         status: r.status,
         headers: { ...cors(request), 'Content-Type': 'application/json', 'X-Cache': r.cached ? 'HIT' : 'MISS' },
