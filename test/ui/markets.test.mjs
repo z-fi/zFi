@@ -113,6 +113,56 @@ test('markets mode', async (t) => {
     assert.match(rows(p)[0], /YES won/);
   });
 
+  await t.test('the detail separates what the sides pay from the terms and from your own position', async () => {
+    // The two payout multiples are what you trade on, so they lead the detail
+    // rather than sitting mid-sentence among the fee and the taxes. A later
+    // edit can keep every word and still flatten the three tiers back into one
+    // run-on line, which is why this pins the structure and not the text.
+    const p = await openMarkets(pmChain({ held: { [RAIN]: [ONE, 0n, 0n] } }));
+    await pick(p, RAIN);
+    const head = p.$('mkInfo').querySelector('.mkhd');
+    assert.ok(head, 'the payouts head the detail');
+    assert.deepEqual([...head.querySelectorAll('b')].map((b) => b.textContent.replace(/×.*/, '×').trim()),
+      ['YES pays ×', 'NO pays ×'], 'both sides, each in its own cell');
+    const fine = p.$('mkInfo').querySelector('.mkfp');
+    assert.match(fine.textContent, /Pot /);
+    assert.match(fine.textContent, /resolver/);
+    assert.doesNotMatch(fine.textContent, /pays ×/, 'the terms do not carry the payouts');
+    const mine = p.$('mkInfo').querySelector('.mkyou');
+    assert.match(mine.textContent, /^You hold /, 'your position stands on its own');
+    assert.doesNotMatch(fine.textContent, /You hold/);
+  });
+
+  await t.test('a settled market heads with the one payout it has', async () => {
+    const p = await openMarkets(pmChain({ held: { [BALL]: [ONE, 0n, 2n * ONE] } }));
+    p.$('mkChips').querySelector('[data-f="done"]').click();
+    await p.waitFor(() => rows(p).length === 1, { label: 'settled filter' });
+    await pick(p, BALL);
+    const head = p.$('mkInfo').querySelector('.mkhd');
+    assert.equal(head.querySelectorAll('b').length, 1, 'a settled market has one payout, not two');
+    assert.match(head.textContent, /each winning share pays ×2\.00/);
+  });
+
+  await t.test('a sell action may wrap, because its label carries the proceeds', async () => {
+    // .lqbtn is white-space:nowrap with min-width:0, so a label as long as
+    // "Sell YES (0.2475 ETH)" shrank below its content and ran past the card.
+    const p = await openMarkets(pmChain({ held: { [EXIT]: [ONE, 0n, 0n] } }));
+    await pick(p, EXIT);
+    const sell = act(p, 'xy');
+    assert.ok(sell, 'an exitable market you hold offers a sell');
+    assert.match(sell.textContent, /Sell YES \(.+\)/, 'the label names what it returns');
+    const win = sell.ownerDocument.defaultView;
+    // Control: a .lqbtn outside #mkActs still refuses to wrap, so this is the
+    // scoped override doing the work and not jsdom defaulting to normal.
+    const loose = sell.ownerDocument.createElement('button');
+    loose.className = 'lqbtn';
+    sell.ownerDocument.body.append(loose);
+    assert.equal(win.getComputedStyle(loose).whiteSpace, 'nowrap');
+    assert.equal(win.getComputedStyle(sell).whiteSpace, 'normal',
+      'actions in the markets panel wrap instead of overflowing the card');
+    loose.remove();
+  });
+
   await t.test('buys YES with ETH in a wstETH market through betETH and the Lido route', async () => {
     const chain = pmChain();
     const p = await openMarkets(chain);
