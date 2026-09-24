@@ -7485,8 +7485,8 @@ const cpProveTip=async()=>{if(!cpTipOn())return 0n;
 try{const j=await relayFetch("/confidential/quote?asset="+CP_ETH),r=String(j&&j.recommendedProveTipWei||"");
 if(!cpTipTo(j)||!/^\d{1,30}$/.test(r))return 0n;let t=BigInt(r);if(t<=0n)return 0n;
 if(t>300000000000000n)t=300000000000000n;return t}catch{return 0n}};
-const cpSettleReq=async(pv,pr,ms,gas)=>{const base={from:account,to:CP_POOL,value:"0x0",data:cpSettleData(pv,pr,ms),gas:toHex(gas)};
-try{const t=await cpProveTip();if(t<=0n)return base;
+const cpSettleReq=async(pv,pr,ms,gas,fee)=>{const base={from:account,to:CP_POOL,value:"0x0",data:cpSettleData(pv,pr,ms),gas:toHex(gas)};
+try{if(fee&&BigInt(fee)>0n)return base;const t=await cpProveTip();if(t<=0n)return base;
 const a=encBytes(pv),b=encBytes(pr),tl=ms.map(encBytes);let off=ms.length*32,hd=encUint(ms.length);for(const x of tl){hd+=encUint(off);off+=x.length/2}
 const mo=128+(a.length+b.length)/2,req={from:account,to:CP_TIPFWD_S,value:toHex(t),gas:toHex(gas+60000),
 data:"0x"+SEL_CPSTIP+encUint(128)+encUint(128+a.length/2)+encUint(mo)+encAddr(CP_TIPTO)+a+b+hd+tl.join("")};
@@ -7628,7 +7628,7 @@ if(st.status==="proven"&&/^0x[0-9a-fA-F]+$/.test(st.publicValues||"")&&/^0x[0-9a
 const cpLockSettle=async l=>{if(!(l.pv&&l.pr))throw Error(PNR);const add=l.one?await cpEscrowNeed(l):0n,eth=add?await cpEthFor(add):0n;
 if(eth&&!await sure("Post the escrow with "+trimAmt(eth,18)+" ETH and mint the cBTC in the same transaction? This wallet can take the escrow back once the lock is redeemed."))return;
 const a=encBytes(l.pv),b=encBytes(l.pr),m=encUint(1)+encUint(32)+encBytes("0x"),req=eth?{from:account,to:CP_EH,value:toHex(eth),gas:toHex(1100000),
-data:"0x2bb12527"+pad32(bOp(l))+encUint(128)+encUint(128+a.length/2)+encUint(128+(a.length+b.length)/2)+a+b+m}:{from:account,to:CP_POOL,value:"0x0",data:cpSettleData(l.pv,l.pr,["0x"]),gas:toHex(700000)};if(eth)l.eh=1;
+data:"0x2bb12527"+pad32(bOp(l))+encUint(128)+encUint(128+a.length/2)+encUint(128+(a.length+b.length)/2)+a+b+m}:await cpSettleReq(l.pv,l.pr,["0x"],700000);if(eth)l.eh=1;
 await rpc(C,[req,L]);l.stx=await sendTx([req]);cpSaveLocks();await settle(l.stx);l.js="settled";cpSaveLocks();await cpLockSync();stat.textContent="cBTC minted."};
 const cpEscrowBack=async l=>{const req={from:account,to:CP_EH,value:"0x0",data:"0xc5211d27"+pad32(bOp(l))};await rpc(C,[req,L]);l.rtx=await sendTx([req]);cpSaveLocks();await settle(l.rtx);await cpLockSync();stat.textContent="Escrow returned to this wallet."};
 const CP_CUSD="0x8f4490dd3728b0ee904d7a67c11b37ffd463a5c7f08b79810006995ee8a9679d",CP_CDPS="zswap:cpc:",CDP_MINTED="0x232c7d098ca44092999087e6ee530a2171f95f9ecb1caa363f6dcf448fb7dd57",Z32="0x"+"00".repeat(32);
@@ -7648,16 +7648,16 @@ const w=h=>BigInt("0x"+(strip0x(h||"").slice(0,64)||"0")),[u,rt,rb]=await cfgBat
 const usd=w(u),ratio=w(rb)||15000n,max=usd*10000n/ratio;if(!max)throw Error("The engine could not price this cBTC.");
 const s=(await ask("Borrow how many cUSD against "+trimAmt(k.value,8)+" cBTC (worth $"+trimAmt(usd,8)+")? At most "+trimAmt(max,8)+"; the engine liquidates a position that falls below its liquidation ratio.",trimAmt(max/2n,8))||"").trim();if(!s)return;
 const debt=parseUnits(s,8);if(debt<=0n||debt>max)throw Error("Borrow more than zero and at most "+trimAmt(max,8)+" cUSD.");
-await cpScanCdps().catch(()=>0);const cdps=cpLoadCdps(),i=cdps.reduce((m,p)=>Math.max(m,p.i+1),0),{root,path}=cpTree(c.leaves,li),rate="0x"+(w(rt)||10n**27n).toString(16).padStart(64,"0"),X=cdpBuildOp(k,li,root,path,debt,rate,i),self=pvPath.value==="self";
+await cpScanCdps().catch(()=>0);const cdps=cpLoadCdps(),i=cdps.reduce((m,p)=>Math.max(m,p.i+1),0),{root,path}=cpTree(c.leaves,li),rate="0x"+(w(rt)||10n**27n).toString(16).padStart(64,"0"),X=cdpBuildOp(k,li,root,path,debt,rate,i),self=true;
 const memo=cpSeal(cpPub,{value:debt,blinding:X.S.blind,secret:X.S.nk,owner:X.S.dOwner,asset:CP_CUSD},cpRandom());
 const p={i,v:String(debt),cv:String(k.value),c:n.b,rate,leaf:cdpLeaf(debt,rate,X.S.owner,X.S.nonce,[[k.asset,k.value]]),memo,at:Math.floor(Date.now()/1000)};cdps.push(p);cpSaveCdps(cdps);
 const nn=cpNotes.some(x=>x.s===X.S.nk)?null:{i:-1,v:String(debt),a:CP_CUSD,s:X.S.nk,b:"0x"+X.S.blind.toString(16).padStart(64,"0"),at:p.at};if(nn){cpNotes.push(nn);cpSaveNotes()}
 const undo=()=>{const q=cpLoadCdps().filter(x=>x.leaf!==p.leaf);cpSaveCdps(q);const ix=cpNotes.indexOf(nn);if(ix>=0){cpNotes.splice(ix,1);cpSaveNotes(true)}};
 let j,jrb;try{({j,rb:jrb}=await relaySub({type:"cdpmint",op:X.op,memos:[memo],mode:self?"prove":"settle"}))}catch(e){if(e&&e.rej)undo();throw e}if(!j.jobId){undo();throw Error("The relay did not take the loan.")}
-p.job=j.jobId;p.js=j.status||"pending";p.rb=jrb;p.self=self?1:0;cpSaveCdps(cdps);stat.textContent=self?"Proving the loan. Press settle when it appears.":"The relay is opening the position; the cUSD lands in a minute or two."};
+p.job=j.jobId;p.js=j.status||"pending";p.rb=jrb;p.self=self?1:0;cpSaveCdps(cdps);stat.textContent="Proving the loan. Press settle when it appears: a loan is opened from this wallet, and the tip covers the proof."};
 const cpCdpPoll=async p=>{const st=await relayFetch("/confidential/status?id="+encodeURIComponent(p.job),null,p.rb);p.js=st.status||"unknown";const pr=st.proof||st.proofBytes;
 if(st.status==="proven"&&/^0x[0-9a-fA-F]+$/.test(st.publicValues||"")&&/^0x[0-9a-fA-F]+$/.test(pr||"")&&st.publicValues.toLowerCase().includes(strip0x(p.leaf))){p.pv=st.publicValues;p.pr=pr}};
-const cpCdpSettle=async p=>{if(!(p.pv&&p.pr))throw Error(PNR);const req={from:account,to:CP_POOL,value:"0x0",data:cpSettleData(p.pv,p.pr,[p.memo]),gas:toHex(900000)};
+const cpCdpSettle=async p=>{if(!(p.pv&&p.pr))throw Error(PNR);const req=await cpSettleReq(p.pv,p.pr,[p.memo],900000);
 await rpc(C,[req,L]);p.stx=await sendTx([req]);const a=cpLoadCdps(),m=a.find(x=>x.leaf===p.leaf);if(m)Object.assign(m,p);cpSaveCdps(a);await settle(p.stx);p.js="settled";if(m)m.js="settled";cpSaveCdps(a);stat.textContent="Position opened."};
 const cpScanCdps=async()=>{const z=cpNotes.filter(n=>n.z);if(!z.length)return 0;const f={address:CP_CE,fromBlock:toHex(CP_BLOCK),toBlock:"latest",topics:[CDP_MINTED]};let lg=null;
 try{lg=await cfgRead("eth_getLogs",[f])}catch{}if(!cpLogsOk(lg))for(const u of CP_LOGS){try{lg=await httpRead(u,"eth_getLogs",[f]);if(cpLogsOk(lg))break}catch{}}if(!cpLogsOk(lg))throw Error("No node served the loan history.");
@@ -7959,7 +7959,7 @@ x.job=r2.jobId;x.js=r2.status||"pending";x.rb=rb2;cpSaveNotes();
 stat.textContent=(self?"Proving. Press send when it appears.":ch===1?"The relay is settling the withdrawal.":"The relay is settling the exit, then bridging it; this wallet sends nothing. Export your notes now: until it is bridged, this exit exists only in this browser. If the relay cannot bridge it, its row offers activate; activating from this wallet links the exit to your deposit.")+(ch!==1&&to.toLowerCase()===String(account).toLowerCase()?" It also exits to this same wallet, which links it too.":"")+(warn?" "+warn:"");
 const h=cpHint(v,A);if(h)pvNote.textContent=(pvNote.textContent?pvNote.textContent+" ":"")+h};
 const cpSelfSend=async n=>{const x=n.ex;
-const req=x.ch===1?await cpSettleReq(x.pv,x.pr,x.m||[],700000)
+const req=x.ch===1?await cpSettleReq(x.pv,x.pr,x.m||[],700000,x.fee)
 :{from:account,to:CP_ROUTER,value:"0x0",data:cpExitData(x.pv,x.pr,cpRecipe(x),x.m||[]),gas:toHex(2000000)};
 await rpc(C,[req,L]);
 x.ptx=await sendTx([req]);cpSaveNotes();cpPaint();
@@ -8109,7 +8109,7 @@ return{v:n.v,b:k.blinding,s:n.z?"0x"+"00".repeat(32):k.secret,owner:k.owner,cx:k
 const cpJob=async(t,op,m,self,nd)=>{const{j:r,rb}=await relaySub({type:t,op,memos:m,mode:self?"prove":"settle"});if(!r.jobId)throw Error("The relay did not take it.");return{job:r.jobId,js:r.status||"pending",rb,self:self?1:0,t,op,m,nd}};
 const cpJobPoll=async j=>{if(!j||!j.job||j.stx||j.pv||j.js==="settled"||j.js==="failed")return;const st=await relayFetch("/confidential/status?id="+encodeURIComponent(j.job),null,j.rb),pr=st.proof||st.proofBytes;j.js=st.status||"unknown";if(st.error)j.err=String(st.error).slice(0,120);
 if(st.status==="proven"&&/^0x[0-9a-fA-F]+$/.test(st.publicValues||"")&&/^0x[0-9a-fA-F]+$/.test(pr||"")&&st.publicValues.toLowerCase().includes(strip0x(j.nd).toLowerCase())){j.pv=st.publicValues;j.pr=pr}};
-const cpJobSend=async(j,gas)=>{if(!(j&&j.pv&&j.pr))throw Error(PNR);const req=j.t==="wraptransfer"?{from:account,to:CP_ROUTER,value:toHex(BigInt(j.w)),data:cpWtData(BigInt(j.w),j.cm,j.pv,j.pr,j.m),gas:toHex(1400000)}:await cpSettleReq(j.pv,j.pr,j.m,gas||900000);
+const cpJobSend=async(j,gas)=>{if(!(j&&j.pv&&j.pr))throw Error(PNR);const req=j.t==="wraptransfer"?{from:account,to:CP_ROUTER,value:toHex(BigInt(j.w)),data:cpWtData(BigInt(j.w),j.cm,j.pv,j.pr,j.m),gas:toHex(1400000)}:await cpSettleReq(j.pv,j.pr,j.m,gas||900000,j.op&&j.op.fee);
 await rpc(C,[req,L]);await cpGasOk(req);j.stx=await sendTx([req]);cpSaveS();cpSaveI();cpPaint();try{await settle(j.stx)}catch(e){delete j.stx;cpSaveS();cpSaveI();throw e}j.js="settled";cpSaveS();cpSaveI()};
 const cpAddOut=(o,a,sid)=>{const r={i:-1,v:o.v,s:o.s,b:o.b,at:nowS(),sid};if(a!==CP_ETH)r.a=a;const k=cpKeyOf(r);if(!cpNotes.some(n=>cpKeyOf(n)===k))cpNotes.push(r);return k};
 const cpDropOut=sid=>{cpNotes=cpNotes.filter(n=>n.sid!==sid||!!cpPool&&cpPool.leaves.includes(cpNoteOf(n).leaf));cpSaveNotes(1)};
