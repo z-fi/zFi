@@ -206,6 +206,46 @@ describe('escrow through CbtcEscrowHelper', () => {
     p.close();
   });
 
+  // The same one transaction, with the relay quoting for the proof it made. Only
+  // `stakeAmount` reaches the helper; the rest of msg.value is the tip, and the
+  // forwarder reverts before touching the helper if the proof carries fees of its
+  // own. The head grows from four words to six, so the bytes offsets all move.
+  test('escrow, mint and the relay\'s pay ride one transaction', async () => {
+    const EFWD = '0x000000fb551f7ef4936a59ecdd431ae253139e8d';
+    const p = await open(helperChain());
+    Object.defineProperty(p.chain.lanes, RELAY + '/confidential/quote', {
+      configurable: true, enumerable: true,
+      get: () => ({ ticker: 'cETH', relayFeeEligible: true, recommendedProveTipWei: '90000000000000' }),
+    });
+    p.chain.answer(EFWD, 'ef3dc43b', '0x');
+    await recorded(p);
+    p.click(p.$('pvList').querySelector('button[data-a="lone"]'));
+    await p.waitFor(() => p.window.__posts.some(x => x.url.includes('/confidential/submit')), { label: 'the proof request', ...SLOW });
+    const pv = '0x' + '12'.repeat(64) + C.outpoint.slice(2), pr = '0x' + 'ab'.repeat(260);
+    p.chain.relay.status = { status: 'proven', publicValues: pv, proof: pr };
+    advance(p);
+    poke(p);
+    await p.waitFor(() => !!p.$('pvList').querySelector('button[data-a="lsettle"]'), { label: 'the one-transaction button', ...SLOW });
+    p.queueConfirm(true);
+    p.click(p.$('pvList').querySelector('button[data-a="lsettle"]'));
+    await p.waitFor(() => p.chain.sentTo(EFWD).length === 1, { label: 'postEscrowWithETHAndSettleWithTip', ...SLOW });
+    const tx = p.chain.sentTo(EFWD)[0];
+    assert.equal(tx.data.slice(2, 10), 'ef3dc43b');
+    const [op, stake, pvOut, prOut, memos, to] =
+      coder.decode(['bytes32', 'uint256', 'bytes', 'bytes', 'bytes[]', 'address'], '0x' + tx.data.slice(10));
+    assert.equal(op, C.outpoint);
+    assert.equal(pvOut, pv, 'the offsets still land on the proof, six head words in');
+    assert.equal(prOut, pr);
+    assert.deepEqual([...memos], ['0x']);
+    assert.equal(to.toLowerCase(), '0x68575b073de49a94e3e3acf6f3a0d6e3b66267c7', 'the payee the page carries');
+    assert.equal(BigInt(tx.value) - stake, 90000000000000n, 'exactly the tip rides above the stake');
+    assert.ok(stake > 0n, 'and the stake is what the helper receives');
+    assert.equal(p.chain.sentTo(HELPER).length, 0, 'nothing goes to the helper directly');
+    assert.equal(p.chain.sentTo(POOL).length, 0, 'the pool is settled from inside the helper');
+    await p.settle();
+    p.close();
+  });
+
   test('escrow and mint in one transaction: the relay only proves, the helper posts and settles', async () => {
     const p = await open(helperChain());
     await recorded(p);
@@ -266,7 +306,11 @@ describe('borrowing cUSD against the cBTC note', () => {
     await p.waitFor(() => p.window.__posts.some(x => x.url.includes('/confidential/submit')), { label: 'the loan to reach the relay', ...SLOW });
     const job = JSON.parse(p.window.__posts.find(x => x.url.includes('/confidential/submit')).body);
     assert.equal(job.type, 'cdpmint');
-    assert.equal(job.mode, 'settle');
+    // A loan op carries fee "0", and OP_CDP_MINT is fee-CAPABLE rather than
+    // fee-less by design, so the relay's floor refuses to settle one for
+    // nothing. The relay proves it and this wallet sends the settle, which the
+    // prove tip pays for.
+    assert.equal(job.mode, 'prove', 'a fee-less loan op is proved, never relayed');
     assert.deepEqual(job.op, D.op, 'byte-identical to Tacit\'s op for the same note, debt and key');
     assert.equal(job.memos.length, 1, 'one sealed memo, for the cUSD note');
     assert.match(job.memos[0], /^0x0[23][0-9a-f]{336}$/, 'ephemeral key (33 B) + ciphertext (136 B)');
