@@ -1856,6 +1856,95 @@ describe('tipping the relay for a deposit', () => {
     p.chain.answer(TIPFWD, SEL_WTIP, '0x');
   };
 
+  // A tip names ONE payee, and the page hardcodes Tacit's relay key. Whoever
+  // pins a relay of their own would therefore quote a tip from that relay and
+  // pay it to Tacit's - the wrong party for work the pinned relay did. So a tip
+  // is only ever built for a relay the page itself lists.
+  test('a self-pinned relay is settled with, not tipped', async () => {
+    const p = await open({ storage: { 'zswap:cprelay': 'https://relay.example.com' } });
+    quoting(p, 115000000000000n);
+    Object.defineProperty(p.chain.lanes, 'relay.example.com/confidential/quote', {
+      configurable: true, enumerable: true,
+      get: () => ({ ticker: 'cETH', assetId: F.ethAssetId, relayFeeEligible: true, recommendedWrapTipWei: '115000000000000' }),
+    });
+    await unlock(p);
+    p.type('pvAmt', '0.01');
+    await p.waitFor(() => /0\.01/.test(p.text('pvPrev')), { label: 'the preview', ...SLOW });
+    await p.settle();
+    assert.doesNotMatch(p.text('pvPrev'), /Relay tip/, p.text('pvPrev'));
+    assert.ok(p.$('pvTipL').classList.contains('hide'), 'nothing to tick when a tip can reach nobody');
+    p.click('pvGo');
+    await p.waitFor(() => p.chain.sentTo(POOL).length === 1, { label: 'the deposit to be sent', ...SLOW });
+    assert.equal(p.chain.sentTo(TIPFWD).length, 0, 'no forwarder leg');
+    assert.equal(BigInt(p.chain.sentTo(POOL)[0].value), 10000000000000000n, 'the deposit, and not a wei more');
+    p.close();
+  });
+
+  test('pinning a relay says a tip no longer applies', async () => {
+    const p = await open();
+    await unlock(p);
+    p.window.prompt = () => 'https://relay.example.com';
+    p.click(p.$('pvKey').querySelector('button[data-a="more"]'));
+    await p.settle();
+    p.click(p.$('pvKey').querySelector('button[data-a="relay"]'));
+    await p.waitFor(() => /relay\.example\.com/.test(p.text('stat')), { label: 'the relay status', ...SLOW });
+    assert.match(p.text('stat'), /pinned, with no fallback and no tip/, p.text('stat'));
+    p.close();
+  });
+
+  // Clearing the pin puts the tick back, and with the preference it had before.
+  test('going back to a listed relay restores the tip', async () => {
+    const p = await open({ storage: { 'zswap:cprelay': 'https://relay.example.com' } });
+    quoting(p, 115000000000000n);
+    await unlock(p);
+    await p.settle();
+    assert.ok(p.$('pvTipL').classList.contains('hide'));
+    p.window.prompt = () => '';
+    p.click(p.$('pvKey').querySelector('button[data-a="more"]'));
+    await p.settle();
+    p.click(p.$('pvKey').querySelector('button[data-a="relay"]'));
+    await p.settle();
+    p.type('pvAmt', '0.01');
+    await p.waitFor(() => /Relay tip/.test(p.text('pvPrev')), { label: 'the tip to come back', ...SLOW });
+    assert.equal(p.$('pvTipL').classList.contains('hide'), false);
+    p.close();
+  });
+
+  // The payee is compiled in; the quote merely agrees with it. A quote that
+  // names someone else is a redirect attempt, and the answer is not to tip.
+  test('a quote that names a different payee is not tipped', async () => {
+    const p = await open();
+    Object.defineProperty(p.chain.lanes, RELAY + '/confidential/quote', {
+      configurable: true, enumerable: true,
+      get: () => ({ ticker: 'cETH', assetId: F.ethAssetId, relayFeeEligible: true,
+        recommendedWrapTipWei: '115000000000000', recommendedTipRecipient: '0x' + 'ee'.repeat(20) }),
+    });
+    p.chain.answer(TIPFWD, SEL_WTIP, '0x');
+    await unlock(p);
+    p.type('pvAmt', '0.01');
+    await p.waitFor(() => /0\.01/.test(p.text('pvPrev')), { label: 'the preview', ...SLOW });
+    await p.settle();
+    assert.doesNotMatch(p.text('pvPrev'), /Relay tip/, p.text('pvPrev'));
+    p.click('pvGo');
+    await p.waitFor(() => p.chain.sentTo(POOL).length === 1, { label: 'the deposit to be sent', ...SLOW });
+    assert.equal(p.chain.sentTo(TIPFWD).length, 0, 'no forwarder leg');
+    p.close();
+  });
+
+  test('a quote that names the payee it is paid to is tipped as usual', async () => {
+    const p = await open();
+    Object.defineProperty(p.chain.lanes, RELAY + '/confidential/quote', {
+      configurable: true, enumerable: true,
+      get: () => ({ ticker: 'cETH', assetId: F.ethAssetId, relayFeeEligible: true,
+        recommendedWrapTipWei: '115000000000000', recommendedTipRecipient: TIPTO.toUpperCase().replace('0X', '0x') }),
+    });
+    p.chain.answer(TIPFWD, SEL_WTIP, '0x');
+    await unlock(p);
+    p.type('pvAmt', '0.01');
+    await p.waitFor(() => /Relay tip/.test(p.text('pvPrev')), { label: 'the tip', ...SLOW });
+    p.close();
+  });
+
   test('a tip that does cover the settle says so', async () => {
     const p = await open();
     quoting(p, 115000000000000n);         // the relay's flat floor, 0.000115 ETH

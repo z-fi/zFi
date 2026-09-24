@@ -437,7 +437,7 @@ background:var(--e);margin:.5em auto .1em}
 <label class="dly">Arrives on<select id="pvChain"><option value="1">Ethereum (withdraw)</option><option value="8453">Base</option><option value="4663">Robinhood</option></select></label>
 <label class="dly" title="The address credited on the chain chosen above. Leave blank for this wallet, which links the exit to the deposit. On Robinhood the unused gas budget refunds here too, so a contract wallet gets its refund at an aliased address.">Recipient<input id="pvTo" placeholder="0x… on that chain, defaults to you" autocomplete="off" spellcheck="false"></label>
 <label class="dly hide" id="pvRcL" title="The recipient's Tacit address (tacit1…; zSwap shows it beside “your address”, tacit.finance under Wallet) or their 33-byte Tacit key. A 0x with no Tacit address becomes a public payout.">To<input id="pvRc" placeholder="tacit1…, name or 0x" autocomplete="off" spellcheck="false"></label>
-<label class="dly" title="Through the relay: it proves and settles, paying its own gas; an exit costs a flat fee. An exit to an L2 then needs one activate transaction; sending it from this wallet links the exit to it, so import the key and notes into another wallet to activate there. From this wallet: the relay still proves it, so it sees the same link either way; you send the settle yourself, fee-free, but from this wallet. Applies to deposits, exits and payments.">Settle<select id="pvPath"><option value="relay">Through the relay</option><option value="self">From this wallet</option></select></label><label class="dly hide" id="pvTipL" title="A deposit costs the relay gas and a proof, and nothing in the pool makes you pay for it. On by default at the relay's own quoted cost, never more than 3% of the deposit. Untick and the deposit still settles.">Tip the relay<input id="pvTip" type="checkbox" checked></label>
+<label class="dly" title="Through the relay: it proves and settles, paying its own gas; an exit costs a flat fee. An exit to an L2 then needs one activate transaction; sending it from this wallet links the exit to it, so import the key and notes into another wallet to activate there. From this wallet: the relay still proves it, so it sees the same link either way; you send the settle yourself, fee-free, but from this wallet. Applies to deposits, exits and payments.">Settle<select id="pvPath"><option value="relay">Through the relay</option><option value="self">From this wallet</option></select></label><label class="dly hide" id="pvTipL" title="A deposit costs the relay gas and a proof, and nothing in the pool makes you pay for it. On by default at the relay's own quoted cost, never more than 3% of the deposit. Untick and the deposit still settles. A tip can only be paid to the listed relays, so pinning one of your own leaves nothing to tick.">Tip the relay<input id="pvTip" type="checkbox" checked></label>
 <small id="pvPrev" class="hide"></small>
 <small id="pvKey"></small>
 <div id="pvList"></div>
@@ -7483,7 +7483,7 @@ const X=padd(Cc,pneg(pmul(cpH,BigInt(v))));return pcomp(pmul(GP,BigInt(zh)))===p
 const CP_TIPFWD_S="0x0000008353ee6Dea1236544938C546E27010416D",SEL_CPSTIP="70b16a7d";
 const cpProveTip=async()=>{if(!cpTipOn())return 0n;
 try{const j=await relayFetch("/confidential/quote?asset="+CP_ETH),r=String(j&&j.recommendedProveTipWei||"");
-if(!/^\d{1,30}$/.test(r))return 0n;let t=BigInt(r);if(t<=0n)return 0n;
+if(!cpTipTo(j)||!/^\d{1,30}$/.test(r))return 0n;let t=BigInt(r);if(t<=0n)return 0n;
 if(t>300000000000000n)t=300000000000000n;return t}catch{return 0n}};
 const cpSettleReq=async(pv,pr,ms,gas)=>{const base={from:account,to:CP_POOL,value:"0x0",data:cpSettleData(pv,pr,ms),gas:toHex(gas)};
 try{const t=await cpProveTip();if(t<=0n)return base;
@@ -7834,18 +7834,21 @@ op:{chainBinding:cb,asset:a,value:String(v),cx:k.cx,cy:k.cy,owner:k.owner,sigR:s
 const cpTokBal=async A=>BigInt(await rpc(C,[{to:A.tok,data:balOf(account)},L])||"0x0");
 const CP_SETTLE_GAS=540000n;
 const CP_TIPFWD="0x000000D218B03db5837943b0b05DeA2965AE956e",CP_TIPTO="0x68575B073DE49a94e3E3ACf6F3A0d6E3b66267C7",SEL_CPWTIP="fc24c435",TIPOFF="zswap:cptip";
-const cpTipOn=()=>{try{return LS[TIPOFF]!=="0"}catch{return true}};
-const cpTipSync=()=>{pvTip.checked=cpTipOn();pvTipL.classList.toggle("hide",!(pvAct.value==="dep"&&pvPath.value!=="self"))};
+const cpTipRost=()=>CP_RELAYS.includes(cpRelayBase());
+const cpTipTo=j=>{const r=String(j&&j.recommendedTipRecipient||"");return!r||r.toLowerCase()===CP_TIPTO.toLowerCase()};
+const cpTipPref=()=>{try{return LS[TIPOFF]!=="0"}catch{return true}};
+const cpTipOn=()=>cpTipRost()&&cpTipPref();
+const cpTipSync=()=>{pvTip.checked=cpTipPref();pvTipL.classList.toggle("hide",!(pvAct.value==="dep"&&pvPath.value!=="self"&&cpTipRost()))};
 pvTip.onchange=()=>{sBlip();try{LS[TIPOFF]=pvTip.checked?"1":"0"}catch{}pvPrevSoon()};
 const CP_TIPFWD_T="0x0000007b1d93d72f698A861aA86Ac675D6AF7216",SEL_CPWTIPT="801f0234";
 const cpTipTok=async A=>{if(!cpTipOn()||pvPath.value==="self")return 0n;
 try{const j=await relayFetch("/confidential/quote?asset="+A.id),r=String(j&&j.recommendedWrapTipWei||"");
-if(!/^\d{1,30}$/.test(r))return 0n;let t=BigInt(r);if(t<=0n)return 0n;
+if(!cpTipTo(j)||!/^\d{1,30}$/.test(r))return 0n;let t=BigInt(r);if(t<=0n)return 0n;
 for(const c of [(await gasNow())*1400000n,2000000000000000n])if(t>c)t=c;return t}catch{return 0n}};
 const cpTipFor=async wei=>{if(!cpTipOn()||pvPath.value==="self"||!(wei>0n))return 0n;
 const g=10n**BigInt(Math.max(0,String(wei).length-3)),qw=wei/g*g||wei;
 try{const j=await relayFetch("/confidential/quote?asset="+CP_ETH+"&amountWei="+qw),r=String(j&&j.recommendedWrapTipWei||"");
-if(!/^\d{1,30}$/.test(r))return 0n;let t=BigInt(r);if(t<=0n)return 0n;
+if(!cpTipTo(j)||!/^\d{1,30}$/.test(r))return 0n;let t=BigInt(r);if(t<=0n)return 0n;
 for(const c of [(await gasNow())*1400000n,wei*300n/10000n,2000000000000000n])if(t>c)t=c;
 return t>0n?t:0n}catch{return 0n}};
 const cpDepositOne=async(v,label,A=CP_ETH_AS)=>{const{i,k}=await cpFresh(v,A.id),n=cpNote(i,k),amt=v*A.scale,cm=cpDepCommit(k.cx,k.cy,k.owner);
@@ -8521,7 +8524,7 @@ if(a==="export"){await ask("Your note records — keep them with the key. Exit r
 if(a==="relay"){const nr=CP_RELAYS.length,sp=nr>1?", and "+(nr-1)+" more to fall back on":"";
 const u=(await ask("Relay to prove and settle through. Leave empty for the default ("+cpRelayBase()+sp+").",cpRelayPin())||"").trim().replace(/\/$/,"");
 try{if(!u||CP_RELAYS.includes(u))delete LS["zswap:cprelay"];else if(/^https:\/\/[\w.-]+(:\d+)?(\/[\w./-]*)?$/.test(u))LS["zswap:cprelay"]=u;else return void(stat.textContent="A relay is an https URL.")}catch{}
-stat.textContent="Relay: "+cpRelayBase()+(cpRelayPin()?" \u00b7 pinned, with no fallback":sp);return}
+cpTipSync();stat.textContent="Relay: "+cpRelayBase()+(cpRelayPin()?" \u00b7 pinned, with no fallback and no tip \u2014 settle with it on its own terms":sp);return}
 if(a==="request")return pvRun(cpRequest,"Building the request…");
 if(a==="pay")return pvRun(cpPay,"Checking the request…");
 if(a==="recover")return pvRun(async()=>{const f=await cpRecover();stat.textContent=(f?"Recovered "+f+" deposit"+(f>1?"s":"")+".":"Nothing new on chain for this key.")+(cpRecMiss.length?" Could not check "+cpRecMiss.join(", ")+" — try again.":"")},"Scanning the pool…");
