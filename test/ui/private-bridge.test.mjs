@@ -1482,6 +1482,43 @@ describe('deposits the relay or the pool turn away', () => {
  * A relay that quotes no prove figure, or a forwarder that is not there yet,
  * sends the settle exactly as this page has always sent it.
  */
+/**
+ * A settleWithTip whose arguments are encoded wrong fails in the worst way
+ * available: the pre-flight reverts, the fallback sends a plain untipped settle,
+ * everything looks healthy and the relay is never paid. So the encoding is
+ * pinned against a vector Tacit generated with `cast` from the real ABI, using
+ * the page's own ABI helpers rather than a reimplementation of them.
+ */
+describe('the settleWithTip encoding', () => {
+  test('reproduces Tacit\'s own calldata vector byte for byte', async () => {
+    const p = await open();
+    const data = p.window.eval(`(() => {
+      const pv = "0xdeadbeef", pr = "0xcafebabe", ms = ["0x${'11'.repeat(32)}"], to = "0x0000000000000000000000000000000000001337";
+      const a = encBytes(pv), b = encBytes(pr), tl = ms.map(encBytes);
+      let off = ms.length * 32, hd = encUint(ms.length);
+      for (const x of tl) { hd += encUint(off); off += x.length / 2 }
+      const mo = 128 + (a.length + b.length) / 2;
+      return "0x" + SEL_CPSTIP + encUint(128) + encUint(128 + a.length / 2) + encUint(mo)
+        + encAddr(to) + a + b + hd + tl.join("");
+    })()`);
+    const vector = '0x70b16a7d'
+      + '0000000000000000000000000000000000000000000000000000000000000080'
+      + '00000000000000000000000000000000000000000000000000000000000000c0'
+      + '0000000000000000000000000000000000000000000000000000000000000100'
+      + '0000000000000000000000000000000000000000000000000000000000001337'
+      + '0000000000000000000000000000000000000000000000000000000000000004'
+      + 'deadbeef00000000000000000000000000000000000000000000000000000000'
+      + '0000000000000000000000000000000000000000000000000000000000000004'
+      + 'cafebabe00000000000000000000000000000000000000000000000000000000'
+      + '0000000000000000000000000000000000000000000000000000000000000001'
+      + '0000000000000000000000000000000000000000000000000000000000000020'
+      + '0000000000000000000000000000000000000000000000000000000000000020'
+      + '1111111111111111111111111111111111111111111111111111111111111111';
+    assert.equal(data.toLowerCase(), vector.toLowerCase());
+    p.close();
+  });
+});
+
 describe('tipping the relay for a proof it did not charge for', () => {
   const SFWD = '0x0000008353ee6dea1236544938c546e27010416d';
   const quoteProve = (p, wei) => {
