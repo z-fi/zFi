@@ -1205,8 +1205,8 @@ let PROV=null;
 let walletChain=0;
 const prov=()=>PROV||window.ethereum;
 const RPC_SEED=L1_RPCS;
-const RPC_STORE="zswap:rpc";
-const rpcPin=()=>{try{const v=localStorage.getItem(RPC_STORE);
+const RPC_STORE=()=>CHAIN_ID===1?"zswap:rpc":"zswap:rpc:"+CHAIN_ID;
+const rpcPin=()=>{try{const v=localStorage.getItem(RPC_STORE());
 if(v&&/^https:\/\/\S+$/i.test(v))return v}catch{}return""};
 let rpcPool=RPC_SEED.slice(),rpcPi=0,curated=0,curating=0,curatedTry=0;
 const GAS_FLOOR=3000000000n;
@@ -1239,17 +1239,22 @@ if(Array.isArray(method)){if(!Array.isArray(j))throw Object.assign(Error("batch 
 if(j&&j.error)throw rpcErr(j.error);
 return j?j.result:null;
 }finally{clearTimeout(kill)}};
+const quorum2=async(pool,call)=>{
+const wave=async w=>{
+const r=await Promise.all(w.map(u=>httpRead(u,"eth_call",[call,L]).then(x=>[u,x?strip0x(x):""]).catch(()=>[u,""])));
+const c={};for(const[,x]of r)if(x)c[x]=(c[x]||0)+1;
+const t=Object.entries(c).sort((a,b)=>b[1]-a[1]);
+if(!t.length||t[0][1]<2||(t[1]&&t[1][1]===t[0][1]))return"";
+for(const[u,x]of r)if(x&&x!==t[0][0]){const i=pool.indexOf(u);if(i>=0)pool.push(pool.splice(i,1)[0])}
+return t[0][0]};
+return await wave(pool.slice(0,4))||(pool.length>4?await wave(pool.slice(4,8)):"")};
 const loadCurated=async()=>{
 if(CHAIN_ID!==1)return;
 if(curating||Date.now()-curatedTry<60000)return;
 curating=1;curatedTry=Date.now();
 try{
-const a=RPCS_PIN;
-const alt=RPC_SEED.find(u=>u!==rpcPool[rpcPi])||RPC_SEED[0];
-const [a1,a2]=await Promise.all([
-httpRead(rpcPool[rpcPi],"eth_call",[{to:a,data:"0x"+SEL_LIST},L]),
-httpRead(alt,"eth_call",[{to:a,data:"0x"+SEL_LIST},L])]);
-if(!a1||!a2||strip0x(a1)!==strip0x(a2)||CHAIN_ID!==1)return;
+const a1=await quorum2(rpcPool,{to:RPCS_PIN,data:"0x"+SEL_LIST});
+if(!a1||CHAIN_ID!==1)return;
 const urls=decStrArr(a1).map(s=>s.trim()).filter(s=>/^https:\/\/\S+$/.test(s));
 if(!urls.length)return;
 rpcPool=[...new Set(urls.concat(rpcPool,RPC_SEED))];
@@ -1449,7 +1454,7 @@ if(!r)return nqOne(x);if(!r.error)return x.res(r.result);const e=rpcErr(r.error)
 e=>{if(e&&e.nb)nqOff=Date.now()+6e4;b.forEach(nqOne)})}};
 const nodeRead1=async(method,params)=>{
 let last;
-const pin=CHAIN_ID===1?rpcPin():"";
+const pin=rpcPin();
 const tries=Math.min(rpcPool.length,RPC_TRIES);
 const p=rpcPi;
 for(let i=pin?-1:0;i<tries;i++){
@@ -1943,7 +1948,7 @@ TOKENS.push({sym,addr,dec,std:t.std==="nft"?"nft":"ft",cust:1,icon:genIcon(sym),
 }}catch{}}
 restoreCustom();
 const QUOTE_TTL=45000;
-let account=null,connecting=false,last=null,fromBalance=0n,mode="in",bSeq=0,tab="swap",sendReady=null,sSeq=0,sendD="0",bookD="86400";
+let account=null,connecting=false,last=null,fromBalance=0n,balUnread=false,mode="in",bSeq=0,tab="swap",sendReady=null,sSeq=0,sendD="0",bookD="86400";
 let quoting=false;
 let lqMode=false;
 const readBal=async t=>BigInt(t.addr===ZERO
@@ -1955,14 +1960,14 @@ el.innerHTML=`Balance: ${pretty} <a href="#" title="Use maximum (leaves gas for 
 async function refreshBalance(){
 shieldSync();
 const f=TOKENS[fromSel.value];
-if(!account||!f||offChain()){bal.textContent="";fromBalance=0n;render();return}
+if(!account||!f||offChain()){bal.textContent="";fromBalance=0n;balUnread=false;render();return}
 const my=++bSeq;
 refreshBalance1();
 try{
 const v=await readBal(f);
 if(my!==bSeq)return;
-fromBalance=v;showBal(bal,v,f.dec);
-}catch{if(my===bSeq){bal.textContent="";fromBalance=0n}}
+fromBalance=v;balUnread=false;showBal(bal,v,f.dec);
+}catch{if(my===bSeq){bal.textContent="Balance unavailable";fromBalance=0n;balUnread=true}}
 render();
 }
 let toBalance=0n,b1Seq=0;
@@ -2361,6 +2366,7 @@ swap.disabled=false;return;
 }
 if(quoting){swap.textContent="Quoting…";swap.disabled=true;return}
 if(!last){swap.textContent="Swap";swap.disabled=true;return}
+if(balUnread){swap.textContent="Swap";swap.disabled=false;return}
 if(last.amountIn>fromBalance){swap.textContent=IB;swap.disabled=true;return}
 if(last.exp&&Date.now()>last.exp){swap.textContent="Quote expired — tap to refresh";swap.disabled=false;return}
 swap.textContent=last.recipient?"Swap → "+last.recipient.slice(0,8)+"…":"Swap";swap.disabled=false;
@@ -2764,8 +2770,17 @@ if(p<bestP){bestP=p;best=m;bestK=k}}
 return{size:SZ,modules:best,mask:bestK}}
 return{build};
 })();
-const wcNode=()=>(CHAIN_ID===1&&rpcPin())||rpcPool[rpcPi];
+const wcNode=()=>rpcPin()||rpcPool[rpcPi];
 const wcHost=()=>{try{return new URL(wcNode()).host}catch{return wcNode()}};
+const askReadNode=async()=>{
+const v=await ask("HTTPS "+chainCfg().name+" RPC used for reads — it is pinned to the front of this chain's read pool."
++" Signing always goes to your wallet. Leave blank for the default.",wcNode());
+if(v===null)return false;
+const t=v.trim();
+try{if(!t)localStorage.removeItem(RPC_STORE());
+else if(/^https:\/\/\S+$/i.test(t))localStorage.setItem(RPC_STORE(),t);
+else return false}catch{}
+rpcPi=0;return true};
 const WC_SIGN=["eth_sendTransaction","eth_signTransaction","personal_sign","eth_sign",
 "eth_signTypedData","eth_signTypedData_v3","eth_signTypedData_v4"];
 const wcToWallet=m=>m.indexOf("wallet_")===0||WC_SIGN.indexOf(m)>=0;
@@ -2794,16 +2809,8 @@ nd.className="wcn wcnode";
 nd.appendChild(document.createTextNode("Reads via "+wcHost()+" "));
 const ch=document.createElement("button");
 ch.type="button";ch.className="fclink";ch.textContent="change";
-ch.onclick=async()=>{
-const v=await ask("HTTPS Ethereum RPC used for reads — it is pinned to the front of the read pool (the DAO-curated list, then the page's seeds)."
-+" Signing always goes to your wallet. Leave blank for the default.",wcNode());
-if(v===null)return;
-const t=v.trim();
-try{if(!t)localStorage.removeItem(RPC_STORE);
-else if(/^https:\/\/\S+$/i.test(t))localStorage.setItem(RPC_STORE,t);
-else return}catch{}
-nd.firstChild.nodeValue="Reads via "+wcHost()+" "};
-if(CHAIN_ID===1)nd.appendChild(ch);
+ch.onclick=async()=>{if(await askReadNode())nd.firstChild.nodeValue="Reads via "+wcHost()+" "};
+nd.appendChild(ch);
 wkList.appendChild(box);wkList.appendChild(note);wkList.appendChild(nd);
 wkHdr.textContent="WalletConnect";
 wkWrap.classList.remove("hide");
@@ -3636,7 +3643,7 @@ if(imp!==null&&imp>=IMPACT_HIDE){
 const pctTxt=(Number(imp)/100).toFixed(2);
 rate.textContent+=` · Impact ${pctTxt}%`;
 if(imp>=IMPACT_WARN)stat.textContent=`High price impact: ${pctTxt}% — about ${trimAmt(lossTok,isIn?t.dec:f.dec)} ${isIn?t.sym:f.sym} worse than the market rate.`;
-}else if(imp===null&&isIn)rate.textContent+=" · Impact unknown";
+}else if(imp===null)rate.textContent+=" · Impact unknown";
 if(rankBox.firstChild){
 const car=document.createElement("span");
 car.className="rk";
@@ -3801,8 +3808,10 @@ const netPick=async()=>{
 if(switchNet.busy)return;
 net.setAttribute("aria-expanded","true");
 const c=await wkPick(Object.keys(CHAINS).map(Number).map(id=>
-({id,name:CHAINS[id].name,svg:CHAINS[id].icon,on:id===CHAIN_ID})),"Network");
+({id,name:CHAINS[id].name,svg:CHAINS[id].icon,on:id===CHAIN_ID}))
+.concat([{node:1,name:"Read node",sub:wcHost()}]),"Network");
 net.setAttribute("aria-expanded","false");
+if(c&&c.node)return askReadNode();
 if(c)switchNet(c.id);
 };
 net.onclick=()=>{netPick()}
@@ -7510,7 +7519,7 @@ const epApply=v=>{if(!Array.isArray(v))return;epM(CHAINS[8453].rpcs,v[0],EP_H);e
 epM(CP_RELAYS,v[3],/^https:\/\/[\w.-]+(:\d+)?(\/[\w./-]*)?$/);CP_RELAYS=CP_RELAYS.map(x=>x.replace(/\/$/,""));
 const t=CP_RELAYS[0],p=(v[6]||[]).find(s=>/^[0-9a-f]{32}$/.test(s)),c=CHAINS[CHAIN_ID];if(t)CP_RELAY=t.replace(/\/$/,"");if(p)WC_PID=p;if(CHAIN_ID!==1&&c)rpcPool=[...new Set(c.rpcs.concat(rpcPool))]};
 const epLoad=async()=>{let c;try{c=JSON.parse(LS[EP_KEY])}catch{}const ok=c&&c.t<=Date.now();if(ok&&Date.now()-c.t<216e5)return epApply(c.v);const old=()=>ok&&epApply(c.v);
-const n=EP_Q.length,rd=x=>Promise.all(L1_RPCS.slice(0,2).map(u=>httpRead(u,"eth_call",[x,L]))).then(([a,b])=>a&&strip0x(a)===strip0x(b||"")?strip0x(a):""),
+const n=EP_Q.length,rd=x=>quorum2(L1_RPCS,x),
 [e,r]=await Promise.all([rd({to:EPS,data:"0x"+SEL_EPS+encUint(64)+encUint(96+32*n)+encUint(n)+EP_Q.map(q=>cpHex(cpU8(q[0])).padEnd(64,"0")).join("")+encUint(n)+EP_Q.map(q=>encUint(q[1])).join("")}),rd({to:RPCS_PIN,data:"0x"+SEL_LIST})]),
 W=i=>parseInt(e.slice(i*64,i*64+64),16),o=W(0)/32;
 const rl=decStrArr(r);if(W(o)!==n)return void(epM(L1_RPCS,rl,EP_H),old());

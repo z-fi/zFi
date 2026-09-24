@@ -137,8 +137,9 @@ describe('without a wallet', () => {
     p.click('net');
     await p.settle();
     const rows = [...p.$('wkList').querySelectorAll('.tkr')];
-    assert.deepEqual(rows.map(r => r.textContent), ['Ethereum', 'Robinhood', 'Base'],
+    assert.deepEqual(rows.slice(0, 3).map(r => r.textContent), ['Ethereum', 'Robinhood', 'Base'],
       'every supported chain is offered, not only the next one in a rotation');
+    assert.match(rows[3].textContent, /^Read node/, 'the read node is reachable from the same list');
     assert.equal(rows.filter(r => r.classList.contains('cur')).length, 1, 'exactly one row is marked');
     assert.equal(rows[0].getAttribute('aria-current'), 'true', 'and it is the chain in force');
     assert.equal(p.reloads(), 0, 'opening the list does not move the page on its own');
