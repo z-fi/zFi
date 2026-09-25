@@ -7618,10 +7618,13 @@ const r=bCbtcBlind(cpSeed,a.txid,a.vout),q=cpXY(cpCommit(o.value,r));if(q.cx!==c
 cpLocks.push({t:tx.txid,v:String(o.value),cx,cy,b:"0x"+r.toString(16).padStart(64,"0"),an:a.txid+":"+a.vout,at:tx.status&&tx.status.block_time||0,sent:1});f++}
 if(f)cpSaveLocks();return f};
 const cpLockSync=async()=>{if(!cpLocks.length)return;const w=h=>BigInt("0x"+(strip0x(h||"").slice(0,64)||"0"));
-const rs=await cfgBatch(cpLocks.flatMap(l=>{const o=bOp(l);return[{to:CP_POOL,data:"0x7cea1c1a"+pad32(o)},{to:CP_POOL,data:"0xe2c2a40c"+pad32(o)},{to:CP_CE,data:"0x058e18b0"+pad32(o)+encUint(BigInt(l.v))},{to:CP_CE,data:"0x3feacb25"+pad32(o)},{to:CP_CE,data:"0x034448ed"+encUint(BigInt(l.v))},{to:CP_POOL,data:"0xb5229671"+pad32(o)},{to:CP_EH,data:"0x78808388"+pad32(o)+encAddr(account||ZERO)}]}));
-cpLocks.forEach((l,i)=>{const b=7*i;if(rs[b]==null)return;l.rv=String(w(rs[b]));l.mi=w(rs[b+1])===1n;l.ok=w(rs[b+2])===1n;l.have=String(BigInt("0x"+(strip0x(rs[b+3]||"").slice(64,128)||"0")));l.want=String(w(rs[b+4]));l.rd=w(rs[b+5])===1n;l.hs=String(w(rs[b+6]));
+const rs=await cfgBatch(cpLocks.flatMap(l=>{const o=bOp(l);return[{to:CP_POOL,data:"0x7cea1c1a"+pad32(o)},{to:CP_POOL,data:"0xe2c2a40c"+pad32(o)},{to:CP_CE,data:"0x058e18b0"+pad32(o)+encUint(BigInt(l.v))},{to:CP_CE,data:"0x3feacb25"+pad32(o)},{to:CP_CE,data:"0x034448ed"+encUint(BigInt(l.v))},{to:CP_POOL,data:"0xb5229671"+pad32(o)},{to:CP_EH,data:"0x78808388"+pad32(o)+encAddr(account||ZERO)},{to:CP_EH0,data:"0x78808388"+pad32(o)+encAddr(account||ZERO)}]}));
+cpLocks.forEach((l,i)=>{const b=8*i;if(rs[b]==null)return;l.rv=String(w(rs[b]));l.mi=w(rs[b+1])===1n;l.ok=w(rs[b+2])===1n;l.have=String(BigInt("0x"+(strip0x(rs[b+3]||"").slice(64,128)||"0")));l.want=String(w(rs[b+4]));l.rd=w(rs[b+5])===1n;l.hs=String(w(rs[b+6]));l.ho=String(w(rs[b+7]));
 if(l.mi&&!cpNotes.some(n=>n.z&&n.b===l.b)){cpNotes.push({i:-1,v:l.v,a:CP_CBTC,s:"0x"+"00".repeat(32),b:l.b,z:1,at:l.at||0,rec:1});cpSaveNotes()}});cpSaveLocks()};
-const CP_EH="0x00000000689c71e690e5842df088af97f9d4f71b";
+const CP_EH="0x000000008ecd09f922c9fbbdd9aca5ae8f0bebfa",CP_EH0="0x00000000689c71e690e5842df088af97f9d4f71b",CP_TIPFWD_E="0x000000006fcb52aa67ac4a420a4d43a0e48f136f",SEL_CPETIP="ef3dc43b";
+const cpEhTip=async()=>{try{return await cpProveTip()}catch{return 0n}};
+const cpEhTipData=(op,stake,pv,pr,ms,to)=>{const a=encBytes(pv),b=encBytes(pr),t=ms.map(encBytes);let off=t.length*32,hd=encUint(t.length);for(const x of t){hd+=encUint(off);off+=x.length/2}
+return"0x"+SEL_CPETIP+pad32(op)+encUint(stake)+encUint(192)+encUint(192+a.length/2)+encUint(192+(a.length+b.length)/2)+encAddr(to)+a+b+hd+t.join("")};
 const cpEscrowNeed=async l=>{await cpLockSync();if(l.rv!==l.v)throw Error("The lock is not recorded yet — wait for the reflection.");const need=BigInt(l.want||"0")*105n/100n,have=BigInt(l.have||"0");return need>have?need-have:0n};
 const cpEthFor=async w=>{const s=BigInt(await rpc(C,[{to:CP_WSTETH,data:"0xbb2952fc"+encUint(w)},L])||"0x0");if(!s)throw Error("wstETH did not quote its rate.");return s*1005n/1000n+1n};
 const cpPermitWst=async(value,deadline)=>{const[n,ds]=await Promise.all([rpc(C,[{to:CP_WSTETH,data:"0x7ecebe00"+encAddr(account)},L]),rpc(C,[{to:CP_WSTETH,data:"0x3644e515"},L])]);
@@ -7649,11 +7652,12 @@ if(st.status==="proven"&&/^0x[0-9a-fA-F]+$/.test(st.publicValues||"")&&/^0x[0-9a
 const cpLockSettle=async l=>{if(!(l.pv&&l.pr))throw Error(PNR);const add=l.one?await cpEscrowNeed(l):0n,eth=add?await cpEthFor(add):0n;
 if(eth&&!await sure("Post the escrow with "+trimAmt(eth,18)+" ETH and mint the cBTC in the same transaction? This wallet can take the escrow back once the lock is redeemed."))return;
 const a=encBytes(l.pv),b=encBytes(l.pr),m=encUint(1)+encUint(32)+encBytes("0x");
-let req;if(eth){req={from:account,to:CP_EH,value:toHex(eth),gas:toHex(1100000),
+let req;if(eth){const t=await cpEhTip();req=t>0n?{from:account,to:CP_TIPFWD_E,value:toHex(eth+t),gas:toHex(1160000),data:cpEhTipData(bOp(l),eth,l.pv,l.pr,["0x"],CP_TIPTO)}
+:{from:account,to:CP_EH,value:toHex(eth),gas:toHex(1100000),
 data:"0x2bb12527"+pad32(bOp(l))+encUint(128)+encUint(128+a.length/2)+encUint(128+(a.length+b.length)/2)+a+b+m}}
 else req=await cpSettleReq(l.pv,l.pr,["0x"],700000);if(eth)l.eh=1;
 await rpc(C,[req,L]);l.stx=await sendTx([req]);cpSaveLocks();await settle(l.stx);l.js="settled";cpSaveLocks();await cpLockSync();stat.textContent="cBTC minted."};
-const cpEscrowBack=async l=>{const req={from:account,to:CP_EH,value:"0x0",data:"0xc5211d27"+pad32(bOp(l))};await rpc(C,[req,L]);l.rtx=await sendTx([req]);cpSaveLocks();await settle(l.rtx);await cpLockSync();stat.textContent="Escrow returned to this wallet."};
+const cpEscrowBack=async l=>{const req={from:account,to:BigInt(l.hs||"0")>0n?CP_EH:CP_EH0,value:"0x0",data:"0xc5211d27"+pad32(bOp(l))};await rpc(C,[req,L]);l.rtx=await sendTx([req]);cpSaveLocks();await settle(l.rtx);await cpLockSync();stat.textContent="Escrow returned to this wallet."};
 const CP_CUSD="0x8f4490dd3728b0ee904d7a67c11b37ffd463a5c7f08b79810006995ee8a9679d",CP_CDPS="zswap:cpc:",CDP_MINTED="0x232c7d098ca44092999087e6ee530a2171f95f9ecb1caa363f6dcf448fb7dd57",Z32="0x"+"00".repeat(32);
 const cdpSecrets=(i,sd=cpSeed)=>{const ce=hexToBytes(strip0x(CP_CE).toLowerCase()),t=g=>bHmac(b32(sd),cpCat(cpU8(g),ce,bLE(i,4).reverse())),pos=fmod(big(t("tacit-cdp-position-v1")),FN)||1n,nk="0x"+cpHex(t("tacit-cdp-debt-nk-v1"));
 return{pos,owner:"0x"+pcomp(pmul(GP,pos)).slice(2),nk,dOwner:cpOwner(nk),blind:fmod(big(t("tacit-cdp-debt-blinding-v1")),FN)||1n,nonce:"0x"+"00".repeat(32)}};
@@ -7721,7 +7725,7 @@ return`<div class="cpr"><span><b>${A?trimAmt(BigInt(n.v)*A.scale,A.dec)+" "+A.sy
 const cpLockRows=()=>cpLocks.map((l,j)=>{const B=(a,t)=>`<button type="button" class="fclink" data-a="${a}" data-l="${j}">${t}</button>`;
 const st=!l.sent?"not sent"+B("lsend","send"):l.mi?"minted as cBTC":l.job&&l.js!=="failed"?(l.pv&&(l.self||l.one)?B("lsettle",l.one&&!l.ok?"escrow + mint":"settle"):l.self||l.one?"proving…":"minting…")
 :l.rv===l.v?(l.ok?B("lmint",l.job?"retry mint":"mint"):B("lone","escrow + mint")+B("lesc","post escrow")):"awaiting confirmations and reflection";
-const rc=BigInt(l.hs||"0")>0n&&(l.rd||!l.mi&&!(l.job&&l.js!=="failed"))?B("lrecl","reclaim escrow"):"";
+const rc=BigInt(l.hs||"0")+BigInt(l.ho||"0")>0n&&(l.rd||!l.mi&&!(l.job&&l.js!=="failed"))?B("lrecl","reclaim escrow"):"";
 return`<div class="cpr"><span><b>${trimAmt(BigInt(l.v),8)} BTC</b> lock</span><span>${st}${rc}</span></div>`}).join("");
 const cpUse=s=>{cpBtcSat=null;cpBtcAt=0;cpSeed=s;cpFp=cpHex(sha2(cpU8("zswap-cp-v1:"+s))).slice(0,16);cpPub=pcomp(pmul(GP,BigInt(s)));cpBtc=cpBtcOf(cpPub);cpNotes=cpLoadNotes();cpLocks=cpLoadLocks();cpSends=cpLoadS();cpInbox=cpLoadI();try{const b=JSON.parse(LS["zswap:cpb:"+cpFp]||"[]");cpBtcNotes=Array.isArray(b)?b:[]}catch{cpBtcNotes=[]}};
 const cpSign=async()=>{const sig=await rpc("personal_sign",["0x"+cpHex(cpU8(CP_MSG)),account]);

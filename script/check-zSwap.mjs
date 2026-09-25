@@ -398,6 +398,7 @@ const HELPERS = [
   'sha2', 'pmul', 'pcomp', 'cpDerive', 'cpOwner', 'cpCommit', 'cpXY', 'cpLeaf', 'cpDepCommit', 'cpDepId',
   'cpBinding', 'cpCtx', 'cpNonce', 'cpSigma', 'cpSeal', 'cpTree', 'cpNu', 'cpLadder', 'cpRecipe', 'cpEscrow',
   'cpEncRecipe', 'cpActData', 'cpReclData', 'cpExitData', 'cpRescue', 'cpUse', 'cpVerifySigma', 'cpSettleData',
+  'cpEhTipData',
   'cpScalar', 'cpBtcOf', 'cpWif', 'cpOpen', 'cpSeg', 'bLock', 'bKeys', 'bOp', 'cdpSecrets', 'cdpBuildOp', 'cdpLeaf',
   'bAnchor', 'bEcdhSeed', 'bKs', 'bOpenOut',
   'cpXferOp', 'cpWtOp', 'cpLockOp', 'cpClaimOp', 'cpRefundOp', 'cpSOpen', 'cpTacAddr', 'cpRecip', 'cpWtData', 'cpCalls', 'cpSTail', 'cpSuOp', 'bNoteLeaf',
@@ -857,11 +858,21 @@ if (exported) {
     // pool.settle(bytes,bytes,bytes[]) for a self-settled withdrawal, against ethers' coder.
     const want = '0x717fd7f2' + AbiCoder.defaultAbiCoder().encode(['bytes', 'bytes', 'bytes[]'], ['0x1234', '0xabcdef', []]).slice(2);
     eq(X.cpSettleData('0x1234', '0xabcdef'), want, 'settle calldata');
-    // CbtcEscrowHelper credits an escrow to msg.sender, and only msg.sender can reclaim it. Posted
-    // through CbtcEscrowHelperTipForwarder, the forwarder is the depositor and the stake can never
-    // come back, so the one-transaction escrow + mint calls the helper itself.
-    if (/ef3dc43b|000000fB551f7Ef4936a59ECdD431ae253139E8d/i.test(html))
-      throw Error('escrow + mint routes through a forwarder the escrow cannot be reclaimed from');
+    // The escrow post and the cBTC mint's settle ride ONE transaction, and the tip rides it too: only
+    // `stake` reaches the helper, the rest of msg.value is the tip. Six head words, so a layout copied
+    // from the four-word bare call would point every bytes offset at the wrong place.
+    const ehWant = '0xef3dc43b' + AbiCoder.defaultAbiCoder().encode(
+      ['bytes32', 'uint256', 'bytes', 'bytes', 'bytes[]', 'address'],
+      ['0x' + '11'.repeat(32), 4000000000000000n, '0x1234', '0xabcdef', ['0x'],
+       '0x006CD14F36F65eCbB29b2519cCBe63A0DC8549F2']).slice(2);
+    eq(X.cpEhTipData('0x' + '11'.repeat(32), 4000000000000000n, '0x1234', '0xabcdef', ['0x'],
+      '0x006CD14F36F65eCbB29b2519cCBe63A0DC8549F2'), ehWant, 'escrow-post-with-tip calldata');
+    // The helper credits an escrow to the depositor it is told, and only that depositor can reclaim it.
+    // The first forwarder called the helper as itself, so what it posted can never come back: the page
+    // posts to the current helper, tips only through the forwarder bound to it, and never names the first.
+    if (!/const CP_EH="0x000000008ecd09f922c9fbbdd9aca5ae8f0bebfa"/.test(html)) throw Error('escrow is not posted to the current CbtcEscrowHelper');
+    if (!/CP_TIPFWD_E="0x000000006fcb52aa67ac4a420a4d43a0e48f136f"/.test(html)) throw Error('the tipped escrow + mint is not bound to the current helper\'s forwarder');
+    if (/000000fB551f7Ef4936a59ECdD431ae253139E8d/i.test(html)) throw Error('the page names the forwarder whose escrow cannot be reclaimed');
     // A pool-minted token note (TAC): the asset id enters the derivation, the leaf, the deposit id,
     // the memo and both opening contexts, so each is checked under the token's id, not ether's.
     const T = F.tac, ta = T.assetId, dt = X.cpDerive(F.seed, 0, ta);
