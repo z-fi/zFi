@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AbiCoder, keccak256, concat } from 'ethers';
+import { openStore } from './cp-store.mjs';
 import {
   A, SEL, MockChain, loadPage, closeAllPages, fixedRateQuoter, encodeSingleHop, word, wordAddr, CP_BLOCK,
 } from './harness.mjs';
@@ -306,7 +307,7 @@ describe('private bridge notes', () => {
     await a.waitFor(() => a.window.__relayPosts.length === 2, { label: 'the exit to reach the relay', timeout: 15000 });
     await a.settle();
     const key = notesKey(store);
-    const exitOf = () => JSON.parse(store[key]).find(n => n.i === 0 && !n.p)?.ex;
+    const exitOf = () => openStore(store[key], F.seed).find(n => n.i === 0 && !n.p)?.ex;
     assert.ok(exitOf(), 'tab A stored the exit recipe');
     a.close();
 
@@ -314,7 +315,7 @@ describe('private bridge notes', () => {
     b.click(b.$('pvKey').querySelector('button[data-a="import"]'));
     await b.waitFor(() => /Imported 1 note/.test(b.text('stat')), { label: 'the import in tab B' });
     await b.settle();
-    assert.ok(JSON.parse(store[key]).some(n => n.i === 7), 'tab B saved');
+    assert.ok(openStore(store[key], F.seed).some(n => n.i === 7), 'tab B saved');
     assert.ok(exitOf(), 'the exit recipe tab A stored is still there');
     b.close();
   });

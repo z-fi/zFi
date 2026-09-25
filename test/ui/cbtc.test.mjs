@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { AbiCoder, keccak256, toUtf8Bytes } from 'ethers';
 import { A, MockChain, loadPage, closeAllPages, wordAddr, word, CP_BLOCK } from './harness.mjs';
+import { openStore } from './cp-store.mjs';
 
 const coder = AbiCoder.defaultAbiCoder();
 const B0 = CP_BLOCK + 0x100;
@@ -95,7 +96,7 @@ describe('locking bitcoin into cBTC', () => {
     await lock(p);
     const sent = p.window.__posts.filter(x => /\/tx$/.test(x.url)).map(x => x.body);
     assert.deepEqual([...new Set(sent)], [C.commit, C.reveal], 'commit then reveal, byte for byte');
-    const rec = JSON.parse(p.window.localStorage[Object.keys(p.window.localStorage).find(k => k.startsWith('zswap:cpl:'))])[0];
+    const rec = openStore(p.window.localStorage[Object.keys(p.window.localStorage).find(k => k.startsWith('zswap:cpl:'))], F.seed)[0];
     assert.equal(rec.t, C.lockTxid);
     assert.equal(rec.b, C.blinding, 'the note blinding derived from the key and the funding coin');
     assert.equal(rec.an, C.anchor.txid + ':' + C.anchor.vout, 'anchored to the coin the lock spends first');
@@ -335,7 +336,7 @@ describe('borrowing cUSD against the cBTC note', () => {
     assert.match(job.memos[0], /^0x0[23][0-9a-f]{336}$/, 'ephemeral key (33 B) + ciphertext (136 B)');
     const pos = JSON.parse(p.window.localStorage['zswap:cpc:' + fp])[0];
     assert.equal(pos.leaf, D.positionLeaf, 'the position leaf Tacit computes');
-    const notes = JSON.parse(p.window.localStorage['zswap:cpn:' + fp]);
+    const notes = openStore(p.window.localStorage['zswap:cpn:' + fp], F.seed);
     assert.ok(notes.some(n => n.s === D.debtNk && n.v === D.debtValue), 'the cUSD note is kept with its key-derived nk');
     await p.settle();
     p.close();
@@ -363,7 +364,7 @@ describe('borrowing cUSD against the cBTC note', () => {
     await p.waitFor(() => asked && !/Building the loan/.test(p.text('stat')), { label: 'the loan attempt to finish', ...SLOW });
     await p.settle();
     const cdps = JSON.parse(p.window.localStorage['zswap:cpc:' + fp] || '[]');
-    const cusd = JSON.parse(p.window.localStorage['zswap:cpn:' + fp]).filter(n => n.s === D.debtNk);
+    const cusd = openStore(p.window.localStorage['zswap:cpn:' + fp], F.seed).filter(n => n.s === D.debtNk);
     return { p, cdps, cusd };
   };
 
@@ -453,7 +454,7 @@ describe('the key alone finds its locks', () => {
     }];
     p.click(p.$('pvKey').querySelector('button[data-a="recover"]'));
     await p.waitFor(() => /Recovered 1 deposit/.test(p.text('stat')), { label: 'the lock to be rediscovered', ...SLOW });
-    const rec = JSON.parse(p.window.localStorage[Object.keys(p.window.localStorage).find(k => k.startsWith('zswap:cpl:'))])[0];
+    const rec = openStore(p.window.localStorage[Object.keys(p.window.localStorage).find(k => k.startsWith('zswap:cpl:'))], F.seed)[0];
     assert.equal(rec.t, C.lockTxid);
     assert.equal(rec.b, C.blinding, 'the same blinding, re-derived from the funding coin alone');
     assert.match(p.text('pvList'), /0\.001 BTC lock/);

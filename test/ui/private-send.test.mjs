@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { AbiCoder, keccak256, toUtf8Bytes, concat } from 'ethers';
 import { A, MockChain, loadPage, closeAllPages, CP_BLOCK, ensNamehash } from './harness.mjs';
+import { openStore } from './cp-store.mjs';
 
 after(closeAllPages);
 
@@ -363,8 +364,8 @@ describe('private sends', () => {
     p.window.localStorage['zswap:cps:' + fp] = JSON.stringify([send]);
     p.window.localStorage['zswap:cpi:' + fp] = JSON.stringify([inbox]);
     p.window.eval('cpSaveS();cpSaveI()');
-    assert.ok(JSON.parse(p.window.localStorage['zswap:cps:' + fp]).some(x => x.id === send.id), 'the other tab\'s send survives');
-    assert.ok(JSON.parse(p.window.localStorage['zswap:cpi:' + fp]).some(x => x.lf === inbox.lf), 'and its incoming payment');
+    assert.ok(openStore(p.window.localStorage['zswap:cps:' + fp], F.seed).some(x => x.id === send.id), 'the other tab\'s send survives');
+    assert.ok(openStore(p.window.localStorage['zswap:cpi:' + fp], F.seed).some(x => x.lf === inbox.lf), 'and its incoming payment');
     p.close();
   });
 

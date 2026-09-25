@@ -21,6 +21,7 @@ import { fileURLToPath } from 'node:url';
 import { webcrypto } from 'node:crypto';
 import { AbiCoder, keccak256, getBytes, concat, toUtf8Bytes, sha256, computeAddress } from 'ethers';
 import { A, MockChain, loadPage, closeAllPages, selectorOf, CP_BLOCK } from './harness.mjs';
+import { openStore } from './cp-store.mjs';
 
 after(closeAllPages);
 
@@ -341,6 +342,37 @@ describe('depositing', () => {
     q.close();
   });
 
+  test('note records are sealed under the key, and plain ones from an older build still open', async () => {
+    const p = await open();
+    await unlock(p);
+    await deposit(p);
+    const k = Object.keys(p.window.localStorage).find(x => x.startsWith('zswap:cpn:'));
+    assert.match(p.window.localStorage[k], /^z1\.[0-9a-f]+\.[0-9a-f]{64}$/, 'the stored list is sealed');
+    const plain = p.window.eval('JSON.stringify(cpNotes)');
+    p.close();
+    const q = await open({ storage: { [k]: plain } });
+    await unlock(q);
+    await q.waitFor(() => /0\.01 tETH/.test(q.text('pvList')), { label: 'the plain record to open' });
+    q.window.eval('cpSaveNotes()');
+    assert.match(q.window.localStorage[k], /^z1\./, 'and it is sealed on the next save');
+    const bent = q.window.localStorage[k].replace(/\.([0-9a-f])/, (m, c) => '.' + (c === '0' ? '1' : '0'));
+    q.close();
+    const r = await open({ storage: { [k]: bent } });
+    await unlock(r);
+    assert.equal(r.window.eval('cpLoadNotes().length'), 0, 'a record that does not authenticate opens to nothing');
+    r.close();
+  });
+
+  test('a note another tab saves shows here without a reload', async () => {
+    const p = await open();
+    await unlock(p);
+    const k = 'zswap:cpn:' + p.window.eval('cpFp');
+    p.window.localStorage[k] = JSON.stringify([{ i: 7, v: '1000000', at: 0 }]);
+    p.window.dispatchEvent(new p.window.StorageEvent('storage', { key: k }));
+    await p.waitFor(() => p.window.eval('cpNotes.some(n => n.i === 7)'), { label: 'the other tab\'s note' });
+    p.close();
+  });
+
   test('a key an older build kept in plain text is dropped once the signature matches it', async () => {
     const q = await open({ storage: { ['zswap:cpk:' + A.ACCOUNT.toLowerCase()]: F.seed } });
     assert.doesNotMatch(q.text('pvKey'), /Key unlocked/, 'not used until the wallet signs');
@@ -596,10 +628,23 @@ describe('exiting to Base through the relay', () => {
     await p.waitFor(() => /bridging…/.test(p.text('pvList')), { label: 'the row to wait on the relay', timeout: 20000 });
     assert.equal(p.$('pvList').querySelector('button[data-a="activate"]'), null, 'no activate button while the relay activates');
     p.chain.relay.status = { ...p.chain.relay.status, activation: 'done', activateTx: '0x' + 'cc'.repeat(32) };
+    p.chain.lastLogs = [{ address: ROUTER, topics: [], data: '0x' }];
     advance(p);
     poke(p);
     await p.waitFor(() => /on Base/.test(p.text('pvList')), { label: 'the row to report the bridge', timeout: 20000 });
     assert.equal(p.chain.sentTo(ROUTER).length, 0, 'the wallet sent no activation');
+    p.close();
+  });
+
+  test('an activation the chain does not show is not taken as the bridge', async () => {
+    const { p, net } = await relayedBaseExit();
+    p.chain.relay.status = { status: 'settled', txHash: '0x' + 'bb'.repeat(32), activation: 'done', activateTx: '0x' + 'dd'.repeat(32) };
+    p.chain.lastLogs = [];
+    settledOnChain(p, net);
+    await p.waitFor(() => p.window.eval('cpNotes[0].js') === 'settled', { label: 'the settle to be read', timeout: 20000 });
+    await p.settle();
+    assert.equal(p.window.eval('cpNotes[0].ex.atx'), undefined, 'a receipt with no router log proves nothing');
+    assert.doesNotMatch(p.text('pvList'), /on Base/);
     p.close();
   });
 
@@ -657,6 +702,14 @@ describe('exiting to Base through the relay', () => {
     assert.equal(first.op.fee, String(FEE_BASE));
     assert.equal(again.op.fee, String(fee), 'quoted again, not the fee the relay refused');
     assert.equal(again.op.recipient, p.chain.escrow);
+    p.close();
+  });
+
+  test('an exit whose job the relay no longer knows is offered for retry', async () => {
+    const { p } = await relayedBaseExit();
+    p.chain.relay.status = { status: 'unknown' };
+    poke(p);
+    await p.waitFor(() => /relay failed/.test(p.text('pvList')) && p.$('pvList').querySelector('button[data-a="exit"]'), { label: 'the retry', timeout: 20000 });
     p.close();
   });
 
@@ -812,7 +865,7 @@ describe('self-help', () => {
       `the scan yields to the event loop: ${ticks} timer ticks, longest stall ${Math.round(gap)} ms of ${Math.round(first)} ms`);
     assert.match(q.text('pvList'), /0\.01 tETH/);
     assert.match(q.text('pvList'), /0\.025 tETH/);
-    const stored = JSON.parse(q.window.localStorage[Object.keys(q.window.localStorage).find(k => k.startsWith('zswap:cpn:'))]);
+    const stored = openStore(q.window.localStorage[Object.keys(q.window.localStorage).find(k => k.startsWith('zswap:cpn:'))], F.seed);
     assert.deepEqual(stored.map(n => [n.i, n.v]), [[0, '1000000'], [5, '2500000']]);
     assert.deepEqual(stored[0].op, F.wrapOp, 'the recovered deposit carries the reference witness');
     assert.ok(stored.every(n => /^0x[0-9a-f]+$/i.test(n.memo)), 'and a memo for the relay');
@@ -823,7 +876,7 @@ describe('self-help', () => {
     const second = performance.now() - t0;
     assert.equal(derived, 0, 'a second scan reuses the index table');
     assert.ok(second < first / 4, `and skips the wraps it already ruled out: ${Math.round(second)} ms against ${Math.round(first)} ms`);
-    assert.equal(JSON.parse(q.window.localStorage[Object.keys(q.window.localStorage).find(k => k.startsWith('zswap:cpn:'))]).length, 2);
+    assert.equal(openStore(q.window.localStorage[Object.keys(q.window.localStorage).find(k => k.startsWith('zswap:cpn:'))], F.seed).length, 2);
     q.close();
   });
 
@@ -834,7 +887,7 @@ describe('self-help', () => {
     p.click(p.$('pvKey').querySelector('button[data-a="export"]'));
     assert.equal(p.asked.prompt.length, 1);
     const key = p.window.localStorage['zswap:cpk:' + A.ACCOUNT.toLowerCase()];
-    const notes = p.window.localStorage[Object.keys(p.window.localStorage).find(k => k.startsWith('zswap:cpn:'))];
+    const notes = p.window.__promptDefaults.at(-1);
     p.close();
     const q = await open({ storage: { ['zswap:cpk:' + A.ACCOUNT.toLowerCase()]: key } });
     await unlock(q);
@@ -940,6 +993,17 @@ describe('a relay that does not answer', () => {
     assert.equal(p.window.eval('cpNotes[0].rb'), 'https://api.tacit.finance',
       'the job is polled at the relay that answered, not the one that did not');
     assert.equal(p.window.eval('cpNotes[0].job'), '0xjob1');
+    p.close();
+  });
+
+  test('a relay that is rate-limiting hands the submit to the next one', async () => {
+    const p = await open(roster('https://busy.relay'));
+    p.chain.lanes['busy.relay/confidential/submit'] = 429;
+    await unlock(p);
+    p.type('pvAmt', '0.01');
+    p.click('pvGo');
+    await p.waitFor(() => /settling it into the pool/.test(p.text('stat')), { label: 'the deposit to be taken', ...SLOW });
+    assert.equal(p.window.eval('cpNotes[0].rb'), 'https://api.tacit.finance');
     p.close();
   });
 
@@ -1380,7 +1444,7 @@ describe('a deposit that never landed', () => {
     p.click(p.$('pvList').querySelector('button[data-a="forget"]'));
     await p.settle();
     assert.match(p.text('pvList'), /No deposits yet/, 'confirmed: the record is gone');
-    assert.equal(Object.keys(p.window.localStorage).filter(k => k.startsWith('zswap:cpn:')).map(k => JSON.parse(p.window.localStorage[k]).length)[0], 0, 'and not stored either');
+    assert.equal(Object.keys(p.window.localStorage).filter(k => k.startsWith('zswap:cpn:')).map(k => openStore(p.window.localStorage[k], F.seed).length)[0], 0, 'and not stored either');
     p.close();
   });
 });
@@ -1672,7 +1736,7 @@ describe('a note list that names a destination', () => {
   const stored = (p) => {
     const raw = Object.entries(p.window.localStorage)
       .find(([k]) => k.startsWith('zswap:cpn:'));
-    return raw ? JSON.parse(raw[1]) : [];
+    return raw ? openStore(raw[1], F.seed) : [];
   };
   const paste = async (p, list, want) => {
     p.window.prompt = () => JSON.stringify(list);
@@ -1760,6 +1824,7 @@ describe('the points a wallet has been credited', () => {
       configurable: true, enumerable: true, get: () => body,
     });
     p.chain.answer(DIST, '2f52ebb7', '0x');
+    p.chain.answer(DIST, '787eef2e', '0x' + BigInt(body.unclaimedWei || 0).toString(16).padStart(64, '0'));
   };
 
   test('offers the TAC the points earned, and claims it with its proof', async () => {
@@ -1807,6 +1872,20 @@ describe('the points a wallet has been credited', () => {
     await p.waitFor(() => !!p.$('pvKey').querySelector('button[data-a="ptsclaim"]'), { label: 'the claim button', ...SLOW });
     p.click(p.$('pvKey').querySelector('button[data-a="ptsclaim"]'));
     await p.waitFor(() => p.chain.sentTo(DIST).length === 1, { label: 'the claim', ...SLOW });
+    p.close();
+  });
+
+  test('the amount offered is what the distributor owes, not what the relay says', async () => {
+    const p = await open();
+    serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 5, deposit_count: 1 });
+    claiming(p, RELAY, { address: A.ACCOUNT.toLowerCase(), distributor: DIST,
+      cumulativeAmount: '926845047264463185251', claimedWei: '0',
+      unclaimedWei: '926845047264463185251', proof: PROOF });
+    p.chain.answer(DIST, '787eef2e', '0x' + (5n * 10n ** 18n).toString(16).padStart(64, '0'));
+    await unlock(p);
+    await p.waitFor(() => !!p.$('pvKey').querySelector('button[data-a="ptsclaim"]'), { label: 'the claim button', ...SLOW });
+    assert.match(p.text('pvKey'), /claim 5(?![\d.])/);
+    assert.doesNotMatch(p.text('pvKey'), /926/);
     p.close();
   });
 
