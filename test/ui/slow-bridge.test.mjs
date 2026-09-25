@@ -993,7 +993,7 @@ describe('the refusals', () => {
     p.select('dly', delay);
     p.select('sdChain', dest);
     await p.settle();
-    await p.waitFor(() => !p.disabled('swap') || /Can't deliver/.test(p.text('swap')), { label: 'ready or refused' });
+    await p.waitFor(() => !p.disabled('swap') || /Can't deliver|see below/.test(p.text('swap')), { label: 'ready or refused' });
     p.click('swap');
     await p.settle();
     return p.chain.sent.length;

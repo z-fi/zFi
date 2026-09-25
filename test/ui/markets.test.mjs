@@ -179,6 +179,27 @@ test('markets mode', async (t) => {
     assert.match(p.text('mkResEl'), /^\u2192 0x/, 'the address it resolved to is still there');
   });
 
+  await t.test('a resolver sets their own fee, capped at 10%', async () => {
+    const chain = pmChain();
+    chain.answer(PM, 'fb105091', '0x');
+    const p = await openMarkets(chain);
+    p.click('mkGo');
+    await p.waitFor(() => !!p.$('mkResEl').querySelector('button'), { label: 'the set fee link' });
+    p.queuePrompt('25');
+    p.$('mkResEl').querySelector('button').click();
+    await p.waitFor(() => /0 to 10%/.test(p.text('stat')), { label: 'an over-cap fee refused' });
+    assert.equal(chain.sentTo(PM).length, 0, 'nothing sent for 25%');
+    p.queuePrompt('1.5');
+    p.$('mkResEl').querySelector('button').click();
+    await p_wait(chain, 'setResolverFeeBps');
+    const tx = chain.sentTo(PM)[0];
+    assert.equal(tx.data.slice(0, 10), '0xfb105091');
+    assert.equal(BigInt('0x' + tx.data.slice(10)), 150n, '1.5% is 150 bps');
+    p.type('mkRes', A.OTHER);
+    await p.waitFor(() => /takes 2% of the pot/.test(p.text('mkResEl')), { label: 'another resolver' });
+    assert.equal(p.$('mkResEl').querySelector('button'), null, 'only your own fee can be set');
+  });
+
   await t.test('a tax reads as what it costs now, and the fee says whose it is', async () => {
     const t0 = now();
     const chain = pmChain();

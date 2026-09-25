@@ -403,6 +403,7 @@ export function encodeTapeBar({ bucket, open, high, low, close, volume, count = 
 // Moloch's side of a cause: the loot token names its DAO, and the DAO names
 // the loot and shares back, which is the only way to tell cause loot from any
 // other contract that happens to publish a DAO() getter.
+export const CAUSE_CLONE = '0x5f5f365f5f37365f73643a45b599d81be3f3a68f37eb3de55ff10673c15af43d5f5f3e6029573d5ffd5b3d5ff3';
 // Moloch's mint sentinel for loot: address(1007).
 export const LOOT_SENTINEL = '0x00000000000000000000000000000000000003ef';
 
@@ -443,6 +444,7 @@ export class MockChain {
     this.ensResolver = A.ZERO;   // non-zero enables the .eth path
     this.ensResolvers = new Map();  // node -> resolver, for the ENSIP-10 walk
     this.ensNames = new Map();      // .eth name -> address, read by addr()/resolve()
+    this.ensCoins = new Map();      // `${name}|${coinType}` -> address, read by addr(node, coinType)
     this.ensRevNames = new Map();   // address -> the name its reverse record claims
     this.ensWildcard = false;       // does the resolver admit to ENSIP-10?
     this.ensOffchain = false;       // resolve() reverts OffchainLookup, as a CCIP resolver does
@@ -615,6 +617,9 @@ export class MockChain {
       tapBudget: BigInt(tapBudget), beneficiary,
     });
     this.setNative(dao, treasury);
+    // A real cause DAO is a minimal proxy of the Moloch implementation, and
+    // the page refuses one that is not.
+    if (!this.code.has(dao.toLowerCase())) this.code.set(dao.toLowerCase(), CAUSE_CLONE);
     return this;
   }
 
@@ -1791,6 +1796,14 @@ export class MockChain {
       return null;
     };
     if (sel === SEL.ENS_EADDR) return '0x' + addrWord(byNode(wordHex(body, 0)) || A.ZERO);
+    // addr(bytes32 node, uint256 coinType) - ENSIP-9/11, the EVM address as 20 raw bytes.
+    if (sel === 'f1cb7e06') {
+      const [node, coin] = coder.decode(['bytes32', 'uint256'], body);
+      const hit = [...this.ensCoins.entries()].find(([k]) => {
+        const [n, c] = k.split('|'); return BigInt(c) === coin && ensNamehash(n) === node;
+      });
+      return coder.encode(['bytes'], [hit ? hit[1] : '0x']);
+    }
     // text(bytes32 node, string key), read from the same `texts` map as WNS.
     const textOf = (node, key) => {
       const hit = [...(this.texts || new Map()).entries()].find(([k]) => {

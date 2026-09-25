@@ -1589,8 +1589,10 @@ describe('tipping the relay for a proof it did not charge for', () => {
 // onto it, and a resumed exit takes `to`, `fee` and `self` from that record. On
 // chain 1 the relay settles such an exit with no wallet transaction at all, so a
 // crafted list plus one press of "retry" moved someone else's note. Adoption is
-// gone, and an imported record's `ex`/`rb` are stripped rather than the whole note
-// being dropped - a browser restoring notes mid-exit still gets its notes back.
+// gone. An imported record keeps its exit recipe - activate and reclaim cannot be
+// rebuilt without it, and the router derives the escrow from the recipe's hash, so
+// a forged one names an empty escrow - but it is marked `im`: never resumed, never
+// self-sent, and stripped of its relay base, job and proof.
 describe('a note list that names a destination', () => {
   const ATTACKER = '0x00000000000000000000000000000000000000ff';
   const stored = (p) => {
@@ -1606,16 +1608,32 @@ describe('a note list that names a destination', () => {
     await p.waitFor(() => want.test(p.text('stat')), { label: 'the import to report', ...SLOW });
   };
 
-  test('an exit in an imported record never reaches the notes', async () => {
+  test('an exit in an imported record can never be resumed', async () => {
     const p = await open();
     await unlock(p);
     await paste(p, [{ i: 0, v: '1000000000000000',
       ex: { ch: 1, to: ATTACKER, du: '9999999999', fee: '0', v: '1000000000000000' } }], /Imported 1 note/);
     assert.ok(stored(p).length >= 1, 'the note itself was kept');
-    assert.ok(stored(p).every(n => !n.ex), 'and carries no exit');
+    assert.ok(stored(p).every(n => !n.ex), 'an Ethereum exit has no escrow to rescue, so none is kept');
     assert.doesNotMatch(JSON.stringify(stored(p)), new RegExp(ATTACKER.slice(2), 'i'), 'the address is nowhere');
     await p.settle();
     assert.doesNotMatch(p.text('pvList'), /relay failed/, 'so no row offers to retry one');
+    p.close();
+  });
+
+  test('an L2 exit keeps its recipe for activate and reclaim, and nothing else', async () => {
+    const p = await open();
+    await unlock(p);
+    await paste(p, [{ i: 0, v: '1000000000000000',
+      ex: { ch: 8453, to: ATTACKER, du: '9999999999', fee: '0', v: '1000000000000000',
+            job: 'j1', js: 'failed', rb: 'https://relay.attacker.example', pv: '0x01', pr: '0x02' } }], /Imported 1 note/);
+    const ex = stored(p).find(n => n.ex)?.ex;
+    assert.ok(ex && ex.im === 1, 'the recipe is kept, marked as imported');
+    assert.ok(!ex.job && !ex.js && !ex.pv && !ex.pr && !ex.rb, 'with no relay job, proof or base');
+    await p.settle();
+    assert.doesNotMatch(p.text('pvList'), /relay failed|retry/, 'an imported exit is never resumed');
+    assert.equal(p.window.__relayPosts.length, 0, 'nothing went to a relay');
+    assert.equal(p.chain.sent.length, 0, 'and nothing was signed');
     p.close();
   });
 
@@ -1651,7 +1669,8 @@ describe('a note list that names a destination', () => {
 });
 
 describe('the points a wallet has been credited', () => {
-  const PTS = 'tacit-points.onrender.com';
+  const PTS = 'relay.two.example';
+  const roster = { 'zswap:ep2': JSON.stringify({ t: Date.now(), v: [[], [], [], ['https://' + RELAY, 'https://' + PTS], [], [], [], [], []] }) };
   const serve = (p, host, body) => {
     Object.defineProperty(p.chain.lanes, host + '/points/', {
       configurable: true, enumerable: true, get: () => body,
@@ -1953,8 +1972,8 @@ describe('the points a wallet has been credited', () => {
     p.close();
   });
 
-  test('falls back to the indexer host when the relay does not serve it', async () => {
-    const p = await open();
+  test('falls back to the next roster relay when the first does not serve it', async () => {
+    const p = await open({ storage: roster });
     serve(p, PTS, { address: A.ACCOUNT.toLowerCase(), points: 12.5, deposit_count: 3 });
     await unlock(p);
     await p.waitFor(() => /Points/.test(p.text('pvKey')), { label: 'the points row via fallback', ...SLOW });

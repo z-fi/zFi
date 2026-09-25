@@ -112,6 +112,45 @@ describe('a name is read from Ethereum, whatever chain the wallet is on', () => 
   });
 });
 
+describe('a .eth name pays the address it set for the chain the funds land on', () => {
+  const ON_BASE = '0x4444444444444444444444444444444444444444';
+  const ANY_EVM = '0x5555555555555555555555555555555555555555';
+  const COIN_BASE = String(0x80000000 + BASE), COIN_EVM = String(0x80000000);
+
+  test('on Base, its Base record wins over its Ethereum one', async () => {
+    const l1 = l1Fixture();
+    l1.ensCoins.set('alice.eth|' + COIN_BASE, ON_BASE);
+    l1.ensCoins.set('alice.eth|' + COIN_EVM, ANY_EVM);
+    const { p } = await openOn(BASE, { l1 });
+    assert.equal((await resolveRecipient(p, 'alice.eth')).shown.toLowerCase(), ON_BASE);
+    p.close();
+  });
+
+  test('without one, the default EVM record, and only then Ethereum\'s', async () => {
+    const l1 = l1Fixture();
+    l1.ensCoins.set('alice.eth|' + COIN_EVM, ANY_EVM);
+    const { p } = await openOn(RH, { l1 });
+    assert.equal((await resolveRecipient(p, 'alice.eth')).shown.toLowerCase(), ANY_EVM);
+    p.close();
+    const q = (await openOn(RH)).p;
+    assert.equal((await resolveRecipient(q, 'alice.eth')).shown.toLowerCase(), NAMED);
+    q.close();
+  });
+
+  test('on Ethereum the chain records are not consulted', async () => {
+    const l1 = l1Fixture();
+    l1.ensCoins.set('alice.eth|' + COIN_EVM, ANY_EVM);
+    const chain = l1;
+    chain.autoConnected = true;
+    const p = await loadPage({ chain });
+    await p.connect();
+    p.click('tabSend');
+    await p.settle();
+    assert.equal((await resolveRecipient(p, 'alice.eth')).shown.toLowerCase(), NAMED);
+    p.close();
+  });
+});
+
 describe('the registry walk is one read, not one per label', () => {
   /** Round trips the page made to a mainnet node, which is what an L2 pays for. */
   const l1Requests = chain =>

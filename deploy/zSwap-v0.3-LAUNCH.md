@@ -6,10 +6,10 @@ The page and all its on-chain dependencies are ready. What remains is deploying 
 
 | | |
 |---|---|
-| Page | `zSwap.html`, 671,489 B, 28 chunks (16,639 B headroom) |
+| Page | `zSwap.html`, 673,944 B, 28 chunks (14,184 B headroom) |
 | Identity | `CP_MSG` is Tacit's shared identity message (tacit 2abd65b0, `dapp/identity-message.js`), byte-equal; the derivation is unchanged |
 | Checks | `script/check-zSwap.mjs` all pass; `check-create2-artifacts.mjs` 27/27 reproduce |
-| Tests | UI suite 86 files, run one file at a time; Foundry zSwap 83, zSolverFill 17, PM 76 (without the default mainnet fork), zGuard 18, Precision fork 19; browser 30 |
+| Tests | UI suite 90 files (1,537 tests), run one file at a time; Foundry zSwap 83, zSolverFill 17, PM 76 (without the default mainnet fork), zGuard 18, Precision fork 19; browser 30 |
 | Live smoke (read-only, real Chromium) | quotes land on 1 / 8453 / 4663 in 7–10 s, no page errors |
 | Markets | PM LIVE `0x0000003b…aB5C5` on mainnet, verified (Etherscan + Sourcify); the page's `#mk` mode (mainnet only) |
 | zGuard | LIVE `0x00000057…2b1961` on 1/8453/4663, verified (Sourcify + Etherscan) |
