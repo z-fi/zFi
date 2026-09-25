@@ -1826,6 +1826,57 @@ describe('the points a wallet has been credited', () => {
     p.close();
   });
 
+  test('cBTC posts and cUSD loans earn points too, each shown in its own asset', async () => {
+    const p = await open();
+    serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 3.19, deposit_count: 3, deposits: [
+      { tx_hash: '0x' + '11'.repeat(32), block_time: 1790166371, amount_wei: '1000000000000000', points: 1, activity: 'wrap' },
+      { tx_hash: '0x' + '22'.repeat(32), block_time: 1790252771, amount_wei: '289294547313003', points: 0.29, activity: 'cbtcmint' },
+      { tx_hash: '0x' + '33'.repeat(32), block_time: 1790339171, amount_wei: '150000000', points: 1.9, activity: 'cusdmint' },
+    ] });
+    await unlock(p);
+    await p.waitFor(() => /counted/.test(p.text('pvKey')), { label: 'the points row', ...SLOW });
+    // Three distinct activities, so the summary spells out the breakdown.
+    assert.match(p.text('pvKey'), /3 deposits counted, 1 wrap, 1 cBTC lock and 1 cUSD loan/, p.text('pvKey'));
+    p.click(p.$('pvKey').querySelector('button[data-a="ptshist"]'));
+    await p.waitFor(() => !!p.$('pvKey').querySelector('.pvkh'), { label: 'the list to open', ...SLOW });
+    const rows = [...p.$('pvKey').querySelectorAll('.pvkd')];
+    assert.equal(rows.length, 3);
+    assert.match(rows[0].textContent, /1\.5 cUSD/, 'the CDP loan, at cUSD\'s own 8 decimals');
+    assert.match(rows[0].textContent, /cUSD loan/);
+    assert.match(rows[1].textContent, /0\.000289 wstETH/, 'the cBTC post, at wstETH\'s 18 decimals, trimmed for display');
+    assert.match(rows[1].textContent, /cBTC lock/);
+    assert.match(rows[2].textContent, /0\.001 ETH/, 'the original wrap, unlabelled as before');
+    assert.doesNotMatch(rows[2].textContent, /wrap</, 'a wrap carries no activity tag of its own');
+    p.close();
+  });
+
+  test('a wallet with only wraps sees no category breakdown', async () => {
+    const p = await open();
+    serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 5, deposit_count: 1 });
+    await unlock(p);
+    await p.waitFor(() => /counted/.test(p.text('pvKey')), { label: 'the points row', ...SLOW });
+    assert.match(p.text('pvKey'), /5 from 1 deposit counted/);
+    assert.doesNotMatch(p.text('pvKey'), /wrap|cBTC lock|cUSD loan/, 'nothing to break down with one category');
+    p.close();
+  });
+
+  test('an activity the page does not recognise reads as the original wrap program', async () => {
+    const p = await open();
+    serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 2, deposit_count: 2, deposits: [
+      { tx_hash: '0x' + '44'.repeat(32), block_time: 1790166371, amount_wei: '1000000000000000', points: 1 },
+      { tx_hash: '0x' + '55'.repeat(32), block_time: 1790252771, amount_wei: '1000000000000000', points: 1, activity: 'somethingFuture' },
+    ] });
+    await unlock(p);
+    await p.waitFor(() => /counted/.test(p.text('pvKey')), { label: 'the points row', ...SLOW });
+    assert.doesNotMatch(p.text('pvKey'), /wrap|cBTC lock|cUSD loan/, 'both fall back to the one known category');
+    p.click(p.$('pvKey').querySelector('button[data-a="ptshist"]'));
+    await p.waitFor(() => !!p.$('pvKey').querySelector('.pvkh'), { label: 'the list', ...SLOW });
+    const rows = [...p.$('pvKey').querySelectorAll('.pvkd')];
+    assert.ok(rows.every(r => /ETH/.test(r.textContent)), 'rendered as an ETH deposit, not guessed at');
+    assert.ok(rows.every(r => !/cBTC lock|cUSD loan/.test(r.textContent)), 'and carries no activity tag of its own');
+    p.close();
+  });
+
   test('every counted deposit can be listed, and folded away again', async () => {
     const p = await open();
     serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 11, deposit_count: 2, deposits: [
