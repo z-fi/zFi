@@ -343,7 +343,10 @@ describe('Base — the OP Stack deposit', () => {
   });
 
   test('buys more destination gas when the recipient is a contract', async () => {
-    const p = await setup(c => c.remotes['base-rpc'].code.set(A.OTHER.toLowerCase(), '0x60006000'));
+    const p = await setup(c => {
+      c.remotes['base-rpc'].code.set(A.OTHER.toLowerCase(), '0x60006000');
+      c.remotes['base-rpc'].answers.set(`${A.OTHER.toLowerCase()}:${SEL.HOOK}`, '0x' + SEL.HOOK + '0'.repeat(56));
+    });
     const tx = await sendTo(p, { dest: '8453', delay: '3600' });
     assert.equal(word('0x' + tx.data.slice(10), 2), 2_500_000n,
       'a contract recipient runs onERC1155Received on the way in');
@@ -1071,7 +1074,10 @@ describe('the refusals', () => {
   // guessing "no code" picks the small gas limit, and a deposit that runs out
   // of gas on the far side is minted to the sender's address there.
   test('treats a malformed eth_getCode answer as code, not as absence', async () => {
-    const p = await setup(c => { c.remotes['base-rpc'].codeRaw = null; });
+    const p = await setup(c => {
+      c.remotes['base-rpc'].codeRaw = null;
+      c.remotes['base-rpc'].answers.set(`${A.OTHER.toLowerCase()}:${SEL.HOOK}`, '0x' + SEL.HOOK + '0'.repeat(56));
+    });
     await p.typeAmount('amt', '1');
     await recipient(p, A.OTHER);
     p.select('dly', '3600');
@@ -1289,6 +1295,118 @@ describe('the on-chain switch', () => {
     await p.settle();
     await p.waitFor(() => !p.visible('sdChainL'), { label: 'mainnet lane closing' });
     assert.equal(p.visible('rlOptL'), false);
+    p.close();
+  });
+});
+
+/**
+ * SLOW mints an ERC-1155 to whoever it pays, so a contract recipient runs
+ * onERC1155Received on the way in. On this chain the pre-flight catches a
+ * contract that refuses it; across a bridge the mint happens on the far side,
+ * where a refusal strands the ether in SlowArrival's rescue or leaves a relay
+ * escrow nobody can fill. The page asks the far side first.
+ */
+describe('a recipient that cannot hold SLOW\'s token', () => {
+  const HOOKLESS = '0x60006000';
+  const refused = async (p) => {
+    await p.waitFor(() => /refuses SLOW/.test(p.text('brNote')), { label: 'the refusal' });
+    p.click('swap');
+    await p.settle();
+    assert.equal(p.chain.sent.length, 0);
+  };
+  const fill = async (p, delay, dest) => {
+    await p.typeAmount('amt', '1');
+    await recipient(p, A.OTHER);
+    p.select('dly', delay);
+    p.select('sdChain', dest);
+    await p.settle();
+  };
+
+  test('a locked bridge to it is refused before anything is signed', async () => {
+    const p = await setup(c => c.remotes['base-rpc'].code.set(A.OTHER.toLowerCase(), HOOKLESS));
+    await fill(p, '3600', '8453');
+    await refused(p);
+    assert.match(p.text('brNote'), /without a lock/);
+    const probe = p.chain.remotes['base-rpc'].calls.find(c => c.selector === SEL.HOOK);
+    const b = '0x' + probe.data.slice(10);
+    assert.equal(wordAddr(b, 0).toLowerCase(), A.ARRIVAL.toLowerCase(),
+      'SlowArrival is the depositor there, so it is the operator the hook sees');
+    assert.equal(word(b, 2), 3600n << 160n, 'the id is ETH at the chosen delay');
+    p.close();
+  });
+
+  test('an instant bridge to it still goes, because no token is minted', async () => {
+    const p = await setup(c => c.remotes['base-rpc'].code.set(A.OTHER.toLowerCase(), HOOKLESS));
+    const tx = await sendTo(p, { dest: '8453' });
+    assert.equal(wordAddr('0x' + tx.data.slice(10), 0).toLowerCase(), A.OTHER.toLowerCase());
+    p.close();
+  });
+
+  test('a relay escrow to it is refused even with no lock, since a fill always mints', async () => {
+    const p = await onBaseSend(c => c.l1.code.set(A.OTHER.toLowerCase(), HOOKLESS));
+    await fill(p, '0', '1');
+    await refused(p);
+    assert.doesNotMatch(p.text('brNote'), /without a lock/);
+    const probe = p.chain.l1.calls.find(c => c.selector === SEL.HOOK);
+    assert.equal(wordAddr('0x' + probe.data.slice(10), 0).toLowerCase(), A.RELAY.toLowerCase());
+    p.close();
+  });
+
+  test('a contract that does accept it is sent to as before', async () => {
+    const p = await onBaseSend(c => {
+      c.l1.code.set(A.OTHER.toLowerCase(), HOOKLESS);
+      c.l1.answers.set(`${A.OTHER.toLowerCase()}:${SEL.HOOK}`, '0x' + SEL.HOOK + '0'.repeat(56));
+    });
+    await fill(p, '3600', '1');
+    await p.waitFor(() => !p.disabled('swap'), { label: 'a send the page will make' });
+    p.click('swap');
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'open tx' });
+    assert.equal(selectorOf(p.chain.lastSent.data), SEL.ROPEN);
+    p.close();
+  });
+});
+
+/**
+ * A relayer's zero-delay fill does not pay ether: SlowRelay.fill always goes
+ * through SLOW.depositTo, and at delay 0 that credits unlockedBalances. The
+ * recipient has to see it and withdraw it, or the send looks like it never came.
+ */
+describe('ether held in SLOW', () => {
+  async function held(prep) {
+    const chain = new MockChain({ chainId: BASE });
+    chain.setNative(A.ACCOUNT, 10n * ETH);
+    chain.slowHeld = ETH / 4n;
+    prep?.(chain);
+    const p = await loadPage({ chain, hash: null });
+    await p.connect({ pin: false });
+    p.click('tabSend');
+    await p.settle();
+    await p.waitFor(() => p.$('pos').textContent.includes('Held for you in SLOW'), { label: 'held row' });
+    return p;
+  }
+  const button = (p, label) => [...p.$('pos').querySelectorAll('button')].find(b => b.textContent === label);
+
+  test('is shown with a Withdraw that pays this wallet', async () => {
+    const p = await held();
+    assert.match(p.$('pos').textContent, /0\.25 ETH/);
+    assert.match(p.text('tabSend'), /\(1\)/, 'the tab counts it among what is waiting');
+    p.click(button(p, 'Withdraw'));
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'withdraw tx' });
+    const tx = p.chain.lastSent;
+    assert.equal(tx.to.toLowerCase(), A.SLOW.toLowerCase());
+    assert.equal(selectorOf(tx.data), SEL.WITHDRAWFROM);
+    const b = '0x' + tx.data.slice(10);
+    assert.equal(wordAddr(b, 0).toLowerCase(), A.ACCOUNT.toLowerCase());
+    assert.equal(wordAddr(b, 1).toLowerCase(), A.ACCOUNT.toLowerCase());
+    assert.equal(word(b, 2), 0n, 'the zero-delay ETH id');
+    assert.equal(word(b, 3), ETH / 4n);
+    p.close();
+  });
+
+  test('a guarded account is told why it cannot withdraw here', async () => {
+    const p = await held(c => { c.slowGuardian = A.OTHER; });
+    assert.match(p.$('pos').textContent, /guardian approval/);
+    assert.equal(button(p, 'Withdraw'), undefined);
     p.close();
   });
 });

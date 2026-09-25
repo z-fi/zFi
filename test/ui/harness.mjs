@@ -155,7 +155,7 @@ export const SEL = {
   ENS_RESOLVE: '9061b923', ENS_SUPPORTS: '01ffc9a7',
   DEPOSITTO: '94eeaec9', CLAIM: '379607f5', REVERSE: '97d15425', WITHDRAWFROM: 'd4fdc309',
   DEPOSITTIP: '75f92e42', TIPS: 'a5c68c59', REFUNDTIP: 'd27e1e72',
-  OUT: 'd40d4bc6', IN: 'e3993ee7', PENDING: '6577b86a',
+  OUT: 'd40d4bc6', IN: 'e3993ee7', PENDING: '6577b86a', HELD: '5b96484e', HOOK: 'f23a6e61',
   GUARDIAN: '0633b14a', UNLOCK: '6198e339', CLAWBACK: 'fcc36bc9',
   // SlowArrival, and the two canonical entrypoints a bridged send goes through.
   ARRIVE: '24eb6264', AREV: '99c5ff88', ACLAW: 'e3035405',
@@ -476,6 +476,9 @@ export class MockChain {
     // A guardian on the account changes which calls SLOW will accept: claim
     // becomes unlock, and withdrawFrom needs the guardian's co-signature.
     this.slowGuardian = A.ZERO;
+    // unlockedBalances(account, 0): ether SLOW holds for the account at the
+    // zero-delay id, which is what a relayer's instant fill delivers.
+    this.slowHeld = 0n;
     this.quoteHandler = null;      // ({selector, params}) => hex | null
     this.capabilities = null;      // wallet_getCapabilities response
     this.sent = [];                // eth_sendTransaction payloads
@@ -1885,6 +1888,7 @@ export class MockChain {
       return '0x' + u256(1);
     }
     if (sel === SEL.GUARDIAN) return '0x' + addrWord(this.slowGuardian);
+    if (sel === SEL.HELD) return '0x' + u256(this.slowHeld);
     if (sel === SEL.OUT) {
       const who = wordAddr('0x' + data.slice(8), 0).toLowerCase();
       if (who === A.ARRIVAL.toLowerCase()) return arr(this.slowArrivalOut);

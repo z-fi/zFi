@@ -844,3 +844,72 @@ describe('what SLOW says when it refuses', () => {
     p.close();
   });
 });
+
+/**
+ * A tip is remembered in the browser that posted it. From another browser, or
+ * after storage is cleared, the only trace of a tip on a transfer that has
+ * since settled is the gate's TipPosted log, with the sender indexed. The page
+ * reads those back once per session; the gate's own tips() read still decides
+ * whether anything is refundable.
+ */
+describe('tips posted from another browser', () => {
+  const TIP_POSTED = '0xf5d6ce0c19323a14dfcae19c1a1447d8e5bac8f8e7c2b48bbf3b43f3c88b173c';
+  const pad = (v) => '0x' + BigInt(v).toString(16).padStart(64, '0');
+  const tipLog = (tid, sender) => ({
+    address: A.SLOW_GATE, topics: [TIP_POSTED, pad(tid), pad(sender), pad(A.OTHER)],
+    data: pad(10n ** 15n),
+  });
+  const button = (p, label) => [...p.$('pos').querySelectorAll('button')].find(b => b.textContent === label);
+
+  test('are found again from the gate\'s log and offered back', async () => {
+    const p = await setup(c => {
+      c.blockNumber = '0x18c0000';
+      c.logs.push(tipLog(9n, A.ACCOUNT));
+      c.slowTips.set('9', 10n ** 15n);
+    });
+    await p.waitFor(() => p.$('pos').textContent.includes('Keeper tip'), { label: 'recovered tip' });
+    p.click(button(p, 'Reclaim tip'));
+    await p.waitFor(() => p.chain.sent.length > 0, { label: 'refund tx' });
+    const tx = p.chain.lastSent;
+    assert.equal(tx.to.toLowerCase(), A.SLOW_GATE.toLowerCase());
+    assert.equal(selectorOf(tx.data), SEL.REFUNDTIP);
+    assert.equal(word('0x' + tx.data.slice(10), 0), 9n);
+    p.close();
+  });
+
+  test('a log that names another sender is not adopted', async () => {
+    const p = await setup(c => {
+      c.blockNumber = '0x18c0000';
+      c.logs.push(tipLog(9n, A.OTHER));
+      c.slowTips.set('9', 10n ** 15n);
+    });
+    await p.settle();
+    await new Promise(r => p.window.setTimeout(r, 300));
+    await p.settle();
+    assert.equal(p.$('pos').textContent.includes('Keeper tip'), false);
+    assert.equal(p.chain.calls.some(c => c.to === A.SLOW_GATE.toLowerCase()), false,
+      'the gate is not even asked about a tip this account never posted');
+    p.close();
+  });
+});
+
+describe('a wallet whose code refuses ERC-1155', () => {
+  test('is told why a reverse cannot land, not to send instantly', async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const p = await setup(c => {
+      c.slowOut = [2n];
+      c.slowPending.set('2', {
+        timestamp: BigInt(now), id: BigInt(A.ZERO) | (86400n << 160n), amount: ETH,
+      });
+    });
+    await p.waitFor(() => p.$('pos').textContent.includes('Reversible'), { label: 'positions' });
+    const mc = p.window.eval('SEL_MULTICALL');
+    p.chain.reverts.set(`${A.SLOW.toLowerCase()}:${mc}`, { data: '0x9c05499b' });
+    p.click([...p.$('pos').querySelectorAll('button')].find(b => b.textContent === 'Reverse'));
+    await p.waitFor(() => /ERC-1155/.test(p.text('stat')), { label: 'the explanation' });
+    assert.match(p.text('stat'), /delegation/);
+    assert.doesNotMatch(p.text('stat'), /Send instantly/);
+    assert.equal(p.chain.sent.length, 0);
+    p.close();
+  });
+});
