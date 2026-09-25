@@ -146,7 +146,8 @@ async function open(chain) {
   await p.connect();
   p.click('pv');
   await p.settle();
-  await p.waitFor(() => /Key unlocked/.test(p.text('pvKey')), { label: 'the cached key' });
+  p.click('pvGo');                       // one signature per visit unlocks the key
+  await p.waitFor(() => /Key unlocked/.test(p.text('pvKey')), { label: 'the key to unlock' });
   return p;
 }
 const ready = async p => {

@@ -346,6 +346,7 @@ describe('shielding TAC', () => {
 
   test('recovery finds a TAC deposit by the asset its Wrap event names', async () => {
     const p = await open({ storage: { ['zswap:cpk:' + A.ACCOUNT.toLowerCase()]: F.seed } });
+    await unlock(p);
     p.chain.logs.push(wrapLog(F.tac.depositId, F.tac.amountWei, TAC_ID));
     advance(p);
     p.click(p.$('pvKey').querySelector('button[data-a="recover"]'));

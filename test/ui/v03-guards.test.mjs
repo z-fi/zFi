@@ -296,6 +296,7 @@ describe('private bridge notes', () => {
 
     // Tab B opens on the same notes, then shares tab A's storage from here on.
     const b = await pvOpen({ storage: { ...store } });
+    await pvUnlock(b);
     await b.waitFor(() => /0\.01 tETH/.test(b.text('pvList')), { label: 'tab B to list the note' });
     b.window.__shared = store;
     b.window.eval('LS=window.__shared');

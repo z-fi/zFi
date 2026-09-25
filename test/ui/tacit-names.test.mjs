@@ -27,7 +27,8 @@ async function open(chain) {
   await p.connect();
   p.click('pv');
   await p.settle();
-  await p.waitFor(() => /Key unlocked/.test(p.text('pvKey')), { label: 'the cached key', ...SLOW });
+  p.click('pvGo');                       // one signature per visit unlocks the key
+  await p.waitFor(() => /Key unlocked/.test(p.text('pvKey')), { label: 'the key to unlock', ...SLOW });
   return p;
 }
 /** A tacit1 address for a key, with the Ethereum lane its flag byte declares. */

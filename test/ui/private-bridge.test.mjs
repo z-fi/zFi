@@ -18,6 +18,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { webcrypto } from 'node:crypto';
 import { AbiCoder, keccak256, getBytes, concat, toUtf8Bytes, sha256, computeAddress } from 'ethers';
 import { A, MockChain, loadPage, closeAllPages, selectorOf, CP_BLOCK } from './harness.mjs';
 
@@ -165,7 +166,7 @@ const SLOW = { timeout: 15000 };
 
 async function open(opts = {}) {
   const chain = withPool(opts.chain ?? new MockChain(), opts);
-  const p = await loadPage({ chain, storage: opts.storage, chime: opts.chime, hash: opts.hash, patch: opts.patch });
+  const p = await loadPage({ chain, storage: opts.storage, chime: opts.chime, hash: opts.hash, patch: opts.patch, beforeParse: opts.beforeParse });
   // Capture relay bodies: the fetch mock only records URL + method, and the
   // witness is the thing under test.
   const inner = p.window.fetch;
@@ -325,14 +326,27 @@ describe('depositing', () => {
     p.close();
   });
 
-  test('a key already cached needs no second signature', async () => {
+  test('the browser keeps no key: a return visit signs once again', async () => {
     const p = await open();
     await unlock(p);
+    assert.equal(p.window.localStorage['zswap:cpk:' + A.ACCOUNT.toLowerCase()], '{"v":1}', 'a marker, never the key');
+    assert.ok(!Object.values(p.window.localStorage).some(v => String(v).includes(F.seed.slice(2))), 'the seed is nowhere in storage');
     const storage = { ...p.window.localStorage };
     p.close();
     const q = await open({ storage });
-    assert.equal(q.text('pvGo'), 'Deposit');
-    assert.equal(q.chain.personalSigned.length, 0);
+    assert.equal(q.text('pvGo'), 'Unlock key');
+    assert.doesNotMatch(q.text('pvKey'), /Key unlocked/);
+    await unlock(q);
+    assert.equal(q.window.eval('cpSeed'), F.seed);
+    q.close();
+  });
+
+  test('a key an older build kept in plain text is dropped once the signature matches it', async () => {
+    const q = await open({ storage: { ['zswap:cpk:' + A.ACCOUNT.toLowerCase()]: F.seed } });
+    assert.doesNotMatch(q.text('pvKey'), /Key unlocked/, 'not used until the wallet signs');
+    await unlock(q);
+    assert.equal(q.window.eval('cpSeed'), F.seed);
+    assert.equal(q.window.localStorage['zswap:cpk:' + A.ACCOUNT.toLowerCase()], '{"v":1}');
     q.close();
   });
 });
@@ -627,6 +641,25 @@ describe('exiting to Base through the relay', () => {
     p.close();
   });
 
+  test('an exit the relay failed is rebuilt at today\'s fee, and the row says why it failed', async () => {
+    const { p } = await relayedBaseExit();
+    p.chain.relay.status = { status: 'failed', error: 'feeGate: bound fee is below the marginal cost <b>' };
+    poke(p);
+    await p.waitFor(() => p.$('pvList').querySelector('span[title^="feeGate"]'), { label: 'the reason on the row', timeout: 20000 });
+    assert.equal(p.$('pvList').querySelector('span[title^="feeGate"]').title, 'feeGate: bound fee is below the marginal cost b');
+    p.chain.gasPrice = GAS * 3n / 2n;
+    const fee = (f => f < 10000n ? 10000n : f)(ladder(((323000n + 600000n) * GAS * 3n / 2n + 40000000000000n) * 135n / 100n / 10n ** 10n));
+    p.chain.escrow = escrowOf(baseRecipe((BigInt(F.note.value) - fee) * 10n ** 10n));
+    p.queueConfirm(true);
+    p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
+    await p.waitFor(() => p.window.__relayPosts.length === 3, { label: 'the rebuilt exit', ...SLOW });
+    const [, first, again] = p.window.__relayPosts;
+    assert.equal(first.op.fee, String(FEE_BASE));
+    assert.equal(again.op.fee, String(fee), 'quoted again, not the fee the relay refused');
+    assert.equal(again.op.recipient, p.chain.escrow);
+    p.close();
+  });
+
   test('an expired exit can be cancelled, which makes the note spendable again', async () => {
     const { p } = await expiredExit();
     p.queueConfirm(true);
@@ -722,6 +755,7 @@ describe('self-help', () => {
     p.close();
     // A fresh page: no note records, only the pool's public history.
     const q = await open({ storage: { ['zswap:cpk:' + A.ACCOUNT.toLowerCase()]: key } });
+    await unlock(q);
     settleDeposit(q);
     poke(q);
     assert.match(q.text('pvList'), /No deposits yet/);
@@ -737,9 +771,11 @@ describe('self-help', () => {
     // the page's single-note derivation, which the reference vectors pin; the
     // scan below has to land on the same id by its own route.
     const p = await open({ storage });
+    await unlock(p);
     const mine = p.window.eval('cpNoteOf({i:5,v:"2500000"}).dep');
     p.close();
     const q = await open({ storage });
+    await unlock(q);
     // Every call to derive a note secret encodes this domain tag exactly once.
     let derived = 0;
     const Enc = q.window.TextEncoder;
@@ -801,6 +837,7 @@ describe('self-help', () => {
     const notes = p.window.localStorage[Object.keys(p.window.localStorage).find(k => k.startsWith('zswap:cpn:'))];
     p.close();
     const q = await open({ storage: { ['zswap:cpk:' + A.ACCOUNT.toLowerCase()]: key } });
+    await unlock(q);
     assert.match(q.text('pvList'), /No deposits yet/);
     q.queuePrompt(notes);
     q.click(q.$('pvKey').querySelector('button[data-a="import"]'));
@@ -856,7 +893,8 @@ describe('self-help', () => {
     q.queuePrompt(F.seed);
     q.click(q.$('pvKey').querySelector('button[data-a="import"]'));
     await q.settle();
-    assert.equal(q.window.localStorage['zswap:cpk:' + A.ACCOUNT.toLowerCase()], F.seed);
+    assert.equal(q.window.eval('cpSeed'), F.seed);
+    assert.equal(q.window.localStorage['zswap:cpk:' + A.ACCOUNT.toLowerCase()], '{"v":1}', 'the wallet\'s own key needs nothing stored');
     p.close(); q.close();
   });
 });
@@ -913,6 +951,7 @@ describe('a relay that does not answer', () => {
     assert.equal(p.window.eval('cpRelayBase()'), 'https://down.relay');
     assert.ok([...p.window.eval('CP_RELAYS')].includes('https://api.tacit.finance'), 'which would have answered');
     await unlock(p);
+    assert.match(p.text('pvKey'), /relay down\.relay · pinned/, 'the pin stays named on the key row');
     await deposit(p);
     await p.waitFor(() => /did not take the settle/.test(p.text('stat')), { label: 'the pinned relay to be the only one tried', ...SLOW });
     assert.equal(p.window.eval('cpNotes[0].job'), undefined, 'no job: the viewer\'s choice was not second-guessed');
@@ -1140,7 +1179,7 @@ describe('one key, two chains', () => {
   test('the key is the one Tacit derives, and it reads as a Bitcoin address and a WIF', async () => {
     const p = await open();
     await unlock(p);
-    assert.equal(p.window.localStorage['zswap:cpk:' + A.ACCOUNT.toLowerCase()], F.seed, 'Tacit\'s identity for this signature');
+    assert.equal(p.window.eval('cpSeed'), F.seed, 'Tacit\'s identity for this signature');
     const link = p.$('pvKey').querySelector('a[href*="mempool.space/address/"]');
     assert.ok(link, 'the Bitcoin address is shown');
     assert.equal(link.getAttribute('href'), 'https://mempool.space/address/' + F.btc.address);
@@ -1163,7 +1202,7 @@ describe('one key, two chains', () => {
     const p = await open();
     p.chain.personalSig = F.sig.slice(0, 130) + '00';
     await unlock(p);
-    assert.equal(p.window.localStorage['zswap:cpk:' + A.ACCOUNT.toLowerCase()], F.seed, 'v is canonicalized before hashing, as Tacit does');
+    assert.equal(p.window.eval('cpSeed'), F.seed, 'v is canonicalized before hashing, as Tacit does');
     p.close();
   });
 
@@ -1200,6 +1239,7 @@ describe('one key, two chains', () => {
 
   test('the key alone recovers a note sealed to it elsewhere, and it can be withdrawn', async () => {
     const p = await open({ storage: { ['zswap:cpk:' + A.ACCOUNT.toLowerCase()]: F.seed } });
+    await unlock(p);
     p.chain.logs.push(leavesLog(0, [F.found.leaf], [F.found.memo]));
     p.chain.nextLeaf = 1;
     advance(p);
@@ -1278,7 +1318,7 @@ describe('the rescue key', () => {
     await p.waitFor(() => /exit/.test(p.text('pvList')), SLOW);
     // The rescue address is a key derived from the note key and the index, exactly as the page does it:
     // sha256("zswap-exit-rescue-v1" ‖ key ‖ index_be8) mod n.
-    const key = p.window.localStorage['zswap:cpk:' + A.ACCOUNT.toLowerCase()];
+    const key = p.window.eval('cpSeed');
     const N = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n;
     const be8 = (n) => '0x' + BigInt(n).toString(16).padStart(16, '0');
     const priv = (BigInt(sha256(concat([toUtf8Bytes('zswap-exit-rescue-v1'), key, be8(0)]))) % N) || 1n;
@@ -1352,32 +1392,66 @@ describe('a deposit that never landed', () => {
  * re-derives the key from the wallet, and a mismatch is the user's call.
  */
 describe('a key the wallet did not derive', () => {
-  const PLANTED = '0x' + '5a'.repeat(32);
-  const planted = () => open({ storage: { ['zswap:cpk:' + A.ACCOUNT.toLowerCase()]: PLANTED } });
-  const verify = async p => {
-    await p.waitFor(() => p.$('pvKey').querySelector('[data-a="verify"]'), { label: 'verify button' });
-    assert.ok(!/mempool\.space/.test(p.$('pvKey').innerHTML), 'no receive address before the key is checked');
-    p.click(p.$('pvKey').querySelector('[data-a="verify"]'));
-    await p.settle();
-  };
+  const PLANTED = '0x' + '5a'.repeat(32), K = 'zswap:cpk:' + A.ACCOUNT.toLowerCase();
+  const withSubtle = { beforeParse: w => Object.defineProperty(w.crypto, 'subtle', { value: webcrypto.subtle, configurable: true }) };
+  const planted = (o = {}) => open({ ...o, storage: { [K]: PLANTED } });
 
-  test('is replaced by the wallet\'s own key unless the user says they imported it', async () => {
+  test('is replaced by the wallet\'s own key unless the user says they imported it, and is shown first', async () => {
     const p = await planted();
+    assert.doesNotMatch(p.text('pvKey'), /Key unlocked/, 'nothing is used before the wallet signs');
     p.queueConfirm(false);
-    await verify(p);
-    assert.equal(p.chain.personalSigned.length, 1, 'one signature to check it');
-    assert.equal(p.window.localStorage['zswap:cpk:' + A.ACCOUNT.toLowerCase()], F.seed);
-    assert.match(p.text('stat'), /own key is now in use/);
-    assert.match(p.$('pvKey').innerHTML, /mempool\.space/, 'the verified key shows its address');
+    await unlock(p);
+    assert.ok(p.asked.confirm.some(q => /not the one this wallet derives/.test(q)), 'the mismatch is the user\'s call');
+    assert.ok(p.asked.prompt.some(q => /key being replaced/.test(q)), 'the old key is offered for copying first');
+    assert.ok(p.window.__promptDefaults.includes(PLANTED), 'in full');
+    assert.equal(p.window.eval('cpSeed'), F.seed);
+    assert.equal(p.window.localStorage[K], '{"v":1}');
+    assert.match(p.$('pvKey').innerHTML, /mempool\.space/, 'the wallet\'s key shows its address');
     p.close();
   });
 
-  test('an imported key is kept when the user confirms it', async () => {
-    const p = await planted();
+  test('an imported key is kept when the user confirms it, sealed rather than in plain text', async () => {
+    const p = await planted(withSubtle);
     p.queueConfirm(true);
-    await verify(p);
-    assert.equal(p.window.localStorage['zswap:cpk:' + A.ACCOUNT.toLowerCase()], PLANTED);
-    assert.equal(p.window.eval('cpVer'), 1);
+    await unlock(p);
+    assert.equal(p.window.eval('cpSeed'), PLANTED);
+    const rec = p.window.localStorage[K];
+    assert.ok(!rec.includes('5a5a5a'), 'no plain key is left');
+    assert.match(rec, /"ct":"[0-9a-f]{96}"/, 'the key, sealed under the wallet\'s own');
+    const storage = { ...p.window.localStorage };
+    p.close();
+    const q = await open({ storage, ...withSubtle });
+    await unlock(q);
+    assert.equal(q.window.eval('cpSeed'), PLANTED, 'the next visit opens it with the same signature');
+    assert.equal(q.asked.confirm.length, 0, 'and asks nothing more');
+    q.close();
+  });
+
+  test('a sealed key this wallet\'s signature does not open is left in place', async () => {
+    const p = await planted(withSubtle);
+    p.queueConfirm(true);
+    await unlock(p);
+    const storage = { ...p.window.localStorage };
+    p.close();
+    const q = await open({ storage, ...withSubtle });
+    q.chain.personalSig = '0x' + '44'.repeat(64) + '1b';
+    q.click('pvGo');
+    await q.waitFor(() => /Key unlocked/.test(q.text('pvKey')), { label: 'the key to unlock' });
+    assert.notEqual(q.window.eval('cpSeed'), PLANTED);
+    assert.match(q.text('stat'), /does not open with this wallet/);
+    assert.equal(q.window.localStorage[K], storage[K], 'the sealed record is untouched');
+    q.close();
+  });
+
+  test('a key imported by hand is sealed too', async () => {
+    const p = await open(withSubtle);
+    await unlock(p);
+    p.queuePrompt(PLANTED);
+    p.queueConfirm(true);
+    p.click(p.$('pvKey').querySelector('button[data-a="import"]'));
+    await p.waitFor(() => p.window.eval('cpSeed') === PLANTED, { label: 'the import' });
+    assert.match(p.window.localStorage[K], /"ct":/);
+    assert.ok(!p.window.localStorage[K].includes('5a5a5a'));
     p.close();
   });
 });

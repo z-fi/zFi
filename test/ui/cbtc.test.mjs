@@ -71,7 +71,8 @@ async function open(chain = cbtcChain()) {
   await p.connect();
   p.click('pv');
   await p.settle();
-  await p.waitFor(() => /Key unlocked/.test(p.text('pvKey')), { label: 'the cached key' });
+  p.click('pvGo');                       // one signature per visit unlocks the key
+  await p.waitFor(() => /Key unlocked/.test(p.text('pvKey')), { label: 'the key to unlock' });
   return p;
 }
 const poke = p => p.doc.dispatchEvent(new p.window.Event('visibilitychange'));
@@ -206,11 +207,11 @@ describe('escrow through CbtcEscrowHelper', () => {
     p.close();
   });
 
-  // The same one transaction, with the relay quoting for the proof it made. Only
-  // `stakeAmount` reaches the helper; the rest of msg.value is the tip, and the
-  // forwarder reverts before touching the helper if the proof carries fees of its
-  // own. The head grows from four words to six, so the bytes offsets all move.
-  test('escrow, mint and the relay\'s pay ride one transaction', async () => {
+  // The helper credits the escrow to whoever calls it and only that caller can
+  // reclaim it, so even with the relay quoting a proof tip the one transaction
+  // goes to the helper itself: through Tacit's tip forwarder the stake would
+  // belong to the forwarder, which has no way to take it back.
+  test('with a proof tip quoted, escrow and mint still go to the helper, so the escrow stays this wallet\'s', async () => {
     const EFWD = '0x000000fb551f7ef4936a59ecdd431ae253139e8d';
     const p = await open(helperChain());
     Object.defineProperty(p.chain.lanes, RELAY + '/confidential/quote', {
@@ -228,19 +229,15 @@ describe('escrow through CbtcEscrowHelper', () => {
     await p.waitFor(() => !!p.$('pvList').querySelector('button[data-a="lsettle"]'), { label: 'the one-transaction button', ...SLOW });
     p.queueConfirm(true);
     p.click(p.$('pvList').querySelector('button[data-a="lsettle"]'));
-    await p.waitFor(() => p.chain.sentTo(EFWD).length === 1, { label: 'postEscrowWithETHAndSettleWithTip', ...SLOW });
-    const tx = p.chain.sentTo(EFWD)[0];
-    assert.equal(tx.data.slice(2, 10), 'ef3dc43b');
-    const [op, stake, pvOut, prOut, memos, to] =
-      coder.decode(['bytes32', 'uint256', 'bytes', 'bytes', 'bytes[]', 'address'], '0x' + tx.data.slice(10));
+    await p.waitFor(() => p.chain.sentTo(HELPER).length === 1, { label: 'postEscrowWithETHAndSettle', ...SLOW });
+    const tx = p.chain.sentTo(HELPER)[0];
+    assert.equal(tx.data.slice(2, 10), '2bb12527', 'the helper, called by this wallet');
+    const [op, pvOut, prOut, memos] = coder.decode(['bytes32', 'bytes', 'bytes', 'bytes[]'], '0x' + tx.data.slice(10));
     assert.equal(op, C.outpoint);
-    assert.equal(pvOut, pv, 'the offsets still land on the proof, six head words in');
+    assert.equal(pvOut, pv);
     assert.equal(prOut, pr);
     assert.deepEqual([...memos], ['0x']);
-    assert.equal(to.toLowerCase(), '0x006cd14f36f65ecbb29b2519ccbe63a0dc8549f2', 'the payee the page carries');
-    assert.equal(BigInt(tx.value) - stake, 90000000000000n, 'exactly the tip rides above the stake');
-    assert.ok(stake > 0n, 'and the stake is what the helper receives');
-    assert.equal(p.chain.sentTo(HELPER).length, 0, 'nothing goes to the helper directly');
+    assert.equal(p.chain.sentTo(EFWD).length, 0, 'nothing goes through the forwarder');
     assert.equal(p.chain.sentTo(POOL).length, 0, 'the pool is settled from inside the helper');
     await p.settle();
     p.close();
@@ -300,6 +297,8 @@ describe('borrowing cUSD against the cBTC note', () => {
     await p.connect();
     p.click('pv');
     await p.settle();
+    p.click('pvGo');
+    await p.waitFor(() => /Key unlocked/.test(p.text('pvKey')), { label: 'the key to unlock' });
     await p.waitFor(() => p.$('pvList').querySelector('button[data-a="borrow"]'), { label: 'the borrow action on the cBTC note', ...SLOW });
     p.queuePrompt('30');
     p.click(p.$('pvList').querySelector('button[data-a="borrow"]'));
@@ -336,6 +335,8 @@ describe('borrowing cUSD against the cBTC note', () => {
     await p.connect();
     p.click('pv');
     await p.settle();
+    p.click('pvGo');
+    await p.waitFor(() => /Key unlocked/.test(p.text('pvKey')), { label: 'the key to unlock' });
     await p.waitFor(() => p.$('pvList').querySelector('button[data-a="borrow"]'), { label: 'the borrow action on the cBTC note', ...SLOW });
     p.queuePrompt('30');
     p.click(p.$('pvList').querySelector('button[data-a="borrow"]'));
@@ -372,6 +373,8 @@ describe('borrowing cUSD against the cBTC note', () => {
     await p.connect();
     p.click('pv');
     await p.settle();
+    p.click('pvGo');
+    await p.waitFor(() => /Key unlocked/.test(p.text('pvKey')), { label: 'the key to unlock' });
     p.click(p.$('pvKey').querySelector('button[data-a="recover"]'));
     await p.waitFor(() => /30 cUSD/.test(p.text('pvList')), { label: 'the position to be recovered', ...SLOW });
     assert.match(p.text('pvList'), /30 cUSD against 0\.001 cBTC/);
