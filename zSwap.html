@@ -3340,7 +3340,7 @@ fundedCallData:null,amountLimit:tMin,msgValue:f.addr===ZERO?swapAmt:0n,wrap:0n,o
 if(!r&&tc)r=tc;
 const hc=await hopJob;if(my!==seq)return;
 if(!r&&hc)r=hc;
-if(!r&&(curveOnlyOut||!isIn&&(v4PoolsFor(f,t).length||tacitPair(f,t)||CHAIN_ID===4663&&f.addr!==ZERO&&t.addr!==ZERO)))throw Object.assign(Error(`exact-output is unavailable for this pair — enter an amount to PAY instead`),{exactOut:1});
+if(!r&&(curveOnlyOut||!isIn&&(v4PoolsFor(f,t).length||tacitPair(f,t)||CHAIN_ID===4663)))throw Object.assign(Error(`exact-output is unavailable for this pair — enter an amount to PAY instead`),{exactOut:1});
 if(!r&&isIn){await loadSolvers().catch(()=>{});if(solverLanes&&solverLanes.length&&solverFill&&solverExec)r={best:{source:SRC_SOLVER,amountIn:swapAmt,amountOut:1n,feeBps:0n},amountLimit:1n,callData:"0x",fundedCallData:null,msgValue:0n,to:null,spender:null}}
 if(!r)throw Error("bad quote");
 if(isEthLike(f.addr)&&isEthLike(t.addr))r.amountLimit=swapAmt;
@@ -3587,7 +3587,7 @@ const finalOut=r.best.amountOut;
 if(isIn){outAmt.value=trimAmt(finalOut,t.dec);fitFont(outAmt)}
 else{amt.value=maxAmt(finalIn,f.dec);fitFont(amt)}
 const rx=(+formatUnits(finalOut,t.dec))/(+formatUnits(finalIn,f.dec));
-const s=r.best.source,raw=s===SRC_DEEP?"Deepstate":s===SRC_TACIT?"Tacit":SOURCES[s]||"?";
+const s=r.best.source,raw=s===SRC_DEEP?r.hopMid?"Deepstate via USDG":"Deepstate":s===SRC_TACIT?"Tacit":SOURCES[s]||"?";
 const src=r.best.source===SRC_SOLVER?`${r.best.lane} solver${r.best.forced?" · pinned":""}`:hybrid?bookShare(hybrid,raw):(s===3||s===4||s===SRC_PRECISION||s===SRC_TACIT)&&r.best.feeBps?`${raw}\u00a0${Number(r.best.feeBps)/100}%`:raw;
 rate.textContent=isFinite(rx)?`1 ${f.sym} ≈ ${rx>=1?rx.toLocaleString("en-US",{maximumFractionDigits:4}):rx<1e-4?fmtPx(rx):rx.toPrecision(4)} ${t.sym} · ${src}`:"";
 if(rank&&rank.length>1){
@@ -3622,7 +3622,7 @@ if(r.outDiffers&&rate.textContent)rate.textContent+=` · pays ${paysSym}`;
 rate.title="";
 if(venueLost||mcGaveUp>gaveUp0||(mcFailed>failed0&&mcOk===ok0))
 rate.textContent+=" · some venues unreachable";
-if(isIn&&r.best.source===SRC_DEEP&&finalIn<swapAmt)rate.textContent+=` · book fills ${trimAmt(finalIn,f.dec)} ${f.sym}, the rest is returned`;
+if(isIn&&r.best.source===SRC_DEEP&&finalIn<swapAmt-swapAmt*deepK(slipBps)/10000n)rate.textContent+=` · book fills ${trimAmt(finalIn,f.dec)} ${f.sym}, the rest is returned`;
 if(isIn)rate.textContent+=` · Min ${trimAmt(r.amountLimit,t.dec)} ${t.sym}`;
 else{
 const exactMax=formatUnits(r.amountLimit,f.dec);
@@ -3660,8 +3660,8 @@ if(small&&small.out>0n)refPair={amountOut:small.out};
 }
 if(my!==seq)return;
 const impSrc=refQ||refPair;
-const imp=impSrc?impactBps((isIn?finalOut:finalIn)*refAmt*REF_N/swapAmt,isIn?impSrc.amountOut:impSrc.amountIn,!isIn):null;
-const mkt=impSrc?(isIn?impSrc.amountOut:impSrc.amountIn)*swapAmt/refAmt:0n;
+const imp=impSrc?impactBps((isIn?finalOut:finalIn)*refAmt*REF_N/(isIn&&finalIn?finalIn:swapAmt),isIn?impSrc.amountOut:impSrc.amountIn,!isIn):null;
+const mkt=impSrc?(isIn?impSrc.amountOut:impSrc.amountIn)*(isIn&&finalIn?finalIn:swapAmt)/refAmt:0n;
 const lossTok=imp!==null&&mkt?(isIn?(mkt>finalOut?mkt-finalOut:0n):(finalIn>mkt?finalIn-mkt:0n)):0n;
 if(imp!==null&&imp>=IMPACT_HIDE){
 const pctTxt=(Number(imp)/100).toFixed(2);
@@ -4041,7 +4041,7 @@ const outA=(tokenOut===ZERO?WETH:tokenOut).toLowerCase();
 const reads=fills.map(f=>f.board.toLowerCase()===FLOOR.toLowerCase()
 ?{to:FLOOR,data:"0x"+SEL_BIDS+encUint(f.id)}
 :f.board.toLowerCase()===DUTCH.toLowerCase()
-?{to:DUTCH,data:"0x"+SEL_DUTCH_LISTING+encUint(f.id)}
+?{to:DUTCH,data:"0xad5aeee9"+encUint(f.id)}
 :{to:f.board,data:"0x"+SEL_GETORDERS+encUint(32)+encUint(1)+encUint(f.id)});
 const fzI=fills.map(f=>f.board.toLowerCase()===SB2.toLowerCase()?reads.push({to:SB2,data:"0x"+SEL_FROZEN+encUint(f.id)})-1:-1);
 const res=await mc3Deep(reads);
@@ -4057,9 +4057,7 @@ if(/^0x0{40}$/i.test(ad(0))||at(1)||at(2)+at(3)<=BigInt(nowS()))stale();
 if(ad(4).toLowerCase()!==inA||ad(6).toLowerCase()!==outA)stale();
 if(at(10)<f.pay)stale();
 }else if(f.board.toLowerCase()===DUTCH.toLowerCase()){
-if(s.length<11*64||at(0)===0n)stale();
-if(at(9)<f.get)stale();
-if(at(10)&&BigInt(nowS())>at(10))stale();
+if(s.length<448||!at(0)||at(4)<f.get)stale();
 }else{
 const wds=WORDS(f.board.toLowerCase()===SB2.toLowerCase()?1:0);
 if(s.length<(2+wds)*64)stale();
@@ -4253,7 +4251,7 @@ const bin=tokenIn===ZERO?WETH:tokenIn,bout=tokenOut===ZERO?WETH:tokenOut;
 const out=[];let cur=0n,t=0,lost=false;
 do{
 const raw=await rpc(C,[{to:FLOORVIEW,data:"0x"+SEL_FLOOR_CANDS+encAddr(FLOOR)+encAddr(bin)+encAddr(bout)
-+encUint(cur)+encUint(256)+encUint(512)},block]).catch(()=>null);
++encUint(cur)+encUint(256)+encUint(256)},block]).catch(()=>null);
 if(!raw){lost=true;break}
 cur=BigInt("0x"+(strip0x(raw).slice(64,128)||0));
 for(const b of decBidRows(raw)){
@@ -4493,11 +4491,12 @@ if(tokenIn===ZERO&&tokenOut.toLowerCase()===WETH.toLowerCase()){
 rows=rows.filter(r=>r.dutch&&r.tA.toLowerCase()===WETH.toLowerCase()&&r.tB===ZERO);
 }
 else rows=rows.concat(fc=await fcJob);
-{const v2r=rows.filter(r=>r.v2&&!r.dutch&&!r.floor);if(v2r.length){const fz=await mc3Deep(v2r.map(r=>({to:r.board,data:"0x"+SEL_FROZEN+encUint(r.id)})),block).catch(()=>null);const cold=new Set(v2r.filter((r,i)=>!fz||!fz[i]||/[1-9a-f]/i.test(strip0x(fz[i]))));if(cold.size)rows=rows.filter(r=>!cold.has(r))}}
+{const v2r=rows.filter(r=>r.v2&&!r.dutch&&!r.floor);if(v2r.length){const fz=await mc3Deep(v2r.map(r=>({to:r.board,data:"0x"+SEL_FROZEN+encUint(r.id)})),block).catch(()=>(groups[0].incomplete=1,null));const cold=new Set(v2r.filter((r,i)=>!fz||!fz[i]||/[1-9a-f]/i.test(strip0x(fz[i]))));if(cold.size)rows=rows.filter(r=>!cold.has(r))}}
 const incomplete=fc.incomplete||groups.some(g=>g.incomplete);
 const unavailable=groups.every(g=>g.failed&&!g.out.length);
 rows.incomplete=incomplete;
 rows.unavailable=unavailable;
+if(!key.startsWith(CHAIN_ID+":"))return rows;
 const current=candCache[key],bn=BigInt(block),cn=current?BigInt(current.block):-1n;
 if(!current||bn>cn||(bn===cn&&snapshotAt>=current.at)){
 candCache[key]={at:snapshotAt,block,rows,incomplete,unavailable};
@@ -4594,7 +4593,7 @@ async function loadBookRun(){
 const my=++bookSeq;
 if(tab!=="book"){book.innerHTML="";bookRows=[];syncBook(0);return}
 const live=(await Promise.all(BOARDS().map(b=>
-hasCode(b.a).then(ok=>ok?b:null,()=>null)))).filter(Boolean);
+hasCode(b.a).then(ok=>ok?b:null,()=>b)))).filter(Boolean);
 if(my!==bookSeq)return;
 if(!live.length){
 bookRows=[];bookLegs=[];
@@ -4636,7 +4635,7 @@ if(my!==bookSeq)return;
 const cutoff=BigInt(nowS());
 rows=rows.filter(o=>{
 const mine=o.maker.toLowerCase()===me();
-if(o.exp&&cutoff>o.exp&&!mine)return false;
+if(o.exp&&(o.floor?cutoff>=o.exp:cutoff>o.exp)&&!mine)return false;
 return o.cp===ZERO
 ||o.cp.toLowerCase()===me()
 ||o.maker.toLowerCase()===me();
@@ -4787,8 +4786,7 @@ if(nOwn)html+=`<h6><span>Your orders</span><span>${nOwn}</span></h6>`+own;
 html+=bookFilters(hidden);
 if(nRest)html+=rest;
 else html+=`<div class="lqempty">${emptyBook()}${hidden?` ${hidden} hidden by the filters.`:""}</div>`;
-book.innerHTML=html;
-bookReopen(wasOpen);
+if(html!==book._h||book.firstChild!==book._n){book.innerHTML=html;book._h=html;book._n=book.firstChild;bookReopen(wasOpen)}
 syncBook(nOwn+nRest,rows.length);
 book.scrollTop=wasAt;
 }
@@ -4887,6 +4885,7 @@ b.disabled=true;
 ++busy;
 try{
 await checkWallet();
+const cid=CHAIN_ID,ak=async(m,d)=>{const v=await ask(m,d);if(v!==null&&cid!==CHAIN_ID)throw Error("The network changed after you pressed — press again.");return v};
 const id=BigInt(b.dataset.i),to=b.dataset.b,dl=BigInt(nowS()+1800);
 const row=bookRows.find(x=>String(x.id)===b.dataset.i&&x.board.toLowerCase()===to.toLowerCase());
 if(!row||![SB1,SB2,FLOOR,DUTCH].some(a=>a!==ZERO&&a.toLowerCase()===to.toLowerCase()))throw Error("order changed — refresh and retry");
@@ -4909,7 +4908,7 @@ const refund=row.tA;
 const native=refund.toLowerCase()===WETH.toLowerCase()&&wantsUnwrap();
 const dec=row.dutch?(row.dA??18):(row.dB??18),sym=row.dutch?(row.sA||"tokens"):(row.sB||"tokens");
 const held=row.dutch?row.aA:row.aB;
-const answer=await ask(`Shrink this ${row.dutch?"lot":"bid"}.\n\nIt is escrowed for ${trimAmt(held,dec)} ${sym}.\n\nEnter the amount to stop ${row.dutch?"selling":"bidding for"} — the escrow behind it returns${native?" as ETH":""}. The rest stays live:`,formatUnits(held,dec));
+const answer=await ak(`Shrink this ${row.dutch?"lot":"bid"}.\n\nIt is escrowed for ${trimAmt(held,dec)} ${sym}.\n\nEnter the amount to stop ${row.dutch?"selling":"bidding for"} — the escrow behind it returns${native?" as ETH":""}. The rest stays live:`,formatUnits(held,dec));
 if(answer===null){b.disabled=false;return}
 let asked;
 try{asked=parseUnits(String(answer).trim(),dec)}catch{throw Error("that is not an amount")}
@@ -4923,7 +4922,7 @@ loadBook();refreshBalance();return;
 }
 if(b.dataset.x==="r"){
 const sym=row.sB||"tokens",dec=row.dB??18;
-const answer=await ask(`Reprice this order without losing its place on the book.\n\nIt sells ${trimAmt(row.aA,row.dA??18)} ${row.sA||"tokens"} for ${trimAmt(row.aB,dec)} ${sym}.\n\nEnter the NEW total ${sym} you want:`,formatUnits(row.aB,dec));
+const answer=await ak(`Reprice this order without losing its place on the book.\n\nIt sells ${trimAmt(row.aA,row.dA??18)} ${row.sA||"tokens"} for ${trimAmt(row.aB,dec)} ${sym}.\n\nEnter the NEW total ${sym} you want:`,formatUnits(row.aB,dec));
 if(answer===null){b.disabled=false;return}
 let asked;
 try{asked=parseUnits(String(answer).trim(),dec)}catch{throw Error("that is not an amount")}
@@ -4947,7 +4946,7 @@ have=r.tB===ZERO||r.tB.toLowerCase()===WETH.toLowerCase()
 :BigInt(await rpc(C,[{to:r.tB,data:balOf(account)},L]));
 }catch{}
 const suggest=have&&have<r.aB?have:r.aB;
-const answer=await ask(
+const answer=await ak(
 `Fill how much of this order?\n\nIt sells ${trimAmt(r.aA,dA)} ${sA} for ${trimAmt(r.aB,dB)} ${sB} in total, `
 +`and can be filled in part.\n\nEnter the ${sB} you want to spend:`,
 formatUnits(suggest,dB));
@@ -5673,8 +5672,8 @@ dlyL.firstChild.nodeValue=dutch?"Decays over":bid||collectionBid?"Bid window":"E
 dly.options[0].textContent=sched||collectionBid?"—":"Never";
 }
 fillL.classList.toggle("hide",tab!=="book"||sched||nftLeg);
-rc.classList.toggle("hide",sched);
-rcvEl.classList.toggle("hide",sched);
+rc.classList.toggle("hide",sched||collectionBid);
+rcvEl.classList.toggle("hide",sched||collectionBid);
 if((sched||collectionBid)&&+dly.value===0){dly.value="86400";if(tab==="book")bookD=dly.value}
 if(tab==="book"){
 payL.textContent=bid?"You escrow (max)":"You sell";
@@ -5702,7 +5701,7 @@ floorTouched=true;
 render();
 });
 tabBook.onclick=()=>{sBlip();setTab("book")};
-setInterval(()=>{if(account&&!document.hidden&&!busy){refreshBalance();loadPos();if(tab==="book")loadBook()}},3e4);
+setInterval(()=>{if(!document.hidden&&!busy){if(account){refreshBalance();loadPos()}if(tab==="book")loadBook()}},3e4);
 setInterval(()=>{
 if(tab!=="swap"||!account||document.hidden||!last||swap.disabled||busy)return;
 if(Date.now()>=last.exp-5000)autoQ++<AUTO_Q_MAX?update(1):render();
@@ -9552,10 +9551,10 @@ await checkWallet();
 const f=token.addr===ZERO?{data:callData}:await routerFund(token,amount,[callData],[fundedCallData||callData],msgValue,1);
 stat.textContent=verb;
 let tx;
-if(f.batch){await checkWallet();tx=await sendBatch(account,f.batch)}
+if(f.batch){tx=await sendBatch(account,f.batch)}
 else{
 const req={from:account,to:ZROUTER,data:f.data,value:toHex(msgValue)};
-await rpc(C,[req,L]);await checkWallet();tx=await sendTx([req]);
+await rpc(C,[req,L]);tx=await sendTx([req]);
 }
 await settle(tx);
 }
@@ -9592,7 +9591,6 @@ const data="0x"+SEL_SAFE_TRANSFER_DATA+encAddr(account)+encAddr(SB2)+encUint(tok
 +encUint(128n)+encUint(192n)+terms;
 const req={from:account,to:f.addr,data,value:"0x0"};
 await rpc(C,[req,L]);
-await checkWallet();
 await settle(await sendTx([req]));
 }
 const SEL_CREATE_ETH="0e8e31d3",SEL_CREATE="8e14f9f8",SEL_FLOOR_BID="3d8d260b";
@@ -9659,7 +9657,7 @@ else await bidCollection(f,t,kind.value==="floor");
 amt.value="";outAmt.value="";nftId.value="";floorAmt.value="";
 floorTouched=false;
 fitFont(amt);fitFont(outAmt);
-stat.textContent=f.std==="nft"?"Listed.":"Bid placed.";
+stat.append(f.std==="nft"?" — listed.":" — bid placed.");
 loadBook();refreshBalance();render();
 return;
 }
@@ -9841,7 +9839,7 @@ tx=await sendTx([mainTx]);
 }
 }
 await settle(tx);
-last=null;
+last=null;bnAt=0;
 chCache={};loadChart();
 refreshBalance();
 render();

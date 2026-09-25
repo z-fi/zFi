@@ -230,6 +230,13 @@ describe('bidding for an NFT', () => {
       'a collection bid is a window, not an expiry');
     assert.notEqual(p.$('dly').options[0].textContent, 'Never',
       '"Never" is not on offer for a board that cannot express it');
+
+    // Floorboard's Terms carry no counterparty, so a collection bid is always
+    // public; a "Private to" field here would be silently ignored.
+    assert.equal(p.visible('rc'), false, 'a collection bid cannot be made private');
+    p.type('nftId', '7');
+    await p.settle();
+    assert.equal(p.visible('rc'), true, 'a bid for one id is a Swapboard order, which can be');
     p.close();
   });
 
