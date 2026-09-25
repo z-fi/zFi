@@ -99,6 +99,7 @@ border:1px solid var(--e);border-top-color:var(--m);border-radius:50%;animation:
 @keyframes sp{to{transform:rotate(360deg)}}
 @keyframes fadein{from{opacity:0}to{opacity:1}}
 #tkList.fresh>*{animation:fadein .22s ease-out both}
+.pill.swapin>*{animation:fadein .3s ease-out both}
 .lqbtn{font-size:.8em;padding:.45em .7em;cursor:pointer;border:1px solid var(--e);background:transparent;color:var(--f);font-family:inherit;font-weight:400;letter-spacing:.08em;text-transform:uppercase;
 white-space:nowrap;flex:0 0 auto;text-align:center;transition:background .15s,color .15s,border-color .15s}
 .lqbtn:hover:not(:disabled),.lqbtn:focus-visible:not(:disabled){border-color:var(--f)}
@@ -738,7 +739,7 @@ SB2=b.sb||ZERO;SB1=b.s1||ZERO;SWAPBOL=b.sw||ZERO;DUTCH=b.du||ZERO;ORDERBOL=b.ob|
 floorReady=null;listLive=false;listJob=null;
 SOLVER_FILL_PIN=c.fill;SOLVER_EXEC_PIN=c.exec;
 SOURCES=c.sources;SRC_CURVE=c.curve;
-if(c.tokens){TOKENS=c.tokens.slice();BUILTIN=TOKENS.slice();restoreCustom()}
+if(c.tokens){TOKENS=c.tokens.slice();BUILTIN=TOKENS.slice();restoreCustom();seedList()}
 try{if(c.rpcs&&c.rpcs.length){rpcPool=[...new Set(c.rpcs)];rpcPi=0;curated=0;curatedTry=0}}catch{}
 try{chainWipe()}catch{}try{rebuild();seatPair()||rankedDefaults();syncDisabled();syncIcons()}catch{}
 try{localStorage[CHAIN_STORE]=String(id)}catch{}
@@ -1039,11 +1040,48 @@ const stickyPools=()=>{try{
 return JSON.parse(LS[KEEP()]||"[]").filter(x=>/^0x[0-9a-f]{40}$/i.test(x)).slice(0,LAUNCH_SHOW);
 }catch{return[]}};
 let listJob=null,listGen=0,listSums=null;
+const listFrom=(rows,cid)=>{const next=[],src=new Map();
+for(const row of rows){
+if(typeof row!=="string"||!row)continue;
+let t;try{t=JSON.parse(row)}catch{continue}
+if(!t||t.k!=="eip155"||+t.c!==cid)continue;
+const std=t.p==="Native"||t.p==="ERC-20"?"ft":t.p==="ERC-721"?"nft":"";
+if(!std)continue;
+if(!/^0x[0-9a-f]{40}$/i.test(t.a||""))continue;
+if(!Number.isInteger(t.d)||t.d<0||t.d>36)continue;
+if(src.has(t.a.toLowerCase()))continue;
+const sym=safeSym(t.s).slice(0,12);
+const logo=safeDataUrl(t.l);
+next.push({sym,addr:t.a.toLowerCase(),dec:t.d,std,icon:logo?`<img src="${logo}" width="20" height="20" alt="">`:genIcon(sym),
+name:String(t.n??"").slice(0,64),desc:[String(t.desc??"").slice(0,240),(()=>{const o=(t.e||[]).find(x=>x&&String(x.k).toLowerCase()==="origin");return o?`${String(o.v).slice(0,24)} origin`:""})()].filter(Boolean).join(" · "),
+v4:parseV4Pools(t.e,t.a)});
+src.set(t.a.toLowerCase(),row);
+}
+return{next,src}};
+const nftLast=(a,b)=>(a.std==="nft")-(b.std==="nft");
+const listMerge=(next,born)=>{
+const lc=t=>t.addr.toLowerCase(),at=new Set([...next,...born].map(lc));
+const anchors=BUILTIN.filter(b=>(b.addr===ZERO||b.addr===WETH)&&!next.some(x=>x.addr===b.addr));
+const mine=TOKENS.filter(t=>t.cust&&!at.has(lc(t)));
+const taken=new Set([...next,...anchors,...born].map(t=>t.sym.toLowerCase()));
+for(const t of mine){if(taken.has(t.sym.toLowerCase()))t.sym+=" "+lc(t).slice(0,6)+"…";taken.add(t.sym.toLowerCase())}
+TOKENS.splice(0,TOKENS.length,...next,...anchors,...born,...mine)};
+const LIST_KEEP=()=>CHAIN_ID===1?"zswap:list":"zswap:list:"+CHAIN_ID,LIST_KEEP_MAX=400000;
+let listSeeded=false;
+const seedTokens=cid=>{try{const c=JSON.parse(LS[LIST_KEEP()]||"null");
+if(!c||!Array.isArray(c.r))return null;
+const{next}=listFrom(c.r.slice(0,LIST_WIN),cid);next.sort(nftLast);
+return next.some(t=>t.std==="ft")?{next,f:!!c.f}:null}catch{return null}};
+const seedList=()=>{listSeeded=false;const s=seedTokens(CHAIN_ID);if(!s)return;
+rankFellBack=s.f;listMerge(s.next,[]);listSeeded=true};
+const keepList=(next,src)=>{try{const v=JSON.stringify({f:rankFellBack?1:0,r:next.map(t=>src.get(t.addr)).filter(Boolean)});
+if(v.length<=LIST_KEEP_MAX)LS[LIST_KEEP()]=v;else delete LS[LIST_KEEP()]}catch{}};
+const LIST_STALE="zList as last seen — could not refresh it";
 const loadTokenList=()=>{if(listJob)return listJob;const g=++listGen;
 return listJob=loadTokenListRun().finally(()=>{TOKENS.forEach(t=>t.cause&&cbLook(t.addr));if(!listLive&&g===listGen)listJob=null;shieldSync()})};
 async function loadTokenListRun(){
 const cid=CHAIN_ID;
-setListNote("Built-in token list — checking zList…");
+if(!listSeeded)setListNote("Built-in token list — checking zList…");
 try{
 const cntJob=PLAUNCH===ZERO?Promise.resolve("0x0"):rpc(C,[{to:PFACTORY,data:"0x"+SEL_BYCREATOR_N+encAddr(PLAUNCH)},L]);
 cntJob.catch(()=>{});
@@ -1092,30 +1130,15 @@ want=ids.filter(id=>keep.has(String(id)));
 }}
 const raw=await cfgBatch(want.map(id=>({to:TOKENLIST,data:"0x"+SEL_JSON+encUint(id)})));
 const rows=raw.map(h=>{try{return h?decStr(h):null}catch{return null}});
-const next=[];
-for(const row of rows){
-if(!row)continue;
-let t;try{t=JSON.parse(row)}catch{continue}
-if(t.k!=="eip155"||+t.c!==cid)continue;
-const std=t.p==="Native"||t.p==="ERC-20"?"ft":t.p==="ERC-721"?"nft":"";
-if(!std)continue;
-if(!/^0x[0-9a-f]{40}$/i.test(t.a||""))continue;
-if(!Number.isInteger(t.d)||t.d<0||t.d>36)continue;
-if(next.some(x=>x.addr.toLowerCase()===t.a.toLowerCase()))continue;
-const sym=safeSym(t.s).slice(0,12);
-const logo=safeDataUrl(t.l);
-next.push({sym,addr:t.a.toLowerCase(),dec:t.d,std,icon:logo?`<img src="${logo}" width="20" height="20" alt="">`:genIcon(sym),
-name:String(t.n??"").slice(0,64),desc:[String(t.desc??"").slice(0,240),(()=>{const o=(t.e||[]).find(x=>x&&String(x.k).toLowerCase()==="origin");return o?`${String(o.v).slice(0,24)} origin`:""})()].filter(Boolean).join(" · "),
-v4:parseV4Pools(t.e,t.a)});
-}
+const{next,src}=listFrom(rows,cid);
 if(cid!==1&&next.length){
 const ft=next.filter(t=>t.std==="ft"&&t.addr!==ZERO);
 const dec=await mc3Deep(ft.map(t=>({to:t.addr,data:"0x313ce567"}))).catch(()=>null);
 if(dec){const bad=new Set();ft.forEach((t,i)=>{if(!dec[i])return;const h=strip0x(dec[i]);if(h.length<64||Number(BigInt("0x"+h.slice(0,64)))!==t.dec)bad.add(t.addr)});
 if(bad.size){const n=next.length;next.splice(0,n,...next.filter(t=>!bad.has(t.addr)));dropNote=`${bad.size} listing${bad.size>1?"s":""} dropped: decimals differ on chain`}}
 }
-next.sort((a,b)=>(a.std==="nft")-(b.std==="nft"));
-if(!next.some(t=>t.std==="ft")){fb=fb||"registry returned nothing swappable";next.splice(0,next.length,...BUILTIN)}
+next.sort(nftLast);
+if(!next.some(t=>t.std==="ft")){fb=fb||"registry returned nothing swappable";next.splice(0,next.length,...(listSeeded&&seedTokens(cid)?.next||BUILTIN))}
 let born=[];const launched=[];
 try{
 const{pools,byDepth,toks,info}=await bornJob;
@@ -1139,14 +1162,11 @@ icon:artIcon(art,sym)});
 }catch{}
 if(cid!==CHAIN_ID)return;
 LAUNCHED.splice(0,LAUNCHED.length,...launched);
-const mine=TOKENS.filter(t=>t.cust&&!next.some(x=>x.addr===t.addr.toLowerCase()));
-const anchors=BUILTIN.filter(b=>(b.addr===ZERO||b.addr===WETH)&&!next.some(x=>x.addr===b.addr));
-const bornAt=new Set(born.map(x=>x.addr.toLowerCase()));
-LK=pairAddrs();TOKENS.splice(0,TOKENS.length,...next,...anchors,...born,
-...mine.filter(t=>!bornAt.has(t.addr.toLowerCase())));
+LK=pairAddrs();listMerge(next,born);
 listLive=!fb;if(account)fcMine().catch(()=>{});
-if(fb)setListSource(fb);else setListNote([rankFellBack?"Ranked by listing order — conviction unavailable":"",dropNote].filter(Boolean).join(" · "));
-}catch(e){if(cid===CHAIN_ID)setListSource("could not be reached")}
+if(!fb)keepList(next,src);
+if(fb)listSeeded?setListNote(LIST_STALE):setListSource(fb);else setListNote([rankFellBack?"Ranked by listing order — conviction unavailable":"",dropNote].filter(Boolean).join(" · "));
+}catch(e){if(cid===CHAIN_ID)listSeeded?setListNote(LIST_STALE):setListSource("could not be reached")}
 }
 const strip0x=h=>h.startsWith("0x")?h.slice(2):h;
 const pad32=h=>{const x=strip0x(h);
@@ -1919,29 +1939,24 @@ if(!t||!t.addr)return;
 const a=t.addr.toLowerCase();
 try{const arr=JSON.parse(localStorage.getItem(STORE())||"[]")
 .filter(x=>String(x?.addr||"").toLowerCase()!==a);
-arr.push({sym:t.sym,addr:a,dec:t.dec,std:t.std,cause:t.cause?1:0});
+arr.push({sym:t.sym,addr:a,dec:t.dec,std:t.std,cause:t.cause?1:0,...(t.name?{name:t.name}:{})});
 localStorage.setItem(STORE(),JSON.stringify(arr))}catch{}
 }
 const SEL_SUPPORTS="01ffc9a7",IFACE_721="80ac58cd",IFACE_1155="d9b67a26";
 const supports=id=>"0x"+SEL_SUPPORTS+id.padEnd(64,"0");
-async function addCustomToken(a,keep=1){
-a=a.toLowerCase();const cid=CHAIN_ID;
-if(!/^0x[0-9a-f]{40}$/.test(a))throw Error("invalid address");
-const i=TOKENS.findIndex(t=>t.addr.toLowerCase()===a);
-if(i>=0)return i;
+async function readToken(a){
+const cid=CHAIN_ID;
 if((await rpcRead("eth_getCode",[a,L],2)).length<5)throw Error("no contract at that address");
-const[symRet,decRet,is721,is1155]=await mc3Deep([
+const[symRet,decRet,is721,is1155,nameRet]=await mc3Deep([
 {to:a,data:"0x95d89b41"},{to:a,data:"0x313ce567"},
-{to:a,data:supports(IFACE_721)},{to:a,data:supports(IFACE_1155)}]);
+{to:a,data:supports(IFACE_721)},{to:a,data:supports(IFACE_1155)},{to:a,data:"0x06fdde03"}]);
 let uriRet=null;
 try{uriRet=await rpc(C,[{to:a,data:"0x"+SEL_CONTRACTURI},L])}catch{}
 if(cid!==CHAIN_ID)throw Error("The network changed — add the token again.");
 const yes=h=>{try{return !!h&&BigInt(h)===1n}catch{return false}};
-const dup=TOKENS.findIndex(t=>t.addr.toLowerCase()===a);
-if(dup>=0)return dup;
-let sym="?";
+let sym="?",name="";
 try{sym=safeSym(decodeString(symRet||"0x"))}catch{}
-if(TOKENS.some(t=>t.sym.toLowerCase()===sym.toLowerCase()))sym+=" "+a.slice(0,6)+"…";
+try{name=safeSym(decodeString(nameRet||"0x"),40,"")}catch{}
 if(yes(is1155)&&!yes(is721))throw Error("ERC-1155 is not supported");
 const std=yes(is721)?"nft":"ft";
 let dec=0;
@@ -1949,10 +1964,26 @@ if(std==="ft"){
 dec=Number(BigInt(decRet&&decRet!=="0x"?decRet:"0x0"));
 if(!decRet||decRet==="0x"||!Number.isInteger(dec)||dec<0||dec>36)throw Error("not an ERC-20 or ERC-721");
 }
-let selfArt="";try{selfArt=imgFromContractURI(uriRet?decodeString(uriRet):"")}catch{}
-if(selfArt)logoCache[a]=selfArt;
-TOKENS.push({sym,addr:a,dec,std,cust:1,
-icon:artIcon(selfArt||logoCache[a],sym)});
+let art="";try{art=imgFromContractURI(uriRet?decodeString(uriRet):"")}catch{}
+return{sym,name:name.toLowerCase()===sym.toLowerCase()?"":name,addr:a,dec,std,art};
+}
+const tkProbes=new Map();
+const probeToken=a=>{const k=CHAIN_ID+":"+a;let r=tkProbes.get(k);
+if(!r||r.e){r={};r.p=readToken(a).then(t=>r.t=t,e=>{r.e=e;throw e});r.p.catch(()=>{});tkProbes.set(k,r);capMap(tkProbes,32)}
+return r};
+async function addCustomToken(a,keep=1){
+a=a.toLowerCase();
+if(!/^0x[0-9a-f]{40}$/.test(a))throw Error("invalid address");
+const i=TOKENS.findIndex(t=>t.addr.toLowerCase()===a);
+if(i>=0)return i;
+const{sym:s0,name,dec,std,art}=await probeToken(a).p;
+const dup=TOKENS.findIndex(t=>t.addr.toLowerCase()===a);
+if(dup>=0)return dup;
+let sym=s0;
+if(TOKENS.some(t=>t.sym.toLowerCase()===sym.toLowerCase()))sym+=" "+a.slice(0,6)+"…";
+if(art)logoCache[a]=art;
+TOKENS.push({sym,addr:a,dec,std,cust:1,...(name?{name}:{}),
+icon:artIcon(art||logoCache[a],sym)});
 if(keep)keepToken(TOKENS[TOKENS.length-1]);
 return TOKENS.length-1;
 }
@@ -1960,12 +1991,12 @@ function restoreCustom(){try{for(const t of JSON.parse(localStorage.getItem(STOR
 const addr=(t?.addr||"").toLowerCase();
 const dec=+t?.dec;
 if(/^0x[0-9a-f]{40}$/.test(addr)&&Number.isInteger(dec)&&dec>=0&&dec<=36&&!TOKENS.some(x=>x.addr.toLowerCase()===addr)){
-const sym=safeSym(t.sym,24);
-TOKENS.push({sym,addr,dec,std:t.std==="nft"?"nft":"ft",cust:1,icon:genIcon(sym),
+const sym=safeSym(t.sym,24),name=safeSym(t.name,40,"");
+TOKENS.push({sym,addr,dec,std:t.std==="nft"?"nft":"ft",cust:1,icon:genIcon(sym),...(name?{name}:{}),
 ...(t.cause?{cause:1}:{})});
 }
 }}catch{}}
-restoreCustom();
+restoreCustom();seedList();
 const QUOTE_TTL=45000;
 let account=null,connecting=false,last=null,fromBalance=0n,balUnread=false,mode="in",bSeq=0,tab="swap",sendReady=null,sSeq=0,sendD="0",bookD="86400";
 let quoting=false;
@@ -2068,15 +2099,19 @@ syncDisabled();syncIcons();
 return true;
 };
 const settlePair=keep=>{if(pairChosen)restorePair(keep);else rankedDefaults()};
-let listFresh=false,LK;
+let listFresh=false,LK,listSig="";
+const tokSig=()=>TOKENS.map(t=>t.addr+t.sym).join();
 const adoptList=keep=>{
 LK=0;cbDisarm();
-listFresh=true;
+const sig=tokSig();listFresh=sig!==listSig;listSig=sig;
 rebuild();
 settlePair(keep);
 if(!TOKENS[fromSel.value])fromSel.value=0;
 if(!TOKENS[toSel.value]||toSel.value===fromSel.value)toSel.value=TOKENS[1]?1:0;
 syncDisabled();syncIcons();const k=pairAddrs();if(!keep||k.fa!==keep.fa||k.ta!==keep.ta){++seq;last=null;if(amt.value||outAmt.value)updateSoon()}
+if(keep)for(const[s,moved]of[[fromSel,k.fa!==keep.fa],[toSel,k.ta!==keep.ta]]){const p=moved&&pickBtn(s)?.closest(".pill");
+if(p){p.classList.remove("swapin");void p.offsetWidth;p.classList.add("swapin")}}
+if(tkSel){const y=tkList.scrollTop;tkRows();tkList.scrollTop=y}
 };
 const syncDisabled=keep=>{
 const pair=tab!=="send";
@@ -2095,7 +2130,7 @@ for(const opt of sel.options)
 opt.disabled=opt.value!=="__custom"&&((pair&&opt.value===other.value)||(!nftOk&&isNft(opt.value)));
 };
 fromSel.innerHTML=optsHtml();fromSel.value=0;
-toSel.innerHTML=optsHtml();
+toSel.innerHTML=optsHtml();listSig=tokSig();
 const seatPair=()=>{
 try{
 const [a,b]=JSON.parse(LS[LAST_PAIR()]||"[]");
@@ -2105,7 +2140,7 @@ if(fi>=0&&ti>=0&&fi!==ti){fromSel.value=String(fi);toSel.value=String(ti);return
 }catch{}
 return false;
 };
-if(!seatPair()){const m=MONEY();let d=TOKENS.findIndex(t=>m.includes((t.addr||"").toLowerCase()));
+if(!seatPair())if(listSeeded)rankedDefaults();else{const m=MONEY();let d=TOKENS.findIndex(t=>m.includes((t.addr||"").toLowerCase()));
 if(d<0)d=TOKENS.findIndex(t=>t.sym==="USDC");toSel.value=String(Math.max(1,d))}
 syncDisabled();
 const iconShown=["",""];
@@ -2138,20 +2173,26 @@ else pill.removeAttribute("title");
 const tkAct=id=>{if(id)tkFind.setAttribute("aria-activedescendant",id);
 else tkFind.removeAttribute("aria-activedescendant")};
 const icT=new Map(),icFrag=h=>{let t=icT.get(h);if(!t){t=document.createElement("template");t.innerHTML=h;icT.set(h,t);capMap(icT,256)}return document.importNode(t.content,true)};
+const tkScore=(q,sym,t)=>{
+if(!q)return 0;
+const s=sym.toLowerCase(),n=(t?.name||"").toLowerCase(),a=(t?.addr||"").toLowerCase();
+let b=s===q?0:s.startsWith(q)?1:n===q?2:n.startsWith(q)||n.split(/[\s\-_.()]+/).some(w=>w.startsWith(q))?3:s.includes(q)?4:n.includes(q)?5:-1;
+if(/^0x[0-9a-f]{3,}$/.test(q)&&a.startsWith(q)){const x=a===q?0:6;if(b<0||x<b)b=x}
+return b};
 const tkRows=()=>{
 const q=tkFind.value.trim().toLowerCase();
 tkList.textContent="";
 tkCur=-1;tkAct("");
 const frag=document.createDocumentFragment();
 let n=0,group="";
-for(const opt of tkSel.options){
+const gOf=opt=>opt.parentElement?.label||(opt.value==="__custom"?"":
+(listLive||listSeeded?(rankFellBack?"zList — listing order":"zList — ranked by conviction"):"Built-in token list"));
+const gAt=new Map(),hits=[];
+[...tkSel.options].forEach((opt,i)=>{const g=gOf(opt);if(!gAt.has(g))gAt.set(g,i);
+const sc=tkScore(q,opt.textContent.trim(),TOKENS[opt.value]);if(sc>=0)hits.push({opt,g,sc,i})});
+if(q)hits.sort((x,y)=>gAt.get(x.g)-gAt.get(y.g)||x.sc-y.sc||x.i-y.i);
+for(const{opt,g}of hits){
 const t=TOKENS[opt.value];
-if(q){
-const hay=[opt.textContent,t?.name,t?.addr].filter(Boolean).join(" ").toLowerCase();
-if(!hay.includes(q))continue;
-}
-const g=opt.parentElement?.label||(opt.value==="__custom"?"":
-(listLive?(rankFellBack?"zList — listing order":"zList — ranked by conviction"):"Built-in token list"));
 if(g&&g!==group){const h=document.createElement("div");h.className="tkg";h.textContent=g;frag.appendChild(h);group=g}
 const r=document.createElement("button");
 r.type="button";r.className="tkr";r.setAttribute("role","option");
@@ -2178,19 +2219,26 @@ frag.appendChild(r);n++;
 if(!n){
 const a=/^0x[0-9a-f]{40}$/.test(q)?q:"";
 if(a){
+const pr=probeToken(a),pt=pr.t;
+if(!pt&&!pr.e)pr.p.catch(()=>{}).finally(()=>{if(tkSel&&tkFind.value.trim().toLowerCase()===a)tkRows()});
 const r=document.createElement("button");
 r.type="button";r.className="tkr";r.setAttribute("role","option");r.id="tkr0";
+const ic=document.createElement("span");ic.className="tki";
+if(pt)ic.appendChild(icFrag(artIcon(pt.art,pt.sym)));
+r.appendChild(ic);
 const tx=document.createElement("span");tx.className="tkt";
 const top=document.createElement("span");top.className="tks";
-const b=document.createElement("b");b.textContent="Use "+short(a);top.appendChild(b);
+const b=document.createElement("b");b.textContent=pt?pt.sym:"Reading "+short(a)+"…";top.appendChild(b);
+if(pt?.name){const nm=document.createElement("span");nm.className="tkn";nm.textContent=pt.name;top.appendChild(nm)}
 tx.appendChild(top);
 const d=document.createElement("span");d.className="tkd";
-d.textContent="Not listed — read it from chain";
+d.textContent=pr.e?(pr.e.message||"could not read that address")+" — tap to retry"
+:pt?`Import ${short(a)} — not on zList${pt.std==="nft"?" · NFT collection":""}`:"Not listed — reading it from chain";
 tx.appendChild(d);r.appendChild(tx);
 r.onclick=async e=>{
 e.stopPropagation();
 if(r.dataset.busy)return;
-r.dataset.busy="1";b.textContent="Reading…";
+r.dataset.busy="1";if(!pt)b.textContent="Reading…";
 try{const i=await addCustomToken(a);rebuild();tkChoose(String(i))}
 catch(e){delete r.dataset.busy;b.textContent="Use "+short(a);
 d.textContent=(e&&e.message)||"could not read that address"}};
@@ -2201,6 +2249,8 @@ tkList.classList.toggle("fresh",listFresh);
 listFresh=false;
 tkList.appendChild(frag);
 tkCur=-1;
+const top=q&&tkList.querySelector('.tkr:not([aria-disabled="true"])');
+if(top){top.classList.add("cur");tkCur=0;tkAct(top.id)}
 };
 const tkOpen=sel=>{
 if(tkSel&&tkSel!==sel)pickBtn(tkSel)?.setAttribute("aria-expanded","false");

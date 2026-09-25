@@ -227,9 +227,17 @@ test('shows the logo, the name and the description the registry serves', async (
     find.value = UNLISTED;
     find.dispatchEvent(new p.window.Event('input', { bubbles: true }));
 
-    const offer = rowsIn(p);
+    let offer = rowsIn(p);
     assert.equal(offer.length, 1, 'no way offered to reach an unlisted address');
-    assert.match(offer[0].textContent, /Use 0x0000/, 'the offer does not name the address');
+    assert.match(offer[0].textContent, /0x0000…17ed/, 'the offer does not name the address');
+
+    // The address is read as soon as it is pasted, so the offer shows what it
+    // is before anything is imported - and importing reuses that read.
+    await p.settle();
+    offer = rowsIn(p);
+    assert.equal(symOf(offer[0]), 'DEEP', 'the offer should name the token it read');
+    assert.match(offer[0].textContent, /Deep Cut/);
+    assert.match(offer[0].textContent, /not on zList/);
 
     offer[0].click();
     await p.settle();
