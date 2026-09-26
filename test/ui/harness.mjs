@@ -1052,6 +1052,8 @@ export class MockChain {
     if (to === A.MC3.toLowerCase() && sel === SEL.AGG3) return this.aggregate3(data, block);
     // Multicall3.getCurrentBlockTimestamp(), so a batch can carry the clock.
     if (to === A.MC3.toLowerCase() && sel === '0f28c97d') return '0x' + u256(BigInt(this.blockTime));
+    // Multicall3.getEthBalance(address), so a batch can read ether beside tokens.
+    if (to === A.MC3.toLowerCase() && sel === '4d2301cc') return '0x' + u256(this.balanceOf(A.ZERO, wordAddr('0x' + data.slice(8), 0)));
     if (to === A.ZQUOTER.toLowerCase() || to === A.Z3H.toLowerCase()) return this.quote(sel, data);
     if (to === A.SBVIEW.toLowerCase()) return this.lens(sel, data);
     if (to === A.FLOORVIEW.toLowerCase()) return this.floorLens(sel, data);

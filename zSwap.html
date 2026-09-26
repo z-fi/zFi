@@ -2112,8 +2112,7 @@ if(!TOKENS[toSel.value]||toSel.value===fromSel.value)toSel.value=TOKENS[1]?1:0;
 syncDisabled();syncIcons();const k=pairAddrs();if(!keep||k.fa!==keep.fa||k.ta!==keep.ta){++seq;last=null;if(amt.value||outAmt.value)updateSoon()}
 if(keep)for(const[s,moved]of[[fromSel,k.fa!==keep.fa],[toSel,k.ta!==keep.ta]]){const p=moved&&pickBtn(s)?.closest(".pill");
 if(p){p.classList.remove("swapin");void p.offsetWidth;p.classList.add("swapin")}}
-if(tkSel){const y=tkList.scrollTop;tkRows();tkList.scrollTop=y}
-};
+tkRe()};
 const syncDisabled=keep=>{
 const pair=tab!=="send";
 const nftOk=tab==="book";
@@ -2173,8 +2172,14 @@ else pill.removeAttribute("title");
 const tkAct=id=>{if(id)tkFind.setAttribute("aria-activedescendant",id);
 else tkFind.removeAttribute("aria-activedescendant")};
 const icT=new Map(),icFrag=h=>{let t=icT.get(h);if(!t){t=document.createElement("template");t.innerHTML=h;icT.set(h,t);capMap(icT,256)}return document.importNode(t.content,true)};
+let tkBal={};
+const tkRe=()=>{if(tkSel){const y=tkList.scrollTop;tkRows();tkList.scrollTop=y}};
+const tkBals=()=>{if(!account||offChain())return;const k=CHAIN_ID+account,ts=TOKENS.filter(t=>t.std!="nft");
+if(tkBal.k!==k)tkBal={k};
+mc3Deep(ts.map(t=>t.addr===ZERO?{to:MC3,data:"0x4d2301cc"+encAddr(account)}:{to:t.addr,data:balOf(account)})).then(r=>{if(tkBal.k!==k)return;
+ts.forEach((t,i)=>{try{tkBal[t.addr]=BigInt(r[i].slice(0,66))}catch{}});tkRe()}).catch(()=>{})};
 const tkScore=(q,sym,t)=>{
-if(!q)return 0;
+if(!q)return tkBal[t?.addr]?0:1;
 const s=sym.toLowerCase(),n=(t?.name||"").toLowerCase(),a=(t?.addr||"").toLowerCase();
 let b=s===q?0:s.startsWith(q)?1:n===q?2:n.startsWith(q)||n.split(/[\s\-_.()]+/).some(w=>w.startsWith(q))?3:s.includes(q)?4:n.includes(q)?5:-1;
 if(/^0x[0-9a-f]{3,}$/.test(q)&&a.startsWith(q)){const x=a===q?0:6;if(b<0||x<b)b=x}
@@ -2190,7 +2195,7 @@ const gOf=opt=>opt.parentElement?.label||(opt.value==="__custom"?"":
 const gAt=new Map(),hits=[];
 [...tkSel.options].forEach((opt,i)=>{const g=gOf(opt);if(!gAt.has(g))gAt.set(g,i);
 const sc=tkScore(q,opt.textContent.trim(),TOKENS[opt.value]);if(sc>=0)hits.push({opt,g,sc,i})});
-if(q)hits.sort((x,y)=>gAt.get(x.g)-gAt.get(y.g)||x.sc-y.sc||x.i-y.i);
+hits.sort((x,y)=>gAt.get(x.g)-gAt.get(y.g)||x.sc-y.sc||x.i-y.i);
 for(const{opt,g}of hits){
 const t=TOKENS[opt.value];
 if(g&&g!==group){const h=document.createElement("div");h.className="tkg";h.textContent=g;frag.appendChild(h);group=g}
@@ -2213,7 +2218,8 @@ tx.appendChild(top);
 if(t?.desc){const d=document.createElement("span");d.className="tkd";d.textContent=t.desc;tx.appendChild(d)}
 const tg=tacitTag(t);if(tg){const d=document.createElement("span");d.className="tkd";d.textContent=tg;tx.appendChild(d)}
 r.appendChild(tx);
-if(opt.value===tkSel.value){const m=document.createElement("span");m.className="tkmark";m.textContent="✓";r.appendChild(m)}
+const mk=x=>{const m=document.createElement("span");m.className="tkmark";m.textContent=x;r.appendChild(m)},v=t&&tkBal[t.addr];
+if(v)mk(sigAmt(v,t.dec,4));if(opt.value===tkSel.value)mk("✓");
 frag.appendChild(r);n++;
 }
 if(!n){
@@ -2254,7 +2260,7 @@ if(top){top.classList.add("cur");tkCur=0;tkAct(top.id)}
 };
 const tkOpen=sel=>{
 if(tkSel&&tkSel!==sel)pickBtn(tkSel)?.setAttribute("aria-expanded","false");
-tkSel=sel;tkFind.value="";tkFind.setAttribute("aria-expanded","true");tkFind.placeholder="Search "+chainCfg().name+" tokens, or paste an address";tkRows();
+tkSel=sel;tkFind.value="";tkFind.setAttribute("aria-expanded","true");tkFind.placeholder="Search "+chainCfg().name+" tokens, or paste an address";tkRows();tkBals();
 tkPanel.classList.remove("hide");
 if(matchMedia("(pointer:coarse)").matches){
 tkPanel.style.left=tkPanel.style.top=tkPanel.style.maxHeight=tkPanel.style.width="";

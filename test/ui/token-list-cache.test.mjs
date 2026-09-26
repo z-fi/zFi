@@ -136,6 +136,23 @@ describe('search', () => {
     p.close();
   });
 
+  test('shows what the wallet holds, and puts it first', async () => {
+    const chain = chainWith(ROWS);
+    chain.setErc20(A.USDC, A.ACCOUNT, 1234_560000n);
+    const p = await loadPage({ chain, hash: null });
+    await p.connect({ pin: false });
+    p.click('fromPick');
+    await p.settle();
+    const rows = rowsIn(p);
+    // ETH and USDC are held, WBTC is not: held first, conviction order kept.
+    assert.deepEqual(rows.map(symOf).slice(0, 3), ['ETH', 'USDC', 'WBTC']);
+    const held = r => r.querySelector('.tkmark')?.textContent;
+    assert.equal(held(rows[1]), '1234.5', 'the held amount is shown');
+    assert.equal(held(rows[0]), '10', 'ether is read too');
+    assert.equal(held(rows[2]), undefined, 'nothing shown for a zero balance');
+    p.close();
+  });
+
   test('does not match a letter against every address', async () => {
     const p = await picker();
     search(p, 'f');
