@@ -1639,6 +1639,21 @@ if (exported) {
       return 'short reads at 0, 4 and v words all refused';
     });
 
+    check('decQ: refuses a route with a zAMM leg', () => {
+      // zSwap does not route through zAMM, but the mainnet quoter still
+      // competes it, so its answer can name zAMM (enum ordinal 2) on any leg.
+      // decQ refusing it is what makes every caller fall to its next route.
+      const f = fx.twoHop_ETH_USDC;
+      const h = f.data.slice(2);
+      const u256 = v => v.toString(16).padStart(64, '0');
+      const data = '0x' + u256(2n) + h.slice(64);
+      let threw = false;
+      try { decQ(data, 50n, f.eo, f.u, f.v, f.S, f.mv); } catch { threw = true; }
+      if (!threw) throw Error('decoded a route whose leg is zAMM');
+      decode(f);
+      return 'a zAMM leg is refused, the same route through Uniswap decodes';
+    });
+
     check('decQ: the via-ETH builder with BOTH legs populated', () => {
       // Every captured 2-hop return in the fixtures is really the via-ETH
       // builder taking its single-hop fast path: leg b comes back
