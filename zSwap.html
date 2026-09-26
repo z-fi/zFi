@@ -27,10 +27,11 @@ body{background:var(--b);color:var(--f);font-family:Helvetica,Arial,sans-serif;m
 #logoLink{position:fixed;top:calc(.85em + env(safe-area-inset-top,0px));left:calc(.85em + env(safe-area-inset-left,0px));width:1.75em;height:1.75em;z-index:1;
 display:block;opacity:.85;transition:opacity .15s}
 #logoLink:hover,#logoLink:focus-visible{opacity:1}
+#logoLink{border:0;padding:0;background:none;cursor:pointer}
 #logo{display:block;width:100%;height:100%;pointer-events:none}
 #logo rect{fill:var(--f)}
 #logo path{fill:var(--b)}
-@media(max-width:32em){#logoLink{display:none}body{padding-top:max(3.4em,calc(3.4em + env(safe-area-inset-top,0px)))}}
+@media(max-width:32em){body{padding-top:max(3.4em,calc(3.4em + env(safe-area-inset-top,0px)))}}
 #fish{position:fixed;z-index:1;pointer-events:none;color:var(--m);opacity:.12;
 left:calc(.9em + env(safe-area-inset-left,0px));
 bottom:calc(.9em + env(safe-area-inset-bottom,0px));
@@ -395,7 +396,7 @@ background:var(--e);margin:.5em auto .1em}
 <script>const H=document.documentElement;let LS,SS;try{LS=localStorage||{}}catch{LS={}}try{SS=sessionStorage}catch{SS={getItem(){return null},setItem(){},removeItem(){}}}if(LS.t?LS.t=='d':matchMedia('(prefers-color-scheme:dark)').matches)H.className='d'</script>
 <button id="sd" title="Sound" aria-label="Toggle sound"><svg width="14" height="14" viewBox="0 0 24 24" class="ik" aria-hidden="true"><path d="M4 9.5v5h3.5L12 18V6L7.5 9.5H4z"/><path id="sdw" d="M15.5 9a4 4 0 0 1 0 6"/><path id="sdx" d="M16 9.5l4 4m0-4l-4 4"/></svg></button>
 <span id="net" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false" title="Network"></span>
-<a id="logoLink" href="https://zfi.wei.is/dao/#/dao/1/0x5E58BA0e06ED0F5558f83bE732a4b899a674053E" target="_blank" rel="noopener" aria-label="The DAO that governs this page" title="zFi DAO — the governance that owns this page's lineage"><svg id="logo" viewBox="0 0 400 400" aria-hidden="true"><clipPath id="lgf"><rect width="400" height="400"/></clipPath><g clip-path="url(#lgf)"><rect width="400" height="400"/><path d="M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z"/></g></svg></a>
+<button id="logoLink" type="button" aria-haspopup="dialog" aria-expanded="false" aria-label="Menu" title="Menu"><svg id="logo" viewBox="0 0 400 400" aria-hidden="true"><clipPath id="lgf"><rect width="400" height="400"/></clipPath><g clip-path="url(#lgf)"><rect width="400" height="400"/><path d="M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z"/></g></svg></button>
 <svg id="fish" viewBox="0 0 24 14" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" aria-hidden="true"><path d="M2 12.2C7 .8 18 1.8 22 7"/><path d="M2 1.8C7 13.2 18 12.2 22 7"/></svg>
 <div class="card">
 <div class="meta"><span id="addr" role="button" tabindex="0" title="Connect a wallet">Connect</span><span class="mtl"><label id="slipL" title="Slippage"><span>Slippage </span><input id="slip" aria-label="Slippage" type="number" value="0.5" min="0.01" max="10" step="0.1">%</label><button id="lq" class="mb" title="Liquidity for this pair" aria-label="Toggle liquidity mode" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 24 24" class="ik" aria-hidden="true"><path d="M12 3.2c3.6 4 6 7.2 6 10.1a6 6 0 0 1-12 0c0-2.9 2.4-6.1 6-10.1z"/></svg></button><button id="ln" class="mb" title="Launch a coin" aria-label="Toggle launch mode" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 24 24" class="ik" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/></svg></button><button id="wn" class="mb" title="Claim a .wei name" aria-label="Toggle names mode" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" fill-rule="evenodd" shape-rendering="crispEdges" aria-hidden="true"><path d="M3 1h1v1H3zM5 2h1v1H5zM10 2h1v1h-1zM12 1h1v1h-1zM4 4h8v1H4zM3 5h10v1H3zM2 6h12v3H2zM3 9h10v1H3zM4 10h8v1H4zM5 11h2v1H5zM9 11h2v1H9zM2 12h3v1H2zM7 12h2v1H7zM11 12h3v1h-3zM1 13h2v1H1zM13 13h2v1h-2zM3 6h3v2H3zM10 6h3v2h-3z"/></svg></button><button id="pv" class="mb" title="Tacit private bridge: shield, send, withdraw or bridge" aria-label="Toggle private bridge mode" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 24 24" class="ik" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6l7-3z"/><path d="M13 7.4L10.75 15.15Q10.75 16.4 13.25 15.9M9.25 9.4h5.5" stroke="#f7931a" stroke-width="1.9"/></svg></button><button id="mk" class="mb" title="Prediction markets" aria-label="Toggle markets mode" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 24 24" class="ik" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></svg></button><button id="lk" class="mb" title="Copy shareable link" aria-label="Copy shareable link"><svg width="14" height="14" viewBox="0 0 24 24" class="ik" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5.5 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v.5"/></svg></button><button id="th" class="mb" title="Toggle theme" aria-label="Toggle theme"></button></span></div>
@@ -568,7 +569,7 @@ background:var(--e);margin:.5em auto .1em}
 </div>
 <footer id="foot"><span id="footV"></span><span id="footAddr"></span><span id="footBurn"></span><span>&middot; <a id="footDoc" href="#">how it works</a></span><span>&middot; <a id="footList" target="_blank" rel="noopener" title="Token order here comes from zList, ranked by on-chain conviction staking. Stake to move a token up the list — or to get one listed at all.">token list</a></span></footer>
 </div>
-<script>const cE=t=>document.createElement(t),IC0='<svg width="14" height="14" viewBox="0 0 24 24" class="ik" aria-hidden="true">',
+<script>const cE=t=>document.createElement(t),Hd=(e,v)=>e.classList.toggle("hide",v),IC0='<svg width="14" height="14" viewBox="0 0 24 24" class="ik" aria-hidden="true">',
 ICMOON=IC0+'<path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z"/></svg>',
 ICSUN=IC0+'<circle cx="12" cy="12" r="4.2"/><path d="M12 2v2m0 16v2M4.2 4.2l1.5 1.5m12.6 12.6 1.5 1.5M2 12h2m16 0h2M4.2 19.8l1.5-1.5M18.3 5.7l1.5-1.5"/></svg>';
 const ic=()=>{const d=H.className=='d';th.innerHTML=d?ICSUN:ICMOON;tc.content=d?'#0a0a0a':'#fff'};ic();
@@ -738,7 +739,7 @@ try{localStorage[CHAIN_STORE]=String(id)}catch{}
 try{chainUi()}catch{}
 return true;
 }
-function chainWipe(){pvFarm.classList.add("hide");pvFarm._t=0;
+function chainWipe(){Hd(pvFarm,1);pvFarm._t=0;
 solversJob=null;solversRetry=0;solverLanes=null;solverFill=null;solverExec=null;
 _laneHit.clear();_laneWait.clear();_strikes.clear();laneOverride=null;laneOverrideFor="";
 bnVal="";bnAt=0;bnJob=null;nqOff=0;
@@ -995,7 +996,7 @@ const el=document.getElementById("listNote");
 if(!el)return;
 el.textContent=t||"";
 if(t&&/\u2026$/.test(t)){const s=cE("span");s.className="spin";el.appendChild(s)}
-el.classList.toggle("hide",!t)};
+Hd(el,!t)};
 const setListSource=w=>setListNote(w?"Built-in token list — "+w:"");
 let rankFellBack=false,listLive=false;
 const rankedIds=async()=>{
@@ -2016,7 +2017,7 @@ render();
 let toBalance=0n,b1Seq=0;
 async function refreshBalance1(){
 const t=TOKENS[toSel.value];
-bal1.classList.toggle("hide",!lqMode);
+Hd(bal1,!lqMode);
 if(!lqMode||!account||!t){bal1.textContent="";toBalance=0n;return}
 const my=++b1Seq;
 try{
@@ -2253,7 +2254,7 @@ if(top){top.classList.add("cur");tkCur=0;tkAct(top.id)}
 const tkOpen=sel=>{
 if(tkSel&&tkSel!==sel)pickBtn(tkSel)?.setAttribute("aria-expanded","false");
 tkSel=sel;tkFind.value="";tkFind.setAttribute("aria-expanded","true");tkFind.placeholder="Search "+chainCfg().name+" tokens, or paste an address";tkRows();tkBals();
-tkPanel.classList.remove("hide");
+Hd(tkPanel,0);
 if(matchMedia("(pointer:coarse)").matches){
 tkPanel.style.left=tkPanel.style.top=tkPanel.style.maxHeight=tkPanel.style.width="";
 pickBtn(sel).setAttribute("aria-expanded","true");
@@ -2280,7 +2281,7 @@ tkFind.focus({preventScroll:true});
 const tkClose=()=>{
 if(!tkSel)return;
 pickBtn(tkSel)?.setAttribute("aria-expanded","false");tkFind.setAttribute("aria-expanded","false");
-tkPanel.classList.add("hide");tkSel=null;tkCur=-1;tkAct("");
+Hd(tkPanel,1);tkSel=null;tkCur=-1;tkAct("");
 };
 const tkChoose=v=>{
 const sel=tkSel;if(!sel)return;
@@ -2879,7 +2880,7 @@ ch.onclick=async()=>{if(await askReadNode())nd.firstChild.nodeValue="Reads via "
 nd.appendChild(ch);
 wkList.appendChild(box);wkList.appendChild(note);wkList.appendChild(nd);
 wkHdr.textContent="WalletConnect";
-wkWrap.classList.remove("hide");
+Hd(wkWrap,0);
 const back=document.activeElement;
 cp.focus({preventScroll:true});
 return new Promise((res,rej)=>{
@@ -2901,7 +2902,7 @@ try{sess=await Promise.race([done,bail])}
 catch(e){wcRelay.close();throw e}
 finally{if(wcShow.settle)wcShow.settle();
 wkHdr.textContent="Choose a wallet";
-wkWrap.classList.add("hide")}
+Hd(wkWrap,1)}
 return wcProv(sess)}
 const WCS="zswap:wcs";
 const wcSave=s=>{try{s?localStorage.setItem(WCS,JSON.stringify({t:s.topic,k:WCU.hex(s.key),a:s.accounts,m:s.methods,c:s.chain,x:s.exp})):localStorage.removeItem(WCS)}catch{}};
@@ -2964,12 +2965,12 @@ const t=cE("p");t.className="wcn dlgm";t.textContent=m;wkList.append(t);
 let ta=null;if(inp){ta=cE("textarea");ta.className="dlgt";ta.rows=3;ta.value=d??"";ta.setAttribute("aria-label",m.split("\n")[0].slice(0,80));wkList.append(ta)}
 const row=cE("div");row.className="dlgr";const back=document.activeElement;
 const mk=(x,f)=>{const b=cE("button");b.type="button";b.className="fclink";b.textContent=x;b.onclick=f;row.append(b);return b};
-const no=inp?null:false,end=v=>{wkWrap.classList.add("hide");removeEventListener("keydown",esc);removeEventListener("keydown",wkTrap,true);wkWrap.onclick=null;try{back&&back.focus()}catch{}res(v)};
+const no=inp?null:false,end=v=>{Hd(wkWrap,1);removeEventListener("keydown",esc);removeEventListener("keydown",wkTrap,true);wkWrap.onclick=null;try{back&&back.focus()}catch{}res(v)};
 const esc=e=>{if(e.key==="Escape")end(no)};
 if(ta&&d){const c=mk("Copy",()=>{navigator.clipboard?.writeText(ta.value).then(()=>{c.textContent="Copied"},()=>{})})}
 mk("Cancel",()=>end(no));const ok=mk("OK",()=>end(inp?ta.value:true));wkList.append(row);
 wkWrap.onclick=e=>{if(e.target===wkWrap)end(no)};addEventListener("keydown",esc);addEventListener("keydown",wkTrap,true);
-wkWrap.classList.remove("hide");(ta||ok).focus()});
+Hd(wkWrap,0);(ta||ok).focus()});
 const ask=async(m,d)=>{const t=Date.now();let v;try{v=prompt(m,d)}catch{}return v!=null||v===null&&Date.now()-t>40?v:dlg(m,d,1)};
 const sure=async m=>{const t=Date.now();let v;try{v=confirm(m)}catch{}return v===true||v===false&&Date.now()-t>40?v:dlg(m,null,0)};
 const wkTrap=e=>{
@@ -2985,7 +2986,7 @@ wkList.textContent="";wkHdr.textContent=hdr||"Choose a wallet";
 let done=false;
 const back=document.activeElement;
 const end=v=>{if(done)return;done=true;
-wkWrap.classList.add("hide");removeEventListener("keydown",esc);
+Hd(wkWrap,1);removeEventListener("keydown",esc);
 removeEventListener("keydown",wkTrap,true);
 if(back&&back.focus)try{back.focus()}catch{}
 res(v)};
@@ -3004,7 +3005,7 @@ const cx=cE("button");cx.type="button";cx.className="wnbtn";cx.textContent="Canc
 wkWrap.onclick=e=>{if(e.target===wkWrap)end(null)};
 addEventListener("keydown",esc);
 addEventListener("keydown",wkTrap,true);
-wkWrap.classList.remove("hide");
+Hd(wkWrap,0);
 (wkList.querySelector(".cur")||wkList.firstChild)?.focus()});
 async function wkResolve(){
 if(PROV)return true;
@@ -3201,7 +3202,7 @@ if(offChain()&&(lqMode||tab!=="swap")){stat.textContent=offChainNote();last=null
 if(lqMode)return loadLq();
 if(tab==="book")return render();
 if(tab==="send")return updateSend();
-last=null; rate.textContent="";rankBox.textContent="";rankBox.classList.add("hide"); rcvHdr.textContent="You receive"; render();
+last=null; rate.textContent="";rankBox.textContent="";Hd(rankBox,1); rcvHdr.textContent="You receive"; render();
 const f=TOKENS[fromSel.value], t=TOKENS[toSel.value];
 if(!f||!t)return;
 if(f.addr===t.addr){stat.textContent="Pick different tokens.";return}
@@ -3664,7 +3665,7 @@ row.append(n,v);
 rankBox.appendChild(row);
 }
 }
-rankBox.title=isIn?"The least each venue guarantees you receive, after slippage":"The most each venue may take, after slippage";rankBox.classList.toggle("hide",!(rankOpen&&rankBox.firstChild));
+rankBox.title=isIn?"The least each venue guarantees you receive, after slippage":"The most each venue may take, after slippage";Hd(rankBox,!(rankOpen&&rankBox.firstChild));
 const paysSym=r.poolOut===ZERO?"ETH":"WETH";
 rcvHdr.textContent=r.outDiffers?`You receive — as ${paysSym}`:"You receive";
 if(r.outDiffers&&rate.textContent)rate.textContent+=` · pays ${paysSym}`;
@@ -3751,7 +3752,7 @@ render();
 quoting=false;
 const transport=!!e?.noWallet||mcGaveUp>gaveUp0||(mcFailed>failed0&&mcOk===ok0);
 if(!transport&&!e?.exactOut&&advancePastDeadPair()){loadChart();update();return}
-outEl.value="";fitFont(outEl);rankBox.textContent="";rankBox.classList.add("hide");render();
+outEl.value="";fitFont(outEl);rankBox.textContent="";Hd(rankBox,1);render();
 stat.textContent=e?.noWallet?NO_WALLET
 :e&&e.exactOut?e.message
 :transport
@@ -3892,6 +3893,10 @@ if(c&&c.node)return askReadNode();
 if(c)switchNet(c.id);
 };
 net.onclick=()=>{netPick()}
+const ZNAV=[["Swap","trade any token","tab=swap"],["Send","to a name or address, on any chain","tab=send"],["Orders","limit, Dutch and NFT orders","tab=book"],["Liquidity","add to or leave a pool","m=lq"],["Farm","stake TAC / ETH liquidity","farm"],["Launch","a coin or a cause","m=ln"],["Names",".wei names","chain=1&m=wn"],["Markets","yes / no prediction markets","chain=1&m=mk"],["Private","Tacit: shield, send and withdraw","chain=1&m=pv"],["zFi DAO","governs this page ↗","https://zfi.wei.is/dao/#/dao/1/0x5E58BA0e06ED0F5558f83bE732a4b899a674053E"]],
+zNav=async()=>{logoLink.setAttribute("aria-expanded","true");const c=await wkPick(ZNAV.map(([name,sub,h])=>({name,sub,h})),"zSwap");logoLink.setAttribute("aria-expanded","false");
+if(c)/^h/.test(c.h)?window.open(c.h,"_blank","noopener"):location.hash==="#"+c.h?applyLink(1):location.hash=c.h};
+logoLink.onclick=zNav;
 net.onkeydown=e=>{if(e.key==="Enter"||e.key===" "||e.key==="ArrowDown"){e.preventDefault();netPick()}}
 showNet();
 addr.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();addr.onclick()}};
@@ -4234,9 +4239,9 @@ async function showFloor(){
 const el=document.getElementById("floorNote");if(!el)return;
 const side=isNft(fromSel.value)?fromSel.value:isNft(toSel.value)?toSel.value:null;
 const live=tab==="book"&&side!==null&&!nftId.value.trim();
-if(!live){el.classList.add("hide");el.textContent="";return}
+if(!live){Hd(el,1);el.textContent="";return}
 const seq=++floorSeq,t=TOKENS[side];
-el.classList.remove("hide");el.textContent="Checking floor bids…";
+Hd(el,0);el.textContent="Checking floor bids…";
 const oth=isNft(fromSel.value)?toSel.value:fromSel.value;
 const qt=isNft(oth)?ZERO:(TOKENS[oth].addr===ZERO?WETH:TOKENS[oth].addr);
 const rows=await collectionFloor(t.addr,qt).catch(()=>[]);
@@ -4647,7 +4652,7 @@ if(my!==bookSeq)return;
 if(!live.length){
 bookRows=[];bookLegs=[];
 book.innerHTML='<h6><span>Orderbook</span></h6><div class="o"><span class="l"><i>No Swapboard deployed on this network yet.</i></span></div>';
-syncBook(0);book.classList.remove("hide");return}
+syncBook(0);Hd(book,0);return}
 let rows=null;
 try{rows=await lensBookRows(my)}catch{rows=null}
 if(my!==bookSeq||!rows&&bookRows.length)return;
@@ -4906,11 +4911,11 @@ function syncBook(n,total){
 bookShown=n;
 total=total===undefined?n:total;
 const on=tab==="book"&&total>0;
-bkTog.classList.toggle("hide",!on);
+Hd(bkTog,!on);
 bkTog.firstChild.nodeValue=total
 ?`Orderbook (${n<total?`${n} of ${total}`:total}) `:"Orderbook ";
 bkTog.setAttribute("aria-expanded",on&&bkOpen?"true":"false");
-book.classList.toggle("hide",!on||!bkOpen);
+Hd(book,!on||!bkOpen);
 }
 bkTog.onclick=()=>{bkOpen=!bkOpen;syncBook(bookShown,bookRows.length);try{LS.bk=bkOpen?"1":"0"}catch{}};
 book.addEventListener("keydown",e=>{
@@ -5154,8 +5159,8 @@ if(c!==CHAIN_ID)return;
 try{brOpts();if(brLkD&&brLanes()&&brLkD!==String(CHAIN_ID)&&[...sdChain.options].some(o=>o.value===brLkD))lkKeep(sdChain,brLkD);brLkD="";brPaint();if(tab==="send")updateSend();else{syncBr();render()}}catch{}};
 const brLanes=()=>brFlag()!==2&&(CHAIN_ID===1||brFlag()===1||rlOn());
 const brPaint=t=>{const on=(t||tab)==="send"&&BRCHAINS.includes(CHAIN_ID)&&brFlag()!==2;
-sdChainL.classList.toggle("hide",!on||!brLanes());
-rlOptL.classList.toggle("hide",!on||brLanes()||CHAIN_ID===1)};
+Hd(sdChainL,!on||!brLanes());
+Hd(rlOptL,!on||brLanes()||CHAIN_ID===1)};
 const brDest=()=>{const d=tab==="send"&&brLanes()?+(sdChain.value||0):0;
 return d!==CHAIN_ID&&BRCHAINS.includes(d)&&BRCHAINS.includes(CHAIN_ID)?d:0};
 const brCanon=()=>CHAIN_ID===1;
@@ -5319,7 +5324,7 @@ let sendTipWei=0n,tipSeq=0;
 async function syncTip(){
 const my=++tipSeq;
 const on=tab==="send"&&+dly.value>0&&!!chainCfg().slowTip&&!brDest();
-tipL.classList.toggle("hide",!on);
+Hd(tipL,!on);
 if(!on||!tipCk.checked){tpBusy=0;sendTipWei=0n;tipNote.textContent="";return}
 tipNote.textContent="estimating…";tpBusy=1;render();
 const wei=await tipWei().finally(()=>{if(my===tipSeq)tpBusy=0});
@@ -5337,7 +5342,7 @@ return /^0x[0-9a-fA-F]{40}$/.test(h[0]||"")
 };
 function syncSlowLink(){
 const on=tab==="send";
-slowMoreL.classList.toggle("hide",!on);
+Hd(slowMoreL,!on);
 if(!on)return;
 const q=new URLSearchParams();
 const to=rc.value.trim();
@@ -5614,7 +5619,7 @@ render();
 }
 const syncNftUI=()=>{
 const anyNft=tab==="book"&&(isNft(fromSel.value)||isNft(toSel.value));
-nftIdL.classList.toggle("hide",!anyNft);
+Hd(nftIdL,!anyNft);
 if(!anyNft)nftId.value="";
 nftId.placeholder=isWns(TOKENS[fromSel.value]?.addr)||isWns(TOKENS[toSel.value]?.addr)
 ?(isNft(fromSel.value)?"Which .wei name you are selling":"Any, or a .wei name")
@@ -5624,10 +5629,10 @@ showFloor();
 };
 let syncStops=()=>{};
 function modeBtns(){
-lq.classList.toggle("hide",tab!=="swap"||PROUTE===ZERO);
-ln.classList.toggle("hide",tab!=="swap"||PLAUNCH===ZERO);
-wn.classList.toggle("hide",tab!=="swap"||CHAIN_ID!==1);
-pv.classList.toggle("hide",tab!=="swap"||CHAIN_ID!==1);mk.classList.toggle("hide",tab!=="swap"||CHAIN_ID!==1);shieldSync();
+Hd(lq,tab!=="swap"||PROUTE===ZERO);
+Hd(ln,tab!=="swap"||PLAUNCH===ZERO);
+Hd(wn,tab!=="swap"||CHAIN_ID!==1);
+Hd(pv,tab!=="swap"||CHAIN_ID!==1);Hd(mk,tab!=="swap"||CHAIN_ID!==1);shieldSync();
 }
 function chainUi(){
 modeBtns();
@@ -5659,7 +5664,7 @@ tabSend.classList.toggle("on",send);
 tabBook.classList.toggle("on",bk);
 for(const[el,on]of[[tabSwap,t==="swap"],[tabSend,send],[tabBook,bk]])el.setAttribute("aria-selected",on?"true":"false");
 syncStops();
-rcvPanel.classList.toggle("hide",send||lnMode);flip.classList.toggle("hide",send||lqMode||lnMode);
+Hd(rcvPanel,send||lnMode);Hd(flip,send||lqMode||lnMode);
 if(!bk)for(const[sel,other]of[[fromSel,toSel],[toSel,fromSel]]){
 if(!isNft(sel.value))continue;
 const alt=TOKENS.findIndex((t,i)=>t.std!=="nft"&&String(i)!==other.value);
@@ -5671,14 +5676,14 @@ if(alt>=0)toSel.value=String(alt);
 }
 syncDisabled();
 syncNftUI();
-slipL.classList.toggle("hide",t!=="swap");
-dlyL.classList.toggle("hide",t==="swap");
+Hd(slipL,t!=="swap");
+Hd(dlyL,t==="swap");
 brOpts();
 brPaint(t);
 if(send)brFlagSync();
 if(!send){sdChain.value="0";sendBrWei=0n;brNote.textContent=""}
-kindL.classList.toggle("hide",!bk);
-ethModeL.classList.toggle("hide",!bk);
+Hd(kindL,!bk);
+Hd(ethModeL,!bk);
 dlyL.firstChild.nodeValue=bk?"Expires":"Time lock";
 dly.options[0].textContent=bk?"Never":"Instant";
 if(send)dly.value=sendD;else if(bk)dly.value=bookD;
@@ -5714,17 +5719,17 @@ const dutch=tab==="book"&&kind.value==="dutch";
 const bid=tab==="book"&&kind.value==="floor";
 const sched=dutch||bid;
 const nftLeg=tab==="book"&&(isNft(fromSel.value)||isNft(toSel.value));
-dRestL.classList.toggle("hide",!dutch);
+Hd(dRestL,!dutch);
 const collectionBid=nftLeg&&isNft(toSel.value)&&!nftId.value.trim();
-floorL.classList.toggle("hide",!sched);
+Hd(floorL,!sched);
 floorL.firstChild.nodeValue=bid?"Opening bid":"Floor total";
 if(tab==="book"){
 dlyL.firstChild.nodeValue=dutch?"Decays over":bid||collectionBid?"Bid window":"Expires";
 dly.options[0].textContent=sched||collectionBid?"—":"Never";
 }
-fillL.classList.toggle("hide",tab!=="book"||sched||nftLeg);
-rc.classList.toggle("hide",sched||collectionBid);
-rcvEl.classList.toggle("hide",sched||collectionBid);
+Hd(fillL,tab!=="book"||sched||nftLeg);
+Hd(rc,sched||collectionBid);
+Hd(rcvEl,sched||collectionBid);
 if((sched||collectionBid)&&+dly.value===0){dly.value="86400";if(tab==="book")bookD=dly.value}
 if(tab==="book"){
 payL.textContent=bid?"You escrow (max)":"You sell";
@@ -5792,7 +5797,7 @@ return zeros<4?v.toFixed(Math.min(8,-Number(e)+2)):`0.0${sub(zeros)}${digits}`;
 };
 const lqSyncAmounts=()=>{
 const show=!lqMode||!!lqList.querySelector(".lqnew");
-for(const el of [amtRow,outRow])if(el)el.classList.toggle("hide",!show);
+for(const el of [amtRow,outRow])if(el)Hd(el,!show);
 };
 function lqSet(on){
 if(on&&PROUTE===ZERO)return;
@@ -5807,14 +5812,14 @@ lq.setAttribute("aria-pressed",on?"true":"false");
 lq.classList.toggle("on",on);
 document.querySelector(".card").classList.toggle("lqon",on);
 for(const el of [rate,flip,swap])
-if(el)el.classList.toggle("hide",on);
+if(el)Hd(el,on);
 rc.value="";rc.classList.remove("bad");rcvEl.textContent="";
 rc.placeholder=on?"LP shares to (optional) — 0x or name"
 :"Recipient (optional) — 0x or name";
 amt.value="";outAmt.value="";fitFont(amt);fitFont(outAmt);
 rcvHdr.textContent=on?"and":"You receive";
 payL.textContent=on?"Liquidity for":"You pay";
-lqPanel.classList.toggle("hide",!on);
+Hd(lqPanel,!on);
 refreshBalance1();
 if(on)loadLq();else{lqRows=[];lqList.innerHTML=""}
 lqSyncAmounts();
@@ -6487,7 +6492,7 @@ footDoc.onclick=e=>{
 e.preventDefault();
 const on=docPanel.classList.contains("hide");
 footDoc.setAttribute("aria-expanded",on?"true":"false");
-docPanel.classList.toggle("hide",!on);
+Hd(docPanel,!on);
 footDoc.textContent=on?"hide":"how it works";
 if(on)docPanel.scrollIntoView({behavior:"smooth",block:"nearest"});
 };
@@ -6565,7 +6570,7 @@ const SEL_COLLECTMANY="c296057e";
 const TACAD="0x4b4cb98D0C836c2783Ac46f0078b904dab533AE8",TAC_TOK="0xA1313eb9f3A445606D9583bcAc3ebeB56a858279",
 AD_API=["https://cdn.jsdelivr.net/gh/z0r0z/tacit@1b2eedde8490801c9ef4406020530059162e6d47/dapp/airdrop/v1/proofs/","https://raw.githubusercontent.com/z0r0z/tacit/1b2eedde8490801c9ef4406020530059162e6d47/dapp/airdrop/v1/proofs/"];
 const adEl=document.getElementById("adEl");let adSeq=0,adC=null,adHas=false;
-const adShow=()=>adEl.classList.toggle("hide",!adHas||lnMode||lqMode||wnMode||pvMode||mkMode||tab!=="swap");
+const adShow=()=>Hd(adEl,!adHas||lnMode||lqMode||wnMode||pvMode||mkMode||tab!=="swap");
 const adHide=()=>{adC=null;adHas=false;adEl.textContent="";adShow()};
 const tkIc=(el,a,n=13,c="adic")=>{const k=known(a);if(k&&/^<(img|svg) /.test(k.icon))el.insertAdjacentHTML("beforeend",k.icon.replace('width="20" height="20"',`width="${n}" height="${n}"`).replace(/^<(img|svg) /,`<$1 class="${c}" `))};
 const adLine=(pre,n,post)=>{adEl.textContent="";tkIc(adEl,TAC_TOK);
@@ -6604,7 +6609,7 @@ const pfSync=f=>{const k=CHAIN_ID+"|"+(account||"");if(k!==pfFor){pfFor=k;f=1}
 if(!f&&(pfJob||Date.now()-pfAt<5e3))return pfJob||Promise.resolve();
 return pfJob=pfRun().finally(()=>{pfJob=null;pfAt=Date.now()})};
 const pfOn=()=>!!pfS&&pfS.fin>nowS()&&pfS.rate>0n,pfMine=()=>!!pfS&&(pfS.st>0n||pfS.ea>0n);
-const pfShow=()=>pfEl.classList.toggle("hide",CHAIN_ID!==1||!(pfOn()||pfMine())||lnMode||lqMode||wnMode||pvMode||mkMode||tab!=="swap");
+const pfShow=()=>Hd(pfEl,CHAIN_ID!==1||!(pfOn()||pfMine())||lnMode||lqMode||wnMode||pvMode||mkMode||tab!=="swap");
 const pfPx=()=>{const s=Number(pfS.sp)/1e18;return s>0?1/(s*s):0},pfDay=()=>Number(pfS.rate)*86400/1e18,
 pfVal=sh=>pfS.sup?Number(sh)/Number(pfS.sup)*(Number(pfS.r0)+Number(pfS.r1)*pfPx())/1e18:0,
 pfApr=()=>{const a=pfDay()*365*pfPx()/(pfVal(pfS.tot)+1)*100;return isFinite(a)&&a>0?"~"+Math.round(a).toLocaleString()+"% APR on 1 ETH":""},
@@ -6705,7 +6710,7 @@ fcEl.innerHTML=(mine.length===1?`${safeSym(mine[0].sym)} · `:`${mine.length} of
 +`<button type="button" id="fcGo" class="fclink">${mine.length===1?"Collect":"Collect all"}</button>`;
 fcEl.title="Trading fees your launched coins have earned and nobody has swept yet. "
 +"The ether comes to you; the token side is burned, which raises the floor for your holders.";
-fcEl.classList.toggle("hide",lnMode||lqMode||wnMode||pvMode||mkMode||tab!=="swap");
+Hd(fcEl,lnMode||lqMode||wnMode||pvMode||mkMode||tab!=="swap");
 fcGo.onclick=fcCollectMine;
 }catch{if(my===fcMineSeq)fcSync()}
 }
@@ -6733,9 +6738,9 @@ const my=++fcSeq;
 const t=TOKENS[toSel.value],f=TOKENS[fromSel.value];
 const cand=[t,f].find(x=>x&&x.addr&&x.addr!==ZERO&&x.std!=="nft");
 fcTok="";
-if(lnMode||lqMode||wnMode||pvMode||mkMode||tab!=="swap"||PLAUNCH===ZERO){fcEl.classList.add("hide");return}
-if(fcMineToks.length){fcEl.classList.remove("hide");return}
-if(!cand){fcEl.classList.add("hide");return}
+if(lnMode||lqMode||wnMode||pvMode||mkMode||tab!=="swap"||PLAUNCH===ZERO){Hd(fcEl,1);return}
+if(fcMineToks.length){Hd(fcEl,0);return}
+if(!cand){Hd(fcEl,1);return}
 try{
 const key=cand.addr.toLowerCase();
 let pool=fcPool[key];
@@ -6744,13 +6749,13 @@ const pr=await rpc(C,[{to:PLAUNCH,data:"0x"+SEL_POOLOF+encAddr(cand.addr)},L]);
 if(my!==fcSeq||fcMineToks.length)return;
 pool=fcPool[key]="0x"+strip0x(pr||"").slice(24);
 }
-if(!/^0x[0-9a-f]{40}$/i.test(pool)||/^0x0{40}$/i.test(pool)){fcEl.classList.add("hide");return}
+if(!/^0x[0-9a-f]{40}$/i.test(pool)||/^0x0{40}$/i.test(pool)){Hd(fcEl,1);return}
 const [o0,cr]=await mc3Deep([{to:pool,data:"0x"+SEL_OWED0},
 {to:PLAUNCH,data:"0x"+SEL_CREATOROF+encAddr(cand.addr)}]);
 if(my!==fcSeq||fcMineToks.length)return;
 fcOwner=cr?"0x"+strip0x(cr).slice(24):"";
 const owed=BigInt(o0||"0x0");
-if(owed<FC_DUST){fcEl.classList.add("hide");return}
+if(owed<FC_DUST){Hd(fcEl,1);return}
 fcTok=cand.addr;
 const mine=account&&fcOwner&&account.toLowerCase()===fcOwner.toLowerCase();
 fcEl.innerHTML=`${(+formatUnits(owed*8n/10n,18)).toFixed(4)} ETH in `
@@ -6759,9 +6764,9 @@ fcEl.innerHTML=`${(+formatUnits(owed*8n/10n,18)).toFixed(4)} ETH in `
 fcEl.title=mine?"Trading fees this coin has earned. Anyone may collect them and the ether comes to you."
 :"Trading fees this coin has earned. Anyone may collect them; the ether goes to the coin's creator "
 +"either way, and the token side is burned, which raises the floor for holders.";
-fcEl.classList.remove("hide");
+Hd(fcEl,0);
 fcGo.onclick=fcCollect;
-}catch{if(my===fcSeq)fcEl.classList.add("hide")}
+}catch{if(my===fcSeq)Hd(fcEl,1)}
 }
 async function fcCollect(){
 if(!fcTok)return;
@@ -6786,7 +6791,7 @@ const cbSeen={};
 let cbDao="",cbAmt=0n,cbCost=0n,cbBuy=false,cbDrawn=0,cbSold=0n,cbReady=0n,cbSeq=0;
 let cbDue=0n,cbShares="",cbTok="";
 const cbDisarm=()=>{cbSeq++;cbDao="";cbAmt=0n;cbReady=0n;cbDue=0n;cbShares="";cbTok="";
-cbEl.classList.add("hide")};
+Hd(cbEl,1)};
 const cbWord=h=>{const b=strip0x(h||"");return b.length>=64?"0x"+b.slice(24,64):""};
 async function cbLook(tok){
 const key=tok.toLowerCase(),cid=CHAIN_ID,hit=cbSeen[key];
@@ -6812,7 +6817,7 @@ async function cbSync(){
 const my=++cbSeq;
 cbDao="";cbAmt=0n;cbBuy=false;
 const f=TOKENS[fromSel.value],t=TOKENS[toSel.value];
-if(CHAIN_ID!==1||lnMode||lqMode||wnMode||pvMode||mkMode||tab!=="swap"||!f||!t){cbEl.classList.add("hide");return}
+if(CHAIN_ID!==1||lnMode||lqMode||wnMode||pvMode||mkMode||tab!=="swap"||!f||!t){Hd(cbEl,1);return}
 const real=x=>x&&x.addr&&x.addr!==ZERO&&x.std!=="nft";
 const cbEth=f.addr===ZERO;
 let hit=null,tok=null,buy=false;
@@ -6820,7 +6825,7 @@ if(real(t)){const h=await cbLook(t.addr);if(my!==cbSeq)return;
 if(h.dao){hit=h;tok=t;buy=true}}
 if(!hit&&real(f)){const h=await cbLook(f.addr);if(my!==cbSeq)return;
 if(h.dao){hit=h,tok=f}}
-if(!hit||!hit.shares||!tok){cbEl.classList.add("hide");return}
+if(!hit||!hit.shares||!tok){Hd(cbEl,1);return}
 let eth=0n,sup=0n,price=0n,dl=0n,left=0n,cap=0n;
 let rqOff=false,owed=0n;
 const now2=BigInt(Math.floor(Date.now()/1000));
@@ -6836,7 +6841,7 @@ mc3Deep([{to:hit.shares,data:"0x"+SEL_TOTALSUPPLY},{to:tok.addr,data:"0x"+SEL_TO
 {to:hit.dao,data:"0x"+SEL_RQABLE}])]));
 eth=BigInt(b||"0x0");
 if(my!==cbSeq)return;
-if(r[0]==null||r[1]==null||r[2]==null||r[3]==null){cbEl.classList.add("hide");return}
+if(r[0]==null||r[1]==null||r[2]==null||r[3]==null){Hd(cbEl,1);return}
 const shr=BigInt(r[0]),lot=BigInt(r[1]);
 sup=shr+lot;
 const sale=strip0x(r[2]||"");
@@ -6863,7 +6868,7 @@ cbDrawn=lot>0n&&price>0n?(()=>{const raised=(lot*price+CONE-1n)/CONE;
 return raised>eth?Number((raised-eth)*100n/raised):0})():0;
 }catch{}
 if(my!==cbSeq)return;
-if(sup<=0n){cbEl.classList.add("hide");return}
+if(sup<=0n){Hd(cbEl,1);return}
 const now=BigInt(Math.floor(Date.now()/1000));
 const open=price>0n&&(dl===0n||dl>now);
 const days=dl>now?Number((dl-now+86399n)/86400n):0;
@@ -6888,7 +6893,7 @@ const msg=t=>`<span class="cbmsg">${t}</span>`;
 const paint=(html,tip)=>{
 cbEl.innerHTML=top+html;
 cbEl.title=tip;
-cbEl.classList.remove("hide");
+Hd(cbEl,0);
 const gi=i=>document.getElementById(i);
 const g=gi("cbGo"),r=gi("cbRel");
 if(g)g.onclick=cbAct;
@@ -6910,7 +6915,7 @@ if(pay<=0n)
 return paint(msg(`1 ETH backs ${trimAmt(CONE*CONE/price,tok.dec)} ${safeSym(tok.sym)}`),CB_TIP);
 let units=pay*CONE/price;
 if(units>left)units=left;
-if(units<=0n){cbEl.classList.add("hide");return}
+if(units<=0n){Hd(cbEl,1);return}
 cbAmt=units;
 cbTok=tok.addr;
 cbCost=(units*price+CONE-1n)/CONE;
@@ -7118,8 +7123,8 @@ lnNote.style.color=lnArtBytes&&lnArtBytes.length>CAU_MAX_ART?"var(--w)":"";
 }
 function cauKind(){
 const on=lnKind.value==="cause";
-for(const el of [lnMktL,lnSupplyL,lnMcapL,lnAllocL])el.classList.toggle("hide",on);
-for(const el of [lnGoalL,lnDaysL,lnVestL])el.classList.toggle("hide",!on);
+for(const el of [lnMktL,lnSupplyL,lnMcapL,lnAllocL])Hd(el,on);
+for(const el of [lnGoalL,lnDaysL,lnVestL])Hd(el,!on);
 lnTitle.textContent=on?"Launch a cause":"Launch a coin";
 lnSub.textContent=on?"backers burn back for whatever you have not drawn"
 :"0.4% of each trade goes to the creator";
@@ -7176,10 +7181,10 @@ if(on&&pvMode)pvSet(false);
 if(on&&mkMode)mkSet(false);
 ln.setAttribute("aria-pressed",on?"true":"false");
 ln.classList.toggle("on",on);
-for(const el of [rate,flip,swap])if(el)el.classList.toggle("hide",on);
-for(const el of [document.querySelector(".panel"),rcvPanel])if(el)el.classList.toggle("hide",on);
+for(const el of [rate,flip,swap])if(el)Hd(el,on);
+for(const el of [document.querySelector(".panel"),rcvPanel])if(el)Hd(el,on);
 document.querySelector(".card").classList.toggle("lnon",on);
-for(const el of [lnPanel,lnNote,lnGo])el.classList.toggle("hide",!on);
+for(const el of [lnPanel,lnNote,lnGo])Hd(el,!on);
 rc.value="";rc.classList.remove("bad");rcvEl.textContent="";
 rc.title="";if(!on)rc.placeholder="Recipient (optional) — 0x or name";
 stat.textContent="";lnNote.textContent="";
@@ -7288,7 +7293,7 @@ ln.onclick=()=>{sBlip();lnSet(!lnMode);if(!lnMode)update()};
 let wnMode=false,wnQ=null,wnSeq=0,wnRollSeq=0,wnTimer=0,wnRound=0n,wnStampTry=0,wnRollAt=0;
 const wnOk=l=>/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(l)&&new TextEncoder().encode(l).length<256;
 const wnFree=()=>wnTld.value==="id";
-const wnOffer=(t,id)=>{wnEnter.classList.remove("hide");wnEnter.textContent=t;
+const wnOffer=(t,id)=>{Hd(wnEnter,0);wnEnter.textContent=t;
 wnEnter.dataset.id=id||"";wnEnter.classList.toggle("mut",!id&&!!account)};
 const wnFull=l=>l+(wnFree()?".id.wei":".wei");
 const wnSecret=()=>"0x"+cpHex(crypto.getRandomValues(new Uint8Array(32)));
@@ -7407,10 +7412,10 @@ wnRollEl.textContent=line;
 const wnPaint=()=>{const on=wnMode;
 wn.setAttribute("aria-pressed",on?"true":"false");
 wn.classList.toggle("on",on);
-for(const el of [rate,flip,swap])if(el)el.classList.toggle("hide",on);
-for(const el of [document.querySelector(".panel"),rcvPanel])if(el)el.classList.toggle("hide",on);
-for(const el of [wnPanel,wnGo,wnRollPanel])el.classList.toggle("hide",!on);
-for(const el of [rc,rcvEl])if(el)el.classList.toggle("hide",on);document.querySelector(".card").classList.toggle("wnon",on)};
+for(const el of [rate,flip,swap])if(el)Hd(el,on);
+for(const el of [document.querySelector(".panel"),rcvPanel])if(el)Hd(el,on);
+for(const el of [wnPanel,wnGo,wnRollPanel])Hd(el,!on);
+for(const el of [rc,rcvEl])if(el)Hd(el,on);document.querySelector(".card").classList.toggle("wnon",on)};
 function wnSet(on){
 if(on&&CHAIN_ID!==1)return;
 if(on)cbDisarm();
@@ -7683,7 +7688,7 @@ tbScan=async f=>{const k=CHAIN_ID+account;if(!account||tbScan.k===k&&!f)return;t
 if(!w)tbPut(x.b);else if(await sure("Your Tacit pool box holds "+tbE(w)+" past its deadline. Return it to "+x.i.refund+"?"))await sendTx([{from:account,to:TB_R,data:"0xf255eb45"+tbA(x.i)+encUint(0)}])}},
 tbGo=async r=>{try{const j=JSON.parse(atob(r.replace(/-/g,"+").replace(/_/g,"/"))),i=j.intent,c=+j.chainId,a=BigInt(i.amount),n=TB_K[c]&&CHAINS[c].name,x={c,b:0,i};if(!n)throw Error("That box is on a chain zSwap does not serve.");
 if(c!==CHAIN_ID){setChain(c);showNet()}
-const b=x.b=retAddr(await rpc(C,[{to:TB_R,data:"0x34a44915"+tbA(i)},L]).catch(()=>""));if(!b)throw Error("The Tacit EVM pool is not live on "+n+" yet.");
+const b=x.b=retAddr(await rpc(C,[{to:TB_R,data:"0x34a44915"+tbA(i)},L]).catch(()=>""));if(!b)throw Error("The Tacit pool is not live on "+n+" yet.");
 const w=await tbW(b);if(w||strip0x(await rpc("eth_getCode",[b,L]))){tbPut(b,x);if(w&&nowS()>i.deadline)return tbScan(1);throw Error("That box is already paid.")}
 if(i.deadline<nowS()+3600)throw Error("That box expires within the hour.");
 let e="No keeper serves "+n+" yet.";for(const k of TB_K[c])try{await relayFetch("/evm-pool/keeper/deposit",{intent:i,hint:j.hint},k);e="";break}catch(E){e=E.message}
@@ -7966,7 +7971,7 @@ const cpTipRost=()=>CP_RELAYS.includes(cpRelayBase());
 const cpTipTo=j=>{const r=String(j&&j.recommendedTipRecipient||"");return!r||r.toLowerCase()===CP_TIPTO.toLowerCase()};
 const cpTipPref=()=>{try{return LS[TIPOFF]!=="0"}catch{return true}};
 const cpTipOn=()=>cpTipRost()&&cpTipPref();
-const cpTipSync=()=>{pvTip.checked=cpTipPref();pvTipL.classList.toggle("hide",!(pvAct.value==="dep"&&pvPath.value!=="self"&&cpTipRost()))};
+const cpTipSync=()=>{pvTip.checked=cpTipPref();Hd(pvTipL,!(pvAct.value==="dep"&&pvPath.value!=="self"&&cpTipRost()))};
 pvTip.onchange=()=>{sBlip();try{LS[TIPOFF]=pvTip.checked?"1":"0"}catch{}pvPrevSoon()};
 const CP_TIPFWD_T="0x0000007b1d93d72f698A861aA86Ac675D6AF7216",SEL_CPWTIPT="801f0234";
 const cpTipTok=async A=>{if(!cpTipOn()||pvPath.value==="self")return 0n;
@@ -8328,7 +8333,7 @@ if(f||full){cpNotes.sort((a,b)=>a.i-b.i);cpSaveNotes();cpSaveI();cpSaveS()}retur
 let cpRecMiss=[];const cpRecover=async()=>{const w=[],t=(p,l)=>p.catch(()=>{w.push(l);return 0}),b=t(cpScanBtc(),"Bitcoin notes"),k=t(cpScanLocks(),"Bitcoin locks");let f=await cpFind(1);f+=await k;await cpLockSync().catch(()=>{});f+=await t(cpScanCdps(),"loans");f+=await b;cpRecMiss=w;return f};
 const cpFmt=(v,A=CP_ETH_AS)=>trimAmt(BigInt(v)*A.scale,A.dec);
 const pvAssetPaint=()=>{const v=pvAsset.value||CP_ETH;pvAsset.innerHTML=cpAssets.map(a=>`<option value="${a.id}">${a.sym}</option>`).join("");pvAsset.value=cpAs(v)?v:CP_ETH;
-pvAssetL.classList.toggle("hide",cpAssets.length<2);const A=cpSel();pvUnit.textContent=A.pub;
+Hd(pvAssetL,cpAssets.length<2);const A=cpSel();pvUnit.textContent=A.pub;
 pvHintSync();pvAssetB.textContent="";if(A.icon){const im=new Image(16,16);im.src=A.icon;im.alt="";pvAssetB.append(im)}pvAssetB.append(A.sym);
 for(const o of pvChain.options)if(o.value!=="1")o.disabled=A.tok!==ZERO;if(A.tok!==ZERO)pvChain.value="1"};
 let cpAsJob=null;
@@ -8347,11 +8352,11 @@ function tacitTag(t){try{if(!t||t.addr===ZERO||CHAIN_ID!==1)return"";const A=cpA
 let v=0n;if(cpSeed)for(const n of cpNotes){if(n.p||n.ex||(n.a||CP_ETH)!==A.id)continue;if(cpStatus(n).s==="ready")v+=BigInt(n.v)}
 return"Tacit · shields into the confidential pool as "+A.sym+(v>0n?" · you hold "+cpFmt(v,A)+" "+A.sym+" shielded":"")}catch{return""}}
 function shieldSync(){try{const f=TOKENS[fromSel.value];if(CHAIN_ID===1&&!cpAsT)cpLoadAssets();
-shieldGo.classList.toggle("hide",!(CHAIN_ID===1&&tab==="swap"&&!pvMode&&f&&f.addr!==ZERO&&cpAssets.some(a=>a.tok===f.addr.toLowerCase())))}catch{}}
+Hd(shieldGo,!(CHAIN_ID===1&&tab==="swap"&&!pvMode&&f&&f.addr!==ZERO&&cpAssets.some(a=>a.tok===f.addr.toLowerCase())))}catch{}}
 shieldGo.onclick=()=>{sBlip();const f=TOKENS[fromSel.value],A=f&&cpAssets.find(a=>a.tok===f.addr.toLowerCase());if(!A)return;const v=amt.value.trim();pvSet(true);pvAsset.value=A.id;pvAct.value="dep";pvAssetPaint();pvActSync();if(/^\d*\.?\d+$/.test(v))pvAmt.value=v;pvPrevSoon()};
 pvAsset.onchange=()=>{sBlip();pvAssetPaint()};
 pvAssetB.onclick=async()=>{sBlip();const c=await wkPick(cpAssets.map(a=>({name:a.sym,sub:"private "+(a.id===CP_CBTC?"bitcoin":a.id===CP_CUSD?"dollar":a.tok===ZERO?"ETH":a.pub),icon:a.icon,on:a.id===pvAsset.value,id:a.id})),"Shielded asset");if(c&&c.id!==pvAsset.value){pvAsset.value=c.id;pvAsset.dispatchEvent(new Event("change",{bubbles:true}))}};
-const pvActSync=()=>{const s=pvAct.value==="send";for(const e of[pvChain,pvTo])e.parentElement.classList.toggle("hide",pvAct.value!=="out");pvRcL.classList.toggle("hide",!s);pvHintSync()};
+const pvActSync=()=>{const s=pvAct.value==="send";for(const e of[pvChain,pvTo])Hd(e.parentElement,pvAct.value!=="out");Hd(pvRcL,!s);pvHintSync()};
 const fmApr=async j=>{const ids={cETH:CP_ETH,TAC:(cpAssets.find(a=>a.sym==="TAC")||{}).id,cBTC:CP_CBTC,cUSD:CP_CUSD},cs=[...pvFarm.querySelectorAll(".fmc")],
 pid=(a,b)=>{const[x,y]=BigInt(a)<BigInt(b)?[a,b]:[b,a];return keccak(hexToBytes(pad32(x)+pad32(y)+encUint(30n))).toLowerCase()},
 q=cs.map(c=>{const[a,b]=c._p.pair.split("/").map(k=>ids[k]);if(!a||!b)return null;const P=pid(a,b);return keccak(hexToBytes(strip0x(P)+"6c70")).toLowerCase()===String(c._p.lpAsset).toLowerCase()?P:null});
@@ -8364,11 +8369,11 @@ const E=a===CP_ETH.toLowerCase(),rE=E?rA:rB,rO=E?rB:rA;if(!(rE>0&&rO>0&&sh>0&&is
 cs.forEach((c,i)=>{const o=pl[i],p=c._p;if(!o||!px||!o.sh)return;const st=2*o.rE/1e8*Math.min(1,+p.totalShares/o.sh),apr=+p.tacPerDayForPool*365*px/(st+1)*100;
 if(!isFinite(apr)||apr<=0)return;const e=cE("i");e.className="fma";e.textContent="~"+Math.round(apr).toLocaleString()+"% APR on 1 ETH";c.append(e);
 c.title="Rewards valued at the TAC/tETH pool price ("+px.toPrecision(3)+" ETH per TAC). "+(+st.toPrecision(3))+" ETH staked here now; the rate falls as more joins."})};
-const fmSync=async()=>{if(CHAIN_ID!==1||Date.now()-(pvFarm._t||0)<6e5)return;pvFarm._t=Date.now();try{const j=await relayFetch("/farm/program?network=mainnet"),e=j.epoch;if(CHAIN_ID!==1||!e||!e.active||+e.periodFinish<=nowS()||j.stale||!Array.isArray(j.pools)||j.pools.length>8)return void pvFarm.classList.add("hide");
-const r=j.pools.filter(p=>!p.idle&&/^[\w/]{3,24}$/.test(p.pair||"")&&+p.tacPerDayForPool>=1&&+p.tacPerDayForPool<1e7);if(!r.length)return void pvFarm.classList.add("hide");await cpLoadAssets().catch(()=>{});if(CHAIN_ID!==1)return;
+const fmSync=async()=>{if(CHAIN_ID!==1||Date.now()-(pvFarm._t||0)<6e5)return;pvFarm._t=Date.now();try{const j=await relayFetch("/farm/program?network=mainnet"),e=j.epoch;if(CHAIN_ID!==1||!e||!e.active||+e.periodFinish<=nowS()||j.stale||!Array.isArray(j.pools)||j.pools.length>8)return void Hd(pvFarm,1);
+const r=j.pools.filter(p=>!p.idle&&/^[\w/]{3,24}$/.test(p.pair||"")&&+p.tacPerDayForPool>=1&&+p.tacPerDayForPool<1e7);if(!r.length)return void Hd(pvFarm,1);await cpLoadAssets().catch(()=>{});if(CHAIN_ID!==1)return;
 pvFarm.textContent="";const h=cE("span");h.className="fml";h.textContent="Farms · earn TAC for liquidity"+(+e.periodFinish>nowS()?" · until "+new Date(e.periodFinish*1e3).toLocaleDateString(undefined,{month:"short",day:"numeric"}):"");pvFarm.append(h);for(const p of r){const c=cE("span"),s=p.pair.replace(/cETH/g,"tETH");c.className="fmc";
 for(const x of s.split("/")){const A=cpAssets.find(a=>a.sym===x);if(A&&A.icon){const im=new Image(16,16);im.src=A.icon;im.alt="";c.append(im)}}
-const nm=cE("span");nm.className="fmn";nm.textContent=s+" "+Math.round(+p.tacPerDayForPool).toLocaleString()+" TAC/day";c.append(nm);c._p=p;c._s=s;pvFarm.append(c)}fmApr(j).catch(()=>{});const a=cE("a");a.href="https://tacit.finance";a.target="_blank";a.rel="noreferrer";a.textContent="add liquidity on tacit.finance";pvFarm.append(a);pvFarm.classList.remove("hide");fmPf()}catch{pvFarm._t=0}};
+const nm=cE("span");nm.className="fmn";nm.textContent=s+" "+Math.round(+p.tacPerDayForPool).toLocaleString()+" TAC/day";c.append(nm);c._p=p;c._s=s;pvFarm.append(c)}fmApr(j).catch(()=>{});const a=cE("a");a.href="https://tacit.finance";a.target="_blank";a.rel="noreferrer";a.textContent="add liquidity on tacit.finance";pvFarm.append(a);Hd(pvFarm,0);fmPf()}catch{pvFarm._t=0}};
 const pvDp=()=>{const A=cpSel();return A.dec-String(A.scale).length+1};
 const pvWei=()=>{try{return parseUnits(pvAmt.value||"0",cpSel().dec)}catch{return 0n}};
 const pvShV=A=>cpReady(A.id).reduce((s,n)=>s+BigInt(n.v),0n);
@@ -8379,7 +8384,7 @@ const xg=323000n+(ch!==1?CP_L2[ch].gas/2n:0n);if(x)return pvFeeFor(v,A,xg);
 const[m,w]=await Promise.all([pvFeeFor(v,A,600000n),pvFeeFor(v,A,xg)]);
 return m===null||w===null?null:(pvLegs=[m,w],m+w)};let pvLegs=null;
 let pvPS=0;const pvPrevNow=async()=>{const my=++pvPS,A=cpSel(),e=A.tok===ZERO,P=A.pub,v=pvAct.value,f=cpFmt,s=a=>f(a,A)+" "+A.sym;
-if(!account||!cpSeed||CHAIN_ID!==1)return void pvPrev.classList.add("hide");
+if(!account||!cpSeed||CHAIN_ID!==1)return void Hd(pvPrev,1);
 try{const r=pvWei()/A.scale;let Q=[];pvLegs=null;
 if(v==="dep"){const b=e?BigInt(await rpc("eth_getBalance",[account,L])||"0x0"):await cpTokBal(A);Q.push(trimAmt(b,A.dec)+" "+P+" in this wallet"+(r?" → you'll hold "+s(r):"")+(r*A.scale>b?" · more than this wallet holds":""));
 if(pvPath.value==="self")Q.push("You settle it from this wallet.");
@@ -8393,7 +8398,7 @@ if(fe===null)Q.push("The relay does not take a fee in "+A.sym+": choose Settle: 
 else if(v==="send"){Q.push((fe?"Relay fee "+s(fe):"No fee: it goes as one whole note")+(r+fe>sh?(e?" · not enough shielded, so it wraps the ETH from this wallet":" · more than you hold"):""));Q.push("They can see it in about 2–3 min and have 90 days to claim.")}
 else{Q.push((fe?"Relay fee "+s(fe)+(pvLegs?" in two: "+s(pvLegs[0])+" to merge your notes, then "+s(pvLegs[1])+" to withdraw":"")+" · ":"")+"≈"+f(r>fe?r-fe:0n,A)+" "+P+" arrives on "+CHAINS[ch].name+", "+(ch===8453?"usually 4–8 min":ch===4663?"usually 8–15 min":"usually 1.5–4 min")+(r+fe>sh?" · more than you hold":""));
 const to=pvTo.value.trim().toLowerCase();if(!to||to===account.toLowerCase())Q.push("Withdrawing to this same wallet links it to your deposit: for privacy, send it to a fresh address.")}}}
-if(my!==pvPS)return;pvPrev.textContent=Q.join("\n");pvPrev.classList.toggle("hide",!Q.length)}catch{if(my===pvPS)pvPrev.classList.add("hide")}};
+if(my!==pvPS)return;pvPrev.textContent=Q.join("\n");Hd(pvPrev,!Q.length)}catch{if(my===pvPS)Hd(pvPrev,1)}};
 let pvPT=0;const pvPrevSoon=()=>{clearTimeout(pvPT);pvPT=setTimeout(pvPrevNow,250)};
 pvPanel.addEventListener("input",pvPrevSoon);pvPanel.addEventListener("change",pvPrevSoon);
 pvAmt.addEventListener("change",()=>{const d=pvDp(),m=pvAmt.value.trim().match(new RegExp("^(\\d*\\.\\d{"+d+"})\\d+$"));if(m){pvAmt.value=m[1];pvPrevSoon()}});
@@ -8448,10 +8453,10 @@ const lr=cpSendRows()+cpInRows()+cpLockRows()+cpCdpRows()+cpBtcRows();cpSet(pvLi
 const pvPaint=()=>{const on=pvMode;
 pv.setAttribute("aria-pressed",on?"true":"false");
 pv.classList.toggle("on",on);
-for(const el of [rate,flip,swap])if(el)el.classList.toggle("hide",on);
-for(const el of [document.querySelector(".panel"),rcvPanel])if(el)el.classList.toggle("hide",on);
-for(const el of [pvPanel,pvGo])el.classList.toggle("hide",!on);
-for(const el of [rc,rcvEl])if(el)el.classList.toggle("hide",on);document.querySelector(".card").classList.toggle("pvon",on)};
+for(const el of [rate,flip,swap])if(el)Hd(el,on);
+for(const el of [document.querySelector(".panel"),rcvPanel])if(el)Hd(el,on);
+for(const el of [pvPanel,pvGo])Hd(el,!on);
+for(const el of [rc,rcvEl])if(el)Hd(el,on);document.querySelector(".card").classList.toggle("pvon",on)};
 function pvSet(on){
 if(on)cbDisarm();
 ++seq;quoting=false;
@@ -8521,12 +8526,12 @@ const r=mkAll.filter(m=>(mkF==="open"?mkLive(m):mkF==="done"?!mkLive(m):!!mkPos[
 r.sort(mkS==="pot"?(a,b)=>mkUsd(b)-mkUsd(a):mkS==="end"?(a,b)=>mkF==="done"?b.c-a.c:a.c-b.c:(a,b)=>b.o-a.o);
 cpSet(mkList,r.length?r.slice(0,100).map(mkRow).join(""):`<div class="lqempty">${mkCount<0?"Reading markets…":!mkAll.length?"No markets yet — create the first.":mkF==="mine"&&!account?"Connect a wallet to see yours.":"No markets match."}</div>`);
 mkSub.textContent=mkAll.length?(mkMore?`newest ${mkAll.length} of ${mkCount}`:mkAll.length+(mkAll.length>1?" markets":" market"))+(mkCl?` · ${mkCl} to claim`:""):""};
-const mkDetPaint=()=>{if(!mkMode)return;const m=mkSel;mkDet.classList.toggle("hide",!m);if(!m)return;
+const mkDetPaint=()=>{if(!mkMode)return;const m=mkSel;Hd(mkDet,!m);if(!m)return;
 const t=mkTok(m.a),me=mkPos[m.id]||{y:0n,n:0n,c:0n},live=mkLive(m),isR=!!account&&m.r===account.toLowerCase(),net=m.p-m.p*BigInt(m.f)/10000n,X=s=>s?"×"+(Number(net*1000n/s)/1000).toFixed(2):"—",S=safeSym(t.sym),lapsed=nowS()>=m.c+2592000;
-mkT.textContent=m.d.replace(/\p{C}/gu,"");mkT.classList.toggle("hide",m.d.length<141&&!!mkList.querySelector(".on"));
+mkT.textContent=m.d.replace(/\p{C}/gu,"");Hd(mkT,m.d.length<141&&!!mkList.querySelector(".on"));
 mkInfo.innerHTML=`<span class="mkhd">${m.s?`<b>${m.s===3?"each share returns":"each winning share pays"} ${m.w?"×"+(Number(m.p*1000n/m.w)/1000).toFixed(2):"—"}</b>`:`<b>YES pays ${X(m.y)}</b><b>NO pays ${X(m.n)}</b>`}</span><span class="mkfp">Pot ${sigAmt(m.p,t.dec,6)} ${S} · ${m.s?mkWhen(m):live?"closes "+new Date(m.c*1e3).toLocaleString([],{dateStyle:"medium",timeStyle:"short"}):"closed — awaiting the resolver"} · resolver <span id="mkRv">${short(m.r)}</span>${m.f?` · resolver fee ${mkPc(m.f)}% of the pot`:""}${m.x?` · exit tax ${mkPc(live?mkTax(m):m.x)}%`:live?" · bets final":""}${m.l?` · late tax ${live?mkPc(mkNow(m))+"% now, "+mkPc(m.l)+"% at close":mkPc(m.l)+"% at close"}`:""}</span>${me.y||me.n?`<span class="mkyou">You hold ${[[me.y,m.y,"YES"],[me.n,m.n,"NO"]].filter(v=>v[0]).map(([q,T,l])=>sigAmt(q,t.dec,6)+" "+l+(m.s?"":` → ${sigAmt(q*net/T,t.dec,6)} ${S}`)).join(" · ")}${live&&!m.x?" · locked until it settles":""}</span>`:""}`;
 nameRev(m.r).then(n=>{if(n&&mkSel===m)mkRv.textContent=safeSym(n,48)}).catch(()=>{});
-mkAmtL.classList.toggle("hide",!live);
+Hd(mkAmtL,!live);
 if(mkPay._k!==String(m.id)){++mkQSeq;mkPay._k=String(m.id);mkPay.innerHTML=(m.a===ZERO?[ZERO]:m.a===MK_WST?[ZERO,MK_WST]:[m.a]).map(a=>`<option value="${a}">${safeSym(mkTok(a).sym)}</option>`).join("");mkAmt.value="";mkQ.textContent="";mkQv=null;mkPayB.disabled=mkPay.options.length<2;mkIco(mkPayB,mkTok(mkPay.value))}
 const B=(a,l)=>`<button type="button" class="lqbtn" data-a="${a}">${l}</button>`;
 let h=live?B("yes","Buy YES")+B("no","Buy NO"):"";
@@ -8559,10 +8564,10 @@ await settle(await sendWith(aps,T("0x28ccbb45"+b),V));mkCount=-1;mkLoad(1)};
 const mkPaint=()=>{const on=mkMode;
 mk.setAttribute("aria-pressed",on?"true":"false");
 mk.classList.toggle("on",on);
-for(const el of [rate,flip,swap])if(el)el.classList.toggle("hide",on);
-for(const el of [document.querySelector(".panel"),rcvPanel])if(el)el.classList.toggle("hide",on);
-for(const el of [mkPanel,mkGo])el.classList.toggle("hide",!on);
-for(const el of [rc,rcvEl])if(el)el.classList.toggle("hide",on);document.querySelector(".card").classList.toggle("mkon",on)};
+for(const el of [rate,flip,swap])if(el)Hd(el,on);
+for(const el of [document.querySelector(".panel"),rcvPanel])if(el)Hd(el,on);
+for(const el of [mkPanel,mkGo])Hd(el,!on);
+for(const el of [rc,rcvEl])if(el)Hd(el,on);document.querySelector(".card").classList.toggle("mkon",on)};
 function mkSet(on){
 if(on&&CHAIN_ID!==1)return;
 if(on)cbDisarm();
@@ -8594,11 +8599,11 @@ mkSort.onchange=()=>{sBlip();mkS=mkSort.value;mkPaintList()};
 const mkAdvSync=()=>{mkAdvS.textContent=[mkCan.checked&&"early close",+mkExit.value?"sellable, "+ +mkExit.value+"% exit tax":"bets final",+mkLate.value&&"late "+ +mkLate.value+"%"].filter(Boolean).join(" · ")};
 mkCan.onchange=mkExit.oninput=mkLate.oninput=mkAdvSync;mkAdvSync();
 mkFind.oninput=()=>mkPaintList();
-mkList.onclick=e=>{const r=e.target.closest(".mkr");if(!r)return;sBlip();const m=mkAll.find(x=>String(x.id)===r.dataset.k);mkSel=m&&!(mkSel&&mkSel.id===m.id)?m:null;mkForm.classList.add("hide");mkGo.textContent="New market";mkPaintList();mkDetPaint();if(mkSel)mkDet.scrollIntoView?.({block:"nearest",behavior:"smooth"})};
+mkList.onclick=e=>{const r=e.target.closest(".mkr");if(!r)return;sBlip();const m=mkAll.find(x=>String(x.id)===r.dataset.k);mkSel=m&&!(mkSel&&mkSel.id===m.id)?m:null;Hd(mkForm,1);mkGo.textContent="New market";mkPaintList();mkDetPaint();if(mkSel)mkDet.scrollIntoView?.({block:"nearest",behavior:"smooth"})};
 mkList.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();mkList.onclick(e)}};
 mkAmt.oninput=()=>{clearTimeout(mkAmt._t);mkAmt._t=setTimeout(mkQuote,250)};
 mkPay.onchange=()=>{mkIco(mkPayB,mkTok(mkPay.value));mkAmt.oninput()};
-mkClose.onchange=()=>{sBlip();mkAt.classList.toggle("hide",mkClose.value!=="0")};
+mkClose.onchange=()=>{sBlip();Hd(mkAt,mkClose.value!=="0")};
 mkAdv.ontoggle=()=>sBlip();
 const mkResFee=async(a,my,pre)=>{let f=0;try{f=Number(BigInt(await rpc(C,[{to:PM,data:"0x4d5e9db0"+encAddr(a)},L])||"0x0"))}catch{return}
 if(my!==mkRvSeq)return;mkResEl.textContent=pre+(f?` · takes ${mkPc(f)}% of the pot`:" · takes no fee");
@@ -8619,7 +8624,7 @@ try{if(a==="yes"||a==="no")await mkBuy(a==="yes");
 else await mkSend(T({xy:"0x0fc95438"+I+encBool(true)+encUint(me.y||0)+encAddr(account),xn:"0x0fc95438"+I+encBool(false)+encUint(me.n||0)+encAddr(account),claim:"0xddd5e1b2"+I+encAddr(account),close:"0xae418095"+I,ry:"0x52a34b05"+I+encBool(true),rn:"0x52a34b05"+I+encBool(false),void:"0x5ea2145b"+I,fees:"0xf2555278"+encAddr(m.a)+encAddr(account)}[a]),{xy:"Selling…",xn:"Selling…",claim:"Claiming…",fees:"Withdrawing…"}[a]||"Settling…")}
 catch(x){err(x)}finally{mkBusy=0;b.disabled=false;mkDetPaint()}};
 mkGo.onclick=async()=>{if(mkGo.disabled)return;sBlip();
-if(mkForm.classList.contains("hide")){mkSel=null;mkPaintList();mkDetPaint();mkForm.classList.remove("hide");mkGo.textContent="Create market";mkRes.oninput();mkForm.scrollIntoView?.({block:"nearest",behavior:"smooth"});return}
+if(mkForm.classList.contains("hide")){mkSel=null;mkPaintList();mkDetPaint();Hd(mkForm,0);mkGo.textContent="Create market";mkRes.oninput();mkForm.scrollIntoView?.({block:"nearest",behavior:"smooth"});return}
 if(!account)return void connect();
 mkGo.disabled=true;
 try{const d=mkDesc.value.trim(),db=new TextEncoder().encode(d);if(!d)throw Error("Write the question first.");if(db.length>1024)throw Error("That question is too long.");
@@ -8627,7 +8632,7 @@ const rv=mkRes.value.trim();let r=account;if(rv){const e=rcErr(rv);if(e)throw Er
 const cl=mkClose.value==="0"?Math.floor(new Date(mkAt.value).getTime()/1e3):nowS()+ +mkClose.value;if(!(cl>nowS()+300))throw Error("Pick a close time in the future.");
 const bp=v=>{const x=Math.round(+v*100);if(!(x>=0&&x<=5000))throw Error("Taxes run from 0 to 50%.");return x},hx=cpHex(db);
 mkNew=d;await mkSend({from:account,to:PM,data:"0x6f406fa1"+pad32("e0")+encAddr(r)+encAddr(mkAsset.value)+encUint(cl)+encBool(mkCan.checked)+encUint(bp(mkExit.value))+encUint(bp(mkLate.value))+encUint(db.length)+hx.padEnd(Math.ceil(hx.length/64)*64,"0"),value:"0x0"},"Creating…");
-mkForm.classList.add("hide");mkGo.textContent="New market";mkDesc.value="";mkF="open";mkS="new";mkChipPaint();mkCount=-1;mkLoad(1)}
+Hd(mkForm,1);mkGo.textContent="New market";mkDesc.value="";mkF="open";mkS="new";mkChipPaint();mkCount=-1;mkLoad(1)}
 catch(e){err(e)}finally{mkGo.disabled=false}};
 addEventListener("storage",e=>{if(cpSeed&&e.key===CP_NOTES+cpFp&&!cpBusy){cpMerge();cpPaint()}});
 const pvWake=()=>{pubFor="";if(!account){cpSeed="";cpDk="";cpNotes=[]}
@@ -9110,8 +9115,8 @@ chSupply=sup?+formatUnits(BigInt(sup),18):0;
 }
 function syncChartUI(){
 const on=tab==="swap"&&!!chBars;
-chTog.classList.toggle("hide",!on);
-chBox.classList.toggle("hide",!on||!chOpen);
+Hd(chTog,!on);
+Hd(chBox,!on||!chOpen);
 chTog.setAttribute("aria-expanded",on&&chOpen?"true":"false");
 if(!on||!chOpen)return;
 const p=chEff();
@@ -9371,9 +9376,9 @@ let scSeq=0;
 const scShow=async name=>{
 const my=++scSeq;
 const n=String(name||"").trim().toLowerCase();
-if(!/^[a-z0-9-]{1,63}\.arcade\.wei$/.test(n)){scEl.classList.add("hide");return}
+if(!/^[a-z0-9-]{1,63}\.arcade\.wei$/.test(n)){Hd(scEl,1);return}
 const lbl=n.slice(0,-ARCADE.length);
-scEl.classList.remove("hide");
+Hd(scEl,0);
 scEl.textContent="Reading "+n+"…";
 let owner="",rec="";
 try{
@@ -9422,7 +9427,7 @@ if(tab!=="book"&&dly.value===lkWrote.dly){dly.value="0";dly.onchange()}
 for(const el of[sdChain,kind,fill,dRest,nftId,floorAmt])if(el.value===lkWrote[el.id])el.value=el.options?.[0].value??"";
 if(!floorAmt.value)floorTouched=false;
 syncNftUI();syncTip();
-scEl.classList.add("hide");
+Hd(scEl,1);
 last=null;
 try{update()}catch{}
 }
@@ -9432,6 +9437,7 @@ if(CHAINS[wantChain]&&wantChain!==CHAIN_ID&&!busy){
 linkChain=wantChain;
 setChain(wantChain);showNet();await loadTokenList();if(my!==lSeq)return;
 }
+const md=q.get("m"),mb=/^(lq|ln|wn|pv|mk)$/.test(md)&&document.getElementById(md);if(mb){setTab("swap");if(mb.getAttribute("aria-pressed")!=="true"&&!mb.classList.contains("hide"))mb.click();return}
 const at=a=>a?TOKENS.findIndex(t=>t.addr.toLowerCase()===a):-1;
 const tok=async v=>{if(!v)return "";const x=v.trim().toLowerCase();
 if(!/^0x[0-9a-f]{40}$/.test(x))return symAddr(x);
@@ -9451,7 +9457,7 @@ if(fi>=0||oi>=0)pairChosen=true;
 rebuild();
 if(fi>=0&&!pairUser&&!pairHeld){fromSel.value=fi;fromSel.dataset.prev=fromSel.value}
 if(oi>=0&&oi!==fi&&!pairUser&&!pairHeld){toSel.value=oi;toSel.dataset.prev=toSel.value}
-if(q.get("score"))scShow(q.get("score"));else scEl.classList.add("hide");
+if(q.get("score"))scShow(q.get("score"));else Hd(scEl,1);
 const to=q.get("to"),lk=lsecs(q.get("lock")),want=q.get("tab"),n=q.get("amount");
 const t=want==="swap"||want==="send"||want==="book"?want
 :q.get("out")?"swap":(to||!isNaN(lk))?"send":tab;
@@ -9461,7 +9467,7 @@ if(alt!=="-1"){if(oi>=0)fromSel.value=alt;else toSel.value=alt}
 }
 const rcMine=rc.value!==""&&rc.value!==lkWrote.rc;
 const wantLq=q.get("lq")==="1";
-const linkWantsCard=fi>=0||oi>=0||to||n||!isNaN(lk)||q.get("token")||q.get("out");
+const linkWantsCard=fi>=0||oi>=0||to||n||!isNaN(lk)||q.get("token")||q.get("out")||want;
 if(!wantLq&&lqMode&&linkWantsCard)lqSet(false);
 if(linkWantsCard){if(lnMode)lnSet(false);if(wnMode)wnSet(false);if(pvMode)pvSet(false);if(mkMode)mkSet(false)}
 setTab(t);
