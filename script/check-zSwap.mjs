@@ -160,7 +160,7 @@ check('actionable quotes expire after 45 seconds', () => {
   // since a lane's calldata is reused as-is and ages from the lane's clock.
   const uses = html.match(/exp:Date\.now\(\)\+QUOTE_TTL/g) || [];
   if (uses.length !== 2) throw Error(`expected 2 shortcut quote-expiry uses, found ${uses.length}`);
-  if (!html.includes('exp:r.best.at?Math.min(Date.now()+QUOTE_TTL,r.best.at+3e4):Date.now()+QUOTE_TTL'))
+  if (!html.includes('exp:r.best.at?Mn(Date.now()+QUOTE_TTL,r.best.at+3e4):Date.now()+QUOTE_TTL'))
     throw Error('the routed quote no longer expires on QUOTE_TTL capped by the lane answer');
   if (html.includes('Date.now()+1500000')) throw Error('legacy 25-minute quote expiry remains');
 });
@@ -376,7 +376,7 @@ check('lineage constants are well-formed', () => {
 const ids = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map(m => m[1]));
 check('element ids addressed by string exist in the markup', () => {
   const js = scripts.join('\n');
-  const byName = [...js.matchAll(/getElementById\(["'`]([A-Za-z0-9_-]+)["'`]\)/g)].map(m => m[1]);
+  const byName = [...js.matchAll(/(?:getElementById|\bgE)\(["'`]([A-Za-z0-9_-]+)["'`]\)/g)].map(m => m[1]);
   const missing = [...new Set(byName)].filter(id => !ids.has(id));
   if (missing.length) throw Error(`getElementById for id(s) not in the markup: ${missing.join(', ')}`);
   return `${ids.size} ids, ${new Set(byName).size} addressed by string`;
