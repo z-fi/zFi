@@ -462,7 +462,7 @@ background:var(--e);margin:.5em auto .1em}
 <label class="dly">Closes<select id="mkClose"><option value="86400">in a day</option><option value="604800" selected>in a week</option><option value="2592000">in a month</option><option value="7776000">in 3 months</option><option value="0">at…</option></select></label>
 <input id="mkAt" type="datetime-local" class="rcpt hide" aria-label="Close at">
 <details id="mkAdv"><summary>Advanced<em id="mkAdvS"></em></summary>
-<small class="mkd mkadn">Both taxes stay in the pot, so they pay the other bettors rather than anyone else. Exit tax 0 makes bets final; above 0 it is the least a seller gives up. Late tax makes later bets mint fewer shares, from nothing now to this rate at close.</small>
+<small class="mkd mkadn">Exit tax: before close, holders can sell back for their stake less this tax. 0 makes bets final. Late tax: later bets mint fewer shares, from nothing now to this rate at close. Both taxes stay in the pot for the other bettors.</small>
 <label class="dly" title="Lets the resolver end trading early, once the answer is known.">Early close<input id="mkCan" type="checkbox" checked></label>
 <label class="dly">Exit tax %<input id="mkExit" type="number" min="0" max="50" step="0.5" value="1"></label>
 <label class="dly">Late tax %<input id="mkLate" type="number" min="0" max="50" step="0.5" value="0"></label>
@@ -8576,7 +8576,7 @@ mkAssetB.onclick=()=>mkPickA(mkAsset,MK_AS.map(t=>t.addr),"Pot in");
 mkPayB.onclick=()=>{if(!mkPayB.disabled)mkPickA(mkPay,[...mkPay.options].map(o=>o.value),"Pay with")};
 mkChips.onclick=e=>{const b=e.target.closest("button[data-f]");if(!b)return;sBlip();mkF=b.dataset.f;mkChipPaint();mkPaintList()};
 mkSort.onchange=()=>{sBlip();mkS=mkSort.value;mkPaintList()};
-const mkAdvSync=()=>{mkAdvS.textContent=[mkCan.checked&&"early close",+mkExit.value?"exit "+ +mkExit.value+"%":"bets final",+mkLate.value&&"late "+ +mkLate.value+"%"].filter(Boolean).join(" · ")};
+const mkAdvSync=()=>{mkAdvS.textContent=[mkCan.checked&&"early close",+mkExit.value?"sellable, "+ +mkExit.value+"% exit tax":"bets final",+mkLate.value&&"late "+ +mkLate.value+"%"].filter(Boolean).join(" · ")};
 mkCan.onchange=mkExit.oninput=mkLate.oninput=mkAdvSync;mkAdvSync();
 mkFind.oninput=()=>mkPaintList();
 mkList.onclick=e=>{const r=e.target.closest(".mkr");if(!r)return;sBlip();const m=mkAll.find(x=>String(x.id)===r.dataset.k);mkSel=m&&!(mkSel&&mkSel.id===m.id)?m:null;mkForm.classList.add("hide");mkGo.textContent="New market";mkPaintList();mkDetPaint();if(mkSel)mkDet.scrollIntoView?.({block:"nearest",behavior:"smooth"})};
