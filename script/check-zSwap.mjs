@@ -996,6 +996,23 @@ if (exported) {
     return 'generator, note, memo, tree, both recipes, both openings, a token note, the identity, the Bitcoin key, memo recovery, the cBTC lock, the cUSD position, Bitcoin-side notes, and a split, wrap-and-transfer, stealth lock, refund and claim agree with the reference';
   });
 
+  check('cpCalls refuses settle calldata that fans out past its entry budget', () => {
+    // Anyone can post settle() calldata whose offsets all alias one tuple, so
+    // ~260 KB of input would otherwise expand to 4096 x 4096 memos on every
+    // visitor's private panel. The decoder has to give up, and quickly.
+    const w = n => BigInt(n).toString(16).padStart(64, '0');
+    const K = 4096, tupleAt = K * 32;
+    let d = w(32) + w(K) + w(tupleAt).repeat(K);
+    d += w(96) + w(0) + w(128) + w(0) + w(K) + w(0).repeat(K);
+    const t0 = Date.now();
+    let got = null;
+    try { got = exported.cpCalls('0xfcccb833' + d); } catch { got = 'refused'; }
+    const ms = Date.now() - t0;
+    if (ms > 2000) throw Error(`took ${ms} ms`);
+    if (got !== 'refused' && (!Array.isArray(got) || got.reduce((n, c) => n + c.ms.length, 0) > 16384)) throw Error('decoded the aliased fan-out');
+    return `refused in ${ms} ms`;
+  });
+
   check('keccak matches known vectors', () => {
     eq(keccak(new TextEncoder().encode('')),
       '0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470', 'keccak("")');

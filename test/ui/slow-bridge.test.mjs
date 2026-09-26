@@ -1335,6 +1335,17 @@ describe('a recipient that cannot hold SLOW\'s token', () => {
     p.close();
   });
 
+  test('a refusal on one node is not undone by a second node that is rate-limited', async () => {
+    const p = await setup(c => {
+      c.remotes['base-rpc'].code.set(A.OTHER.toLowerCase(), HOOKLESS);
+      c.remotes['base-rpc'].revertOn(A.OTHER, SEL.HOOK);
+      c.remotes['blxrbdn'] = { request: async () => { throw Object.assign(Error('rate limited'), { code: 429 }); } };
+    });
+    await fill(p, '3600', '8453');
+    await refused(p);
+    p.close();
+  });
+
   test('an instant bridge to it still goes, because no token is minted', async () => {
     const p = await setup(c => c.remotes['base-rpc'].code.set(A.OTHER.toLowerCase(), HOOKLESS));
     const tx = await sendTo(p, { dest: '8453' });

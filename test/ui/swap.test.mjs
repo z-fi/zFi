@@ -1186,6 +1186,17 @@ describe('price impact gates', () => {
     p.close();
   });
 
+  test('a quote that refreshes while the impact dialog is open is not the one sent', async () => {
+    const p = await pool();
+    await p.typeAmount('amt', '200');
+    p.window.confirm = () => { p.window.eval('last={...last}'); return true; };
+    p.click('swap');
+    await p.settle();
+    assert.equal(p.chain.sent.length, 0, 'the confirmed quote was replaced, so nothing may be sent');
+    assert.match(p.text('stat'), /quote refreshed/);
+    p.close();
+  });
+
   test('a ruinous trade demands the loss be typed back, not just clicked through', async () => {
     const p = await pool();
     await p.typeAmount('amt', '1000'); // the whole reserve => ~49%
