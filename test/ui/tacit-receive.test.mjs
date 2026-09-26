@@ -31,6 +31,8 @@ async function open(id, { live = true, keepers = { [id]: [KEEPER] }, infoChain }
   const p = await loadPage({ chain: chainOn(id, { live, infoChain }), storage: roster(keepers), beforeParse: w => {
     const inner = w.fetch;
     w.__keeper = [];
+    w.__opened = [];
+    w.open = (...a) => { w.__opened.push(a); return null; };
     w.fetch = async (url, init) => {
       if (String(url).includes('/evm-pool/keeper/') && init && init.body) w.__keeper.push({ url: String(url), body: JSON.parse(init.body) });
       return inner(url, init);
@@ -43,6 +45,13 @@ async function open(id, { live = true, keepers = { [id]: [KEEPER] }, infoChain }
 const shown = p => !p.$('pv').classList.contains('hide');
 const unlock = p => p.window.eval(`cpUse(${JSON.stringify(KEY)})`);
 const okIn = p => [...p.$('wkList').querySelectorAll('button')].find(b => b.textContent === 'OK');
+const row = (p, name) => [...p.$('wkList').querySelectorAll('button.tkr')].find(b => b.textContent.startsWith(name));
+const menu = p => p.visible('wkWrap') && row(p, 'Your private ETH address');
+async function choose(p, name) {
+  await p.waitFor(() => menu(p), { label: 'the private ETH menu' });
+  p.click(row(p, name));
+  await p.settle();
+}
 
 describe('the private ETH receive address', () => {
   test('the note key derived in page is Tacit\'s own', async () => {
@@ -74,17 +83,39 @@ describe('the private ETH receive address', () => {
     await p.waitFor(() => shown(p), { label: 'the Private button on Base' });
     unlock(p);
     p.click('pv');
-    await p.waitFor(() => p.visible('wkWrap') && okIn(p), { label: 'the address sheet' });
+    await p.waitFor(() => menu(p), { label: 'the private ETH menu' });
+    assert.equal(p.text('wkHdr'), 'Private ETH · Base');
+    assert.match(row(p, 'Your private ETH address').textContent, /0x52fc37…aeb232/);
+    await choose(p, 'Your private ETH address');
+    await p.waitFor(() => okIn(p), { label: 'the address, in full' });
     assert.equal(p.$('wkList').querySelector('textarea').value, BOX);
-    assert.match(p.text('wkList'), /Your private ETH address/);
+    assert.match(p.text('wkList'), /shielded into your Tacit balance on that chain, less at most 0\.25%/);
+    p.click(okIn(p));
+    await p.settle();
     const call = p.chain.calls.find(c => c.to === ROUTER && c.selector === '7944b37a');
     assert.equal(call.data, '0x7944b37a' + word(NPK0) + word(25), 'receiveBoxOf(npk, 25)');
     assert.deepEqual(p.window.__keeper.map(k => [k.url, k.body]), [[KEEPER + '/receive', { chainId: 8453, npk: NPK0.toString(), feeBps: 25 }]]);
     assert.ok(!p.window.eval('pvMode'), 'the Ethereum panel stays shut on Base');
-    p.click(okIn(p));
+    p.click('pv');
+    await choose(p, 'Shield ETH into it');
     await p.waitFor(() => p.value('rc') === BOX, { label: 'a send to the address' });
     assert.equal(p.window.eval('CHAIN_ID'), 8453);
     assert.equal(p.$('tabSend').getAttribute('aria-selected'), 'true');
+    p.close();
+  });
+
+  test('sending and withdrawing private ETH open tacit.finance on this chain, in a new tab', async () => {
+    const p = await open(8453);
+    await p.waitFor(() => shown(p), { label: 'the Private button on Base' });
+    unlock(p);
+    for (const [name, doing] of [['Send privately', 'send'], ['Withdraw', 'withdraw']]) {
+      p.click('pv');
+      await choose(p, name);
+    }
+    assert.deepEqual(p.window.__opened.map(a => [a[0], a[1], a[2]]), [
+      ['https://tacit.finance/sats#eth=8453&do=send', '_blank', 'noopener'],
+      ['https://tacit.finance/sats#eth=8453&do=withdraw', '_blank', 'noopener']]);
+    assert.equal(p.window.eval('CHAIN_ID'), 8453, 'zSwap stays where it was');
     p.close();
   });
 
@@ -94,8 +125,8 @@ describe('the private ETH receive address', () => {
     p.click('pv');
     await p.waitFor(() => p.$('pvKey').querySelector('button[data-a="rx"]'), { label: 'the private ETH address button' });
     p.click(p.$('pvKey').querySelector('button[data-a="rx"]'));
-    await p.waitFor(() => p.visible('wkWrap') && okIn(p), { label: 'the address sheet' });
-    assert.equal(p.$('wkList').querySelector('textarea').value, BOX);
+    await p.waitFor(() => menu(p), { label: 'the private ETH menu' });
+    assert.equal(p.text('wkHdr'), 'Private ETH · Ethereum');
     p.close();
   });
 
@@ -118,7 +149,7 @@ describe('the private ETH receive address', () => {
     await p.waitFor(() => shown(p), { label: 'the Private button on Base' });
     unlock(p);
     p.window.location.hash = 'm=pv';
-    await p.waitFor(() => p.visible('wkWrap') && okIn(p), { label: 'the address sheet on Base' });
+    await p.waitFor(() => menu(p), { label: 'the private ETH menu on Base' });
     assert.equal(p.window.eval('CHAIN_ID'), 8453);
     p.close();
     p = await open(8453, { live: false });
