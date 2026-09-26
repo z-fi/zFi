@@ -113,8 +113,8 @@ describe('the private ETH receive address', () => {
       await choose(p, name);
     }
     assert.deepEqual(p.window.__opened.map(a => [a[0], a[1], a[2]]), [
-      ['https://tacit.finance/sats#eth=8453&do=send', '_blank', 'noopener'],
-      ['https://tacit.finance/sats#eth=8453&do=withdraw', '_blank', 'noopener']]);
+      ['https://tacit.finance/sats/#eth=8453&do=send', '_blank', 'noopener'],
+      ['https://tacit.finance/sats/#eth=8453&do=withdraw', '_blank', 'noopener']]);
     assert.equal(p.window.eval('CHAIN_ID'), 8453, 'zSwap stays where it was');
     p.close();
   });
