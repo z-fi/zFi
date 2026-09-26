@@ -100,9 +100,9 @@ border:1px solid var(--e);border-top-color:var(--m);border-radius:50%;animation:
 @keyframes fadein{from{opacity:0}to{opacity:1}}
 #tkList.fresh>*{animation:fadein .22s ease-out both}
 .pill.swapin>*{animation:fadein .3s ease-out both}
-.lqbtn,.lnbtn,.o button,.p button{border:1px solid var(--e);padding:.4em .7em;font-size:.85em;font-weight:400;letter-spacing:.08em;text-transform:uppercase;background:transparent;color:var(--f);cursor:pointer;flex:0 0 auto;white-space:nowrap;text-align:center;transition:background .15s,color .15s,border-color .15s}
+.lqbtn,.lnbtn,.wnbtn,.o button,.p button{border:1px solid var(--e);padding:.4em .7em;font-size:.85em;font-weight:400;letter-spacing:.08em;text-transform:uppercase;background:transparent;color:var(--f);cursor:pointer;flex:0 0 auto;white-space:nowrap;text-align:center;transition:background .15s,color .15s,border-color .15s}
 .lqbtn{font-size:.8em;padding:.45em .7em}
-:is(.lqbtn,.lnbtn,.o button,.p button):not(:disabled):is(:hover,:focus-visible){border-color:var(--f)}
+:is(.lqbtn,.lnbtn,.wnbtn,.o button,.p button):not(:disabled,.mut):is(:hover,:focus-visible){border-color:var(--f)}
 .lqbtn:disabled{opacity:.4;cursor:not-allowed}
 .lqadd{margin-top:.45em;display:flex;flex-direction:column;gap:.35em}
 .lqin{width:100%;box-sizing:border-box;padding:.5em .65em;font:inherit;font-size:.75em;border:1px solid transparent;background:var(--b);transition:border-color .15s;color:var(--f);outline:0}
@@ -175,7 +175,7 @@ vertical-align:.1em;line-height:1;text-decoration:none;margin-left:.5em}
 #pvTo{flex:1 1 11em;width:auto}
 #lnArtNote{color:var(--m);font-variant-numeric:tabular-nums}
 #lnArtNote.set{color:var(--f)}
-.wnbtn{display:block;width:100%;box-sizing:border-box;font:inherit;font-size:.75em;color:var(--f);background:var(--b);border:1px solid var(--e);padding:.65em .8em;margin-top:.5em;cursor:pointer;text-align:center;transition:border-color .15s,color .15s}.wnbtn:hover{border-color:var(--f)}.wnbtn.mut{color:var(--m);cursor:default;border-color:transparent}.wnbtn.mut:hover{border-color:transparent}
+.wnbtn{display:block;width:100%;box-sizing:border-box;font-size:.75em;padding:.65em .8em;margin-top:.5em;white-space:normal}.wnbtn.mut{color:var(--m);cursor:default;border-color:transparent}
 #adEl,#pfEl{display:block;text-align:center;color:var(--dm);font-size:.66em;letter-spacing:.03em;margin-top:.75em}
 #adEl .adic,#pfEl .adic,.pfh .adic{vertical-align:middle;margin:-2px .4em 0 0;border-radius:50%;opacity:.8}
 #adEl b,#pfEl b{color:var(--m);font-weight:500}
@@ -197,11 +197,11 @@ vertical-align:.1em;line-height:1;text-decoration:none;margin-left:.5em}
 .lqon>*{order:2}
 .lqon>.meta,.lqon>.tabs,.lqon>.panel,.lqon>.flip,.lqon>#rcvPanel{order:0}
 .lqon>#rc,.lqon>#rcvEl{order:1}
-.lnon>.tabs .on,.wnon>.tabs .on,.pvon>.tabs .on,.mkon>.tabs .on{color:var(--m);font-weight:600;box-shadow:none}.lnon #chTog,.lnon #chBox,.lnon #bkTog,.lnon #book,.lnon #pos,.pvon #chTog,.pvon #chBox,.pvon #bkTog,.pvon #book,.pvon #pos,.wnon #chTog,.wnon #chBox,.mkon #chTog,.mkon #chBox,.mkon #bkTog,.mkon #book,.mkon #pos{display:none!important}
+.lqon>.tabs .on,.lnon>.tabs .on,.wnon>.tabs .on,.pvon>.tabs .on,.mkon>.tabs .on{color:var(--m);font-weight:600;box-shadow:none}.lnon #chTog,.lnon #chBox,.lnon #bkTog,.lnon #book,.lnon #pos,.pvon #chTog,.pvon #chBox,.pvon #bkTog,.pvon #book,.pvon #pos,.wnon #chTog,.wnon #chBox,.mkon #chTog,.mkon #chBox,.mkon #bkTog,.mkon #book,.mkon #pos{display:none!important}
 .docs{margin-top:.5em}
 .docs details{border-top:1px solid var(--e)}
 .docs details:last-child{border-bottom:1px solid var(--e)}
-.docs summary{cursor:pointer;list-style:none;padding:.75em .2em;font-size:.7em;font-weight:700;text-transform:uppercase;letter-spacing:.02em;color:var(--f);display:flex;justify-content:space-between;align-items:center}
+.docs summary{cursor:pointer;list-style:none;padding:.75em .2em;font-size:.7em;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--f);display:flex;justify-content:space-between;align-items:center}
 .docs summary::-webkit-details-marker{display:none}
 .docs summary::after{content:"+";color:var(--m);font-weight:400}
 .docs details[open] summary::after{content:"\2013"}
@@ -307,7 +307,7 @@ margin-top:.55em;padding-top:.55em;border-top:1px solid var(--e);color:var(--f)}
 font:inherit;font-size:.9em;font-weight:600;letter-spacing:.02em;color:var(--f);cursor:pointer}
 .tkb.on{display:inline-flex}
 .tkbc{font-size:.7em;color:var(--m)}
-.tkp{position:fixed;z-index:40;width:min(20em,calc(100vw - 2em));max-height:min(32em,calc(100dvh - 5em));
+.tkp{position:fixed;z-index:40;box-shadow:0 1.5em 4em #0008;width:min(20em,calc(100vw - 2em));max-height:min(32em,calc(100dvh - 5em));
 display:flex;flex-direction:column;background:var(--b);border:1px solid var(--hd);overflow:hidden}
 #tkFind{border:0;border-bottom:1px solid var(--e);background:transparent;color:var(--f);
 font:inherit;font-size:.8em;padding:.7em .8em;outline:0;flex:none}
