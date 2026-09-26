@@ -75,6 +75,20 @@ describe('the last good list', () => {
     again.close();
   });
 
+  test('with nothing kept, the first paint ranks the built-in list the way zList does', async () => {
+    // No kept copy and no registry: the pair painted is the built-in list's
+    // own ranked top. It is ordered like zList, so a first visit lands where
+    // the registry will send it instead of on a stablecoin it then leaves.
+    // Read the pair as painted, before the list load can move it.
+    const BOOT = 'applyLink();\nloadTokenList().then(()=>{';
+    const p = await loadPage({ chain: chainWith(null), hash: null, patch: [[BOOT,
+      'window.__painted=[fromSel,toSel].map(s=>TOKENS[s.value].sym);' + BOOT]] });
+    await p.settle();
+    assert.deepEqual([...p.window.__painted], ['ETH', 'wstETH'], 'the first paint is not the ranked pair');
+    assert.deepEqual([symIn(p, 'fromSel'), symIn(p, 'toSel')], ['ETH', 'wstETH']);
+    p.close();
+  });
+
   test('is replaced by the live one when the registry answers', async () => {
     const stale = JSON.stringify({ f: 0, r: [JSON.stringify(ROWS[0]), JSON.stringify(ROWS[1])] });
     const p = await loadPage({ chain: chainWith(ROWS), hash: null, storage: { 'zswap:list': stale } });

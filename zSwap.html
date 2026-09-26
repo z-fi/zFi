@@ -2141,8 +2141,7 @@ if(fi>=0&&ti>=0&&fi!==ti){fromSel.value=String(fi);toSel.value=String(ti);return
 }catch{}
 return false;
 };
-if(!seatPair())if(listSeeded)rankedDefaults();else{const m=MONEY();let d=TOKENS.findIndex(t=>m.includes((t.addr||"").toLowerCase()));
-if(d<0)d=TOKENS.findIndex(t=>t.sym==="USDC");toSel.value=String(Math.max(1,d))}
+seatPair()||rankedDefaults();
 syncDisabled();
 const iconShown=["",""];
 const syncIcons=()=>{
