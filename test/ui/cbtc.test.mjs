@@ -129,6 +129,25 @@ describe('locking bitcoin into cBTC', () => {
     p.close();
   });
 
+  test('a coin in a Tacit note transaction that this key cannot open is never spent either', async () => {
+    const B = F.btcNote, chain = cbtcChain();
+    chain.lanes['/tx/' + B.txid] = B.tx;
+    const p = await open(chain);
+    // Vout 2 belongs to the note's sender: not this key's note, but not a plain coin either, and priced above dust.
+    p.chain.lanes['/address/' + F.btc.address + '/utxo'] = [
+      { txid: B.txid, vout: 2, value: 100001 }, { txid: B.txid, vout: 3, value: 546 }, ...C.utxos];
+    p.chain.lanes['/fee-estimates'] = { 2: C.feeRate };
+    p.chain.lanes['api/tx'] = 'ok';
+    p.queuePrompt('0.001');
+    p.queueConfirm(true);
+    p.click(p.$('pvKey').querySelector('button[data-a="lockbtc"]'));
+    await p.waitFor(() => /Locked/.test(p.text('stat')), { label: 'the lock to be sent', ...SLOW });
+    const sent = [...new Set(p.window.__posts.filter(x => /\/tx$/.test(x.url)).map(x => x.body))];
+    assert.deepEqual(sent, [C.commit, C.reveal], 'exactly the lock the plain coins alone make');
+    await p.settle();
+    p.close();
+  });
+
   test('once recorded, wstETH already held is posted with one permit signature, then the relay mints fee-free', async () => {
     const chain = cbtcChain(), HELPER = '0x000000008ecd09f922c9fbbdd9aca5ae8f0bebfa';
     chain.answer(WSTETH, '7ecebe00', '0x' + u256(0));
@@ -423,6 +442,20 @@ describe('Tacit notes on Bitcoin', () => {
     const asked = p.window.__posts.filter(x => /\/reflection\/note-witness$/.test(x.url)).map(x => JSON.parse(x.body));
     assert.deepEqual(asked, [{ leaves: [got.leaf, fresh.leaf] }], 'one batch, carrying exactly the leaves Tacit\'s reflection folds these outputs under');
     await p.settle();
+    p.close();
+  });
+});
+
+describe('a generation-bound note on Bitcoin', () => {
+  test('decodes to the same asset and outputs as the plain transfer it binds', async () => {
+    const p = await open(cbtcChain());
+    const asset = 'a1'.repeat(32), sig = 'b2'.repeat(64), out = '02' + 'c3'.repeat(32) + 'd4'.repeat(8), tail = '01' + out + '0000';
+    const plain = p.window.eval(`JSON.stringify(bOutsOf(hexToBytes("23${asset}${sig}${tail}")))`);
+    const bound = p.window.eval(`JSON.stringify(bOutsOf(hexToBytes("39${'e5'.repeat(32)}${asset}${sig}${tail}")))`);
+    const a = JSON.parse(plain), b = JSON.parse(bound);
+    assert.equal(a.asset, '0x' + asset);
+    assert.equal(b.op, 57);
+    assert.deepEqual({ ...b, op: 35 }, a, 'the binding changes nothing a Bitcoin-side scan reads');
     p.close();
   });
 });

@@ -7803,9 +7803,9 @@ return`<div class="cpr"><span><b>${trimAmt(BigInt(p.v),8)} cUSD</b> against ${tr
 const bEnvOf=h=>{const s=/^[0-9a-f]*$/i.test(h||"")?hexToBytes(h):new Uint8Array(0);if(s.length<36||s[0]!==32||s[33]!==172||s[34]!==0||s[35]!==99)return null;let i=36,end=0;const P=[];
 while(i<s.length){const o=s[i];if(o===104){end=i+1;break}let n,j=i+1;if(o===0)n=0;else if(o<76)n=o;else if(o===76){n=s[j];j++}else if(o===77){n=s[j]|s[j+1]<<8;j+=2}else return null;if(j+n>s.length)return null;P.push(s.slice(j,j+n));i=j+n}
 if(!end||end!==s.length||P.length<3||cpHex(P[0])!=="5441434954"||P[1].length!==1||P[1][0]!==1)return null;return cpCat(...P.slice(2))};
-const bOutsOf=p=>{if(!p||!p.length)return null;const op=p[0],o=op===34||op===35?97:op===38||op===60?98:op===37?105:0;if(!o||p.length<=o)return null;const N=p[o];
+const bOutsOf=p=>{if(!p||!p.length)return null;const op=p[0],o=op===34||op===35?97:op===57?129:op===38||op===60?98:op===37?105:0;if(!o||p.length<=o)return null;const N=p[o];
 if(!(op===37?[0,1,2,4,8]:[1,2,4,8]).includes(N))return null;const outs=[];for(let k=0;k<N;k++){const b=o+1+k*41;if(b+41>p.length)return null;outs.push({c:cpHex(p.slice(b,b+33)),ct:p.slice(b+33,b+41)})}
-return{op,asset:"0x"+cpHex(p.slice(1,33)),ain:op===38||op===60?p[33]:0,outs}};
+const a=op===57?33:1;return{op,asset:"0x"+cpHex(p.slice(a,a+32)),ain:op===38||op===60?p[33]:0,outs}};
 const bAnchor=v=>cpCat(bRev(v.txid),bLE(v.vout,4));
 const bEcdhSeed=(d,pub)=>{const P=pub.length===33&&(pub[0]===2||pub[0]===3)?pfromx(big(pub.slice(1)),pub[0]===3):null;return P?sha2(b32(paff(pmul(P,BigInt(d)))[0])):null};
 const bKs=(k,dom,an,v)=>bHmac(k,cpCat(cpU8(dom),an,bLE(v,4)));
@@ -7818,7 +7818,7 @@ const bNoteLeaf=(a,c,spk)=>{const P=pfromx(BigInt("0x"+c.slice(2)),c.slice(0,2)=
 return keccak(cpCat(b32(a),b32(cx),b32(cy),b32(ak),cpU8("tacit-btc-note-v1")))};
 let cpBtcNotes=[],cpBtcSkip=[];
 const cpScanBtc=async()=>{const all=(await bGet("/address/"+cpBtc+"/utxo")).filter(x=>x&&/^[0-9a-f]{64}$/.test(x.txid||"")&&Number.isInteger(x.vout)),u=all.slice(0,200),out=[];cpBtcSkip=all.slice(200).map(x=>x.txid+":"+x.vout);
-for(let i=0;i<u.length;i+=6){const g=u.slice(i,i+6),ts=await Promise.all(g.map(x=>bGet("/tx/"+x.txid).catch(()=>null)));g.forEach((x,j)=>{const tx=ts[j];if(!tx){cpBtcSkip.push(x.txid+":"+x.vout);return}const h=bOpenOut(cpSeed,tx,x.vout);if(h)out.push({t:x.txid,o:x.vout,...h,l:bNoteLeaf(h.a,h.c,((tx.vout||[])[x.vout]||{}).scriptpubkey)})})}
+for(let i=0;i<u.length;i+=6){const g=u.slice(i,i+6),ts=await Promise.all(g.map(x=>bGet("/tx/"+x.txid).catch(()=>null)));g.forEach((x,j)=>{const tx=ts[j];if(!tx){cpBtcSkip.push(x.txid+":"+x.vout);return}const h=bOpenOut(cpSeed,tx,x.vout);if(h)out.push({t:x.txid,o:x.vout,...h,l:bNoteLeaf(h.a,h.c,((tx.vout||[])[x.vout]||{}).scriptpubkey)});else if(bEnvOf((((tx.vin||[])[0]||{}).witness||[])[1]||""))cpBtcSkip.push(x.txid+":"+x.vout)})}
 for(let i=0;i<out.length;i+=64)try{const w=(await relayFetch("/reflection/note-witness",{leaves:out.slice(i,i+64).map(n=>n.l)})).witnesses;if(w&&typeof w==="object")for(const n of out.slice(i,i+64))n.w=w[n.l]?1:0}catch{}
 cpBtcNotes=out;try{LS["zswap:cpb:"+cpFp]=JSON.stringify(out)}catch{}return out.length};
 const cpBtcRows=()=>cpBtcNotes.filter(n=>/^[0-9a-f]{64}$/.test(n.t)&&/^\d+$/.test(n.v)).map(n=>{const A=cpAs(n.a);
