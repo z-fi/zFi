@@ -487,6 +487,8 @@ test('markets mode', async (t) => {
     p.type('mkDesc', q);
     p.click('mkGo');
     await p_wait(chain, 'create sent');
+    assert.equal(word(chain.sentTo(PM)[0].data, 5), 100n, 'a new market lets holders sell back at 1% by default');
+    assert.equal(word(chain.sentTo(PM)[0].data, 6), 0n, 'no late tax by default');
     await p.waitFor(() => p.$('mkT').textContent === q, { label: 'created market selected' });
   });
 

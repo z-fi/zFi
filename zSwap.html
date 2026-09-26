@@ -239,7 +239,7 @@ margin-top:.55em;padding-top:.55em;border-top:1px solid var(--e);color:var(--f)}
 .mkbar i{display:block;height:100%;background:var(--f)}
 .mkr{cursor:pointer}
 .mkr.on{border-color:var(--f);position:relative}
-#mkList{max-height:22em;overflow:auto;margin:.2em 0 .5em}
+#mkList{max-height:22em;overflow:auto;margin:.2em 0 .5em;padding-top:1px}
 .mkd{display:block;font-size:.72em;line-height:1.55;color:var(--m);margin:.3em 0}.mkhd{display:flex;flex-wrap:wrap;justify-content:space-between;gap:.15em .8em;font-size:1.15em;color:var(--f);margin-bottom:.45em}.mkhd>b{font-weight:600}.mkfp{display:block}.mkyou{display:block;margin-top:.4em;color:var(--f)}#mkQ{color:var(--f)}#mkDet{border-top:1px solid var(--e);margin-top:.2em;padding-top:.15em}#mkActs>.lqbtn,.pfb .lqbtn{flex:1 1 8em;white-space:normal;line-height:1.25}.mkr .lqmeta>span:first-child{color:var(--f)}.mkr .lqmeta>span+span:not(.lqtag)::before{content:"\00b7";margin-right:.32em;color:var(--dm)}.mkr .lqtag{margin-left:auto}
 .mkd:empty{display:none}
 #mkT{text-transform:none;letter-spacing:0;font-size:.82em;color:var(--f)}
@@ -472,8 +472,8 @@ background:var(--e);margin:.5em auto .1em}
 <details id="mkAdv"><summary>Advanced<em id="mkAdvS"></em></summary>
 <small class="mkd mkadn">Both taxes stay in the pot, so they pay the other bettors rather than anyone else. Exit tax 0 makes bets final; above 0 it is the least a seller gives up. Late tax makes later bets mint fewer shares, from nothing now to this rate at close.</small>
 <label class="dly" title="Lets the resolver end trading early, once the answer is known.">Early close<input id="mkCan" type="checkbox" checked></label>
-<label class="dly" title="Holders may sell back before close at par less this tax, which stays in the pot. 0 makes bets final.">Exit tax %<input id="mkExit" type="number" min="0" max="50" step="0.5" value="0"></label>
-<label class="dly" title="Later bets mint fewer shares, ramping from 0 now to this tax at close. It stays in the pot for earlier bettors.">Late tax %<input id="mkLate" type="number" min="0" max="50" step="0.5" value="0"></label>
+<label class="dly">Exit tax %<input id="mkExit" type="number" min="0" max="50" step="0.5" value="1"></label>
+<label class="dly">Late tax %<input id="mkLate" type="number" min="0" max="50" step="0.5" value="0"></label>
 </details>
 </div>
 <small id="mkNote" role="status" aria-live="polite"></small>
@@ -8477,7 +8477,7 @@ const mkWhen=m=>m.s?["","YES won","NO won","void"][m.s]:nowS()<m.c?mkLeft(m.c)+"
 const mkNow=m=>{const sp=m.c-m.o;return sp>0?Math.floor(m.l*Math.min(Math.max(nowS()-m.o,0),sp)/sp):m.l};
 const mkTax=m=>Math.max(m.x,mkNow(m));
 const mkPc=b=>String(+(b/100).toFixed(2));
-const mkPct=m=>{const t=m.y+m.n;return t?Number(m.y*1000n/t)/10:50};
+const mkPct=m=>{const t=m.y+m.n;return t?Number((m.y*2000n+t)/t/2n)/10:50};
 const mkUsd=m=>{const t=mkTok(m.a),v=Number(formatUnits(m.p,t.dec));return/ETH/i.test(t.sym)?v*(ethUsd||2e3):/USD|BOLD|DAI/i.test(t.sym)?v:v*1e-6};
 const mkPosLoad=async all=>{const P={};if(account&&all.length){const ps=[];
 for(let i=0;i<all.length;i+=100)ps.push(all.slice(i,i+100).map(m=>m.id));
@@ -8516,8 +8516,8 @@ cpSet(mkList,r.length?r.slice(0,100).map(mkRow).join(""):`<div class="lqempty">$
 mkSub.textContent=mkAll.length?(mkMore?`newest ${mkAll.length} of ${mkCount}`:mkAll.length+(mkAll.length>1?" markets":" market"))+(mkCl?` · ${mkCl} to claim`:""):""};
 const mkDetPaint=()=>{if(!mkMode)return;const m=mkSel;mkDet.classList.toggle("hide",!m);if(!m)return;
 const t=mkTok(m.a),me=mkPos[m.id]||{y:0n,n:0n,c:0n},live=mkLive(m),isR=!!account&&m.r===account.toLowerCase(),net=m.p-m.p*BigInt(m.f)/10000n,X=s=>s?"×"+(Number(net*1000n/s)/1000).toFixed(2):"—",S=safeSym(t.sym),lapsed=nowS()>=m.c+2592000;
-mkT.textContent=m.d.replace(/\p{C}/gu,"");
-mkInfo.innerHTML=`<span class="mkhd">${m.s?`<b>${m.s===3?"each share returns":"each winning share pays"} ${m.w?"×"+(Number(m.p*1000n/m.w)/1000).toFixed(2):"—"}</b>`:`<b>YES pays ${X(m.y)}</b><b>NO pays ${X(m.n)}</b>`}</span><span class="mkfp">Pot ${sigAmt(m.p,t.dec,6)} ${S} · ${m.s?mkWhen(m):live?"closes "+new Date(m.c*1e3).toLocaleString():"closed — awaiting the resolver"} · resolver <span id="mkRv">${m.r.slice(0,6)}…${m.r.slice(-4)}</span>${m.f?` · resolver fee ${mkPc(m.f)}% of the pot`:""}${m.x?` · exit tax ${mkPc(live?mkTax(m):m.x)}%`:" · bets final"}${m.l?` · late tax ${live?mkPc(mkNow(m))+"% now, "+mkPc(m.l)+"% at close":mkPc(m.l)+"% at close"}`:""}</span>${me.y||me.n?`<span class="mkyou">You hold ${sigAmt(me.y,t.dec,6)} YES · ${sigAmt(me.n,t.dec,6)} NO</span>`:""}`;
+mkT.textContent=m.d.replace(/\p{C}/gu,"");mkT.classList.toggle("hide",m.d.length<141&&!!mkList.querySelector(".on"));
+mkInfo.innerHTML=`<span class="mkhd">${m.s?`<b>${m.s===3?"each share returns":"each winning share pays"} ${m.w?"×"+(Number(m.p*1000n/m.w)/1000).toFixed(2):"—"}</b>`:`<b>YES pays ${X(m.y)}</b><b>NO pays ${X(m.n)}</b>`}</span><span class="mkfp">Pot ${sigAmt(m.p,t.dec,6)} ${S} · ${m.s?mkWhen(m):live?"closes "+new Date(m.c*1e3).toLocaleString([],{dateStyle:"medium",timeStyle:"short"}):"closed — awaiting the resolver"} · resolver <span id="mkRv">${short(m.r)}</span>${m.f?` · resolver fee ${mkPc(m.f)}% of the pot`:""}${m.x?` · exit tax ${mkPc(live?mkTax(m):m.x)}%`:live?" · bets final":""}${m.l?` · late tax ${live?mkPc(mkNow(m))+"% now, "+mkPc(m.l)+"% at close":mkPc(m.l)+"% at close"}`:""}</span>${me.y||me.n?`<span class="mkyou">You hold ${[[me.y,m.y,"YES"],[me.n,m.n,"NO"]].filter(v=>v[0]).map(([q,T,l])=>sigAmt(q,t.dec,6)+" "+l+(m.s?"":` → ${sigAmt(q*net/T,t.dec,6)} ${S}`)).join(" · ")}${live&&!m.x?" · locked until it settles":""}</span>`:""}`;
 nameRev(m.r).then(n=>{if(n&&mkSel===m)mkRv.textContent=safeSym(n,48)}).catch(()=>{});
 mkAmtL.classList.toggle("hide",!live);
 if(mkPay._k!==String(m.id)){++mkQSeq;mkPay._k=String(m.id);mkPay.innerHTML=(m.a===ZERO?[ZERO]:m.a===MK_WST?[ZERO,MK_WST]:[m.a]).map(a=>`<option value="${a}">${safeSym(mkTok(a).sym)}</option>`).join("");mkAmt.value="";mkQ.textContent="";mkQv=null;mkPayB.disabled=mkPay.options.length<2;mkIco(mkPayB,mkTok(mkPay.value))}
@@ -8536,7 +8536,7 @@ const t=mkTok(m.a),pay=mkPay.value;if(t.u||mkTok(pay).u)return mkQ.textContent="
 if(!v)return mkQ.textContent="";
 try{const a=pay===m.a?v:BigInt(await rpc(C,[{to:MK_WST,data:"0xb0e38900"+encUint(v)},L])),[hy,hn]=await mc3Deep([true,false].map(y=>({to:PM,data:"0x124d6efc"+encUint(m.id)+encBool(y)+encUint(a)})));if(my!==mkQSeq)return;
 const d=h=>{h=strip0x(h||"");return[BigInt("0x"+(h.slice(0,64)||"0")),BigInt("0x"+(h.slice(64,128)||"0"))]},[sy,py]=d(hy),[sn,pn]=d(hn),S=safeSym(t.sym);
-mkQv={v,sy,sn};mkQ.textContent=`Wins ${sigAmt(py,t.dec,6)} ${S} if YES · ${sigAmt(pn,t.dec,6)} ${S} if NO`}catch{if(my===mkQSeq)mkQ.textContent="Could not quote."}};
+mkQv={v,sy,sn};mkQ.textContent=`Wins ${sigAmt(py,t.dec,6)} ${S} betting YES · ${sigAmt(pn,t.dec,6)} ${S} betting NO`}catch{if(my===mkQSeq)mkQ.textContent="Could not quote."}};
 const mkSend=async(req,verb)=>{stat.textContent=verb;await rpc(C,[req,L]);await settle(await sendTx([req]));mkCount=-1;mkLoad(1)};
 const mkBuy=async yes=>{const m=mkSel,pay=mkPay.value;await mkQuote();const q=mkQv;if(!q)throw Error(mkQ.textContent||"Enter an amount.");
 const v=q.v,min=(yes?q.sy:q.sn)*BigInt(1e4-Math.round(slipPct()*100))/10000n,H=encUint(m.id)+encBool(yes),V="Betting…",T=d=>({from:account,to:PM,data:d,value:"0x0"});
@@ -8584,7 +8584,7 @@ mkAssetB.onclick=()=>mkPickA(mkAsset,MK_AS.map(t=>t.addr),"Pot in");
 mkPayB.onclick=()=>{if(!mkPayB.disabled)mkPickA(mkPay,[...mkPay.options].map(o=>o.value),"Pay with")};
 mkChips.onclick=e=>{const b=e.target.closest("button[data-f]");if(!b)return;sBlip();mkF=b.dataset.f;mkChipPaint();mkPaintList()};
 mkSort.onchange=()=>{sBlip();mkS=mkSort.value;mkPaintList()};
-const mkAdvSync=()=>{mkAdvS.textContent=[mkCan.checked&&"early close",+mkExit.value&&"exit "+ +mkExit.value+"%",+mkLate.value&&"late "+ +mkLate.value+"%"].filter(Boolean).join(" · ")||"final bets, no early close"};
+const mkAdvSync=()=>{mkAdvS.textContent=[mkCan.checked&&"early close",+mkExit.value?"exit "+ +mkExit.value+"%":"bets final",+mkLate.value&&"late "+ +mkLate.value+"%"].filter(Boolean).join(" · ")};
 mkCan.onchange=mkExit.oninput=mkLate.oninput=mkAdvSync;mkAdvSync();
 mkFind.oninput=()=>mkPaintList();
 mkList.onclick=e=>{const r=e.target.closest(".mkr");if(!r)return;sBlip();const m=mkAll.find(x=>String(x.id)===r.dataset.k);mkSel=m&&!(mkSel&&mkSel.id===m.id)?m:null;mkForm.classList.add("hide");mkGo.textContent="New market";mkPaintList();mkDetPaint();if(mkSel)mkDet.scrollIntoView?.({block:"nearest",behavior:"smooth"})};
@@ -8600,10 +8600,10 @@ const mkFeeSet=async f=>{if(mkBusy)return;sBlip();const v=String(await ask("Your
 if(!/^\d{0,2}(\.\d{0,2})?$/.test(v)||!(+v<=10))return void(stat.textContent="A resolver fee is 0 to 10%, in steps of 0.01.");
 mkBusy=1;try{await mkSend({from:account,to:PM,data:"0xfb105091"+encUint(BigInt(Math.round(+v*100))),value:"0x0"},"Setting your fee…");mkRes.oninput()}catch(x){err(x)}finally{mkBusy=0}};
 mkRes.oninput=()=>{clearTimeout(mkRes._t);const v=mkRes.value.trim(),my=++mkRvSeq;
-if(!v){const p0=account?`Defaults to you — ${account.slice(0,6)}…${account.slice(-4)}`:"Defaults to you";mkResEl.textContent=p0;
+if(!v){const p0="Defaults to you"+(account?" — "+short(account):"");mkResEl.textContent=p0;
 if(account){mkResFee(account,my,p0);nameRev(account).then(n=>{if(n&&my===mkRvSeq)mkResFee(account,my,"Defaults to you — "+safeSym(n,48))}).catch(()=>{})}return}
 const e=rcErr(v);if(e)return mkResEl.textContent=e;mkResEl.textContent="resolving…";
-mkRes._t=setTimeout(()=>rcvOf(v).then(a=>{if(my!==mkRvSeq)return;if(!a)return void(mkResEl.textContent="Name not registered");const pre=`→ ${a.slice(0,6)}…${a.slice(-4)}`;mkResEl.textContent=pre;mkResFee(a,my,pre)},x=>{if(my===mkRvSeq)mkResEl.textContent=x.message}),250)};
+mkRes._t=setTimeout(()=>rcvOf(v).then(a=>{if(my!==mkRvSeq)return;if(!a)return void(mkResEl.textContent="Name not registered");const pre="→ "+short(a);mkResEl.textContent=pre;mkResFee(a,my,pre)},x=>{if(my===mkRvSeq)mkResEl.textContent=x.message}),250)};
 mkActs.onclick=async e=>{const b=e.target.closest("button[data-a]");if(!b||!mkSel||mkBusy)return;if(!account)return void connect();
 const a=b.dataset.a,m=mkSel,me=mkPos[m.id]||{},I=encUint(m.id),T=d=>({from:account,to:PM,data:d,value:"0x0"});
 if(/^(r[yn]|void|close)$/.test(a)&&!b.dataset.c){sBlip();b.dataset.c=1;b.textContent="Confirm: "+b.textContent;return}
