@@ -7703,9 +7703,10 @@ rxB=k=>{let r=[0n,1n],a=[5299619240641551281634865583518297030282874472190772894
 rxS=(t,...m)=>{const x=cpCat(cpU8("tacit-btc-pool-zk-"+t),...m);return big(cpCat(sha2(cpCat(x,[0])),sha2(cpCat(x,[1]))))%rxL},rxK={},
 rxNpk=()=>rxK[cpSeed]||(rxK[cpSeed]=(()=>{const d=bHmac(b32(BigInt(cpSeed)),cpU8("tacit-btc-pool-seed-v1")),M=cpU8("mainnet"),a=rxS("wallet-spend-v1",M,d),n=rxS("wallet-nk-v1",M,d),s=cpCat([0],hexToBytes(keccak(cpCat(cpU8("tacit-evm-pool-receive-key-v1"),b32(n),b32(0n)))));
 return rxH([...rxB(a+rxS("auth-tweak-v1",s)),...rxB(n+rxS("nk-tweak-v1",s))])})()),rxOn={},
-rxProbe=async()=>{const c=CHAIN_ID;if(c in rxOn)return;rxOn[c]=0;await epP;rxOn[c]=TB_K[c].length&&strip0x(await nodeRead("eth_getCode",[TB_R,L]).catch(()=>"")||"")?1:0;if(c===CHAIN_ID)modeBtns()},
+rxPost=f=>{const c=CHAIN_ID;if(cpSeed&&(f||rxOn[c]))for(const k of TB_K[c])relayFetch("/evm-pool/keeper/receive",{chainId:c,npk:String(rxNpk()),feeBps:25},k).catch(()=>{})},
+rxProbe=async()=>{const c=CHAIN_ID;if(c in rxOn)return;rxOn[c]=0;await epP;rxOn[c]=TB_K[c].length&&strip0x(await nodeRead("eth_getCode",[TB_R,L]).catch(()=>"")||"")?1:0;if(c===CHAIN_ID){modeBtns();rxPost()}},
 rxShow=async()=>{try{if(!account)throw Error("Connect a wallet to see your private ETH address.");if(!cpSeed)await cpUnlock();const c=CHAIN_ID,n=CHAINS[c].name,a=retAddr(await nodeRead(C,[{to:TB_R,data:"0x7944b37a"+encUint(rxNpk())+encUint(25)},L]).catch(()=>""));
-if(!a)throw Error("The Tacit pool is not live on "+n+" yet.");for(const k of TB_K[c])relayFetch("/evm-pool/keeper/receive",{chainId:c,npk:String(rxNpk()),feeBps:25},k).catch(()=>{});const w=await tbW(a);
+if(!a)throw Error("The Tacit pool is not live on "+n+" yet.");rxPost(1);const w=await tbW(a);
 if(await dlg("Your private ETH address. Whatever is sent to it, on Ethereum, Base or Robinhood, is shielded into your Tacit balance on that chain, less at most 0.25% to whoever sweeps it in."+(w?" "+tbE(w)+" is waiting on "+n+".":"")+" Spend it on tacit.finance.\n\nOK fills in a send of ETH to it.",a,1)!==null)location.hash="chain="+c+"&token="+ZERO+"&to="+a}catch(E){stat.textContent=E.message}};
 rxProbe();
 const bGet=async p=>{let e;for(const u of B_API){try{const j=await relayFetch(p,null,u);if(j&&j.status!=="unknown")return j}catch(x){e=x}}throw e||Error("No Bitcoin node answered.")};
@@ -7864,7 +7865,7 @@ if(old&&old!==d){let keep=false;try{keep=await sure("The key saved in this brows
 if(!keep){await ask("The key being replaced. Copy it before you go on: it is the only way back to the notes it made, and this browser will not keep it.",old);s=d}}
 if(sealed&&!o)note="A key imported here earlier does not open with this wallet's signature, so this wallet's own key is in use. Import the other key again to use it.";
 else try{await cpKeep(d,s)}catch{if(s!==d&&!old)note="This browser cannot seal an imported key, so it is kept for this visit only."}
-cpDk=d;cpUse(s);cpVer=1;if(note)stat.textContent=note;
+cpDk=d;cpUse(s);cpVer=1;rxPost();if(note)stat.textContent=note;
 if(cw&&!t)await ask("Your Tacit key. This wallet may not reproduce it later, so keep it: anyone holding it can spend your shielded notes and the Bitcoin at "+cpBtc+".",cpSeed)};
 const cpRescue=i=>{const k=fmod(big(sha2(cpCat(cpU8("zswap-exit-rescue-v1"),b32(cpSeed),beN(i,8)))),FN)||1n,[x,y]=paff(pmul(GP,k));
 return{key:"0x"+k.toString(16).padStart(64,"0"),addr:"0x"+strip0x(keccak(cpCat(beN(x,32),beN(y,32)))).slice(24)}};

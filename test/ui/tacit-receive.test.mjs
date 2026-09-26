@@ -93,6 +93,20 @@ describe('the private ETH receive address', () => {
     p.close();
   });
 
+  test('unlocking the key registers the address with the keeper, so a payment is swept at once', async () => {
+    const p = await open(1);
+    await p.waitFor(() => p.window.eval('rxOn[1]') === 1, { label: 'the pool to read as live' });
+    p.click('pv');
+    await p.settle();
+    p.click('pvGo');
+    await p.waitFor(() => /Key unlocked/.test(p.text('pvKey')), { label: 'the key to unlock' });
+    await p.waitFor(() => p.window.__keeper.length > 0, { label: 'the keeper to hear of the address' });
+    const npk = p.window.eval('String(rxNpk())');
+    assert.deepEqual(p.window.__keeper.map(k => [k.url, k.body]), [[KEEPER + '/evm-pool/keeper/receive', { chainId: 1, npk, feeBps: 25 }]]);
+    assert.ok(!p.visible('wkWrap'), 'no sheet opens: this happens quietly');
+    p.close();
+  });
+
   test('the menu\'s Private stays on Base when the pool is live there, and goes to Ethereum when it is not', async () => {
     let p = await open(8453);
     await p.waitFor(() => shown(p), { label: 'the Private button on Base' });
