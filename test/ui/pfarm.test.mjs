@@ -108,6 +108,14 @@ describe('the TAC/ETH farm line', () => {
     p.close();
   });
 
+  test('an ended farm holding only earnings does not claim a stake is left', async () => {
+    const p = await open({ fin: Math.floor(Date.now() / 1e3) - 60, earned: 12n * ETH });
+    await p.waitFor(() => p.visible('pfEl'), { label: 'the ended line' });
+    assert.match(p.text('pfEl'), /ended · earned 12 TAC/);
+    assert.doesNotMatch(p.text('pfEl'), /stake/);
+    p.close();
+  });
+
   test('claim from the line calls the farm', async () => {
     const p = await open({ staked: ETH, earned: 3n * ETH });
     await p.waitFor(() => p.$('pfEl').querySelector('[data-pf="cl"]'), { label: 'the claim button' });

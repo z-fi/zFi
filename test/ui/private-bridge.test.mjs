@@ -2134,6 +2134,23 @@ describe('the points a wallet has been credited', () => {
     p.close();
   });
 
+  // The claim button can come from the fallback relay while the first is down. Pressing it
+  // refreshes the proof from the first relay, and that failing must not throw away the
+  // claim already read: the distributor's pre-flight is the check on a stale proof.
+  test('a claim read from the fallback relay can still be sent while the first is down', async () => {
+    const p = await open({ storage: roster });
+    serve(p, PTS, { address: A.ACCOUNT.toLowerCase(), points: 5, deposit_count: 1 });
+    claiming(p, PTS, { address: A.ACCOUNT.toLowerCase(), distributor: DIST,
+      cumulativeAmount: '926845047264463185251', claimedWei: '0',
+      unclaimedWei: '926845047264463185251', proof: PROOF });
+    await unlock(p);
+    await p.waitFor(() => !!p.$('pvKey').querySelector('button[data-a="ptsclaim"]'), { label: 'the claim button', ...SLOW });
+    p.click(p.$('pvKey').querySelector('button[data-a="ptsclaim"]'));
+    await p.waitFor(() => p.chain.sentTo(DIST).length === 1, { label: 'the claim to be sent', ...SLOW });
+    assert.doesNotMatch(p.text('stat'), /Nothing to claim/);
+    p.close();
+  });
+
   test('says nothing at all when neither host answers', async () => {
     const p = await open();                       // no lane for either host
     await unlock(p);

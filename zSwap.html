@@ -240,7 +240,7 @@ margin-top:.55em;padding-top:.55em;border-top:1px solid var(--e);color:var(--f)}
 .mkr{cursor:pointer}
 .mkr.on{border-color:var(--f);position:relative}
 #mkList{max-height:22em;overflow:auto;margin:.2em 0 .5em}
-.mkd{display:block;font-size:.72em;line-height:1.55;color:var(--m);margin:.3em 0}.mkhd{display:flex;flex-wrap:wrap;justify-content:space-between;gap:.15em .8em;font-size:1.15em;color:var(--f);margin-bottom:.45em}.mkhd>b{font-weight:600}.mkfp{display:block}.mkyou{display:block;margin-top:.4em;color:var(--f)}#mkQ{color:var(--f)}#mkDet{border-top:1px solid var(--e);margin-top:.2em;padding-top:.15em}#mkActs>.lqbtn{flex:1 1 8em;white-space:normal;line-height:1.25}.mkr .lqmeta>span:first-child{color:var(--f)}.mkr .lqmeta>span+span:not(.lqtag)::before{content:"\00b7";margin-right:.32em;color:var(--dm)}.mkr .lqtag{margin-left:auto}
+.mkd{display:block;font-size:.72em;line-height:1.55;color:var(--m);margin:.3em 0}.mkhd{display:flex;flex-wrap:wrap;justify-content:space-between;gap:.15em .8em;font-size:1.15em;color:var(--f);margin-bottom:.45em}.mkhd>b{font-weight:600}.mkfp{display:block}.mkyou{display:block;margin-top:.4em;color:var(--f)}#mkQ{color:var(--f)}#mkDet{border-top:1px solid var(--e);margin-top:.2em;padding-top:.15em}#mkActs>.lqbtn,.pfb .lqbtn{flex:1 1 8em;white-space:normal;line-height:1.25}.mkr .lqmeta>span:first-child{color:var(--f)}.mkr .lqmeta>span+span:not(.lqtag)::before{content:"\00b7";margin-right:.32em;color:var(--dm)}.mkr .lqtag{margin-left:auto}
 .mkd:empty{display:none}
 #mkT{text-transform:none;letter-spacing:0;font-size:.82em;color:var(--f)}
 #mkChips{align-items:center}
@@ -682,7 +682,7 @@ const V4LENS="0x00000000Dc6f467A7AA88e216a904Cf758453EbC";
 const SEL_V4QUOTE="d500463c",SEL_V4SWAP="48e6f730";
 const V4POOL_KEY="0x95a932c205571d4d1ca72715c642a2eca21dde79ffc28ff11509681f9383385f";
 const nowS=()=>Math.floor(Date.now()/1e3);
-const C="eth_call",S="eth_sendTransaction",L="latest",I="eth_chainId";
+const C="eth_call",S="eth_sendTransaction",L="latest",I="eth_chainId",QP='<option value="100">all</option><option value="75">75%</option><option value="50">50%</option><option value="25">25%</option>';
 let SOURCES=CHAINS[1].sources;
 const SRC_PRECISION=8;
 let SRC_CURVE=5;
@@ -3126,8 +3126,8 @@ const R_NS="This token does not move the exact amount sent: it takes a fee on tr
 const R_OG="That order is no longer available — refresh the book.",R_RQ=" — refresh the quote and try again.";
 const REVERTS={
 "e2c865df":"Betting on this market has closed.","969bf728":"There is nothing to claim on this market.","8fc6f59b":"That market already exists.","7db1be50":"That market does not exist.","19918280":"This market does not allow selling back before it resolves.",
-"646cf558":"That airdrop has already been claimed.","7ca55c77":"That airdrop proof does not match — reload the page and try again.",
-"f0f25a33":"The airdrop claim window has closed.","9e87fac8":"The airdrop is paused right now.","67a2cc26":"That address cannot receive the airdrop.",
+"646cf558":"That airdrop has already been claimed.","7ca55c77":"That claim's proof does not match — reload the page and try again.","797dba54":"There is nothing left to claim — it has all been paid out.","5088d84e":"The distributor cannot cover that claim yet — try again later.",
+"f0f25a33":"The airdrop claim window has closed.","9e87fac8":"Claims are paused right now.","67a2cc26":"That address cannot receive the airdrop.",
 "2746152a":R_SL,"2c19b8b8":R_SL,"bb2875c3":R_SL,"349465f1":R_SL,"d0b3be44":R_SL,
 "203d82d8":"Its time ran out: this transaction's deadline or the order's own expiry passed. Refresh and try again.","c6f221aa":"That took too long and its deadline passed. Try again.",
 "bb55fd27":"The pool does not hold enough for that amount — try less.","1f2a2005":"That amount rounds to zero — enter a larger one.",
@@ -5848,7 +5848,7 @@ o.cbps>0n?` — ${(Number(o.fee)*(10000-Number(o.cbps))/10000/10000).toFixed(2)}
 +`</div>`
 +(mine?`<div class="lqmine">yours ${trimAmt(o.mine0,t0.dec)} ${t0.sym} + ${trimAmt(o.mine1,t1.dec)} ${t1.sym}</div>`:"")
 +`<div class="lqacts">${o.liq>0n?`<button class="lqbtn" data-act="a" ${p}>Add</button>`:""}`
-+(mine?`<select class="pfsp lqwp" aria-label="How much to withdraw"><option value="100">all</option><option value="75">75%</option><option value="50">50%</option><option value="25">25%</option></select><button class="lqbtn" data-act="w" ${p}>Withdraw</button>`:"")
++(mine?`<select class="pfsp lqwp" aria-label="How much to withdraw">${QP}</select><button class="lqbtn" data-act="w" ${p}>Withdraw</button>`:"")
 +`</div>`
 +`<div class="lqadd hide">`
 +(o.liq>0n
@@ -6573,8 +6573,8 @@ AD_API=["https://cdn.jsdelivr.net/gh/z0r0z/tacit@1b2eedde8490801c9ef440602053005
 const adEl=document.getElementById("adEl");let adSeq=0,adC=null,adHas=false;
 const adShow=()=>adEl.classList.toggle("hide",!adHas||lnMode||lqMode||wnMode||pvMode||mkMode||tab!=="swap");
 const adHide=()=>{adC=null;adHas=false;adEl.textContent="";adShow()};
-const adLine=(pre,n,post)=>{adEl.textContent="";const k=known(TAC_TOK);
-if(k&&/^<(img|svg) /.test(k.icon))adEl.insertAdjacentHTML("beforeend",k.icon.replace('width="20" height="20"','width="13" height="13"').replace(/^<(img|svg) /,'<$1 class="adic" '));
+const tkIc=(el,a,n=13,c="adic")=>{const k=known(a);if(k&&/^<(img|svg) /.test(k.icon))el.insertAdjacentHTML("beforeend",k.icon.replace('width="20" height="20"',`width="${n}" height="${n}"`).replace(/^<(img|svg) /,`<$1 class="${c}" `))};
+const adLine=(pre,n,post)=>{adEl.textContent="";tkIc(adEl,TAC_TOK);
 const s=document.createElement("b");s.textContent=n;adEl.append(pre,s,post)};
 const adRoot=c=>{let h=keccak(hexToBytes(keccak(hexToBytes(encUint(BigInt(c.index))+encAddr(c.a)+encUint(BigInt(c.amount))))));
 for(const x of c.proof)h=BigInt(h)<BigInt(x)?keccak(hexToBytes(strip0x(h)+strip0x(x))):keccak(hexToBytes(strip0x(x)+strip0x(h)));return h.toLowerCase()};
@@ -6616,7 +6616,7 @@ pfVal=sh=>pfS.sup?Number(sh)/Number(pfS.sup)*(Number(pfS.r0)+Number(pfS.r1)*pfPx
 pfApr=()=>{const a=pfDay()*365*pfPx()/(pfVal(pfS.tot)+1)*100;return isFinite(a)&&a>0?"~"+Math.round(a).toLocaleString()+"% APR on 1 ETH":""},
 pfHead=()=>[Math.round(pfDay()).toLocaleString()+" TAC/day",pfApr(),"until "+new Date(pfS.fin*1e3).toLocaleDateString(undefined,{month:"short",day:"numeric"})].filter(Boolean),
 pfBtn=(k,t,c="fclink")=>{const x=document.createElement("button");x.type="button";x.className=c;x.dataset.pf=k;x.textContent=t;return x},
-pfIcon=(el,n=13,c="adic")=>{for(const a of[TAC_TOK,ZERO]){const k=known(a);if(k&&/^<(img|svg) /.test(k.icon))el.insertAdjacentHTML("beforeend",k.icon.replace('width="20" height="20"',`width="${n}" height="${n}"`).replace(/^<(img|svg) /,`<$1 class="${c}" `))}};
+pfIcon=(el,n,c)=>{for(const a of[TAC_TOK,ZERO])tkIc(el,a,n,c)};
 async function pfRun(){const my=++pfSeq,a=account;
 if(CHAIN_ID===1)try{const r=await mc3([{to:PFARM,data:"0x7b0a47ee"},{to:PFARM,data:"0xebe2b12b"},{to:PFARM,data:"0x817b1cd2"},{to:PFPOOL,data:"0x18160ddd"},
 {to:PFPOOL,data:"0x443cb4bc"},{to:PFPOOL,data:"0x5a76f25e"},{to:PFPOOL,data:"0x2af1f249"},
@@ -6625,11 +6625,11 @@ if(my!==pfSeq)return;const w=i=>{try{return BigInt(r[i])}catch{return 0n}};
 pfS=CHAIN_ID===1?{rate:w(0),fin:Number(w(1)),tot:w(2),sup:w(3),r0:w(4),r1:w(5),sp:w(6),st:a?w(7):0n,ea:a?w(8):0n,lp:a?w(9):0n}:null}catch{if(my===pfSeq)pfS=null}
 else pfS=null;
 pfDraw()}
-function pfDraw(){const S=pfS,g=S?[S.rate,S.fin,S.tot,S.sup,S.r0,S.r1,S.sp,S.st,S.ea,S.lp].join(","):"";
+function pfDraw(){const S=pfS,g=S?[S.rate,S.fin,S.tot,S.sup,S.r0,S.r1,S.sp,S.st,S.ea,S.lp,!known(TAC_TOK)].join(","):"";
 if(g!==pfSig||lqMode){pfSig=g;pfLine();pfPaint()}else pfShow();
 try{fmPf()}catch{}}
 function pfLine(){pfEl.textContent="";if(pfS&&(pfOn()||pfMine())){const on=pfOn(),b=document.createElement("b");pfIcon(pfEl);
-b.textContent=on?pfHead()[0]:"ended";pfEl.append("TAC/ETH farm · ",b,on?" · "+pfApr():" · your stake is still here");
+b.textContent=on?pfHead()[0]:"ended";pfEl.append("TAC/ETH farm · ",b,on?pfApr()&&" · "+pfApr():pfS.st>0n?" · your stake is still here":"");
 if(pfS.ea>0n){const e=document.createElement("b");e.textContent=trimAmt(pfS.ea,18)+" TAC";pfEl.append(" · earned ",e)}
 pfEl.append(pfBtn("go",on&&!pfMine()?"Farm":"Open"));if(pfS.ea>0n)pfEl.append(pfBtn("cl","Claim"));
 pfEl.title=on?pfHead().join(" · ")+". Stake liquidity in the TAC/ETH Precision pool to earn TAC by the second. The rate is shared by everyone staked, so it falls as more joins.":"This farm has stopped paying. Your stake and anything earned can be taken out at any time."}
@@ -6644,10 +6644,10 @@ el.textContent="";const h=document.createElement("div"),S=pfS;h.className="pfh";
 if(S.st>0n&&S.sup){const m=document.createElement("div");m.className="lqmine";m.textContent="staked "+trimAmt(S.st*S.r0/S.sup,18)+" ETH + "+trimAmt(S.st*S.r1/S.sup,18)+" TAC · earned "+trimAmt(S.ea,18)+" TAC";el.append(m)}
 const acts=document.createElement("div");acts.className="lqacts";
 if(on&&S.lp>0n){const sp=document.createElement("select");sp.className="pfsp";sp.setAttribute("aria-label","How much to stake");
-sp.innerHTML='<option value="100">all</option><option value="75">75%</option><option value="50">50%</option><option value="25">25%</option>';
+sp.innerHTML=QP;
 const st=pfBtn("st","","lqbtn"),upd=()=>st.textContent="Stake "+trimAmt(S.lp*BigInt(sp.value)/100n,18)+" LP";upd();sp.onchange=upd;acts.append(sp,st)}
 if(S.ea>0n)acts.append(pfBtn("cl","Claim","lqbtn"));
-if(S.st>0n){acts.insertAdjacentHTML("beforeend",'<select class="pfp" aria-label="How much"><option value="100">all</option><option value="75">75%</option><option value="50">50%</option><option value="25">25%</option></select><select class="pfo" aria-label="Withdraw as"><option value="both">as ETH + TAC</option><option value="eth">as ETH</option><option value="tac">as TAC</option><option value="lp">as LP</option></select>');const w=pfBtn("wd","Withdraw","lqbtn");w.title="Withdrawing all also claims your TAC; a part leaves it to claim.";acts.append(w)}
+if(S.st>0n){acts.insertAdjacentHTML("beforeend",'<select class="pfp" aria-label="How much">'+QP+'</select><select class="pfo" aria-label="Withdraw as"><option value="both">as ETH + TAC</option><option value="eth">as ETH</option><option value="tac">as TAC</option><option value="lp">as LP</option></select>');const w=pfBtn("wd","Withdraw","lqbtn");w.title="Withdrawing all also claims your TAC; a part leaves it to claim.";acts.append(w)}
 if(acts.childNodes.length)el.append(acts)}
 function fmPf(){pvFarm.querySelector(".fmpf")?.remove();if(!pfS||!pfOn()||pvFarm.classList.contains("hide"))return;
 const c=pfBtn("go","","fmc fmpf"),nm=document.createElement("span"),a=pfApr();pfIcon(c,16,"");nm.className="fmn";nm.textContent="TAC/ETH zSwap "+Math.round(pfDay()).toLocaleString()+" TAC/day";c.append(nm);
@@ -7551,7 +7551,7 @@ if(!j||String(j.address||"").toLowerCase()!==who||!isAddr(j.distributor||"")||!A
 if(String(j.distributor).toLowerCase()!==CP_DIST.toLowerCase())return void(cpClm=null,cpClmBad=1,pvMode&&cpPaint());
 if(!/^\d{1,40}$/.test(String(j.unclaimedWei||""))||!/^\d{1,40}$/.test(String(j.cumulativeAmount||"")))return void(cpClm=null);
 const c=BigInt(j.cumulativeAmount),ow=await cfgRead(C,[{to:CP_DIST,data:"0x787eef2e"+encAddr(who)+encUint(c)},L]).catch(()=>null),u=/^0x[0-9a-fA-F]{1,64}$/.test(ow||"")?BigInt(ow):0n;if(u<=0n||!j.proof.every(x=>/^0x[0-9a-fA-F]{64}$/.test(x)))return void(cpClm=null);
-if(String(account||"").toLowerCase()!==who)return;cpClm={d:CP_DIST,u,c,p:j.proof};cpClmBad=null;if(pvMode)cpPaint()}catch{cpClm=null}};
+if(String(account||"").toLowerCase()!==who)return;cpClm={d:CP_DIST,u,c,p:j.proof,b};cpClmBad=null;if(pvMode)cpPaint()}catch{}};
 const cpPtsRead=async()=>{if(cpPtsRead.f)return;cpPtsRead.f=1;try{await cpPtsRead0()}finally{cpPtsRead.f=0}},cpPtsRead0=async()=>{if(!account)return;const who=account.toLowerCase();
 if(cpPtsFor===who&&Date.now()-cpPtsAt<12e4)return;cpPtsAt=Date.now();
 for(const b of new Set([cpRelayBase(),...CP_RELAYS])){try{const j=await relayFetch("/points/"+who,null,b);
@@ -8667,7 +8667,7 @@ if(a==="recover")return pvRun(async()=>{const f=await cpRecover();stat.textConte
 if(a==="lockbtc")return pvRun(cpLockBtc,"Building the lock…");
 if(a==="addr")return pvRun(async()=>{await cpCopy("Your Tacit address. Anyone can send to it privately, from zSwap or tacit.finance; what arrives shows up here.",cpTacAddr(cpSeed))},"Check your wallet for the message to sign.");
 if(a==="ptshist"){sBlip();cpPtsH=!cpPtsH;cpPaint();return}
-if(a==="ptsclaim")return pvRun(async()=>{await cpClaimRead(cpRelayBase()).catch(()=>{});
+if(a==="ptsclaim")return pvRun(async()=>{await cpClaimRead(cpClm?.b||cpRelayBase()).catch(()=>{});
 if(!cpClm)throw Error("Nothing to claim right now.");
 const pr=cpClm.p,tail=encUint(pr.length)+pr.map(x=>pad32(x)).join("");
 const req={from:account,to:cpClm.d,value:"0x0",data:"0x"+SEL_PCLAIM+encUint(cpClm.c)+pad32("40")+tail};
