@@ -8680,9 +8680,9 @@ if(!n)return;
 if(!nameOk(n)||!pubOk(n))throw Error("zSwap publishes to .wei, .gwei and .eth names. A Basename takes a finance.tacit record set on Base.");
 const o=await nameFwd(n).catch(()=>"");
 if(!isAddr(o||"")||o.toLowerCase()!==account.toLowerCase())throw Error(n+" does not point at this wallet, so its records cannot be set from here.")}
-const addr=cpTacAddr(cpSeed);if(String(await nameText(n)||"").trim()===addr){pubName=n;cpPaint();return void(stat.textContent=n+" already points to your Tacit address.")}
-if(!await sure("Publish your Tacit address on "+n+"?\n\n"+addr+"\n\nAnyone can then pay you privately by typing "+n+". The record is public: it ties the name to this Tacit address and to the Bitcoin address it carries, though never to a balance."))return;
-const req=await setTextReq(n);await rpc(C,[req,L]);await settle(await sendTx([req]));pubName=n;cpPaint();stat.textContent=n+" now points to your Tacit address — anyone can send to it privately by name."},"Checking your name…");
+const addr=cpTacAddr(cpSeed),cur=String(await nameText(n)||"").trim();if(cur===addr){pubName=n;cpPaint();return void(stat.textContent=n+" already points to your Tacit address.")}
+if(!await sure("Publish your Tacit address on "+n+"?\n\n"+addr+"\n\nAnyone can then pay you privately by typing "+n+". The record is public: it ties the name to this Tacit address and to the Bitcoin address it carries, though never to a balance."+(cur?"\n\nThis replaces "+cur.slice(0,12)+"…, which "+n+" carries now.":"")))return;
+const req=await setTextReq(n);await rpc(C,[req,L]).catch(e=>{throw isRejection(e)?e:Error("Only "+n+"'s owner can set its records — publish from that wallet.")});await settle(await sendTx([req]));pubName=n;cpPaint();stat.textContent=n+" now points to your Tacit address — anyone can send to it privately by name."},"Checking your name…");
 if(a==="merge")return pvRun(()=>cpMergeGo(b.dataset.as),"Building the merge…");
 const sq=b.dataset.s!==undefined?cpSends.find(S=>S.id===b.dataset.s)||null:null;
 if(sq){if(a==="sgo")return pvRun(()=>cpSGo(sq),"Sending…");if(a==="srefund")return pvRun(()=>cpRefund(sq),"Taking it back…");

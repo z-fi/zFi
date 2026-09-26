@@ -147,6 +147,21 @@ describe('publishing to a name', () => {
     p.click(pubBtn(p));
     await p.waitFor(() => chain.sentTo(A.WNS).length > 0, { label: 'the setText', ...SLOW });
     assert.equal(chain.texts.get('alice.wei|finance.tacit'), p.window.eval('cpTacAddr(cpSeed)'));
+    assert.match(p.asked.confirm.at(-1), /This replaces tacit1/, 'the confirmation says a record is being replaced');
+    p.close();
+  });
+
+  // A name can resolve to this wallet while a different wallet owns it; the registry's
+  // refusal of the write should say that, not surface a bare revert.
+  test('a name this wallet does not own is refused in words when the pre-flight reverts', async () => {
+    const chain = owned(new MockChain(), 'alice.wei');
+    chain.revertOn(A.WNS, '3fb24782', 'execution reverted: custom error 0x82b42900');
+    const p = await open(chain);
+    p.queuePrompt('alice.wei');
+    p.queueConfirm(true);
+    p.click(pubBtn(p));
+    await p.waitFor(() => /Only alice\.wei's owner can set its records/.test(p.text('stat')), { label: 'the refusal', ...SLOW });
+    assert.equal(chain.sentTo(A.WNS).length, 0, 'nothing was sent');
     p.close();
   });
 });
