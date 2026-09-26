@@ -568,7 +568,7 @@ background:var(--e);margin:.5em auto .1em}
 </div>
 <footer id="foot"><span id="footV"></span><span id="footAddr"></span><span id="footBurn"></span><span>&middot; <a id="footDoc" href="#">how it works</a></span><span>&middot; <a id="footList" target="_blank" rel="noopener" title="Token order here comes from zList, ranked by on-chain conviction staking. Stake to move a token up the list — or to get one listed at all.">token list</a></span></footer>
 </div>
-<script>const IC0='<svg width="14" height="14" viewBox="0 0 24 24" class="ik" aria-hidden="true">',
+<script>const cE=t=>document.createElement(t),IC0='<svg width="14" height="14" viewBox="0 0 24 24" class="ik" aria-hidden="true">',
 ICMOON=IC0+'<path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z"/></svg>',
 ICSUN=IC0+'<circle cx="12" cy="12" r="4.2"/><path d="M12 2v2m0 16v2M4.2 4.2l1.5 1.5m12.6 12.6 1.5 1.5M2 12h2m16 0h2M4.2 19.8l1.5-1.5M18.3 5.7l1.5-1.5"/></svg>';
 const ic=()=>{const d=H.className=='d';th.innerHTML=d?ICSUN:ICMOON;tc.content=d?'#0a0a0a':'#fff'};ic();
@@ -994,7 +994,7 @@ const setListNote=t=>{
 const el=document.getElementById("listNote");
 if(!el)return;
 el.textContent=t||"";
-if(t&&/\u2026$/.test(t)){const s=document.createElement("span");s.className="spin";el.appendChild(s)}
+if(t&&/\u2026$/.test(t)){const s=cE("span");s.className="spin";el.appendChild(s)}
 el.classList.toggle("hide",!t)};
 const setListSource=w=>setListNote(w?"Built-in token list — "+w:"");
 let rankFellBack=false,listLive=false;
@@ -2163,7 +2163,7 @@ else pill.removeAttribute("title");
 };
 const tkAct=id=>{if(id)tkFind.setAttribute("aria-activedescendant",id);
 else tkFind.removeAttribute("aria-activedescendant")};
-const icT=new Map(),icFrag=h=>{let t=icT.get(h);if(!t){t=document.createElement("template");t.innerHTML=h;icT.set(h,t);capMap(icT,256)}return document.importNode(t.content,true)};
+const icT=new Map(),icFrag=h=>{let t=icT.get(h);if(!t){t=cE("template");t.innerHTML=h;icT.set(h,t);capMap(icT,256)}return document.importNode(t.content,true)};
 let tkBal={};
 const tkRe=()=>{if(tkSel){const y=tkList.scrollTop;tkRows();tkList.scrollTop=y}};
 const tkBals=()=>{if(!account||offChain())return;const k=CHAIN_ID+account,ts=TOKENS.filter(t=>t.std!="nft");
@@ -2190,27 +2190,27 @@ const sc=tkScore(q,opt.textContent.trim(),TOKENS[opt.value]);if(sc>=0)hits.push(
 hits.sort((x,y)=>gAt.get(x.g)-gAt.get(y.g)||x.sc-y.sc||x.i-y.i);
 for(const{opt,g}of hits){
 const t=TOKENS[opt.value];
-if(g&&g!==group){const h=document.createElement("div");h.className="tkg";h.textContent=g;frag.appendChild(h);group=g}
-const r=document.createElement("button");
+if(g&&g!==group){const h=cE("div");h.className="tkg";h.textContent=g;frag.appendChild(h);group=g}
+const r=cE("button");
 r.type="button";r.className="tkr";r.setAttribute("role","option");
 r.id="tkr"+n;
 r.dataset.value=opt.value;
 r.setAttribute("aria-selected",String(opt.value===tkSel.value));
 if(opt.disabled)r.setAttribute("aria-disabled","true");
-const ic=document.createElement("span");ic.className="tki";
+const ic=cE("span");ic.className="tki";
 if(t?.icon)ic.appendChild(icFrag(t.icon));
 r.appendChild(ic);
-const tx=document.createElement("span");tx.className="tkt";
-const top=document.createElement("span");top.className="tks";
-const b=document.createElement("b");b.textContent=opt.textContent.trim();top.appendChild(b);
+const tx=cE("span");tx.className="tkt";
+const top=cE("span");top.className="tks";
+const b=cE("b");b.textContent=opt.textContent.trim();top.appendChild(b);
 if(t?.name&&t.name.toLowerCase()!==b.textContent.toLowerCase()){
-const nm=document.createElement("span");nm.className="tkn";nm.textContent=t.name;top.appendChild(nm);
+const nm=cE("span");nm.className="tkn";nm.textContent=t.name;top.appendChild(nm);
 }
 tx.appendChild(top);
-if(t?.desc){const d=document.createElement("span");d.className="tkd";d.textContent=t.desc;tx.appendChild(d)}
-const tg=tacitTag(t);if(tg){const d=document.createElement("span");d.className="tkd";d.textContent=tg;tx.appendChild(d)}
+if(t?.desc){const d=cE("span");d.className="tkd";d.textContent=t.desc;tx.appendChild(d)}
+const tg=tacitTag(t);if(tg){const d=cE("span");d.className="tkd";d.textContent=tg;tx.appendChild(d)}
 r.appendChild(tx);
-const mk=x=>{const m=document.createElement("span");m.className="tkmark";m.textContent=x;r.appendChild(m)},v=t&&tkBal[t.addr];
+const mk=x=>{const m=cE("span");m.className="tkmark";m.textContent=x;r.appendChild(m)},v=t&&tkBal[t.addr];
 if(v)mk(sigAmt(v,t.dec,4));if(opt.value===tkSel.value)mk("✓");
 frag.appendChild(r);n++;
 }
@@ -2219,17 +2219,17 @@ const a=/^0x[0-9a-f]{40}$/.test(q)?q:"";
 if(a){
 const pr=probeToken(a),pt=pr.t;
 if(!pt&&!pr.e&&!pr.w){pr.w=1;pr.p.catch(()=>{}).finally(()=>{if(tkSel&&tkFind.value.trim().toLowerCase()===a)tkRows()})}
-const r=document.createElement("button");
+const r=cE("button");
 r.type="button";r.className="tkr";r.setAttribute("role","option");r.id="tkr0";
-const ic=document.createElement("span");ic.className="tki";
+const ic=cE("span");ic.className="tki";
 if(pt)ic.appendChild(icFrag(artIcon(pt.art,pt.sym)));
 r.appendChild(ic);
-const tx=document.createElement("span");tx.className="tkt";
-const top=document.createElement("span");top.className="tks";
-const b=document.createElement("b");b.textContent=pt?pt.sym:"Reading "+short(a)+"…";top.appendChild(b);
-if(pt?.name){const nm=document.createElement("span");nm.className="tkn";nm.textContent=pt.name;top.appendChild(nm)}
+const tx=cE("span");tx.className="tkt";
+const top=cE("span");top.className="tks";
+const b=cE("b");b.textContent=pt?pt.sym:"Reading "+short(a)+"…";top.appendChild(b);
+if(pt?.name){const nm=cE("span");nm.className="tkn";nm.textContent=pt.name;top.appendChild(nm)}
 tx.appendChild(top);
-const d=document.createElement("span");d.className="tkd";
+const d=cE("span");d.className="tkd";
 d.textContent=pr.e?(pr.e.message||"could not read that address")+" — tap to retry"
 :pt?`Import ${short(a)} — not on zList${pt.std==="nft"?" · NFT collection":""}`:"Not listed — reading it from chain";
 tx.appendChild(d);r.appendChild(tx);
@@ -2241,7 +2241,7 @@ try{const i=await addCustomToken(a);rebuild();tkChoose(String(i))}
 catch(e){delete r.dataset.busy;b.textContent="Use "+short(a);
 d.textContent=(e&&e.message)||"could not read that address"}};
 frag.appendChild(r);
-}else{const e=document.createElement("div");e.className="tkempty";e.textContent="No token matches that.";frag.appendChild(e)}
+}else{const e=cE("div");e.className="tkempty";e.textContent="No token matches that.";frag.appendChild(e)}
 }
 tkList.classList.toggle("fresh",listFresh);
 listFresh=false;
@@ -2860,20 +2860,20 @@ for(let r=0;r<m.size;r++)for(let c=0;c<m.size;c++)if(m.modules[r][c])d+="M"+c+" 
 return '<svg viewBox="-4 -4 '+(m.size+8)+" "+(m.size+8)+'" role="img" aria-label="WalletConnect pairing code" style="width:100%;height:auto;background:#fff;border-radius:.3em"><path fill="#000" d="'+d+'"/></svg>'};
 const wcShow=uri=>{
 wkList.textContent="";
-const box=document.createElement("div");
+const box=cE("div");
 box.className="wcq";
 box.innerHTML=qrSvg(QR8.build(uri));
-const cp=document.createElement("button");
+const cp=cE("button");
 cp.type="button";cp.className="fclink";cp.textContent="copy link";
 cp.onclick=()=>{navigator.clipboard?navigator.clipboard.writeText(uri).then(()=>{cp.textContent="copied"}).catch(()=>{cp.textContent="copy blocked"}):cp.textContent="copy blocked"};
-const note=document.createElement("div");
+const note=cE("div");
 note.className="wcn";
 note.textContent="Scan with a mobile wallet, or ";
 note.appendChild(cp);
-const nd=document.createElement("div");
+const nd=cE("div");
 nd.className="wcn wcnode";
 nd.appendChild(document.createTextNode("Reads via "+wcHost()+" "));
-const ch=document.createElement("button");
+const ch=cE("button");
 ch.type="button";ch.className="fclink";ch.textContent="change";
 ch.onclick=async()=>{if(await askReadNode())nd.firstChild.nodeValue="Reads via "+wcHost()+" "};
 nd.appendChild(ch);
@@ -2960,10 +2960,10 @@ return}
 await new Promise(r=>setTimeout(r,50));
 }};
 const dlg=(m,d,inp)=>new Promise(res=>{wkList.textContent="";wkHdr.textContent="zSwap";
-const t=document.createElement("p");t.className="wcn dlgm";t.textContent=m;wkList.append(t);
-let ta=null;if(inp){ta=document.createElement("textarea");ta.className="dlgt";ta.rows=3;ta.value=d??"";ta.setAttribute("aria-label",m.split("\n")[0].slice(0,80));wkList.append(ta)}
-const row=document.createElement("div");row.className="dlgr";const back=document.activeElement;
-const mk=(x,f)=>{const b=document.createElement("button");b.type="button";b.className="fclink";b.textContent=x;b.onclick=f;row.append(b);return b};
+const t=cE("p");t.className="wcn dlgm";t.textContent=m;wkList.append(t);
+let ta=null;if(inp){ta=cE("textarea");ta.className="dlgt";ta.rows=3;ta.value=d??"";ta.setAttribute("aria-label",m.split("\n")[0].slice(0,80));wkList.append(ta)}
+const row=cE("div");row.className="dlgr";const back=document.activeElement;
+const mk=(x,f)=>{const b=cE("button");b.type="button";b.className="fclink";b.textContent=x;b.onclick=f;row.append(b);return b};
 const no=inp?null:false,end=v=>{wkWrap.classList.add("hide");removeEventListener("keydown",esc);removeEventListener("keydown",wkTrap,true);wkWrap.onclick=null;try{back&&back.focus()}catch{}res(v)};
 const esc=e=>{if(e.key==="Escape")end(no)};
 if(ta&&d){const c=mk("Copy",()=>{navigator.clipboard?.writeText(ta.value).then(()=>{c.textContent="Copied"},()=>{})})}
@@ -2991,16 +2991,16 @@ if(back&&back.focus)try{back.focus()}catch{}
 res(v)};
 const esc=e=>{if(e.key==="Escape")end(null)};
 cs.forEach(c=>{
-const b=document.createElement("button");
+const b=cE("button");
 b.type="button";b.className="tkr";
-if(c.icon){const im=document.createElement("img");im.src=c.icon;im.alt="";b.appendChild(im)}
-else if(c.svg){const sp=document.createElement("span");sp.className="wki";sp.innerHTML=c.svg;b.appendChild(sp)}
+if(c.icon){const im=cE("img");im.src=c.icon;im.alt="";b.appendChild(im)}
+else if(c.svg){const sp=cE("span");sp.className="wki";sp.innerHTML=c.svg;b.appendChild(sp)}
 b.appendChild(document.createTextNode(c.name));
-if(c.sub){const s=document.createElement("span");s.className="wks";s.textContent=c.sub;b.appendChild(s)}
+if(c.sub){const s=cE("span");s.className="wks";s.textContent=c.sub;b.appendChild(s)}
 if(c.on){b.classList.add("cur");b.setAttribute("aria-current","true")}
 b.onclick=()=>end(c);
 wkList.appendChild(b)});
-const cx=document.createElement("button");cx.type="button";cx.className="wnbtn";cx.textContent="Cancel";cx.onclick=()=>end(null);wkList.appendChild(cx);
+const cx=cE("button");cx.type="button";cx.className="wnbtn";cx.textContent="Cancel";cx.onclick=()=>end(null);wkList.appendChild(cx);
 wkWrap.onclick=e=>{if(e.target===wkWrap)end(null)};
 addEventListener("keydown",esc);
 addEventListener("keydown",wkTrap,true);
@@ -3232,6 +3232,7 @@ catch(e){if(my!==seq)return;fail(e&&e.offchain?e.message:"Name not registered");
 if(my!==seq)return;
 if(!rcv){fail("Name not registered");return}
 }
+const tb=tbChk(rcv,!isIn&&t.addr===ZERO?swapAmt:-1n);if(tb){fail(tb);return}
 rcvEl.textContent=rcv;
 }else rcvEl.textContent="";
 rc.classList.remove("bad");
@@ -3643,7 +3644,7 @@ const top=rank[0].f;
 const worse=isIn?"-":"+";
 const used=r.best.source===SRC_SOLVER?r.best.lane:"On-chain";
 for(const x of rank){
-const row=document.createElement("i");
+const row=cE("i");
 if(x.n===used)row.className="w";
 const pinNow=lanePin();
 if(x.n===pinNow)row.className+=" pin";
@@ -3654,9 +3655,9 @@ row.onclick=pick;
 row.setAttribute("role","button");
 row.tabIndex=0;
 row.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();pick()}};
-const n=document.createElement("span");
+const n=cE("span");
 n.textContent=safeSym(x.n).slice(0,16);
-const v=document.createElement("u");
+const v=cE("u");
 const gap=top>0n?Number((x.f>top?x.f-top:top-x.f)*10000n/top)/100:0;
 v.textContent=`${isIn?"min":"max"} ${sigAmt(x.f,isIn?t.dec:f.dec)}${gap>0.004?` · ${worse}${gap.toFixed(2)}%`:""}`;
 row.append(n,v);
@@ -3717,7 +3718,7 @@ rate.textContent+=` · Impact ${pctTxt}%`;
 if(imp>=IMPACT_WARN)stat.textContent=`High price impact: ${pctTxt}% — about ${trimAmt(lossTok,isIn?t.dec:f.dec)} ${isIn?t.sym:f.sym} worse than the market rate.`;
 }else if(imp===null)rate.textContent+=" · Impact unknown";
 if(rankBox.firstChild){
-const car=document.createElement("span");
+const car=cE("span");
 car.className="rk";
 car.textContent="▾";
 car.title="Compare venues";
@@ -3732,7 +3733,7 @@ car.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();carToggle(
 rate.appendChild(document.createTextNode(" "));
 rate.appendChild(car);
 }
-if(flR){const b=document.createElement("button");b.type="button";b.className="fclink";b.textContent="Redeem";b.onclick=()=>flRedeem(f,swapAmt,flR);rate.append(" ",b)}
+if(flR){const b=cE("button");b.type="button";b.className="fclink";b.textContent="Redeem";b.onclick=()=>flRedeem(f,swapAmt,flR);rate.append(" ",b)}
 const inApprove=isIn?swapAmt:r.amountLimit;
 const shownPay=amt.value,shownGet=outAmt.value;
 if(acct)last={callData:r.callData,fundedCallData:r.fundedCallData,msgValue:r.msgValue,
@@ -3869,7 +3870,7 @@ const outMin=deepMin(bk,slipBps);
 return cand(swapAmt,bk.out,outMin,
 [leg.callData,encDeepLeg(bk,to,midIn,outMin,deadline),...sw],leg.msgValue);
 };
-const showAddr=async()=>{const a=account;
+const showAddr=async()=>{const a=account;tbScan();
 addr.textContent=short(a);addr.title=a+" — click to disconnect";addr.classList.add("on");
 addr.setAttribute("role","button");addr.tabIndex=0;
 const n=await nameRev(a).catch(()=>"");if(n&&a===account)addr.textContent=n};
@@ -5162,7 +5163,7 @@ const brOpts=()=>{if(!BRCHAINS.includes(CHAIN_ID)||!brLanes())return;
 const want=BRCHAINS.filter(c=>c!==CHAIN_ID).join(",");
 if(sdChain.dataset.for===want)return;
 sdChain.textContent="";
-const mk=(v,t)=>{const o=document.createElement("option");o.value=String(v);o.textContent=t;return o};
+const mk=(v,t)=>{const o=cE("option");o.value=String(v);o.textContent=t;return o};
 sdChain.append(mk(0,"This chain"));
 for(const c of BRCHAINS)if(c!==CHAIN_ID)sdChain.append(mk(c,CHAINS[c].name));
 sdChain.dataset.for=want;
@@ -5600,6 +5601,7 @@ if(my!==sSeq)return;
 if(!to){rc.classList.add("bad");rcvEl.textContent="";
 stat.textContent=toErr||"Name not registered";render();return}
 if(to.toLowerCase()===f.addr.toLowerCase()){rc.classList.add("bad");stat.textContent="That is "+f.sym+"'s own contract — tokens sent there are lost.";render();return}
+const tb=tbChk(to,f.addr===ZERO&&!+dly.value&&!brDest()?amount:-1n);if(tb){rc.classList.add("bad");stat.textContent=tb;render();return}
 rc.classList.remove("bad");
 rcvEl.textContent=to;
 stat.textContent=amtErr;
@@ -5640,7 +5642,7 @@ if(pvMode&&CHAIN_ID!==1)pvSet(false);
 if(mkMode&&CHAIN_ID!==1)mkSet(false);
 const co=lnKind.querySelector('option[value="cause"]');co.hidden=co.disabled=CHAIN_ID!==1;
 if(co.disabled&&lnKind.value==="cause"){lnKind.value="coin";if(lnMode)cauKind()}
-try{if(CHAIN_ID===1&&cpInvGet())cpInvGo()}catch{}
+try{if(CHAIN_ID===1&&cpInvGet())cpInvGo();tbScan()}catch{}
 }
 const setTab=t=>{
 if(tab==="send")sendD=dly.value;else if(tab==="book")bookD=dly.value;
@@ -6567,7 +6569,7 @@ const adShow=()=>adEl.classList.toggle("hide",!adHas||lnMode||lqMode||wnMode||pv
 const adHide=()=>{adC=null;adHas=false;adEl.textContent="";adShow()};
 const tkIc=(el,a,n=13,c="adic")=>{const k=known(a);if(k&&/^<(img|svg) /.test(k.icon))el.insertAdjacentHTML("beforeend",k.icon.replace('width="20" height="20"',`width="${n}" height="${n}"`).replace(/^<(img|svg) /,`<$1 class="${c}" `))};
 const adLine=(pre,n,post)=>{adEl.textContent="";tkIc(adEl,TAC_TOK);
-const s=document.createElement("b");s.textContent=n;adEl.append(pre,s,post)};
+const s=cE("b");s.textContent=n;adEl.append(pre,s,post)};
 const adRoot=c=>{let h=keccak(hexToBytes(keccak(hexToBytes(encUint(BigInt(c.index))+encAddr(c.a)+encUint(BigInt(c.amount))))));
 for(const x of c.proof)h=BigInt(h)<BigInt(x)?keccak(hexToBytes(strip0x(h)+strip0x(x))):keccak(hexToBytes(strip0x(x)+strip0x(h)));return h.toLowerCase()};
 async function adSync(){const my=++adSeq;
@@ -6586,7 +6588,7 @@ if(BigInt(bal||"0x0")<amt)return adHide();
 adC={index:BigInt(c.index),amt,proof:c.proof};
 adLine("",n," airdrop · until "+D.toLocaleDateString(undefined,D.getFullYear()===new Date().getFullYear()?{month:"short",day:"numeric"}:{year:"numeric",month:"short",day:"numeric"})+" ");
 adEl.title=trimAmt(amt,18)+" TAC set aside for this address in Tacit's airdrop. Claim sends it to this wallet; Claim to… sends it to another address or name. Open until "+D.toLocaleString()+".";
-for(const [k,t] of [["me","Claim"],["to","Claim to…"]]){const x=document.createElement("button");x.type="button";x.className="fclink";x.dataset.ad=k;x.textContent=t;adEl.append(x)}
+for(const [k,t] of [["me","Claim"],["to","Claim to…"]]){const x=cE("button");x.type="button";x.className="fclink";x.dataset.ad=k;x.textContent=t;adEl.append(x)}
 }catch{if(my===adSeq)adHide()}}
 adEl.onclick=async e=>{const b=e.target.closest("button[data-ad]");if(!b||!adC||busy)return;const c=adC;let to=account;
 if(b.dataset.ad==="to"){const v=String(await ask("Send your "+trimAmt(c.amt,18)+" TAC to which address or name?","")||"").trim();if(!v)return;
@@ -6607,7 +6609,7 @@ const pfPx=()=>{const s=Number(pfS.sp)/1e18;return s>0?1/(s*s):0},pfDay=()=>Numb
 pfVal=sh=>pfS.sup?Number(sh)/Number(pfS.sup)*(Number(pfS.r0)+Number(pfS.r1)*pfPx())/1e18:0,
 pfApr=()=>{const a=pfDay()*365*pfPx()/(pfVal(pfS.tot)+1)*100;return isFinite(a)&&a>0?"~"+Math.round(a).toLocaleString()+"% APR on 1 ETH":""},
 pfHead=()=>[Math.round(pfDay()).toLocaleString()+" TAC/day",pfApr(),"until "+new Date(pfS.fin*1e3).toLocaleDateString(undefined,{month:"short",day:"numeric"})].filter(Boolean),
-pfBtn=(k,t,c="fclink")=>{const x=document.createElement("button");x.type="button";x.className=c;x.dataset.pf=k;x.textContent=t;return x},
+pfBtn=(k,t,c="fclink")=>{const x=cE("button");x.type="button";x.className=c;x.dataset.pf=k;x.textContent=t;return x},
 pfIcon=(el,n,c)=>{for(const a of[TAC_TOK,ZERO])tkIc(el,a,n,c)};
 async function pfRun(){const my=++pfSeq,a=account;
 if(CHAIN_ID===1)try{const r=await mc3([{to:PFARM,data:"0x7b0a47ee"},{to:PFARM,data:"0xebe2b12b"},{to:PFARM,data:"0x817b1cd2"},{to:PFPOOL,data:"0x18160ddd"},
@@ -6620,9 +6622,9 @@ pfDraw()}
 function pfDraw(){const S=pfS,g=S?[S.rate,S.fin,S.tot,S.sup,S.r0,S.r1,S.sp,S.st,S.ea,S.lp,!known(TAC_TOK)].join(","):"";
 if(g!==pfSig||lqMode){pfSig=g;pfLine();pfPaint()}else pfShow();
 try{fmPf()}catch{}}
-function pfLine(){pfEl.textContent="";if(pfS&&(pfOn()||pfMine())){const on=pfOn(),b=document.createElement("b");pfIcon(pfEl);
+function pfLine(){pfEl.textContent="";if(pfS&&(pfOn()||pfMine())){const on=pfOn(),b=cE("b");pfIcon(pfEl);
 b.textContent=on?pfHead()[0]:"ended";pfEl.append("TAC/ETH farm · ",b,on?pfApr()&&" · "+pfApr():pfS.st>0n?" · your stake is still here":"");
-if(pfS.ea>0n){const e=document.createElement("b");e.textContent=trimAmt(pfS.ea,18)+" TAC";pfEl.append(" · earned ",e)}
+if(pfS.ea>0n){const e=cE("b");e.textContent=trimAmt(pfS.ea,18)+" TAC";pfEl.append(" · earned ",e)}
 pfEl.append(pfBtn("go",on&&!pfMine()?"Farm":"Open"));if(pfS.ea>0n)pfEl.append(pfBtn("cl","Claim"));
 pfEl.title=on?pfHead().join(" · ")+". Stake liquidity in the TAC/ETH Precision pool to earn TAC by the second. The rate is shared by everyone staked, so it falls as more joins.":"This farm has stopped paying. Your stake and anything earned can be taken out at any time."}
 pfShow()}
@@ -6631,19 +6633,19 @@ let el=row.querySelector(".pfb");const on=!!pfS&&pfOn(),box=row.querySelector(".
 if(box&&on&&!k)box.insertAdjacentHTML("afterbegin",'<label class="lqzap"><input type="checkbox" class="pfk" checked> Stake in the farm to earn TAC</label>');
 if(box&&!on&&k)k.parentElement.remove();
 if(!pfS||!(on||pfMine())){if(el)el.remove();return}
-if(!el){el=document.createElement("div");el.className="pfb";row.insertBefore(el,row.querySelector(".lqacts"))}
-el.textContent="";const h=document.createElement("div"),S=pfS;h.className="pfh";pfIcon(h);h.append(on?"Farm · "+pfHead().join(" · "):"Farm ended");el.append(h);
-if(S.st>0n&&S.sup){const m=document.createElement("div");m.className="lqmine";m.textContent="staked "+trimAmt(S.st*S.r0/S.sup,18)+" ETH + "+trimAmt(S.st*S.r1/S.sup,18)+" TAC · earned "+trimAmt(S.ea,18)+" TAC";el.append(m)}
-const acts=document.createElement("div");acts.className="lqacts";
-if(on&&S.lp>0n){const sp=document.createElement("select");sp.className="pfsp";sp.setAttribute("aria-label","How much to stake");
+if(!el){el=cE("div");el.className="pfb";row.insertBefore(el,row.querySelector(".lqacts"))}
+el.textContent="";const h=cE("div"),S=pfS;h.className="pfh";pfIcon(h);h.append(on?"Farm · "+pfHead().join(" · "):"Farm ended");el.append(h);
+if(S.st>0n&&S.sup){const m=cE("div");m.className="lqmine";m.textContent="staked "+trimAmt(S.st*S.r0/S.sup,18)+" ETH + "+trimAmt(S.st*S.r1/S.sup,18)+" TAC · earned "+trimAmt(S.ea,18)+" TAC";el.append(m)}
+const acts=cE("div");acts.className="lqacts";
+if(on&&S.lp>0n){const sp=cE("select");sp.className="pfsp";sp.setAttribute("aria-label","How much to stake");
 sp.innerHTML=QP;
 const st=pfBtn("st","","lqbtn"),upd=()=>st.textContent="Stake "+trimAmt(S.lp*BigInt(sp.value)/100n,18)+" LP";upd();sp.onchange=upd;acts.append(sp,st)}
 if(S.ea>0n)acts.append(pfBtn("cl","Claim","lqbtn"));
 if(S.st>0n){acts.insertAdjacentHTML("beforeend",'<select class="pfp" aria-label="How much">'+QP+'</select><select class="pfo" aria-label="Withdraw as"><option value="both">as ETH + TAC</option><option value="eth">as ETH</option><option value="tac">as TAC</option><option value="lp">as LP</option></select>');const w=pfBtn("wd","Withdraw","lqbtn");w.title="Withdrawing all also claims your TAC; a part leaves it to claim.";acts.append(w)}
 if(acts.childNodes.length)el.append(acts)}
 function fmPf(){pvFarm.querySelector(".fmpf")?.remove();if(!pfS||!pfOn()||pvFarm.classList.contains("hide"))return;
-const c=pfBtn("go","","fmc fmpf"),nm=document.createElement("span"),a=pfApr();pfIcon(c,16,"");nm.className="fmn";nm.textContent="TAC/ETH zSwap "+Math.round(pfDay()).toLocaleString()+" TAC/day";c.append(nm);
-if(a){const e=document.createElement("i");e.className="fma";e.textContent=a;c.append(e)}pvFarm.insertBefore(c,pvFarm.querySelector("a"))}
+const c=pfBtn("go","","fmc fmpf"),nm=cE("span"),a=pfApr();pfIcon(c,16,"");nm.className="fmn";nm.textContent="TAC/ETH zSwap "+Math.round(pfDay()).toLocaleString()+" TAC/day";c.append(nm);
+if(a){const e=cE("i");e.className="fma";e.textContent=a;c.append(e)}pvFarm.insertBefore(c,pvFarm.querySelector("a"))}
 function pfGo(){pairUser=false;pairFree=1;if(location.hash==="#farm")applyLink(1);else location.hash="farm"}
 const pfTx=async(data,val,verb)=>settle(await sendWith([],{from:account,to:PFARM,data,value:toHex(val)},verb));
 async function pfTok(tok,amt,plain,withP,val,verb){const dl=BigInt(nowS()+1800),aps=await apSeq(tok,PFARM,amt);
@@ -7226,7 +7228,7 @@ let smallest=null;
 for(const side of [512,384,256,192,128,96,64]){
 for(const [type,q] of [["image/webp",1],["image/png",undefined],["image/webp",0.85],["image/webp",0.6]]){
 const sc=Math.min(1,side/Math.max(bmp.width,bmp.height));
-const cv=document.createElement("canvas");
+const cv=cE("canvas");
 cv.width=Math.max(1,Math.round(bmp.width*sc));cv.height=Math.max(1,Math.round(bmp.height*sc));
 const cx=cv.getContext("2d");cx.imageSmoothingQuality="high";
 cx.drawImage(bmp,0,0,cv.width,cv.height);
@@ -7662,9 +7664,9 @@ const rt={ins:[{txid:bTxid(ct),vout:0,seq:0xfffffffd,wit:[]}],outs:[{v:546,s:K.w
 rt.ins[0].wit=[bSchnorr(bSig341(rt,[{v:cv,s:p2tr}],lf),K.d,aux),scr,cpCat([192|tw.par],TAP_NUMS)];
 return{commit:cpHex(bSer(ct,1)),reveal:cpHex(bSer(rt,1)),lockTxid:bTxid(rt),blinding:r,cx,cy,anchor:{txid:f.txid,vout:f.vout},vBtc:vSats,fee:cfee+cv-vSats-546}};
 const CP_CE="0x000000003f608BDdF0ca45934003ffb9DbDF70DB",CP_WSTETH="0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",CP_LOCKS="zswap:cpl:",B_API=["https://mempool.space/api","https://blockstream.info/api"];
-const EPS="0x00000051F365d898132f4ebF345Cd3968e02F288",SEL_EPS="c03c2d74",EP_KEY="zswap:ep2",EP_H=/^https:\/\/\S+$/,EP_Q=[["rpc",8453],["rpc",4663],["logs",1],["tacit",1],["btc",0],["wc",0],["wcpid",0],["tacad",1]];
+const EPS="0x00000051F365d898132f4ebF345Cd3968e02F288",SEL_EPS="c03c2d74",EP_KEY="zswap:ep3",TB_K={1:[],8453:[],4663:[]},EP_H=/^https:\/\/\S+$/,EP_Q=[["rpc",8453],["rpc",4663],["logs",1],["tacit",1],["btc",0],["wc",0],["wcpid",0],["tacad",1],["evk",1],["evk",8453],["evk",4663]];
 const epM=(a,u,re)=>{u=(u||[]).map(s=>String(s).trim()).filter(s=>re.test(s));if(u.length){const m=[...new Set(u.concat(a))];a.length=0;a.push(...m)}};
-const epApply=v=>{if(!Array.isArray(v))return;epM(CHAINS[8453].rpcs,v[0],EP_H);epM(CHAINS[4663].rpcs,v[1],EP_H);epM(CP_LOGS,v[2],EP_H);epM(B_API,v[4],EP_H);epM(WC_RELAY,v[5],/^wss:\/\/[\w.-]+(:\d+)?$/);epM(AD_API,v[7],/^https:\/\/[\w.-]+(:\d+)?\/[\w.\/@-]*\/$/);epM(L1_RPCS,v[8],EP_H);
+const epApply=v=>{if(!Array.isArray(v))return;epM(CHAINS[8453].rpcs,v[0],EP_H);epM(CHAINS[4663].rpcs,v[1],EP_H);epM(CP_LOGS,v[2],EP_H);epM(B_API,v[4],EP_H);epM(WC_RELAY,v[5],/^wss:\/\/[\w.-]+(:\d+)?$/);epM(AD_API,v[7],/^https:\/\/[\w.-]+(:\d+)?\/[\w.\/@-]*\/$/);epM(L1_RPCS,v[11],EP_H);[1,8453,4663].map((c,i)=>epM(TB_K[c],v[8+i],/^https:\/\/\S*[^/\s]$/));
 epM(CP_RELAYS,v[3],/^https:\/\/[\w.-]+(:\d+)?(\/[\w./-]*)?$/);CP_RELAYS=CP_RELAYS.map(x=>x.replace(/\/$/,""));
 const t=CP_RELAYS[0],p=(v[6]||[]).find(s=>/^[0-9a-f]{32}$/.test(s)),c=CHAINS[CHAIN_ID];if(t)CP_RELAY=t.replace(/\/$/,"");if(p)WC_PID=p;if(CHAIN_ID!==1&&c)rpcPool=[...new Set(c.rpcs.concat(rpcPool))]};
 const epLoad=async()=>{let c;try{c=JSON.parse(LS[EP_KEY])}catch{}const ok=c&&c.t<=Date.now();if(ok&&Date.now()-c.t<216e5)return epApply(c.v);const old=()=>ok&&epApply(c.v);
@@ -7672,8 +7674,21 @@ const n=EP_Q.length,rd=x=>quorum2(L1_RPCS,x),
 [e,r]=await Promise.all([rd({to:EPS,data:"0x"+SEL_EPS+encUint(64)+encUint(96+32*n)+encUint(n)+EP_Q.map(q=>cpHex(cpU8(q[0])).padEnd(64,"0")).join("")+encUint(n)+EP_Q.map(q=>encUint(q[1])).join("")}),rd({to:RPCS_PIN,data:"0x"+SEL_LIST})]),
 W=i=>parseInt(e.slice(i*64,i*64+64),16),o=W(0)/32;
 const rl=decStrArr(r);if(W(o)!==n)return void(epM(L1_RPCS,rl,EP_H),old());
-const v=EP_Q.map((_,i)=>decStrArr(e,o+1+W(o+1+i)/32));v[8]=rl;epApply(ok?v.map((x,i)=>x.length?x:c.v[i]):v);try{LS[EP_KEY]=JSON.stringify({t:Date.now(),v})}catch{}};
+const v=EP_Q.map((_,i)=>decStrArr(e,o+1+W(o+1+i)/32));v[11]=rl;epApply(ok?v.map((x,i)=>x.length?x:c.v[i]):v);try{LS[EP_KEY]=JSON.stringify({t:Date.now(),v})}catch{}};
 epLoad().catch(()=>{try{const c=JSON.parse(LS[EP_KEY]);if(c.t<=Date.now())epApply(c.v)}catch{}});
+const TB_R="0x0000006C96Afa6f1cD4DF8FE19bc0d8B6A6Cd7B5",tbL=()=>{try{return JSON.parse(LS["zswap:tb"])||[]}catch{return[]}},tbPut=(b,x)=>{try{LS["zswap:tb"]=JSON.stringify(tbL().filter(y=>y.b!==b).concat(x||[]))}catch{}},
+tbA=i=>[i.amount,i.outLeaf0,i.outLeaf1,i.memo0Hash,i.memo1Hash,i.refund,i.deadline,i.nonce].map(encUint).join(""),tbE=w=>formatUnits(w,18)+" ETH",tbW=async b=>BigInt(await rpc("eth_getBalance",[b,L])||"0x0"),
+tbChk=(to,w,c=CHAIN_ID)=>{const x=tbL().find(x=>x.b===to.toLowerCase());return x&&(x.c!==c||w!==BigInt(x.i.amount))?"A Tacit pool box takes exactly "+tbE(x.i.amount)+" on "+CHAINS[x.c].name+", sent directly.":""},
+tbScan=async f=>{const k=CHAIN_ID+account;if(!account||tbScan.k===k&&!f)return;tbScan.k=k;for(const x of tbL())if(x.c===CHAIN_ID&&nowS()>x.i.deadline){const w=await tbW(x.b);
+if(!w)tbPut(x.b);else if(await sure("Your Tacit pool box holds "+tbE(w)+" past its deadline. Return it to "+x.i.refund+"?"))await sendTx([{from:account,to:TB_R,data:"0xf255eb45"+tbA(x.i)+encUint(0)}])}},
+tbGo=async r=>{try{const j=JSON.parse(atob(r.replace(/-/g,"+").replace(/_/g,"/"))),i=j.intent,c=+j.chainId,a=BigInt(i.amount),n=TB_K[c]&&CHAINS[c].name,x={c,b:0,i};if(!n)throw Error("That box is on a chain zSwap does not serve.");
+if(c!==CHAIN_ID){setChain(c);showNet()}
+const b=x.b=retAddr(await rpc(C,[{to:TB_R,data:"0x34a44915"+tbA(i)},L]).catch(()=>""));if(!b)throw Error("The Tacit EVM pool is not live on "+n+" yet.");
+const w=await tbW(b);if(w||strip0x(await rpc("eth_getCode",[b,L]))){tbPut(b,x);if(w&&nowS()>i.deadline)return tbScan(1);throw Error("That box is already paid.")}
+if(i.deadline<nowS()+3600)throw Error("That box expires within the hour.");
+let e="No keeper serves "+n+" yet.";for(const k of TB_K[c])try{await relayFetch("/evm-pool/keeper/deposit",{intent:i,hint:j.hint},k);e="";break}catch(E){e=E.message}
+if(e)throw Error(e);tbPut(b,x);
+if(await sure("Shield "+tbE(a)+" into the Tacit pool on "+n+" for the wallet that made this link? It goes to box "+b+", less a keeper fee of "+tbE(a-j.hint.outputs.reduce((s,o)=>s+BigInt(o?.v||0),0n))+"; if unfinished after "+new Date(i.deadline*1e3).toLocaleString()+" it returns to "+i.refund+". A swap with exact ETH out"+(c<2?", or a private withdrawal,":"")+" can pay it too."))location.hash="chain="+c+"&token="+ZERO+"&amount="+formatUnits(a,18)+"&to="+b}catch(E){stat.textContent=E.message}};
 const bGet=async p=>{let e;for(const u of B_API){try{const j=await relayFetch(p,null,u);if(j&&j.status!=="unknown")return j}catch(x){e=x}}throw e||Error("No Bitcoin node answered.")};
 const bPost=async h=>{let e;for(const u of B_API){try{return(await relayFetch("/tx",h,u)).text}catch(x){if(/already|known|in block|conflict/i.test(x.message))return"";e=x}}throw e||Error("No Bitcoin node took the transaction.")};
 const bOp=l=>keccak(cpCat(bRev(l.t),bLE(1,4)));
@@ -8043,7 +8058,7 @@ let fee=o?BigInt(o.fee):0n,why="";
 if(!o&&!self){if(A.tok!==ZERO&&!CP_FEES[A.id])why="The relay takes no fee in "+A.sym;
 else{const w=part?"amount":"note";fee=await cpFee(v,A,(part?600000n:323000n)+(ch!==1?CP_L2[ch].gas/2n:0n));why=fee>=v?"This "+w+" is too small to pay the relay":fee*10000n/v>300n?"The relay fee would be "+(Number(fee*10000n/v)/100).toFixed(1)+"% of this "+w:""}
 if(why){if(p.auto)throw Error(why);if(!await sure(why+". Settle it from this wallet instead? The relay still proves it; this wallet sends the settle, which links the exit to it."))throw Error(why+" — wait for cheaper gas, or settle it from this wallet.");self=true;fee=0n}}
-const net=v-fee,wei=net*A.scale;
+const net=v-fee,wei=net*A.scale,tb=tbChk(to,A.tok===ZERO&&ch!==4663?wei:-1n,ch);if(tb)throw Error(tb+" Relay fee: "+cpFmt(fee,A)+" ETH.");
 const x={ch,to,dl:String((Math.floor(Date.now()/86400000)+3)*86400),nonce:(o&&/^\d{1,80}$/.test(String(o.nonce||""))?String(o.nonce):big(sha2(cpU8("zswap-exit-nonce-v1:"+cpFp+":"+(n.s?n.s+n.b:n.i)))).toString()),
 fee:String(fee),wei:String(wei),self,fin:to};if(part)x.v=String(v);
 let esc=to.toLowerCase(),warn="";
@@ -8347,13 +8362,13 @@ if(!need[i]){a=String(R.assetA).toLowerCase();rA=+R.reserveA;rB=+R.reserveB;sh=+
 else{const h=strip0x(rs[k++]||""),w=n=>BigInt("0x"+(h.slice(n*64,n*64+64)||"0"));if(h.length<448||!w(0))return null;a="0x"+h.slice(64,128);rA=Number(w(3));rB=Number(w(4));sh=Number(w(6))}
 const E=a===CP_ETH.toLowerCase(),rE=E?rA:rB,rO=E?rB:rA;if(!(rE>0&&rO>0&&sh>0&&isFinite(rE+rO+sh)))return null;if(cs[i]._p.pair==="TAC/cETH")px=rE/rO;return{rE,sh}});
 cs.forEach((c,i)=>{const o=pl[i],p=c._p;if(!o||!px||!o.sh)return;const st=2*o.rE/1e8*Math.min(1,+p.totalShares/o.sh),apr=+p.tacPerDayForPool*365*px/(st+1)*100;
-if(!isFinite(apr)||apr<=0)return;const e=document.createElement("i");e.className="fma";e.textContent="~"+Math.round(apr).toLocaleString()+"% APR on 1 ETH";c.append(e);
+if(!isFinite(apr)||apr<=0)return;const e=cE("i");e.className="fma";e.textContent="~"+Math.round(apr).toLocaleString()+"% APR on 1 ETH";c.append(e);
 c.title="Rewards valued at the TAC/tETH pool price ("+px.toPrecision(3)+" ETH per TAC). "+(+st.toPrecision(3))+" ETH staked here now; the rate falls as more joins."})};
 const fmSync=async()=>{if(CHAIN_ID!==1||Date.now()-(pvFarm._t||0)<6e5)return;pvFarm._t=Date.now();try{const j=await relayFetch("/farm/program?network=mainnet"),e=j.epoch;if(CHAIN_ID!==1||!e||!e.active||+e.periodFinish<=nowS()||j.stale||!Array.isArray(j.pools)||j.pools.length>8)return void pvFarm.classList.add("hide");
 const r=j.pools.filter(p=>!p.idle&&/^[\w/]{3,24}$/.test(p.pair||"")&&+p.tacPerDayForPool>=1&&+p.tacPerDayForPool<1e7);if(!r.length)return void pvFarm.classList.add("hide");await cpLoadAssets().catch(()=>{});if(CHAIN_ID!==1)return;
-pvFarm.textContent="";const h=document.createElement("span");h.className="fml";h.textContent="Farms · earn TAC for liquidity"+(+e.periodFinish>nowS()?" · until "+new Date(e.periodFinish*1e3).toLocaleDateString(undefined,{month:"short",day:"numeric"}):"");pvFarm.append(h);for(const p of r){const c=document.createElement("span"),s=p.pair.replace(/cETH/g,"tETH");c.className="fmc";
+pvFarm.textContent="";const h=cE("span");h.className="fml";h.textContent="Farms · earn TAC for liquidity"+(+e.periodFinish>nowS()?" · until "+new Date(e.periodFinish*1e3).toLocaleDateString(undefined,{month:"short",day:"numeric"}):"");pvFarm.append(h);for(const p of r){const c=cE("span"),s=p.pair.replace(/cETH/g,"tETH");c.className="fmc";
 for(const x of s.split("/")){const A=cpAssets.find(a=>a.sym===x);if(A&&A.icon){const im=new Image(16,16);im.src=A.icon;im.alt="";c.append(im)}}
-const nm=document.createElement("span");nm.className="fmn";nm.textContent=s+" "+Math.round(+p.tacPerDayForPool).toLocaleString()+" TAC/day";c.append(nm);c._p=p;c._s=s;pvFarm.append(c)}fmApr(j).catch(()=>{});const a=document.createElement("a");a.href="https://tacit.finance";a.target="_blank";a.rel="noreferrer";a.textContent="add liquidity on tacit.finance";pvFarm.append(a);pvFarm.classList.remove("hide");fmPf()}catch{pvFarm._t=0}};
+const nm=cE("span");nm.className="fmn";nm.textContent=s+" "+Math.round(+p.tacPerDayForPool).toLocaleString()+" TAC/day";c.append(nm);c._p=p;c._s=s;pvFarm.append(c)}fmApr(j).catch(()=>{});const a=cE("a");a.href="https://tacit.finance";a.target="_blank";a.rel="noreferrer";a.textContent="add liquidity on tacit.finance";pvFarm.append(a);pvFarm.classList.remove("hide");fmPf()}catch{pvFarm._t=0}};
 const pvDp=()=>{const A=cpSel();return A.dec-String(A.scale).length+1};
 const pvWei=()=>{try{return parseUnits(pvAmt.value||"0",cpSel().dec)}catch{return 0n}};
 const pvShV=A=>cpReady(A.id).reduce((s,n)=>s+BigInt(n.v),0n);
@@ -8564,7 +8579,7 @@ if(on){loadEthUsd();mkTick=0;mkLoad(1);mkTimer=setInterval(()=>{if(!document.hid
 fcSync()}
 mk.onclick=()=>{sBlip();mkSet(!mkMode);if(!mkMode)update()};
 const mkMk=i=>/^<(img|svg)[\s>]/.test(i||"");
-const mkIco=(b,t)=>{b.textContent="";const i=t.icon||"",sp=document.createElement("span");
+const mkIco=(b,t)=>{b.textContent="";const i=t.icon||"",sp=cE("span");
 if(mkMk(i)){sp.innerHTML=i;b.append(sp.firstChild)}
 else if(i){const im=new Image(16,16);im.src=i;im.alt="";b.append(im)}
 else{sp.innerHTML=genIcon(t.sym);b.append(sp.firstChild)}
@@ -8587,7 +8602,7 @@ mkClose.onchange=()=>{sBlip();mkAt.classList.toggle("hide",mkClose.value!=="0")}
 mkAdv.ontoggle=()=>sBlip();
 const mkResFee=async(a,my,pre)=>{let f=0;try{f=Number(BigInt(await rpc(C,[{to:PM,data:"0x4d5e9db0"+encAddr(a)},L])||"0x0"))}catch{return}
 if(my!==mkRvSeq)return;mkResEl.textContent=pre+(f?` · takes ${mkPc(f)}% of the pot`:" · takes no fee");
-if(account&&a.toLowerCase()===account.toLowerCase()){const b=document.createElement("button");b.type="button";b.className="fclink";b.textContent="set fee";b.onclick=()=>mkFeeSet(f);mkResEl.append(" ",b)}};
+if(account&&a.toLowerCase()===account.toLowerCase()){const b=cE("button");b.type="button";b.className="fclink";b.textContent="set fee";b.onclick=()=>mkFeeSet(f);mkResEl.append(" ",b)}};
 const mkFeeSet=async f=>{if(mkBusy)return;sBlip();const v=String(await ask("Your fee as a resolver, in % of each pot (0 to 10). It applies only to markets created after you change it.",mkPc(f))??"").trim();if(!v)return;
 if(!/^\d{0,2}(\.\d{0,2})?$/.test(v)||!(+v<=10))return void(stat.textContent="A resolver fee is 0 to 10%, in steps of 0.01.");
 mkBusy=1;try{await mkSend({from:account,to:PM,data:"0xfb105091"+encUint(BigInt(Math.round(+v*100))),value:"0x0"},"Setting your fee…");mkRes.oninput()}catch(x){err(x)}finally{mkBusy=0}};
@@ -8713,7 +8728,7 @@ function invPlay(){
 if(invOff)return;
 const host=document.querySelector(".card");if(!host)return;
 const W=host.clientWidth,H=Math.min(host.clientHeight,innerHeight-Math.max(0,host.getBoundingClientRect().top)),COLS=6,ROWS=4,IW=22,IH=20,SW=22,SH=20;
-const mk=(c,h)=>{const d=document.createElement("div");d.className=c;if(h)d.innerHTML=h;return d};
+const mk=(c,h)=>{const d=cE("div");d.className=c;if(h)d.innerHTML=h;return d};
 const w=mk("inv");w.tabIndex=0;w.setAttribute("role","application");
 w.setAttribute("aria-label","Token invaders. Arrow keys move, space fires, escape leaves.");
 host.appendChild(w);
@@ -9324,18 +9339,18 @@ ethNum&&ethUsd>0?` (${fmtUsd(mcap*ethUsd)})`:""}`:"",
 if(p0){const was=chFloor+":"+chSupply+":"+chCoin1;
 chFloorFor(p0).then(()=>{if(chFloor+":"+chSupply+":"+chCoin1!==was)drawChart()});}
 }
-for(const[label,secs]of TFS){const b=document.createElement("button");
+for(const[label,secs]of TFS){const b=cE("button");
 b.textContent=label;b.dataset.secs=String(secs);if(secs===chPeriod)b.className="on";
 b.onclick=()=>{chPeriod=secs;chTfKey=chPairKey(chEff());drawChart()};
 chTf.appendChild(b)}
-const kindBtn=document.createElement("button");
+const kindBtn=cE("button");
 kindBtn.className="chk";
 const syncKind=()=>{kindBtn.textContent=chKind==="candle"?"Line":"Candle";
 kindBtn.title=`Switch to ${kindBtn.textContent.toLowerCase()} chart`};
 syncKind();
 kindBtn.onclick=()=>{chKind=chKind==="candle"?"line":"candle";syncKind();drawChart();LS.ck=chKind};
 chTf.appendChild(kindBtn);
-const invBtn=document.createElement("button");
+const invBtn=cE("button");
 invBtn.className="chk";
 invBtn.textContent="⇅";
 const syncInv=()=>{const p=chEff();
@@ -9373,14 +9388,14 @@ try{rec=decStr(t)}catch{}
 }catch{if(my===scSeq)scEl.textContent="No such name — "+n+" has never been minted.";return}
 const m=/^(\d+)(?:-w(\d+))?-[0-9a-z]+$/.exec(lbl);
 scEl.textContent="";
-const b=document.createElement("b");b.textContent=n;scEl.appendChild(b);
-const line=t=>{const d=document.createElement("div");d.textContent=t;scEl.appendChild(d);return d};
+const b=cE("b");b.textContent=n;scEl.appendChild(b);
+const line=t=>{const d=cE("div");d.textContent=t;scEl.appendChild(d);return d};
 if(m)line(`Minted score ${(+m[1]).toLocaleString("en-US")}`+(m[2]?` · reached wave ${m[2]}`:""));
 else line("Not a score name — the label carries no run.");
 line("Held by "+short(owner));
 if(m)line("Anyone can mint a name with any number — this says it was claimed, not earned.").className="scw";
 if(m&&rec&&rec!==m[1])line(`The score record now reads ${rec}, not ${m[1]} — the holder changed it.`).className="scw";
-const go=document.createElement("button");go.type="button";go.textContent="Play invaders";
+const go=cE("button");go.type="button";go.textContent="Play invaders";
 go.onclick=()=>{sBlip();invPlay()};
 scEl.appendChild(go);
 };
@@ -9394,6 +9409,7 @@ el.value=v;lkWrote[el.id]=v;return true;
 };
 async function applyLink(e){if(e&&(busy||txLive))return void idle(()=>applyLink(e));lkEv=!!e;
 const q=new URLSearchParams(location.hash.slice(1));if(q.has("farm")){q.set("token","ETH");q.set("out",TAC_TOK);q.set("lq","1")}
+const tx=q.get("tacit-box");if(tx){history.replaceState(null,"",location.href.split("#")[0]);return void tbGo(tx)}
 const ti=q.get("tacit-invoice");if(ti!==null){try{history.replaceState(null,"",location.href.split("#")[0])}catch{}if(/^[A-Za-z0-9_-]{16,8000}$/.test(ti)){window.__tinv=ti;try{sessionStorage.setItem("zswap:tinv",ti)}catch{}setTimeout(()=>cpInvGo(),0)}return}
 const my=++lSeq;
 if(![...q.keys()].length){

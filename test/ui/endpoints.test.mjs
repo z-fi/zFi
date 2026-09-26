@@ -18,12 +18,13 @@ const b32 = s => '0x' + Buffer.from(s, 'ascii').toString('hex').padEnd(64, '0');
 /* The order the page asks in, which is the order its answer is read back in.
    Pinned here as data so a reordering on either side fails loudly instead of
    pouring the Bitcoin list into the Tacit relay. */
-const ASKED = [['rpc', 8453], ['rpc', 4663], ['logs', 1], ['tacit', 1], ['btc', 0], ['wc', 0], ['wcpid', 0], ['tacad', 1]];
+const ASKED = [['rpc', 8453], ['rpc', 4663], ['logs', 1], ['tacit', 1], ['btc', 0], ['wc', 0], ['wcpid', 0], ['tacad', 1], ['evk', 1], ['evk', 8453], ['evk', 4663]];
 
 const PID = 'ab'.repeat(16);
 const CURATED = [
   ['https://base.cur'], ['https://rh.cur'], ['https://logs.cur'], ['https://relay.cur/'],
   ['https://btc.cur/api'], ['wss://wc.cur'], [PID], ['https://ad.cur/proofs/'],
+  ['https://k1.cur'], ['https://k8453.cur/'], ['https://k4663.cur/keeper'],
 ];
 
 /* Serves the roster, and zRpcList's rpcs(), from whichever node asks. `each`
@@ -78,9 +79,12 @@ describe('the endpoint roster', () => {
     assert.equal(ev(p, 'WC_PID'), PID);
     assert.equal(ev(p, 'L1_RPCS[0]'), 'https://l1.cur', "zRpcList reaches the L1 read path too");
     assert.equal(ev(p, 'AD_API[0]'), 'https://ad.cur/proofs/', 'a curated airdrop mirror goes first');
+    assert.deepEqual(JSON.parse(ev(p, 'JSON.stringify(TB_K[1])')), ['https://k1.cur']);
+    assert.deepEqual(JSON.parse(ev(p, 'JSON.stringify(TB_K[8453])')), [], 'a keeper base ending in / is refused');
+    assert.deepEqual(JSON.parse(ev(p, 'JSON.stringify(TB_K[4663])')), ['https://k4663.cur/keeper'], 'each chain keeps its own keepers');
     assert.ok(ev(p, 'AD_API').some(u => u.startsWith('https://cdn.jsdelivr.net/')), 'the built-in mirrors stay behind it');
-    const kept = JSON.parse(p.window.localStorage.getItem('zswap:ep2'));
-    assert.ok(kept && kept.t > 0 && kept.v.length === 9, 'the answer is kept for the next load');
+    const kept = JSON.parse(p.window.localStorage.getItem('zswap:ep3'));
+    assert.ok(kept && kept.t > 0 && kept.v.length === 12, 'the answer is kept for the next load');
     assert.deepEqual(p.consoleErrors, []);
     p.close();
   });
@@ -108,7 +112,7 @@ describe('the endpoint roster', () => {
       ['ftp://x', ' https://ok.cur ', 'https://has space'], [], ['http://plain'],
       ['http://insecure', 'javascript:alert(1)', 'https://relay.cur/a?b=1'],
       ['https://btc.cur/api'], ['https://not-a-socket', 'wss://wc.cur/path'], ['XYZ', 'AB'.repeat(16)],
-      ['https://ad.cur/proofs', 'http://ad.cur/proofs/', 'https://ad.cur/p/?x=1/'],
+      ['https://ad.cur/proofs', 'http://ad.cur/proofs/', 'https://ad.cur/p/?x=1/'], [], [], [],
     ], { l1: ['http://l1.plain'] });
     const p = await loadPage({ walletless: true, chain });
     await p.settle();
@@ -133,6 +137,16 @@ describe('the endpoint roster', () => {
     p.close();
   });
 
+  test('a roster kept before the keeper lists, with L1 nodes at slot 8, is not applied', async () => {
+    const chain = serve(new MockChain(), CURATED.map(() => []));
+    const old = [[], [], [], [], [], [], [], [], ['https://l1.old']];
+    const p = await loadPage({ walletless: true, chain, storage: { 'zswap:ep2': JSON.stringify({ t: Date.now(), v: old }) } });
+    await p.settle();
+    assert.deepEqual(JSON.parse(ev(p, 'JSON.stringify(TB_K[1])')), [], 'an L1 node never becomes a keeper');
+    assert.equal(chain.epAsks.length, 2, 'the roster is read afresh');
+    p.close();
+  });
+
   test('a roster only one node vouches for is not adopted', async () => {
     const chain = serve(new MockChain(), null, {
       each: n => (n === 0 ? CURATED : CURATED.map(() => [])),
@@ -141,7 +155,7 @@ describe('the endpoint roster', () => {
     await p.settle();
     assert.equal(ev(p, 'cpRelayBase()'), 'https://api.tacit.finance');
     assert.notEqual(ev(p, 'CHAINS[8453].rpcs[0]'), 'https://base.cur');
-    assert.equal(p.window.localStorage.getItem('zswap:ep2'), null, 'nothing kept from a split answer');
+    assert.equal(p.window.localStorage.getItem('zswap:ep3'), null, 'nothing kept from a split answer');
     p.close();
   });
 
@@ -150,7 +164,7 @@ describe('the endpoint roster', () => {
     const v = CURATED.concat([['https://l1.cur']]);
     const p = await loadPage({
       walletless: true, chain,
-      storage: { 'zswap:ep2': JSON.stringify({ t: Date.now(), v }) },
+      storage: { 'zswap:ep3': JSON.stringify({ t: Date.now(), v }) },
     });
     await p.settle();
     assert.equal(ev(p, 'cpRelayBase()'), 'https://relay.cur');
@@ -164,7 +178,7 @@ describe('the endpoint roster', () => {
     const v = CURATED.concat([[]]);
     const p = await loadPage({
       walletless: true, chain,
-      storage: { 'zswap:ep2': JSON.stringify({ t: Date.now() - 7 * 3600e3, v }) },
+      storage: { 'zswap:ep3': JSON.stringify({ t: Date.now() - 7 * 3600e3, v }) },
     });
     await p.settle();
     assert.equal(chain.epAsks.length, 2, 'a stale copy must be refreshed');

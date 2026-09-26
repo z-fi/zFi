@@ -111,7 +111,7 @@
   <section>
     <h2>New list</h2>
     <div class="row">
-      <input class="addr" id="nSvc" list="svcs" placeholder="service — rpc, logs, tacit, btc, wc, wcpid, tacad" spellcheck="false">
+      <input class="addr" id="nSvc" list="svcs" placeholder="service — rpc, logs, tacit, btc, wc, wcpid, tacad, evk" spellcheck="false">
       <input class="addr" id="nChain" placeholder="chain id — 0 for all chains" inputmode="numeric" spellcheck="false">
     </div>
     <div class="row" style="margin-top:9px">
@@ -158,7 +158,7 @@ const ERR = { '30cd7471': 'NotOwner() — this account is not the owner.',
               'ff633a38': 'LengthMismatch()' };
 const CHAIN = { 1: 'Ethereum', 8453: 'Base', 4663: 'Robinhood' };
 // The (service, chainId) pairs zSwap reads, in the order it asks for them.
-const READS = [['rpc', 8453], ['rpc', 4663], ['logs', 1], ['tacit', 1], ['btc', 0], ['wc', 0], ['wcpid', 0], ['tacad', 1]];
+const READS = [['rpc', 8453], ['rpc', 4663], ['logs', 1], ['tacit', 1], ['btc', 0], ['wc', 0], ['wcpid', 0], ['tacad', 1], ['evk', 1], ['evk', 8453], ['evk', 4663]];
 const HTTPS = /^https:\/\/\S+$/;
 // The same shape checks zSwap applies before it uses an entry.
 const SERVICE = {
@@ -176,6 +176,8 @@ const SERVICE = {
            desc: 'The WalletConnect project id — 32 lowercase hex characters, not a URL. The page uses the first valid entry.' },
   tacad: { rule: /^https:\/\/[\w.-]+(:\d+)?\/[\w.\/@-]*\/$/, probe: 'tacad', fmt: 'https://host/…/ — the folder that holds <byte>.json, ending in /',
            desc: 'Mirrors of the TAC airdrop proof files — https://, a folder ending in /. Every proof is checked against the airdrop contract\'s Merkle root, so a mirror can be down but never wrong.' },
+  evk:   { rule: /^https:\/\/\S*[^/\s]$/, probe: 'evk', fmt: 'https://host[/path], no trailing /',
+           desc: 'Keepers for the Tacit EVM pool on this chain — https://, the base that serves /evm-pool/keeper/*. zSwap posts a deposit box to the first that accepts it.' },
 };
 // Known-good candidates offered when a list zSwap reads has fewer than two working entries.
 const SUGGEST = {
@@ -191,6 +193,8 @@ const DEFAULTS = {
 const OTHER = { rule: /^(https|wss):\/\/\S+$/, fmt: 'https://… or wss://…',
                 desc: 'Not a service zSwap reads today — https:// or wss://.' };
 const TACIT_ASSET = '0x3cba71e1114af183cdeacc6b8457a474d17529fd28704480ca799d0d03126f34';
+// The Tacit EVM pool router every keeper must serve (the same CreateX address on every chain).
+const EVK_ROUTER = '0x0000006c96afa6f1cd4df8fe19bc0d8b6a6cd7b5';
 // The private pool zSwap scans, and its deploy block: the widest range a logs node must serve.
 const TACIT_POOL = '0x000000000Ed1eabD231Be41d93b719056F7febFC', TACIT_FROM = 25998736;
 
@@ -520,6 +524,11 @@ async function probeRaw(kind, u, chain) {
       const want = await logsRef(q);
       if (want !== null && j.result.length !== want) throw Error(`returned ${j.result.length} of ${want} logs`);
       res = [`ok · ${j.result.length} logs over ${parseInt(q.toBlock, 16) - TACIT_FROM} blocks · ${t}`, 'ok'];
+    } else if (kind === 'evk') {
+      const r = await fetch(base + '/evm-pool/keeper/info', { signal });
+      const t = ms(), j = await r.json();
+      if (!r.ok || String(j.router).toLowerCase() !== EVK_ROUTER) throw Error('HTTP ' + r.status + ', not a keeper for router ' + EVK_ROUTER);
+      res = chain && BigInt(j.chainId) !== chain ? [`fail · keeps chain ${j.chainId}, not ${chain} · ${t}`, 'bad'] : [`ok · chain ${j.chainId} · ${t}`, 'ok'];
     } else if (kind === 'tacad') {
       const r = await fetch(base + '/00.json', { signal });
       const t = ms(), j = await r.json();
