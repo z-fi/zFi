@@ -115,6 +115,15 @@ function nestedOn(chain, c) {
   nextBlock(chain);
 }
 
+/** A settle this page sent from the wallet through the SettleTipForwarder: settleWithTip(pv, proof, memos, tipTo). */
+const TIPFWD_S = '0x0000008353ee6Dea1236544938C546E27010416D';
+function tipFwdOn(chain, c) {
+  const tx = txHash(chain, 'tipfwd-'), all = [...(c.memos || []), ...(c.lockMemos || [])];
+  chain.txs.set(tx, { hash: tx, to: TIPFWD_S, input: '0x70b16a7d' + coder.encode(['bytes', 'bytes', 'bytes[]', 'address'], [pvWith(c), '0x00', all, A.ACCOUNT]).slice(2) });
+  eventsOf(chain, tx, '0x' + (B0 + chain.ntx).toString(16), c);
+  nextBlock(chain);
+}
+
 /** A TacitRelayer.relaySettle batch: every inner call rides the calldata, but only the calls that landed emit. */
 const RELAYER = '0x000000009C28617AC88B52Eae5EFaAcdD4aC34c3';
 function relayOn(chain, calls) {
@@ -303,6 +312,21 @@ describe('private sends', () => {
     nestedOn(chain, { nullifiers: ['0x' + '78'.repeat(32)], lockLeaves: ['0x' + '55'.repeat(32)], lockMemos: [S.lock.memo] });
     settleOn(chain, { nullifiers: ['0x' + '79'.repeat(32)], lockLeaves: [S.claim.leaf], lockMemos: [S.claim.memo] });
     // The pool's own lock count and root.
+    chain.storage = new Map([[POOL.toLowerCase() + ':54', '0x' + u256(2)], [POOL.toLowerCase() + ':55', S.claim.op.lockSetRoot]]);
+    const p = await open(chain);
+    await ready(p);
+    await until(p, () => /0\.03 tETH received privately/.test(p.text('pvList')), 'the payment, found from the key');
+    useStream(p, S.claim.tag);
+    p.click(p.$('pvList').querySelector('button[data-a="claim"]'));
+    await p.waitFor(() => posts(p).some(x => x.type === 'stealthclaim'), { label: 'the claim to reach the relay', ...SLOW });
+    assert.equal(canon(posts(p).find(x => x.type === 'stealthclaim').op), canon(S.claim.op), 'built on the pool\'s own lock set');
+    p.close();
+  });
+
+  test('a lock settled from the wallet through the tip forwarder counts toward the lock set', async () => {
+    const chain = withNote(poolChain());
+    tipFwdOn(chain, { nullifiers: ['0x' + '77'.repeat(32)], lockLeaves: [S.lock.op.lockLeaf], lockMemos: [S.lock.memo] });
+    settleOn(chain, { nullifiers: ['0x' + '79'.repeat(32)], lockLeaves: [S.claim.leaf], lockMemos: [S.claim.memo] });
     chain.storage = new Map([[POOL.toLowerCase() + ':54', '0x' + u256(2)], [POOL.toLowerCase() + ':55', S.claim.op.lockSetRoot]]);
     const p = await open(chain);
     await ready(p);

@@ -8215,7 +8215,7 @@ const CP_RELAYER="0x000000009c28617ac88b52eae5efaacdd4ac34c3",CP_LKBAD="This pag
 cpSlot=(k,s)=>keccak(cpCat(b32(k),b32(BigInt(s)))),cpStor=(s,t)=>l1Read("eth_getStorageAt",[CP_POOL,typeof s==="string"?s:toHex(s),t||L]);
 const cpCalls=inp=>{const h=strip0x(inp).toLowerCase(),sel=h.slice(0,8),d=h.slice(8),W=(s,o)=>{const x=BigInt("0x"+(s.slice(o*2,o*2+64)||"0"));if(x>1n<<24n)throw Error("pv");return Number(x)},N=x=>{if(x>4096||(N.b=(N.b||0)+x)>16384)throw Error("pv");return x},
 by=o=>"0x"+d.slice((o+32)*2,(o+32+W(d,o))*2),tup=o=>{const mo=o+W(d,o+64);return{pv:by(o+W(d,o)),ms:Array.from({length:N(W(d,mo))},(_,i)=>by(mo+32+W(d,mo+32+i*32)))}},
-arr=h0=>{const a=W(d,h0);return Array.from({length:N(W(d,a))},(_,i)=>tup(a+32+W(d,a+32+i*32)))},cs=sel===SEL_CPSETTLE?[tup(0)]:sel==="fcccb833"?arr(0):sel==="e2b28725"?arr(32):[];
+arr=h0=>{const a=W(d,h0);return Array.from({length:N(W(d,a))},(_,i)=>tup(a+32+W(d,a+32+i*32)))},cs=sel===SEL_CPSETTLE||sel===SEL_CPSTIP?[tup(0)]:sel==="fcccb833"?arr(0):sel==="e2b28725"?arr(32):[];
 if(!cs.length)for(let i=h.indexOf(SEL_CPSETTLE,8);i>=0;i=h.indexOf(SEL_CPSETTLE,i+1))if(!(i%2))try{cs.push(tup(i/2))}catch{}
 return cs.flatMap(({pv,ms})=>{try{const p=strip0x(pv),s=p.slice(W(p,0)*2),ar=i=>{const o=W(s,i*32);return Array.from({length:N(W(s,o))},(_,k)=>"0x"+s.slice((o+32+k*32)*2,(o+64+k*32)*2))},lv=ar(4);return[{nl:lv.length,lv,nu:ar(3),lk:ar(17),ln:ar(18),ms}]}catch{return[]}})};
 const cpEvSig=(k,a,b=[])=>k+keccak(cpU8(a.join(",")+"|"+b.join(",")));
