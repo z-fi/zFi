@@ -649,30 +649,24 @@ if (exported) {
 
   check('every mode toggle shares the toggle styling', () => {
     // Every control in the meta row, not just the mode toggles: the sound
-    // button fell through the SAME way the names tile did, because it is a
-    // second ID list and nothing checks a new id is in it.
-    const toggles = ['lq', 'ln', 'wn', 'pv'];
-    const metaCtl = ['th', 'lk', 'lq', 'ln', 'wn', 'pv'];
+    // button fell through the SAME way the names tile did, because it was a
+    // second ID list and nothing checked a new id was in it. The row now shares
+    // one class, `.mb`, so the failure to guard is a button that lacks it, or an
+    // ID list creeping back in beside it.
     const css = [...html.matchAll(/<style>([\s\S]*?)<\/style>/g)].map(m => m[1]).join('\n');
     if (!css) throw Error('found no stylesheet in the page');
-    // `#lq` must end the identifier here: `#lqPxRow` is a different element,
-    // and matching it would drag JS string literals in as if they were rules.
-    const rules = [...css.matchAll(/#lq(?![\w-])[^{}]*\{[^}]*\}/g)].map(m => m[0]);
-    if (!rules.length) throw Error('found no #lq rules at all — the selector shape changed');
-    const missing = [];
-    for (const rule of rules) {
-      for (const id of toggles) if (!rule.includes('#' + id)) missing.push(`${id} in ${rule.slice(0, 48)}…`);
-    }
-    if (missing.length) throw Error(`a toggle is missing from its own styling:\n      ${missing.join('\n      ')}`);
-
-    // The shared meta-row rules: whatever `#th` is in, every sibling must be.
-    const shared = [...css.matchAll(/#th(?![\w-])[^{}]*\{[^}]*\}/g)].map(m => m[0]);
-    const gaps = [];
-    for (const rule of shared) {
-      for (const id of metaCtl) if (!rule.includes('#' + id)) gaps.push(`${id} in ${rule.slice(0, 44)}…`);
-    }
-    if (gaps.length) throw Error(`a meta control is missing from a shared rule:\n      ${gaps.join('\n      ')}`);
-    return `${toggles.length} toggles across ${rules.length} rules, ${metaCtl.length} controls across ${shared.length} shared`;
+    if (!/\.mb\{[^}]*display:inline-flex/.test(css)) throw Error('the shared .mb toggle rule is gone');
+    const at = html.indexOf('<span class="mtl">');
+    if (at < 0) throw Error('found no meta row');
+    const row = html.slice(at, html.indexOf('</div>', at));
+    const btns = [...row.matchAll(/<button\b[^>]*>/g)].map(m => m[0]);
+    if (btns.length < 7) throw Error(`expected at least 7 meta-row buttons, found ${btns.length}`);
+    const bare = btns.filter(t => !/\bclass="(?:[^"]* )?mb(?: [^"]*)?"/.test(t)).map(t => (t.match(/id="([^"]+)"/) || [, t.slice(0, 30)])[1]);
+    if (bare.length) throw Error(`a meta control lacks the shared .mb class: ${bare.join(', ')}`);
+    const ids = btns.map(t => (t.match(/id="([^"]+)"/) || [])[1]).filter(Boolean);
+    const lists = [...css.matchAll(/[^{}]*\{/g)].map(m => m[0]).filter(sel => ids.filter(id => new RegExp(`#${id}(?![\\w-])`).test(sel)).length > 1);
+    if (lists.length) throw Error(`a rule lists meta controls by id instead of .mb: ${lists[0].trim().slice(0, 60)}…`);
+    return `${btns.length} meta controls share .mb`;
   });
 
   check('every fetch lives in the shared read layer, and signing never reaches it', () => {
