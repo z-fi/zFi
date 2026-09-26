@@ -9,7 +9,7 @@ after(closeAllPages);
 
 const ROUTER = '0x0000006c96afa6f1cd4df8fe19bc0d8b6a6cd7b5';
 const BOX = '0x52fc37ee7741468a15ce879320a7a41cebaeb232';
-const KEEPER = 'https://keeper.test';
+const KEEPER = 'https://keeper.test/evm-pool/keeper';
 // Tacit's vectors (docs/EVM-POOL.md, "Receive address"): identity key 0x11 × 32.
 const KEY = '0x' + '11'.repeat(32);
 const NPK0 = 4783613888947850950044057964142544727340891053660060203316524895455918575012n;
@@ -17,17 +17,18 @@ const word = x => BigInt(x).toString(16).padStart(64, '0');
 
 const roster = k => ({ 'zswap:ep3': JSON.stringify({ t: Date.now(), v: [[], [], [], [], [], [], [], [], k[1] || [], k[8453] || [], [], []] }) });
 
-function chainOn(id, { live = true } = {}) {
+function chainOn(id, { live = true, infoChain } = {}) {
   const chain = new MockChain({ chainId: '0x' + id.toString(16) });
   if (live) chain.code.set(ROUTER, '0x5f5ff3');
   chain.answers.set(`${ROUTER}:7944b37a`, '0x' + word(BOX));
   chain.lanes = chain.lanes || {};
   chain.lanes['keeper.test/evm-pool/keeper/receive'] = { box: BOX, kind: 'receive', status: 'watching' };
+  chain.lanes['keeper.test/evm-pool/keeper/info'] = { chainId: infoChain ?? id, router: ROUTER };
   return chain;
 }
 
-async function open(id, { live = true, keepers = { [id]: [KEEPER] } } = {}) {
-  const p = await loadPage({ chain: chainOn(id, { live }), storage: roster(keepers), beforeParse: w => {
+async function open(id, { live = true, keepers = { [id]: [KEEPER] }, infoChain } = {}) {
+  const p = await loadPage({ chain: chainOn(id, { live, infoChain }), storage: roster(keepers), beforeParse: w => {
     const inner = w.fetch;
     w.__keeper = [];
     w.fetch = async (url, init) => {
@@ -61,6 +62,11 @@ describe('the private ETH receive address', () => {
     p = await open(8453, { keepers: {} });
     assert.ok(!shown(p), 'no keeper listed: no Private button');
     p.close();
+    p = await open(8453, { infoChain: 1 });
+    await p.waitFor(() => (p.chain.httpLog || []).some(x => x.url.includes('/evm-pool/keeper/info')), { label: 'the keeper to be asked its chain' });
+    await p.settle();
+    assert.ok(!shown(p), 'a keeper that serves another chain: no Private button');
+    p.close();
   });
 
   test('on Base, Private shows the address from the router, tells the keeper, and fills in a send to it', async () => {
@@ -73,7 +79,7 @@ describe('the private ETH receive address', () => {
     assert.match(p.text('wkList'), /Your private ETH address/);
     const call = p.chain.calls.find(c => c.to === ROUTER && c.selector === '7944b37a');
     assert.equal(call.data, '0x7944b37a' + word(NPK0) + word(25), 'receiveBoxOf(npk, 25)');
-    assert.deepEqual(p.window.__keeper.map(k => [k.url, k.body]), [[KEEPER + '/evm-pool/keeper/receive', { chainId: 8453, npk: NPK0.toString(), feeBps: 25 }]]);
+    assert.deepEqual(p.window.__keeper.map(k => [k.url, k.body]), [[KEEPER + '/receive', { chainId: 8453, npk: NPK0.toString(), feeBps: 25 }]]);
     assert.ok(!p.window.eval('pvMode'), 'the Ethereum panel stays shut on Base');
     p.click(okIn(p));
     await p.waitFor(() => p.value('rc') === BOX, { label: 'a send to the address' });
@@ -102,7 +108,7 @@ describe('the private ETH receive address', () => {
     await p.waitFor(() => /Key unlocked/.test(p.text('pvKey')), { label: 'the key to unlock' });
     await p.waitFor(() => p.window.__keeper.length > 0, { label: 'the keeper to hear of the address' });
     const npk = p.window.eval('String(rxNpk())');
-    assert.deepEqual(p.window.__keeper.map(k => [k.url, k.body]), [[KEEPER + '/evm-pool/keeper/receive', { chainId: 1, npk, feeBps: 25 }]]);
+    assert.deepEqual(p.window.__keeper.map(k => [k.url, k.body]), [[KEEPER + '/receive', { chainId: 1, npk, feeBps: 25 }]]);
     assert.ok(!p.visible('wkWrap'), 'no sheet opens: this happens quietly');
     p.close();
   });

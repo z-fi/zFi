@@ -7691,7 +7691,7 @@ if(c!==CHAIN_ID){tbScan.k=c+account;setChain(c);showNet()}
 const b=x.b=retAddr(await nodeRead(C,[{to:TB_R,data:"0x34a44915"+tbA(i)},L]).catch(()=>""));if(!b)throw Error("The Tacit pool is not live on "+n+" yet.");
 const w=await tbW(b);if(w||strip0x(await nodeRead("eth_getCode",[b,L]))){tbPut(b,x);if(w&&nowS()>i.deadline)return tbScan(1);throw Error("That box is already paid.")}
 if(i.deadline<nowS()+3600)throw Error("That box expires within the hour.");
-await Promise.race([epP,new Promise(r=>setTimeout(r,9e3))]);let e="No keeper serves "+n+" yet.";for(const k of TB_K[c])try{await relayFetch("/evm-pool/keeper/deposit",{intent:i,hint:j.hint},k);e="";break}catch(E){e=E.message}
+await Promise.race([epP,new Promise(r=>setTimeout(r,9e3))]);let e="No keeper serves "+n+" yet.";for(const k of TB_K[c])try{await relayFetch("/deposit",{intent:i,hint:j.hint},k);e="";break}catch(E){e=E.message}
 if(e)throw Error(e);tbPut(b,x);
 if(await sure("Shield "+tbE(a)+" into the Tacit pool on "+n+" for the wallet that made this link? It goes to box "+b+", less a keeper fee of "+tbE(a-j.hint.outputs.reduce((s,o)=>s+BigInt(o?.v||0),0n))+"; if unfinished after "+new Date(i.deadline*1e3).toLocaleString()+" it returns to "+i.refund+". A swap with exact ETH out"+(c<2?", or a private withdrawal,":"")+" can pay it too."))location.hash="chain="+c+"&token="+ZERO+"&amount="+formatUnits(a,18)+"&to="+b}catch(E){stat.textContent=E.message}};
 const rxP=21888242871839275222246405745257275088548364400416034343698204186575808495617n,rxL=2736030358979909402780800718157159386076813972158567259200215660948447373041n,rxM=a=>(a%rxP+rxP)%rxP,rxW=(b,e)=>{let r=1n;for(b=rxM(b);e;e>>=1n,b=b*b%rxP)if(e&1n)r=r*b%rxP;return r},rxC={},
@@ -7703,8 +7703,8 @@ rxB=k=>{let r=[0n,1n],a=[5299619240641551281634865583518297030282874472190772894
 rxS=(t,...m)=>{const x=cpCat(cpU8("tacit-btc-pool-zk-"+t),...m);return big(cpCat(sha2(cpCat(x,[0])),sha2(cpCat(x,[1]))))%rxL},rxK={},
 rxNpk=()=>rxK[cpSeed]||(rxK[cpSeed]=(()=>{const d=bHmac(b32(BigInt(cpSeed)),cpU8("tacit-btc-pool-seed-v1")),M=cpU8("mainnet"),a=rxS("wallet-spend-v1",M,d),n=rxS("wallet-nk-v1",M,d),s=cpCat([0],hexToBytes(keccak(cpCat(cpU8("tacit-evm-pool-receive-key-v1"),b32(n),b32(0n)))));
 return rxH([...rxB(a+rxS("auth-tweak-v1",s)),...rxB(n+rxS("nk-tweak-v1",s))])})()),rxOn={},
-rxPost=f=>{const c=CHAIN_ID;if(cpSeed&&(f||rxOn[c]))for(const k of TB_K[c])relayFetch("/evm-pool/keeper/receive",{chainId:c,npk:String(rxNpk()),feeBps:25},k).catch(()=>{})},
-rxProbe=async()=>{const c=CHAIN_ID;if(c in rxOn)return;rxOn[c]=0;await epP;rxOn[c]=TB_K[c].length&&strip0x(await nodeRead("eth_getCode",[TB_R,L]).catch(()=>"")||"")?1:0;if(c===CHAIN_ID){modeBtns();rxPost()}},
+rxPost=f=>{const c=CHAIN_ID;if(cpSeed&&(f||rxOn[c]))for(const k of TB_K[c])relayFetch("/receive",{chainId:c,npk:String(rxNpk()),feeBps:25},k).catch(()=>{})},
+rxProbe=async()=>{const c=CHAIN_ID;if(c in rxOn)return;rxOn[c]=0;await epP;const k=TB_K[c][0];rxOn[c]=k&&(await relayFetch("/info",null,k).catch(()=>0)||{}).chainId==c&&strip0x(await nodeRead("eth_getCode",[TB_R,L]).catch(()=>"")||"")?1:0;if(c===CHAIN_ID){modeBtns();rxPost()}},
 rxShow=async()=>{try{if(!account)throw Error("Connect a wallet to see your private ETH address.");if(!cpSeed)await cpUnlock();const c=CHAIN_ID,n=CHAINS[c].name,a=retAddr(await nodeRead(C,[{to:TB_R,data:"0x7944b37a"+encUint(rxNpk())+encUint(25)},L]).catch(()=>""));
 if(!a)throw Error("The Tacit pool is not live on "+n+" yet.");rxPost(1);const w=await tbW(a);
 if(await dlg("Your private ETH address. Whatever is sent to it, on Ethereum, Base or Robinhood, is shielded into your Tacit balance on that chain, less at most 0.25% to whoever sweeps it in."+(w?" "+tbE(w)+" is waiting on "+n+".":"")+" Spend it on tacit.finance.\n\nOK fills in a send of ETH to it.",a,1)!==null)location.hash="chain="+c+"&token="+ZERO+"&to="+a}catch(E){stat.textContent=E.message}};

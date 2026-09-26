@@ -15,7 +15,7 @@ after(closeAllPages);
 
 const ROUTER = '0x0000006c96afa6f1cd4df8fe19bc0d8b6a6cd7b5';
 const BOX = '0x00000000000000000000000000000000000b0c5e';
-const KEEPER = 'https://keeper.test';
+const KEEPER = 'https://keeper.test/evm-pool/keeper';
 const AMOUNT = 5n * 10n ** 17n;  // 0.5 ETH
 const now = () => Math.floor(Date.now() / 1000);
 
@@ -51,7 +51,7 @@ function servesRoster(chain) {
 function pool(chain, { live = true } = {}) {
   if (live) chain.answers.set(`${ROUTER}:34a44915`, '0x' + BOX.slice(2).padStart(64, '0'));
   chain.lanes = chain.lanes || {};
-  chain.lanes[KEEPER.slice(8) + '/evm-pool/keeper/deposit'] = { box: BOX, kind: 'deposit' };
+  chain.lanes[KEEPER.slice(8) + '/deposit'] = { box: BOX, kind: 'deposit' };
   return chain;
 }
 
@@ -93,7 +93,7 @@ describe('a Tacit EVM pool deposit box', () => {
     await p.waitFor(() => p.value('rc') === BOX, { label: 'the box as recipient' });
     await p.settle();
     assert.equal(p.window.__keeper.length, 1);
-    assert.equal(p.window.__keeper[0].url, KEEPER + '/evm-pool/keeper/deposit');
+    assert.equal(p.window.__keeper[0].url, KEEPER + '/deposit');
     assert.deepEqual(p.window.__keeper[0].body, { intent: sent.intent, hint: sent.hint });
     assert.match(p.asked.confirm[0], /Shield 0\.5 ETH into the Tacit pool on Ethereum for the wallet that made this link/);
     assert.match(p.asked.confirm[0], /keeper fee of 0\.001 ETH/);
@@ -119,7 +119,7 @@ describe('a Tacit EVM pool deposit box', () => {
     } });
     await p.waitFor(() => p.window.__keeper.length === 1, { label: 'the keeper from the roster to be asked' });
     assert.doesNotMatch(p.text('stat'), /No keeper/);
-    assert.equal(p.window.__keeper[0].url, KEEPER + '/evm-pool/keeper/deposit');
+    assert.equal(p.window.__keeper[0].url, KEEPER + '/deposit');
     p.close();
   });
 

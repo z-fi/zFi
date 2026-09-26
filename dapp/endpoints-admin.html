@@ -176,8 +176,8 @@ const SERVICE = {
            desc: 'The WalletConnect project id — 32 lowercase hex characters, not a URL. The page uses the first valid entry.' },
   tacad: { rule: /^https:\/\/[\w.-]+(:\d+)?\/[\w.\/@-]*\/$/, probe: 'tacad', fmt: 'https://host/…/ — the folder that holds <byte>.json, ending in /',
            desc: 'Mirrors of the TAC airdrop proof files — https://, a folder ending in /. Every proof is checked against the airdrop contract\'s Merkle root, so a mirror can be down but never wrong.' },
-  evk:   { rule: /^https:\/\/\S*[^/\s]$/, probe: 'evk', fmt: 'https://host[/path], no trailing /',
-           desc: 'Keepers for the Tacit EVM pool on this chain — https://, the base that serves /evm-pool/keeper/*. zSwap posts a deposit box to the first that accepts it.' },
+  evk:   { rule: /^https:\/\/\S*[^/\s]$/, probe: 'evk', fmt: 'https://host/evm-pool/keeper, no trailing /',
+           desc: 'Keepers for the Tacit EVM pool on this chain — https://, the keeper base, ending in /evm-pool/keeper. zSwap posts a deposit box to the first that accepts it.' },
 };
 // Known-good candidates offered when a list zSwap reads has fewer than two working entries.
 const SUGGEST = {
@@ -525,7 +525,7 @@ async function probeRaw(kind, u, chain) {
       if (want !== null && j.result.length !== want) throw Error(`returned ${j.result.length} of ${want} logs`);
       res = [`ok · ${j.result.length} logs over ${parseInt(q.toBlock, 16) - TACIT_FROM} blocks · ${t}`, 'ok'];
     } else if (kind === 'evk') {
-      const r = await fetch(base + '/evm-pool/keeper/info', { signal });
+      const r = await fetch(base + '/info', { signal });
       const t = ms(), j = await r.json();
       if (!r.ok || String(j.router).toLowerCase() !== EVK_ROUTER) throw Error('HTTP ' + r.status + ', not a keeper for router ' + EVK_ROUTER);
       res = chain && BigInt(j.chainId) !== chain ? [`fail · keeps chain ${j.chainId}, not ${chain} · ${t}`, 'bad'] : [`ok · chain ${j.chainId} · ${t}`, 'ok'];
