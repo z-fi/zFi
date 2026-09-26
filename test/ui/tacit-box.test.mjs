@@ -98,6 +98,29 @@ describe('a Tacit EVM pool deposit box', () => {
     p.close();
   });
 
+  test('a swap pays a box only as exact ETH out of the intent\'s amount', async () => {
+    const storage = { ...roster(), 'zswap:tb': JSON.stringify([{ c: 1, b: BOX, i: intent() }]) };
+    const refusal = /A Tacit pool box takes exactly 0\.5 ETH on Ethereum/;
+    const swapTo = async (hash, want) => {
+      const p = await loadPage({ chain: pool(new MockChain()), storage, hash });
+      await p.connect({ pin: false });
+      await p.settle();
+      assert.equal(p.window.eval('TOKENS[toSel.value].sym'), want.out);
+      assert.equal(p.window.eval('mode'), want.mode);
+      return p;
+    };
+    let p = await swapTo('token=ETH&out=USDC&amount=0.5&to=' + BOX, { out: 'USDC', mode: 'in' });
+    await p.waitFor(() => refusal.test(p.text('stat')), { label: 'an exact-in swap to the box refused' });
+    p.close();
+    p = await swapTo('token=USDC&out=ETH&amount=0.4&exactOut=1&to=' + BOX, { out: 'ETH', mode: 'out' });
+    await p.waitFor(() => refusal.test(p.text('stat')), { label: 'the wrong amount of ETH out refused' });
+    p.close();
+    p = await swapTo('token=USDC&out=ETH&amount=0.5&exactOut=1&to=' + BOX, { out: 'ETH', mode: 'out' });
+    assert.doesNotMatch(p.text('stat'), refusal, 'exactly the box\'s amount of ETH out is allowed');
+    assert.ok(!p.$('rc').classList.contains('bad'));
+    p.close();
+  });
+
   test('a box that already holds funds is not paid again', async () => {
     const chain = pool(new MockChain());
     chain.native.set(BOX, AMOUNT);
