@@ -7,6 +7,8 @@
 // back to its refund address.
 import { test, describe, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { AbiCoder } from 'ethers';
 import { A, MockChain, loadPage, closeAllPages } from './harness.mjs';
 
 after(closeAllPages);
@@ -24,7 +26,27 @@ const intent = (o = {}) => ({
 });
 const hint = { outputs: [{ v: (AMOUNT - 10n ** 15n).toString(), npk: '5', rho: '9' }, null], fee: '1000000000000000', memo0: '0x', memo1: '0x' };
 const link = (o = {}, chainId = 1) => 'tacit-box=' + Buffer.from(JSON.stringify({ chainId, intent: intent(o), hint })).toString('base64url');
-const roster = (k1 = [KEEPER]) => ({ 'zswap:ep3': JSON.stringify({ t: Date.now(), v: [[], [], [], [], [], [], [], [], k1, [], [], []] }) });
+const roster = (k1 = [KEEPER], k8453 = []) => ({ 'zswap:ep3': JSON.stringify({ t: Date.now(), v: [[], [], [], [], [], [], [], [], k1, k8453, [], []] }) });
+const SRC = readFileSync(new URL('../../zSwap.html', import.meta.url), 'utf8');
+const EPS = /const EPS="(0x[0-9a-fA-F]{40})"/.exec(SRC)[1].toLowerCase();
+const RPCS_PIN = /const RPCS_PIN="(0x[0-9a-fA-F]{40})"/.exec(SRC)[1].toLowerCase();
+
+/* The zEndpoints roster as the contract serves it, with this keeper under evk/1. */
+function servesRoster(chain) {
+  const ethCall = chain.ethCall.bind(chain), coder = AbiCoder.defaultAbiCoder();
+  chain.ethCall = (tx, block) => {
+    const to = (tx.to || '').toLowerCase();
+    // A roster read is two L1 nodes that must agree, so it can land after the box's own reads.
+    if (to === EPS && tx.data.startsWith('0xc03c2d74')) return new Promise(r => {
+      const answer = () => r(coder.encode(['string[][]'], [[[], [], [], [], [], [], [], [], [KEEPER], [], []]]));
+      const wait = n => ((chain.httpLog || []).some(x => x.method === 'eth_getCode') || n > 2000 ? setImmediate(() => setImmediate(answer)) : setImmediate(() => wait(n + 1)));
+      wait(0);
+    });
+    if (to === RPCS_PIN && tx.data.startsWith('0xd77e4c79')) return coder.encode(['string[]'], [[]]);
+    return ethCall(tx, block);
+  };
+  return chain;
+}
 
 function pool(chain, { live = true } = {}) {
   if (live) chain.answers.set(`${ROUTER}:34a44915`, '0x' + BOX.slice(2).padStart(64, '0'));
@@ -82,6 +104,31 @@ describe('a Tacit EVM pool deposit box', () => {
     assert.equal(kept[0].b, BOX);
     const call = p.chain.calls.find(c => c.to === ROUTER);
     assert.equal(call.selector, '34a44915', 'the box comes from the router, not from the link');
+    p.close();
+  });
+
+  test('on a first visit the keeper comes from the roster read, not a cached copy', async () => {
+    // The link is what opens the page, so it is read while the roster is still on its way.
+    const p = await loadPage({ walletless: true, chain: servesRoster(pool(new MockChain())), hash: link(), beforeParse: w => {
+      const inner = w.fetch;
+      w.__keeper = [];
+      w.fetch = async (url, init) => {
+        if (String(url).includes('/evm-pool/keeper/') && init && init.body) w.__keeper.push({ url: String(url), body: JSON.parse(init.body) });
+        return inner(url, init);
+      };
+    } });
+    await p.waitFor(() => p.window.__keeper.length === 1, { label: 'the keeper from the roster to be asked' });
+    assert.doesNotMatch(p.text('stat'), /No keeper/);
+    assert.equal(p.window.__keeper[0].url, KEEPER + '/evm-pool/keeper/deposit');
+    p.close();
+  });
+
+  test('a box on another chain is read from that chain\'s nodes, whatever chain the wallet is on', async () => {
+    const p = await open({ hash: link({}, 8453), storage: roster([], [KEEPER]), confirm: [true] });
+    await p.waitFor(() => p.window.__keeper.length === 1, { label: 'the Base keeper to be asked', timeout: 20000 });
+    assert.doesNotMatch(p.text('stat'), /not live/);
+    assert.equal(p.window.eval('CHAIN_ID'), 8453);
+    assert.match(p.asked.confirm[0], /into the Tacit pool on Base/);
     p.close();
   });
 

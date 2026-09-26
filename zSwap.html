@@ -7680,18 +7680,18 @@ const n=EP_Q.length,rd=x=>quorum2(L1_RPCS,x),
 W=i=>parseInt(e.slice(i*64,i*64+64),16),o=W(0)/32;
 const rl=decStrArr(r);if(W(o)!==n)return void(epM(L1_RPCS,rl,EP_H),old());
 const v=EP_Q.map((_,i)=>decStrArr(e,o+1+W(o+1+i)/32));v[11]=rl;epApply(ok?v.map((x,i)=>x.length?x:c.v[i]):v);try{LS[EP_KEY]=JSON.stringify({t:Date.now(),v})}catch{}};
-epLoad().catch(()=>{try{const c=JSON.parse(LS[EP_KEY]);if(c.t<=Date.now())epApply(c.v)}catch{}});
+const epP=epLoad().catch(()=>{try{const c=JSON.parse(LS[EP_KEY]);if(c.t<=Date.now())epApply(c.v)}catch{}});
 const TB_R="0x0000006C96Afa6f1cD4DF8FE19bc0d8B6A6Cd7B5",tbL=()=>{try{return JSON.parse(LS["zswap:tb"])||[]}catch{return[]}},tbPut=(b,x)=>{try{LS["zswap:tb"]=JSON.stringify(tbL().filter(y=>y.b!==b).concat(x||[]))}catch{}},
-tbA=i=>[i.amount,i.outLeaf0,i.outLeaf1,i.memo0Hash,i.memo1Hash,i.refund,i.deadline,i.nonce].map(encUint).join(""),tbE=w=>formatUnits(w,18)+" ETH",tbW=async b=>BigInt(await rpc("eth_getBalance",[b,L])||"0x0"),
+tbA=i=>[i.amount,i.outLeaf0,i.outLeaf1,i.memo0Hash,i.memo1Hash,i.refund,i.deadline,i.nonce].map(encUint).join(""),tbE=w=>formatUnits(w,18)+" ETH",tbW=async b=>BigInt(await nodeRead("eth_getBalance",[b,L])||"0x0"),
 tbChk=(to,w,c=CHAIN_ID)=>{const x=tbL().find(x=>x.b===to.toLowerCase());return x&&(x.c!==c||w!==BigInt(x.i.amount))?"A Tacit pool box takes exactly "+tbE(x.i.amount)+" on "+CHAINS[x.c].name+", sent directly.":""},
 tbScan=async f=>{const k=CHAIN_ID+account;if(!account||tbScan.k===k&&!f)return;tbScan.k=k;for(const x of tbL())if(x.c===CHAIN_ID&&nowS()>x.i.deadline){const w=await tbW(x.b);
 if(!w)tbPut(x.b);else if(await sure("Your Tacit pool box holds "+tbE(w)+" past its deadline. Return it to "+x.i.refund+"?"))await sendTx([{from:account,to:TB_R,data:"0xf255eb45"+tbA(x.i)+encUint(0)}])}},
 tbGo=async r=>{try{const j=JSON.parse(atob(r.replace(/-/g,"+").replace(/_/g,"/"))),i=j.intent,c=+j.chainId,a=BigInt(i.amount),n=TB_K[c]&&CHAINS[c].name,x={c,b:0,i};if(!n)throw Error("That box is on a chain zSwap does not serve.");
-if(c!==CHAIN_ID){setChain(c);showNet()}
-const b=x.b=retAddr(await rpc(C,[{to:TB_R,data:"0x34a44915"+tbA(i)},L]).catch(()=>""));if(!b)throw Error("The Tacit pool is not live on "+n+" yet.");
-const w=await tbW(b);if(w||strip0x(await rpc("eth_getCode",[b,L]))){tbPut(b,x);if(w&&nowS()>i.deadline)return tbScan(1);throw Error("That box is already paid.")}
+if(c!==CHAIN_ID){tbScan.k=c+account;setChain(c);showNet()}
+const b=x.b=retAddr(await nodeRead(C,[{to:TB_R,data:"0x34a44915"+tbA(i)},L]).catch(()=>""));if(!b)throw Error("The Tacit pool is not live on "+n+" yet.");
+const w=await tbW(b);if(w||strip0x(await nodeRead("eth_getCode",[b,L]))){tbPut(b,x);if(w&&nowS()>i.deadline)return tbScan(1);throw Error("That box is already paid.")}
 if(i.deadline<nowS()+3600)throw Error("That box expires within the hour.");
-let e="No keeper serves "+n+" yet.";for(const k of TB_K[c])try{await relayFetch("/evm-pool/keeper/deposit",{intent:i,hint:j.hint},k);e="";break}catch(E){e=E.message}
+await Promise.race([epP,new Promise(r=>setTimeout(r,9e3))]);let e="No keeper serves "+n+" yet.";for(const k of TB_K[c])try{await relayFetch("/evm-pool/keeper/deposit",{intent:i,hint:j.hint},k);e="";break}catch(E){e=E.message}
 if(e)throw Error(e);tbPut(b,x);
 if(await sure("Shield "+tbE(a)+" into the Tacit pool on "+n+" for the wallet that made this link? It goes to box "+b+", less a keeper fee of "+tbE(a-j.hint.outputs.reduce((s,o)=>s+BigInt(o?.v||0),0n))+"; if unfinished after "+new Date(i.deadline*1e3).toLocaleString()+" it returns to "+i.refund+". A swap with exact ETH out"+(c<2?", or a private withdrawal,":"")+" can pay it too."))location.hash="chain="+c+"&token="+ZERO+"&amount="+formatUnits(a,18)+"&to="+b}catch(E){stat.textContent=E.message}};
 const bGet=async p=>{let e;for(const u of B_API){try{const j=await relayFetch(p,null,u);if(j&&j.status!=="unknown")return j}catch(x){e=x}}throw e||Error("No Bitcoin node answered.")};
