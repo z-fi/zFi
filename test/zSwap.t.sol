@@ -7,8 +7,8 @@ import {zSwap} from "../src/zSwap.sol";
 contract zSwapDeployTest is Test {
     // keccak256 and length of zSwap.html. To recompute after editing the dapp:
     //   node -e "const e=require('ethers'),fs=require('fs');const h=fs.readFileSync('zSwap.html');console.log(e.keccak256(h),h.length)"
-    bytes32 constant EXPECTED_HASH = 0x066934917c6ba323ce0338a2f0cb9dd2ea9111e902471be179b3c4958fb75d88;
-    uint256 constant EXPECTED_LEN = 680814;
+    bytes32 constant EXPECTED_HASH = 0x4e710602975daffbe204d211949b268e6ae60258a688fdf99f6be9185e4ed73f;
+    uint256 constant EXPECTED_LEN = 680746;
 
     /// @dev Deploys `data` as a contract whose runtime bytecode IS that data,
     /// mirroring how the chunks are deployed on-chain (PUSH2 len, DUP1,

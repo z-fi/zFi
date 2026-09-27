@@ -236,6 +236,21 @@ describe('Basenames are read from Base', () => {
     assert.match(status, /not registered/i);
     p.close();
   });
+
+  test('a Basename whose address read fails is not called unregistered', async () => {
+    const base = baseFixture(), req = base.request.bind(base);
+    base.request = async (a) => {
+      if (a.method === 'eth_call' && String(a.params?.[0]?.data).startsWith('0x3b3b57de'))
+        throw Object.assign(Error('rate limited'), { code: -32005 });
+      return req(a);
+    };
+    const { p, chain } = await openOn(RH, { base });
+    chain.remotes['blxrbdn'] = base;
+    const { shown, status } = await resolveRecipient(p, 'alice.base.eth');
+    assert.equal(shown, '');
+    assert.doesNotMatch(status, /not registered/i);
+    p.close();
+  });
 });
 
 describe('the connected account shows the name it holds', () => {
@@ -274,6 +289,32 @@ describe('the connected account shows the name it holds', () => {
     l1.reverse.set(A.ACCOUNT.toLowerCase(), 'me.wei');
     const { p } = await openOn(RH, { l1 });
     assert.equal(p.text('addr'), 'me.wei');
+    p.close();
+  });
+});
+
+describe('on Ethereum, a wallet node that fails a name read does not make the name unregistered', () => {
+  // Connected on mainnet, names are read through the wallet and nowhere else
+  // (a browser wallet is the RPC; see wallet-picker). A node that errors -
+  // "header not found", a rate limit - says nothing about the name, so the
+  // page says the lookup failed rather than that a registered name is not.
+  test('a .wei name the wallet node cannot read is a failed lookup', async () => {
+    const chain = new MockChain({ chainId: 1, autoConnected: true });
+    chain.names.set('alice.wei', NAMED);
+    const req = chain.request.bind(chain);
+    chain.request = async (a) => {
+      if (a.method === 'eth_call' && String(a.params?.[0]?.to).toLowerCase() === A.WNS.toLowerCase())
+        throw Object.assign(Error('header not found'), { code: -32000 });
+      return req(a);
+    };
+    const p = await loadPage({ chain });
+    await p.connect();
+    p.click('tabSend');
+    await p.settle();
+    const { shown, status } = await resolveRecipient(p, 'alice.wei');
+    assert.equal(shown, '');
+    assert.match(status, /Could not look up/);
+    assert.doesNotMatch(status, /not registered/i);
     p.close();
   });
 });

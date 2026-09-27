@@ -487,7 +487,7 @@ background:var(--e);margin:.5em auto .1em}
 <label class="dly hide" id="sdChainL" title="Where the ether lands. From Ethereum this is that chain's own bridge — the same deposit those chains make for themselves, with nobody holding the money in between. It arrives in a few minutes. A time-locked send crosses through SlowArrival, which keeps the reverse yours on the far side; without it the bridge would be the sender there and nobody could take the transfer back.">Arrives on<span class="tipr"><small id="brNote"></small><select id="sdChain"><option value="0">This chain</option><option value="8453">Base</option><option value="4663">Robinhood</option></select></span></label>
 <div class="dly hide" id="rlOptL" title="Leaving an L2 has no bridge that is not about a week, so this escrows your ether here and pays a relayer to deliver it there. Nobody is obliged to take it. Until someone is running a relayer, opening one is a way to lock up your own money for eight days and six hours, and that is the whole of the risk — it cannot be spent, and it comes back.">Another chain<button type="button" id="rlOpt" class="lnbtn">Enable</button></div>
 <label class="dly hide" id="tipL" title="A time-locked transfer does not move on its own: once the lock expires somebody has to send the claim transaction. Tick this and the page posts a small ETH tip alongside the deposit, which pays a keeper to claim it for the recipient the moment it matures. The tip is refundable — if you reverse the transfer, the ether comes back to you.">Auto-claim<span class="tipr"><small id="tipNote"></small><input id="tipCk" type="checkbox" aria-describedby="tipNote"></span></label>
-<div class="dly hide" id="slowMoreL" title="SLOW's own page, served from its own bytes on this chain — guardians, per-token balances, and every transfer in and out, which this panel does not show. It opens with what you have typed here already filled in.">Everything else<a id="slowMore" target="_blank" rel="noopener">SLOW on chain ↗</a></div>
+<div class="dly hide" id="slowMoreL" title="SLOW's own page, served from its own bytes on this chain — guardians, per-token balances, and every transfer in and out, which this panel does not show. It opens with what you have typed here already filled in.">Guardians, history<a id="slowMore" target="_blank" rel="noopener">Open SLOW ↗</a></div>
 <label class="dly hide" id="fillL">Fill<select id="fill"><option value="1">Any amount</option><option value="0">All or nothing</option></select></label>
 <label class="dly hide" id="floorL">Floor total<input id="floorAmt" inputmode="decimal" placeholder="0.0"></label>
 <label class="dly hide" id="dRestL" title="A Dutch lot has TWO clocks. It decays to your floor over the window above, and then — unless it is given an end — it sits there fillable forever, until you spend gas cancelling. This is how long it rests at the floor before it lapses; the escrow then waits on the board until you reclaim it.">Rest at floor<select id="dRest"><option value="0">Forever</option><option value="86400">1 day</option><option value="604800">1 week</option><option value="2592000">30 days</option></select></label>
@@ -1648,7 +1648,7 @@ throw Error("no base read node");
 const bnRead=c=>baseRead(C,[c,L]).catch(()=>null);
 const bnRes=async nd=>retAddr(await baseRead(C,[{to:BNREG,data:"0x"+SEL_RSLV+pad32(nd)},L]).catch(()=>{throw NS_ERR()}));
 const bnFwd=async n=>{const nd=namehash(n),r=await bnRes(nd);
-return r?retAddr(await bnRead({to:r,data:"0x"+SEL_EADDR+pad32(nd)})):""};
+return r?retAddr(await baseRead(C,[{to:r,data:"0x"+SEL_EADDR+pad32(nd)},L])):""};
 const bnRev=async a=>{const nd=namehash(Sx(a).toLowerCase()+"."+BN_COIN+".reverse"),r=await bnRes(nd);
 if(!r)return"";
 try{return decodeString(await bnRead({to:r,data:"0x"+SEL_ENAME+pad32(nd)})||"0x").trim()}catch{return""}};
@@ -5595,7 +5595,7 @@ const n=v.toLowerCase(),d=brDest()||CHAIN_ID;
 if(!nameOk(n))return "";
 let a="";
 try{a=fresh?await nameFwd(n,d):await nameFwdCached(n,d)}
-catch(e){if(e&&e.offchain)throw e;if(e&&(e.retry||e.code===-32603||e.code===-32005||e.code===429))throw Object.assign(Error("Could not look up that name right now — try again."),{offchain:1})}
+catch(e){throw e?.offchain?e:Object.assign(Error("Could not look up that name right now — try again."),{offchain:1})}
 const r=isAddr(a)&&rcErr(a);if(r)throw Object.assign(Error(r),{offchain:1});return isAddr(a)?a:"";
 };
 async function updateSend(){
