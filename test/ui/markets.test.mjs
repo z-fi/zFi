@@ -217,7 +217,61 @@ test('markets mode', async (t) => {
   await t.test('winnings waiting on you are counted where you would look', async () => {
     const p = await openMarkets(pmChain({ held: { [BALL]: [ONE, 0n, 2n * ONE] } }));
     await p.waitFor(() => /Mine \(1\)/.test(p.$('mkChips').textContent), { label: 'the claim count' });
-    assert.match(p.text('mkSub'), /1 to claim/);
+    assert.match(p.text('mkSub'), /1 waiting on you/);
+  });
+
+  await t.test('a closed market you resolve asks for a result, by its deadline, and sends the side you confirm', async () => {
+    const chain = pmChain(), t0 = now(), DUE = 0xe0n;
+    chain.__extra = [{ id: DUE, d: 'Did the vote pass?', r: A.ACCOUNT, a: A.ZERO, o: t0 - 9 * 86400, c: t0 - 3600, y: ONE, n: ONE, p: 2n * ONE }];
+    const p = await openMarkets(chain);
+    await p.waitFor(() => /Mine \(1\)/.test(p.$('mkChips').textContent), { label: 'the resolve count' });
+    assert.match(p.text('mkSub'), /1 waiting on you/);
+    p.$('mkChips').querySelector('[data-f="done"]').click();
+    await p.waitFor(() => rows(p).some((r) => /vote pass/.test(r) && /resolve/.test(r)), { label: 'the row is tagged' });
+    await pick(p, DUE);
+    assert.match(p.$('mkInfo').textContent, /resolve by/);
+    assert.ok(act(p, 'void'), 'a resolver may also void');
+    act(p, 'rn').click();
+    assert.match(act(p, 'rn').textContent, /^Confirm: Resolve NO/, 'the first tap only arms it');
+    assert.equal(chain.sentTo(PM).length, 0);
+    act(p, 'rn').click();
+    await p_wait(chain, 'resolve');
+    const tx = chain.sentTo(PM)[0];
+    assert.equal(tx.data.slice(2, 10), '52a34b05');
+    assert.equal(word(tx.data, 0), DUE);
+    assert.equal(word(tx.data, 1), 0n, 'NO');
+  });
+
+  await t.test('a market with an empty side offers its resolver only a void', async () => {
+    const chain = pmChain(), t0 = now(), ONE_SIDED = 0xe2n;
+    chain.__extra = [{ id: ONE_SIDED, d: 'Nobody took the other side', r: A.ACCOUNT, a: A.ZERO, o: t0 - 9 * 86400, c: t0 - 3600, y: ONE, n: 0n, p: ONE }];
+    const p = await openMarkets(chain);
+    p.$('mkChips').querySelector('[data-f="done"]').click();
+    await p.waitFor(() => rows(p).some((r) => /other side/.test(r)), { label: 'listed' });
+    await pick(p, ONE_SIDED);
+    assert.equal(act(p, 'ry'), null);
+    assert.equal(act(p, 'rn'), null);
+    assert.ok(act(p, 'void'));
+    assert.match(p.$('mkInfo').textContent, /only void/);
+  });
+
+  await t.test('a losing position says so instead of offering a claim', async () => {
+    const p = await openMarkets(pmChain({ held: { [BALL]: [0n, ONE, 0n] } }));
+    p.$('mkChips').querySelector('[data-f="done"]').click();
+    await p.waitFor(() => rows(p).length === 1, { label: 'settled' });
+    await pick(p, BALL);
+    assert.equal(act(p, 'claim'), null);
+    assert.match(p.$('mkInfo').textContent, /You hold 1 NO · lost/);
+  });
+
+  await t.test('the odds bar and the two sides are colored, YES green and NO red', async () => {
+    const p = await openMarkets(pmChain());
+    const css = [...p.doc.querySelectorAll('style')].map((s) => s.textContent).join('');
+    assert.match(css, /\.mkbar\{[^}]*background:var\(--w\)/);
+    assert.match(css, /\.mkbar i\{[^}]*background:var\(--g\)/);
+    assert.match(css, /--g:#/);
+    await pick(p, RAIN);
+    assert.ok(p.$('mkInfo').querySelector('b.y') && p.$('mkInfo').querySelector('b.n'));
   });
 
   await t.test('the subtitle says which markets loaded, not how they are ordered', async () => {

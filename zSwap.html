@@ -7,8 +7,8 @@
 <title>zSwap</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400' width='400' height='400'%3E%3Crect width='400' height='400' fill='%23000'/%3E%3CclipPath id='frame'%3E%3Crect width='400' height='400'/%3E%3C/clipPath%3E%3Cg clip-path='url(%23frame)'%3E%3Cpath d='M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z' fill='white'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml">
 <meta name="theme-color" id="tc" content="#fff">
-<style>.ik{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}:root{color-scheme:light;--b:#fff;--f:#000;--m:#666;--e:#ddd;--k:#000;--kf:#fff;--kh:#333;--fh:#f5f5f5;--w:#c33;--hd:#000;--dm:#767676;--ph:#8f8f8f}
-.d{color-scheme:dark;--b:#0a0a0a;--f:#e8e8e0;--m:#888;--e:#2a2a2a;--k:#e8e8e0;--kf:#0a0a0a;--kh:#ccc;--fh:#161616;--w:#e57373;--hd:#333;--dm:#7b7b7b;--ph:#6e6e6e}
+<style>.ik{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}:root{color-scheme:light;--b:#fff;--f:#000;--m:#666;--e:#ddd;--k:#000;--kf:#fff;--kh:#333;--fh:#f5f5f5;--w:#c33;--g:#17803d;--hd:#000;--dm:#767676;--ph:#8f8f8f}
+.d{color-scheme:dark;--b:#0a0a0a;--f:#e8e8e0;--m:#888;--e:#2a2a2a;--k:#e8e8e0;--kf:#0a0a0a;--kh:#ccc;--fh:#161616;--w:#e57373;--g:#66bb6a;--hd:#333;--dm:#7b7b7b;--ph:#6e6e6e}
 :focus-visible{outline:2px solid var(--f);outline-offset:2px}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}.flip:hover{transform:none}}
 button,input,select,textarea{font-family:inherit}
@@ -233,8 +233,8 @@ margin-top:.55em;padding-top:.55em;border-top:1px solid var(--e);color:var(--f)}
 #wnRollEl{display:block;font-size:.72em;line-height:1.5;color:var(--m)}
 #lnNote,#floorNote,#wnNote,#mkNote{display:block;font-size:.7em;line-height:1.45;color:var(--m);text-align:center;text-wrap:balance;margin:.55em .2em 0}
 #lnNote:empty,#floorNote:empty,#wnNote:empty,#mkNote:empty{display:none}
-.mkbar{height:4px;background:var(--m);margin:.45em 0 .2em}
-.mkbar i{display:block;height:100%;background:var(--f)}
+.mkbar{height:4px;background:var(--w);margin:.45em 0 .2em}
+.mkbar i{display:block;height:100%;background:var(--g)}#mkActs [data-a^=y],#mkActs [data-a$=y],.mkhd>.y{color:var(--g)}#mkActs [data-a=no],#mkActs [data-a$=n],.mkhd>.n{color:var(--w)}.lqtag.mkt{color:var(--f);border-color:var(--f)}
 .mkr{cursor:pointer}
 .mkr.on{border-color:var(--f);position:relative}
 #mkList{max-height:22em;overflow:auto;margin:.2em 0 .5em;padding-top:1px}
@@ -3118,7 +3118,7 @@ const UIM={},uim=t=>{if(CHAIN_ID!==4663||!t||t.addr===ZERO)return 0n;const a=t.a
 const R_NS="This token does not move the exact amount sent: it takes a fee on transfer, rebases or is paused, so the contract refuses it.",R_SL="The price moved past your slippage bound. Try again, or raise slippage.";
 const R_OG="That order is no longer available — refresh the book.",R_RQ=" — refresh the quote and try again.";
 const REVERTS={
-"e2c865df":"Betting on this market has closed.","969bf728":"There is nothing to claim on this market.","8fc6f59b":"That market already exists.","7db1be50":"That market does not exist.","19918280":"This market does not allow selling back before it resolves.",
+"e2c865df":"Betting on this market has closed.","969bf728":"There is nothing to claim on this market.","8fc6f59b":"That market already exists.","97088ec3":"This market has already settled.","7db1be50":"That market does not exist.","19918280":"This market does not allow selling back before it resolves.",
 "646cf558":"That airdrop has already been claimed.","7ca55c77":"That claim's proof does not match — reload the page and try again.","797dba54":"There is nothing left to claim — it has all been paid out.","5088d84e":"The distributor cannot cover that claim yet — try again later.",
 "f0f25a33":"The airdrop claim window has closed.","9e87fac8":"Claims are paused right now.","67a2cc26":"That address cannot receive the airdrop.",
 "2746152a":R_SL,"2c19b8b8":R_SL,"bb2875c3":R_SL,"349465f1":R_SL,"d0b3be44":R_SL,
@@ -8499,12 +8499,12 @@ const mkDec1=h=>{h=strip0x(h);return mkEl(h,Number(Bx((h.slice(0,64)||"0")))*2)}
 const mkPosDec=(h,ids,P)=>{h=strip0x(h);const A=k=>{const o=Number(Bx(h.slice(k*64,k*64+64)))*2,c=Number(Bx(h.slice(o,o+64)));return Array.from({length:c},(_,i)=>Bx(h.slice(o+64+i*64,o+128+i*64)))},Y=A(0),N=A(1),K=A(2);
 Y.forEach((y,i)=>{if(y||N[i]||K[i])P[ids[i]]={y,n:N[i],c:K[i]};else delete P[ids[i]]});return P};
 const mkPosCall=ids=>({to:PM,data:"0xafa8f792"+encAddr(account)+pad32("40")+encUint(ids.length)+ids.map(encUint).join("")});
-const mkLive=m=>m.s===0&&nowS()<m.c;
+const mkLive=m=>m.s===0&&nowS()<m.c,mkDue=m=>!!account&&m.r===account.toLowerCase()&&!m.s&&nowS()>=m.c&&nowS()<m.c+2592000;
 const mkLeft=c=>{const d=c-nowS();return d<3600?Mx(1,Math.ceil(d/60))+"m":d<86400?Mf(d/3600)+"h":Mf(d/86400)+"d"};
 const mkWhen=m=>m.s?["","YES won","NO won","void"][m.s]:nowS()<m.c?mkLeft(m.c)+" left":nowS()>=m.c+2592000?"unresolved — anyone can void":"awaiting result";
 const mkNow=m=>{const sp=m.c-m.o;return sp>0?Mf(m.l*Mn(Mx(nowS()-m.o,0),sp)/sp):m.l};
 const mkTax=m=>Mx(m.x,mkNow(m));
-const mkPc=b=>String(+(b/100).toFixed(2));
+const mkD=c=>new Date(c*1e3).toLocaleString([],{dateStyle:"medium",timeStyle:"short"}),mkPc=b=>String(+(b/100).toFixed(2));
 const mkPct=m=>{const t=m.y+m.n;return t?Number((m.y*2000n+t)/t/2n)/10:50};
 const mkUsd=m=>{const t=mkTok(m.a),v=Number(formatUnits(m.p,t.dec));return/ETH/i.test(t.sym)?v*(ethUsd||2e3):/USD|BOLD|DAI/i.test(t.sym)?v:v*1e-6};
 const mkPosLoad=async all=>{const P={};if(account&&all.length){const ps=[];
@@ -8535,17 +8535,17 @@ mkNote.textContent=nf;mkPaintList();mkDetPaint();if(mkSel&&mkAmt.value.trim())mk
 catch{if(my===mkSeq)mkNote.textContent=mkAll.length?"Could not refresh just now — showing the last read.":"Could not load markets — retrying."}};
 const mkChipPaint=()=>{for(const c of mkChips.querySelectorAll("[data-f]"))c.classList.toggle("on",c.dataset.f===mkF);mkSort.value=mkS};
 const mkRow=m=>{const t=mkTok(m.a),p=mkPct(m),me=mkPos[m.id];
-return`<div class="lqrow mkr${mkSel&&mkSel.id===m.id?" on":""}" data-k="${m.id}" role="button" tabindex="0"><div class="lqband">${m.d.replace(/\p{C}/gu,"").slice(0,140).replace(/[<&]/g,c=>c<"<"?"&amp;":"&lt;")}${m.d.length>140?"…":""}</div><div class="mkbar"><i style="width:${p}%"></i></div><div class="lqmeta"><span>YES ${p}%</span><span>${sigAmt(m.p,t.dec,4)} ${safeSym(t.sym)}</span><span>${mkWhen(m)}</span>${me?`<span class="lqtag">${m.s&&me.c?"claim":"yours"}</span>`:""}</div></div>`};
-const mkPaintList=()=>{if(!mkMode)return;mkCl=mkAll.reduce((n,m)=>n+(m.s&&(mkPos[m.id]||{}).c?1:0),0);
+return`<div class="lqrow mkr${mkSel&&mkSel.id===m.id?" on":""}" data-k="${m.id}" role="button" tabindex="0"><div class="lqband">${m.d.replace(/\p{C}/gu,"").slice(0,140).replace(/[<&]/g,c=>c<"<"?"&amp;":"&lt;")}${m.d.length>140?"…":""}</div><div class="mkbar"><i style="width:${p}%"></i></div><div class="lqmeta"><span>YES ${p}%</span><span>${sigAmt(m.p,t.dec,4)} ${safeSym(t.sym)}</span><span>${mkWhen(m)}</span>${m.s&&me?.c||mkDue(m)?`<span class="lqtag mkt">${me?.c?"claim":"resolve"}</span>`:me?`<span class="lqtag">yours</span>`:""}</div></div>`};
+const mkPaintList=()=>{if(!mkMode)return;mkCl=mkAll.reduce((n,m)=>n+(m.s&&(mkPos[m.id]||{}).c||mkDue(m)?1:0),0);
 mkChips.querySelector('[data-f="mine"]').textContent=mkCl?`Mine (${mkCl})`:"Mine";const me=(account||"").toLowerCase(),q=mkFind.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
 const r=mkAll.filter(m=>(mkF==="open"?mkLive(m):mkF==="done"?!mkLive(m):!!mkPos[m.id]||m.r===me)&&q.every(t=>(m.d+" "+mkTok(m.a).sym+" "+m.r).toLowerCase().includes(t)));
 r.sort(mkS==="pot"?(a,b)=>mkUsd(b)-mkUsd(a):mkS==="end"?(a,b)=>mkF==="done"?b.c-a.c:a.c-b.c:(a,b)=>b.o-a.o);
 cpSet(mkList,r.length?r.slice(0,100).map(mkRow).join(""):`<div class="lqempty">${mkCount<0?"Reading markets…":!mkAll.length?"No markets yet — create the first.":mkF==="mine"&&!account?"Connect a wallet to see yours.":"No markets match."}</div>`);
-mkSub.textContent=mkAll.length?(mkMore?`newest ${mkAll.length} of ${mkCount}`:mkAll.length+(mkAll.length>1?" markets":" market"))+(mkCl?` · ${mkCl} to claim`:""):""};
+mkSub.textContent=mkAll.length?(mkMore?`newest ${mkAll.length} of ${mkCount}`:mkAll.length+(mkAll.length>1?" markets":" market"))+(mkCl?` · ${mkCl} waiting on you`:""):""};
 const mkDetPaint=()=>{if(!mkMode)return;const m=mkSel;Hd(mkDet,!m);if(!m)return;
 const t=mkTok(m.a),me=mkPos[m.id]||{y:0n,n:0n,c:0n},live=mkLive(m),isR=!!account&&m.r===account.toLowerCase(),net=m.p-m.p*BigInt(m.f)/10000n,X=s=>s?"×"+(Number(net*1000n/s)/1000).toFixed(2):"—",S=safeSym(t.sym),lapsed=nowS()>=m.c+2592000;
 mkT.textContent=m.d.replace(/\p{C}/gu,"");Hd(mkT,m.d.length<141&&!!mkList.querySelector(".on"));
-mkInfo.innerHTML=`<span class="mkhd">${m.s?`<b>${m.s===3?"each share returns":"each winning share pays"} ${m.w?"×"+(Number(m.p*1000n/m.w)/1000).toFixed(2):"—"}</b>`:`<b>YES pays ${X(m.y)}</b><b>NO pays ${X(m.n)}</b>`}</span><span class="mkfp">Pot ${sigAmt(m.p,t.dec,6)} ${S} · ${m.s?mkWhen(m):live?"closes "+new Date(m.c*1e3).toLocaleString([],{dateStyle:"medium",timeStyle:"short"}):"closed — awaiting the resolver"} · resolver <span id="mkRv">${short(m.r)}</span>${m.f?` · resolver fee ${mkPc(m.f)}% of the pot`:""}${m.x?` · exit tax ${mkPc(live?mkTax(m):m.x)}%`:live?" · bets final":""}${m.l?` · late tax ${live?mkPc(mkNow(m))+"% now, "+mkPc(m.l)+"% at close":mkPc(m.l)+"% at close"}`:""}</span>${me.y||me.n?`<span class="mkyou">You hold ${[[me.y,m.y,"YES"],[me.n,m.n,"NO"]].filter(v=>v[0]).map(([q,T,l])=>sigAmt(q,t.dec,6)+" "+l+(m.s?"":` → ${sigAmt(q*net/T,t.dec,6)} ${S}`)).join(" · ")}${live&&!m.x?" · locked until it settles":""}</span>`:""}`;
+mkInfo.innerHTML=`<span class="mkhd">${m.s?`<b>${m.s===3?"each share returns":"each winning share pays"} ${m.w?"×"+(Number(m.p*1000n/m.w)/1000).toFixed(2):"—"}</b>`:`<b class="y">YES pays ${X(m.y)}</b><b class="n">NO pays ${X(m.n)}</b>`}</span><span class="mkfp">Pot ${sigAmt(m.p,t.dec,6)} ${S} · ${m.s?mkWhen(m):live?"closes "+mkD(m.c):isR&&!lapsed?"closed — resolve by "+mkD(m.c+2592000)+(m.y&&m.n?"":"; a side is empty, so only void"):"closed — awaiting the resolver"} · resolver <span id="mkRv">${short(m.r)}</span>${m.f?` · resolver fee ${mkPc(m.f)}% of the pot`:""}${m.x?` · exit tax ${mkPc(live?mkTax(m):m.x)}%`:live?" · bets final":""}${m.l?` · late tax ${live?mkPc(mkNow(m))+"% now, "+mkPc(m.l)+"% at close":mkPc(m.l)+"% at close"}`:""}</span>${me.y||me.n?`<span class="mkyou">You hold ${[[me.y,m.y,"YES"],[me.n,m.n,"NO"]].filter(v=>v[0]).map(([q,T,l])=>sigAmt(q,t.dec,6)+" "+l+(m.s?"":` → ${sigAmt(q*net/T,t.dec,6)} ${S}`)).join(" · ")}${live&&!m.x?" · locked until it settles":m.s&&!me.c?" · lost":""}</span>`:""}`;
 nameRev(m.r).then(n=>{if(n&&mkSel===m)mkRv.textContent=safeSym(n,48)}).catch(()=>{});
 Hd(mkAmtL,!live);
 if(mkPay._k!==String(m.id)){++mkQSeq;mkPay._k=String(m.id);mkPay.innerHTML=(m.a===ZERO?[ZERO]:m.a===MK_WST?[ZERO,MK_WST]:[m.a]).map(a=>`<option value="${a}">${safeSym(mkTok(a).sym)}</option>`).join("");mkAmt.value="";mkQ.textContent="";mkQv=null;mkPayB.disabled=mkPay.options.length<2;mkIco(mkPayB,mkTok(mkPay.value))}
@@ -8554,7 +8554,7 @@ let h=live?B("yes","Buy YES")+B("no","Buy NO"):"";
 if(live&&m.x){const sv=q=>sigAmt(q-q*BigInt(mkTax(m))/10000n,t.dec,4)+" "+S;
 if(me.y)h+=B("xy",`Sell YES (${sv(me.y)})`);if(me.n)h+=B("xn",`Sell NO (${sv(me.n)})`)}
 if(m.s&&me.c)h+=B("claim",`Claim ${sigAmt(me.c,t.dec,6)} ${S}`);
-if(!m.s&&(isR||!live&&lapsed)){if(isR&&live&&m.cc)h+=B("close","Close now");if(isR&&!live&&!lapsed)h+=B("ry","Resolve YES")+B("rn","Resolve NO");h+=B("void","Void")}
+if(!m.s&&(isR||!live&&lapsed)){if(isR&&live&&m.cc)h+=B("close","Close now");if(isR&&!live&&!lapsed&&m.y&&m.n)h+=B("ry","Resolve YES")+B("rn","Resolve NO");h+=B("void","Void")}
 cpSet(mkActs,h);
 if(isR){const fk=account+":"+m.a;
 if(mkFee[fk]===undefined){mkFee[fk]=0n;rpc(C,[{to:PM,data:"0xffecc085"+encAddr(account)+encAddr(m.a)},L]).then(BigInt).then(f=>{mkFee[fk]=f;if(f&&mkSel===m)mkDetPaint()}).catch(()=>{})}
