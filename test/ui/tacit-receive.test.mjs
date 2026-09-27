@@ -24,6 +24,7 @@ function chainOn(id, { live = true, infoChain } = {}) {
   chain.lanes = chain.lanes || {};
   chain.lanes['keeper.test/evm-pool/keeper/receive'] = { box: BOX, kind: 'receive', status: 'watching' };
   chain.lanes['keeper.test/evm-pool/keeper/info'] = { chainId: infoChain ?? id, router: ROUTER };
+  chain.lanes['keeper.test/evm-pool/keeper/quote'] = { sweepFee: '5000000000000', receiveMin: '2000000000000000' };
   for (const h of ['tacit-evm-pool-keeper.onrender.com', 'tacit-evm-pool-keeper-base.onrender.com', 'tacit-evm-pool-keeper-robinhood.onrender.com']) chain.lanes[h] = 404;
   return chain;
 }
@@ -77,7 +78,7 @@ describe('the private ETH receive address', () => {
     p.click('pv');
     await p.waitFor(() => menu(p), { label: 'the private ETH menu' });
     assert.equal(p.text('wkHdr'), 'Private ETH · Base');
-    assert.match(row(p, 'Your private ETH address').textContent, /0x52fc37…aeb232/);
+    assert.match(row(p, 'Your private ETH address').textContent, /0x52fc37…aeb232 · send at least 0\.002 ETH/, 'the keeper\'s minimum for a sweep');
     await choose(p, 'Your private ETH address');
     await p.waitFor(() => okIn(p), { label: 'the address, in full' });
     assert.equal(p.$('wkList').querySelector('textarea').value, BOX);
