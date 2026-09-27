@@ -680,8 +680,8 @@ if (exported) {
     // pool's prove/settle relay. It carries a witness, never a signature, and
     // it is pinned to one host, so it is held to the same rule as the lanes.
     const hits = [...html.matchAll(/\bfetch\s*\(/g)].length;
-    if (hits !== 4) throw Error(`expected exactly four fetch( - httpRead, laneGet, lanePost, relayFetch - found ${hits}`);
-    for (const owner of ['const lanePost=async(name,url,body,ms)=>{', 'const laneGet=async(name,url,ms)=>{', 'const relayFetch=async(path,body,base)=>{']) {
+    if (hits !== 5) throw Error(`expected exactly five fetch( - httpRead, laneGet, lanePost, relayFetch, twGet - found ${hits}`);
+    for (const owner of ['const lanePost=async(name,url,body,ms)=>{', 'const laneGet=async(name,url,ms)=>{', 'const relayFetch=async(path,body,base)=>{', 'twGet=async(f,h,x)=>{']) {
       const at = html.indexOf(owner);
       if (at < 0) throw Error(`the solver lane transport ${owner.slice(6, 13)} has moved or been renamed`);
       const body = html.slice(at, at + 700);
@@ -706,7 +706,11 @@ if (exported) {
       throw Error('nodeRead is called with a signing method directly');
     if (!/const relayFetch=async\(path,body,base\)=>\{[\s\S]{0,160}?fetch\(\(base\|\|cpRelayBase\(\)\)\+path,/.test(html))
       throw Error('relayFetch must address the pinned relay host and nothing else');
-    return 'four fetches, each named; pool is walletless-only and refuses signing and accounts';
+    // Five since self-proving: `twGet` fetches Tacit's wallet bundle and the ceremony files from fixed
+    // mirrors, and nothing it fetches is used unless its sha256 matches a hash pinned in the page.
+    if (!/twGet=async\(f,h,x\)=>\{[\s\S]{0,700}?crypto\.subtle\.digest\("SHA-256",b\)\)\)!==h\)continue;/.test(html))
+      throw Error('twGet must refuse any file whose sha256 does not match its pin');
+    return 'five fetches, each named; pool is walletless-only and refuses signing and accounts';
   });
 
   check('a connected quote reaches the public pool only with its addresses blinded', () => {

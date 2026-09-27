@@ -3,6 +3,7 @@
 // the address from the router's own receiveBoxOf, so nothing shows before the pool is live on the chain.
 import { test, describe, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash, webcrypto } from 'node:crypto';
 import { A, MockChain, loadPage, closeAllPages } from './harness.mjs';
 
 after(closeAllPages);
@@ -98,18 +99,39 @@ describe('the private ETH receive address', () => {
     p.close();
   });
 
-  test('sending and withdrawing private ETH open tacit.finance on this chain, in a new tab', async () => {
+  test('tacit.finance opens on this chain, in a new tab, for the same balance', async () => {
     const p = await open(8453);
     await p.waitFor(() => shown(p), { label: 'the Private button on Base' });
     unlock(p);
-    for (const [name, doing] of [['Send privately', 'send'], ['Withdraw', 'withdraw']]) {
-      p.click('pv');
-      await choose(p, name);
-    }
-    assert.deepEqual(p.window.__opened.map(a => [a[0], a[1], a[2]]), [
-      ['https://tacit.finance/sats/#eth=8453&do=send', '_blank', 'noopener'],
-      ['https://tacit.finance/sats/#eth=8453&do=withdraw', '_blank', 'noopener']]);
+    p.click('pv');
+    await choose(p, 'tacit.finance');
+    assert.deepEqual(p.window.__opened.map(a => [a[0], a[1], a[2]]), [['https://tacit.finance/sats/#eth=8453', '_blank', 'noopener']]);
     assert.equal(p.window.eval('CHAIN_ID'), 8453, 'zSwap stays where it was');
+    p.close();
+  });
+
+  test('the prover files are taken only from a mirror whose bytes match the pinned hash', async () => {
+    const good = new TextEncoder().encode('tacit prover bytes'), bad = new TextEncoder().encode('something else');
+    const hash = createHash('sha256').update(good).digest('hex');
+    const served = [];
+    const p = await loadPage({ chain: chainOn(1), beforeParse: w => {
+      Object.defineProperty(w.crypto, 'subtle', { value: webcrypto.subtle, configurable: true });
+      const inner = w.fetch;
+      w.fetch = async (url, init) => {
+        const u = String(url);
+        if (/raw\.githubusercontent|tacit\.finance\/evm-pool|ipfs\.filebase\.io/.test(u)) {
+          served.push(u);
+          const body = u.includes('githubusercontent') ? bad : u.includes('tacit.finance') ? good : bad;
+          return { ok: true, status: 200, arrayBuffer: async () => body.buffer.slice(0) };
+        }
+        return inner(url, init);
+      };
+    } });
+    await p.settle();
+    const got = await p.window.eval(`twGet("x.bin","${hash}").then(b=>new TextDecoder().decode(b))`);
+    assert.equal(got, 'tacit prover bytes');
+    assert.ok(served[0].includes('githubusercontent') && served[1].includes('tacit.finance/evm-pool/x.bin'), 'a wrong file is skipped for the next mirror');
+    await assert.rejects(p.window.eval(`twGet("y.bin","${'0'.repeat(64)}")`), /Could not load y\.bin from any mirror/);
     p.close();
   });
 
