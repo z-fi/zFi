@@ -75,12 +75,12 @@ describe('the corner menu', () => {
     p.close();
   });
 
-  test('the DAO opens in a new tab, as the mark used to', async () => {
+  test('the DAO opens its governance panel in the page', async () => {
     const p = await open();
     await pick(p, 'zFi DAO');
-    assert.equal(p.window.__opened.length, 1);
-    assert.match(p.window.__opened[0][0], /^https:\/\/zfi\.wei\.is\/dao\/#\/dao\/1\/0x5E58BA0e06ED0F5558f83bE732a4b899a674053E$/);
-    assert.equal(p.window.__opened[0][2], 'noopener');
+    assert.equal(p.window.__opened.length, 0);
+    assert.ok(p.visible('gvPanel'));
+    assert.match(p.$('gvPanel').querySelector('a').href, /^https:\/\/zfi\.wei\.is\/dao\/#\/dao\/1\/0x5E58BA0e06ED0F5558f83bE732a4b899a674053E$/);
     p.close();
   });
 

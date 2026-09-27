@@ -69,8 +69,8 @@ test('the order word the lens returned is forwarded verbatim into the calldata',
     const q=await deepQuote("${DEEP}","${USDG}",${5000n * ETH}n);
     if(!q)return null;
     return {epoch:q.epoch.toString(),order:q.order,
-      leg:"0x${SWAPDEEP}"+encAddr("${A.ACCOUNT}")+encAddr(q.t0)+encAddr(q.t1)+encUint(q.epoch)
-        +strip0x(q.order)+encUint(q.isBid?1:0)+encUint(${5000n * ETH}n)+encUint(0n)+encUint(0n)};
+      leg:"0x${SWAPDEEP}"+eA("${A.ACCOUNT}")+eA(q.t0)+eA(q.t1)+eU(q.epoch)
+        +Sx(q.order)+eU(q.isBid?1:0)+eU(${5000n * ETH}n)+eU(0n)+eU(0n)};
   })()`);
   assert.ok(built, 'no quote');
   assert.ok(built.leg.includes(word.slice(2)), 'the lens order word is not in the calldata');

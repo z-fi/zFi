@@ -410,7 +410,7 @@ describe('the game in the page', () => {
     });
 
     test('a preflight that answers with nothing is not treated as success', () => {
-      assert.match(body, /strip0x\(ret\|\|""\)\.length!==64/,
+      assert.match(body, /Sx\(ret\|\|""\)\.length!==64/,
         'claim returns a token id; anything else means the call did not run');
       assert.match(body, /on Ethereum\./, 'and the message should point at the likely reason');
     });

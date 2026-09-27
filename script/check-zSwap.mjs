@@ -387,7 +387,7 @@ check('element ids addressed by string exist in the markup', () => {
 // top-level code is inert and the pure helpers become reachable.
 const HELPERS = [
   'decQ', 'parseUnits', 'formatUnits', 'trimAmt', 'maxAmt', 'merge', 'hasAtomicBatch', 'encCalls',
-  'encUint', 'encAddr', 'pad32', 'strip0x', 'keccak', 'namehash', 'nftIdIn', 'weiName',
+  'eU', 'eA', 'pad32', 'Sx', 'keccak', 'namehash', 'nftIdIn', 'weiName',
   'decodeString', 'idTok', 'idDelay',
   'decViewPage', 'planBookExactIn', 'planBookExactOut', 'decBar', 'rollUp', 'mergeTapes',
   'encFillPlan', 'encFillPlanAndSwap', 'encSnwap', 'encSweep',

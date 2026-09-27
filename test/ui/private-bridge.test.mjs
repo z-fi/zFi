@@ -1633,11 +1633,11 @@ describe('the settleWithTip encoding', () => {
     const data = p.window.eval(`(() => {
       const pv = "0xdeadbeef", pr = "0xcafebabe", ms = ["0x${'11'.repeat(32)}"], to = "0x0000000000000000000000000000000000001337";
       const a = encBytes(pv), b = encBytes(pr), tl = ms.map(encBytes);
-      let off = ms.length * 32, hd = encUint(ms.length);
-      for (const x of tl) { hd += encUint(off); off += x.length / 2 }
+      let off = ms.length * 32, hd = eU(ms.length);
+      for (const x of tl) { hd += eU(off); off += x.length / 2 }
       const mo = 128 + (a.length + b.length) / 2;
-      return "0x" + SEL_CPSTIP + encUint(128) + encUint(128 + a.length / 2) + encUint(mo)
-        + encAddr(to) + a + b + hd + tl.join("");
+      return "0x" + SEL_CPSTIP + eU(128) + eU(128 + a.length / 2) + eU(mo)
+        + eA(to) + a + b + hd + tl.join("");
     })()`);
     const vector = '0x70b16a7d'
       + '0000000000000000000000000000000000000000000000000000000000000080'
