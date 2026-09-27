@@ -181,6 +181,7 @@ vertical-align:.1em;line-height:1;text-decoration:none;margin-left:.5em}
 #adEl,#pfEl{display:block;text-align:center;color:var(--dm);font-size:.66em;letter-spacing:.03em;margin-top:.75em}
 #adEl .adic,#pfEl .adic,.pfh .adic{vertical-align:middle;margin:-2px .4em 0 0;border-radius:50%;opacity:.8}
 #adEl b,#pfEl b{color:var(--m);font-weight:500}
+.pq{opacity:.55}
 #fcEl{display:block;text-align:center;color:var(--m);font-size:.72em;letter-spacing:.03em;margin-top:.9em}
 .pfb{margin-top:.5em;padding-top:.45em;border-top:1px dashed var(--e)}.pfh{font-size:.72em;letter-spacing:.03em}.pfo,.pfp,.pfsp{font:inherit;font-size:.75em;background:transparent;color:var(--f);border:1px solid var(--e)}.fmpf{font:inherit;background:none;border:0;padding:0;cursor:pointer;white-space:normal;text-align:left}.fmc :is(img,svg)+svg{margin-left:-.35em}.adic+.adic{margin-left:-.75em}
 .fclink{font:inherit;color:var(--m);background:none;border:0;border-bottom:1px solid var(--e);padding:0 0 .1em;margin-left:.35em;cursor:pointer;letter-spacing:inherit}
@@ -1116,7 +1117,7 @@ meta.forEach((x,i)=>{const a=x?("0x"+Sx(x).slice(24)).toLowerCase():"";
 if(/^0x[0-9a-f]{40}$/.test(a))toks.push({a,pi:i})});
 const info=await mD(toks.flatMap(({a})=>[{to:a,data:"0x95d89b41"},{to:a,data:"0x"+SEL_CONTRACTURI},
 {to:PLAUNCH,data:"0x"+SEL_CREATOROF+eA(a)}]));
-return{pools,byDepth,toks,info}})();bornJob.catch(()=>{});
+return{pools,byDepth,toks,info}})();let bd=0;bornJob.then(()=>bd=1,()=>bd=1);
 let dropNote="",want=[],fb="";
 const sums=await summaries();if(sums)listSums=sums;
 if(cid!==CHAIN_ID)return;
@@ -1144,6 +1145,7 @@ if(bad.size){const n=next.length;next.splice(0,n,...next.filter(t=>!bad.has(t.ad
 }
 next.sort(nftLast);
 if(!next.some(t=>t.std==="ft")){fb=fb||"registry returned nothing swappable";next.splice(0,next.length,...(listSeeded&&seedTokens(cid)?.next||BUILTIN))}
+if(!fb&&!bd&&!listSeeded&&cid===CHAIN_ID){const k=pairAddrs();listMerge(next,TOKENS.filter(x=>x.launched&&!next.some(y=>y.addr===x.addr)));listSeeded=true;setListNote("");adoptList(k)}
 let born=[];const launched=[];
 try{
 const{pools,byDepth,toks,info}=await bornJob;
@@ -2334,6 +2336,7 @@ aE(document,"click",tkClose);
 addEventListener("resize",()=>{if(!matchMedia("(pointer:coarse)").matches)tkClose()});
 addEventListener("scroll",e=>{if(tkSel&&!tkPanel.contains(e.target))tkClose()},true);
 const render=()=>{
+if(!quoting)for(const e of[amt,outAmt])e.classList.remove("pq");
 if(!account){swap.textContent=CW;swap.disabled=false;return}
 if(tab==="book"){
 rate.textContent="";
@@ -3412,6 +3415,7 @@ for(const c of [v4c,pc,dc,tc,hc]){
 if(!c||c===r)continue;
 if(isIn?c.best.amountOut>r.best.amountOut:c.best.amountIn<r.best.amountIn)r=c;
 }
+if(r.callData!=="0x"){const e=isIn?outAmt:amt;e.value=isIn?tM(r.best.amountOut,t.dec):maxAmt(r.best.amountIn,f.dec);fitFont(e);e.classList.add("pq")}
 let hybrid=null,bookIncomplete=false,bookUnavailable=false,plannerBounded=false,rank=null;
 if(acct){
 const candidates=await candJob;
