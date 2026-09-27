@@ -52,6 +52,7 @@ function pool(chain, { live = true } = {}) {
   if (live) chain.answers.set(`${ROUTER}:34a44915`, '0x' + BOX.slice(2).padStart(64, '0'));
   chain.lanes = chain.lanes || {};
   chain.lanes[KEEPER.slice(8) + '/deposit'] = { box: BOX, kind: 'deposit' };
+  for (const h of ['tacit-evm-pool-keeper.onrender.com', 'tacit-evm-pool-keeper-base.onrender.com', 'tacit-evm-pool-keeper-robinhood.onrender.com']) chain.lanes[h] = 404;
   return chain;
 }
 
@@ -72,17 +73,19 @@ async function open({ hash, storage = roster(), chain = pool(new MockChain()), c
 }
 
 describe('a Tacit EVM pool deposit box', () => {
-  test('before the pool is deployed the link says so and asks nothing of the keeper', async () => {
+  test('when the router cannot be read the link says so and asks nothing of the keeper', async () => {
     const p = await open({ hash: link(), chain: pool(new MockChain(), { live: false }) });
-    await p.waitFor(() => /not live on Ethereum yet/.test(p.text('stat')), { label: 'the not-live notice' });
+    await p.waitFor(() => /Could not read the Tacit pool on Ethereum/.test(p.text('stat')), { label: 'the read failure' });
     assert.equal(p.window.__keeper.length, 0);
     assert.equal(p.chain.sent.length, 0);
     p.close();
   });
 
-  test('with no keeper listed for the chain nothing is filled in', async () => {
-    const p = await open({ hash: link(), storage: roster([]) });
-    await p.waitFor(() => /No keeper serves Ethereum yet/.test(p.text('stat')), { label: 'the no-keeper notice' });
+  test('a box no keeper accepts is not filled in, and the keeper\'s refusal is shown', async () => {
+    const chain = pool(new MockChain());
+    chain.lanes[KEEPER.slice(8) + '/deposit'] = 400;
+    const p = await open({ hash: link(), chain });
+    await p.waitFor(() => /answered 404/.test(p.text('stat')), { label: 'the refusal' });
     assert.notEqual(p.value('rc'), BOX);
     p.close();
   });
@@ -126,7 +129,7 @@ describe('a Tacit EVM pool deposit box', () => {
   test('a box on another chain is read from that chain\'s nodes, whatever chain the wallet is on', async () => {
     const p = await open({ hash: link({}, 8453), storage: roster([], [KEEPER]), confirm: [true] });
     await p.waitFor(() => p.window.__keeper.length === 1, { label: 'the Base keeper to be asked', timeout: 20000 });
-    assert.doesNotMatch(p.text('stat'), /not live/);
+    assert.doesNotMatch(p.text('stat'), /Could not read/);
     assert.equal(p.window.eval('CHAIN_ID'), 8453);
     assert.match(p.asked.confirm[0], /into the Tacit pool on Base/);
     p.close();

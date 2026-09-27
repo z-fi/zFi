@@ -154,7 +154,7 @@ describe('features that exist on one chain only', () => {
     for (const id of [8453, 4663]) {
       await hopTo(p, id);
       assert.equal(p.visible('wn'), false, `${id}: names are not offered`);
-      assert.equal(p.visible('pv'), false, `${id}: the bridge is not offered`);
+      assert.equal(p.visible('pv'), true, `${id}: Private is offered, as the Tacit pool on this chain`);
       assert.equal(p.visible('ln'), true, `${id}: coins launch here too`);
       assert.equal(p.window.eval('wnMode'), false, `${id}: and no mode is left on`);
       assert.equal(p.window.eval('pvMode'), false);

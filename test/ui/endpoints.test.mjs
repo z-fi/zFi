@@ -79,9 +79,9 @@ describe('the endpoint roster', () => {
     assert.equal(ev(p, 'WC_PID'), PID);
     assert.equal(ev(p, 'L1_RPCS[0]'), 'https://l1.cur', "zRpcList reaches the L1 read path too");
     assert.equal(ev(p, 'AD_API[0]'), 'https://ad.cur/proofs/', 'a curated airdrop mirror goes first');
-    assert.deepEqual(JSON.parse(ev(p, 'JSON.stringify(TB_K[1])')), ['https://k1.cur']);
-    assert.deepEqual(JSON.parse(ev(p, 'JSON.stringify(TB_K[8453])')), [], 'a keeper base ending in / is refused');
-    assert.deepEqual(JSON.parse(ev(p, 'JSON.stringify(TB_K[4663])')), ['https://k4663.cur/keeper'], 'each chain keeps its own keepers');
+    assert.deepEqual(JSON.parse(ev(p, 'JSON.stringify(TB_K[1])')), ['https://k1.cur', 'https://tacit-evm-pool-keeper.onrender.com/evm-pool/keeper'], 'a listed keeper goes ahead of Tacit\'s own');
+    assert.deepEqual(JSON.parse(ev(p, 'JSON.stringify(TB_K[8453])')), ['https://tacit-evm-pool-keeper-base.onrender.com/evm-pool/keeper'], 'a keeper base ending in / is refused');
+    assert.deepEqual(JSON.parse(ev(p, 'JSON.stringify(TB_K[4663])')), ['https://k4663.cur/keeper', 'https://tacit-evm-pool-keeper-robinhood.onrender.com/evm-pool/keeper'], 'each chain keeps its own keepers');
     assert.ok(ev(p, 'AD_API').some(u => u.startsWith('https://cdn.jsdelivr.net/')), 'the built-in mirrors stay behind it');
     const kept = JSON.parse(p.window.localStorage.getItem('zswap:ep3'));
     assert.ok(kept && kept.t > 0 && kept.v.length === 12, 'the answer is kept for the next load');
@@ -142,7 +142,7 @@ describe('the endpoint roster', () => {
     const old = [[], [], [], [], [], [], [], [], ['https://l1.old']];
     const p = await loadPage({ walletless: true, chain, storage: { 'zswap:ep2': JSON.stringify({ t: Date.now(), v: old }) } });
     await p.settle();
-    assert.deepEqual(JSON.parse(ev(p, 'JSON.stringify(TB_K[1])')), [], 'an L1 node never becomes a keeper');
+    assert.deepEqual(JSON.parse(ev(p, 'JSON.stringify(TB_K[1])')), ['https://tacit-evm-pool-keeper.onrender.com/evm-pool/keeper'], 'an L1 node never becomes a keeper');
     assert.equal(chain.epAsks.length, 2, 'the roster is read afresh');
     p.close();
   });

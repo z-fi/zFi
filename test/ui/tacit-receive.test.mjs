@@ -24,6 +24,7 @@ function chainOn(id, { live = true, infoChain } = {}) {
   chain.lanes = chain.lanes || {};
   chain.lanes['keeper.test/evm-pool/keeper/receive'] = { box: BOX, kind: 'receive', status: 'watching' };
   chain.lanes['keeper.test/evm-pool/keeper/info'] = { chainId: infoChain ?? id, router: ROUTER };
+  for (const h of ['tacit-evm-pool-keeper.onrender.com', 'tacit-evm-pool-keeper-base.onrender.com', 'tacit-evm-pool-keeper-robinhood.onrender.com']) chain.lanes[h] = 404;
   return chain;
 }
 
@@ -61,21 +62,12 @@ describe('the private ETH receive address', () => {
     p.close();
   });
 
-  test('on Base, Private appears once the pool and a keeper are live there', async () => {
-    let p = await open(8453);
-    await p.waitFor(() => shown(p), { label: 'the Private button on Base' });
-    p.close();
-    p = await open(8453, { live: false });
-    assert.ok(!shown(p), 'no router code: no Private button');
-    p.close();
-    p = await open(8453, { keepers: {} });
-    assert.ok(!shown(p), 'no keeper listed: no Private button');
-    p.close();
-    p = await open(8453, { infoChain: 1 });
-    await p.waitFor(() => (p.chain.httpLog || []).some(x => x.url.includes('/evm-pool/keeper/info')), { label: 'the keeper to be asked its chain' });
-    await p.settle();
-    assert.ok(!shown(p), 'a keeper that serves another chain: no Private button');
-    p.close();
+  test('on Base and Robinhood, Private is there from the first load, with Tacit\'s own keepers built in', async () => {
+    for (const id of [8453, 4663]) {
+      const p = await open(id, { keepers: {} });
+      assert.ok(shown(p), 'Private on chain ' + id);
+      p.close();
+    }
   });
 
   test('on Base, Private shows the address from the router, tells the keeper, and fills in a send to it', async () => {
@@ -95,7 +87,7 @@ describe('the private ETH receive address', () => {
     await p.settle();
     const call = p.chain.calls.find(c => c.to === ROUTER && c.selector === '7944b37a');
     assert.equal(call.data, '0x7944b37a' + word(NPK0) + word(25), 'receiveBoxOf(npk, 25)');
-    assert.deepEqual(p.window.__keeper.map(k => [k.url, k.body]), [[KEEPER + '/receive', { chainId: 8453, npk: NPK0.toString(), feeBps: 25 }]]);
+    assert.deepEqual(p.window.__keeper.map(k => [k.url, k.body]), [[KEEPER + '/receive', { chainId: 8453, npk: NPK0.toString(), feeBps: 25 }]], 'the first keeper that accepts, and only it');
     assert.ok(!p.window.eval('pvMode'), 'the Ethereum panel stays shut on Base');
     p.click('pv');
     await choose(p, 'Shield ETH into it');
@@ -120,7 +112,7 @@ describe('the private ETH receive address', () => {
     p.close();
   });
 
-  test('on Ethereum, the key row offers the address once the pool is live', async () => {
+  test('on Ethereum, the key row offers the address', async () => {
     const p = await open(1);
     unlock(p);
     p.click('pv');
@@ -133,7 +125,6 @@ describe('the private ETH receive address', () => {
 
   test('unlocking the key registers the address with the keeper, so a payment is swept at once', async () => {
     const p = await open(1);
-    await p.waitFor(() => p.window.eval('rxOn[1]') === 1, { label: 'the pool to read as live' });
     p.click('pv');
     await p.settle();
     p.click('pvGo');
@@ -145,17 +136,55 @@ describe('the private ETH receive address', () => {
     p.close();
   });
 
-  test('the menu\'s Private stays on Base when the pool is live there, and goes to Ethereum when it is not', async () => {
+  test('when the listed keeper does not answer, Tacit\'s built-in keeper for the chain is asked', async () => {
+    const p = await open(8453);
+    p.chain.lanes['keeper.test/evm-pool/keeper/receive'] = 404;
+    p.chain.lanes['tacit-evm-pool-keeper-base.onrender.com'] = { box: BOX, kind: 'receive', status: 'watching' };
+    unlock(p);
+    p.window.eval('rxPost()');
+    await p.waitFor(() => (p.chain.httpLog || []).some(x => x.url.startsWith('https://tacit-evm-pool-keeper-base.onrender.com/evm-pool/keeper/receive')), { label: 'the built-in keeper' });
+    p.close();
+  });
+
+  test('a viewer can use a keeper of their own, checked against its /info first', async () => {
+    const MINE = 'https://my.keeper/evm-pool/keeper';
+    const p = await open(8453);
+    p.chain.lanes['my.keeper/evm-pool/keeper/info'] = { chainId: 8453, router: ROUTER, minReceiveFeeBps: 1 };
+    p.chain.lanes['my.keeper/evm-pool/keeper/receive'] = { box: BOX, kind: 'receive', status: 'watching' };
+    p.chain.lanes['bad.keeper/evm-pool/keeper/info'] = { chainId: 1, router: ROUTER, minReceiveFeeBps: 1 };
+    unlock(p);
+    const setKeeper = async v => {
+      p.click('pv');
+      await choose(p, 'Keeper');
+      await p.waitFor(() => okIn(p), { label: 'the keeper prompt' });
+      p.$('wkList').querySelector('textarea').value = v;
+      p.click(okIn(p));
+      await p.settle();
+    };
+    await setKeeper('https://bad.keeper/evm-pool/keeper');
+    await p.waitFor(() => /not a Tacit pool keeper for Base/.test(p.text('stat')), { label: 'the refusal' });
+    assert.equal(p.window.localStorage.getItem('zswap:evk:8453'), null, 'a keeper for another chain is not kept');
+    await setKeeper(MINE + '/');
+    await p.waitFor(() => p.window.localStorage.getItem('zswap:evk:8453') === MINE, { label: 'the keeper to be kept' });
+    await p.waitFor(() => p.window.__keeper.some(k => k.url === MINE + '/receive'), { label: 'the address registered with it' });
+    assert.equal(p.window.__keeper.filter(k => k.url.endsWith('/receive')).at(-1).url, MINE + '/receive', 'your own keeper goes first');
+    p.click('pv');
+    await p.waitFor(() => menu(p), { label: 'the private ETH menu' });
+    assert.match(row(p, 'Keeper').textContent, /yours · my\.keeper/);
+    p.click([...p.$('wkList').querySelectorAll('button')].find(b => b.textContent === 'Cancel'));
+    await p.settle();
+    await setKeeper('');
+    assert.equal(p.window.localStorage.getItem('zswap:evk:8453'), null, 'blank goes back to the listed keepers');
+    p.close();
+  });
+
+  test('the menu\'s Private stays on Base', async () => {
     let p = await open(8453);
     await p.waitFor(() => shown(p), { label: 'the Private button on Base' });
     unlock(p);
     p.window.location.hash = 'm=pv';
     await p.waitFor(() => menu(p), { label: 'the private ETH menu on Base' });
     assert.equal(p.window.eval('CHAIN_ID'), 8453);
-    p.close();
-    p = await open(8453, { live: false });
-    p.window.location.hash = 'm=pv';
-    await p.waitFor(() => p.window.eval('CHAIN_ID') === 1, { label: 'the switch to Ethereum' });
     p.close();
   });
 });
