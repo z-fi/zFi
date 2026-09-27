@@ -714,8 +714,9 @@ describe('zapping in from one side', () => {
     const raw = tx.data.replace(/^0x/, '');
     assert.equal(raw.slice(0, 8), SEL.SNWAP);
     const body = '0x' + raw.slice(8);
-    // previewZap mints amountIn/4 in the mock; the bound is that less 0.5%.
-    const minLp = (2n * ETH / 4n) * 9950n / 10000n;
+    // previewZap mints half the input's share of the pool in the mock
+    // (supply 1e21 over 100 ETH); the bound is that less 0.5%.
+    const minLp = (10n ** 21n * 2n * ETH / (200n * ETH)) * 9950n / 10000n;
     assert.equal(wordAddr(body, 0), A.ZERO, 'native in');
     assert.equal(word(body, 1), 2n * ETH);
     assert.equal(wordAddr(body, 2).toLowerCase(), A.ACCOUNT.toLowerCase(), 'shares to the depositor');

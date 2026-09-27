@@ -1984,7 +1984,7 @@ describe('the points a wallet has been credited', () => {
       deposits: [{ pp_boosted: true }, { pp_boosted: false }, { pp_boosted: true }] });
     await unlock(p);
     await p.waitFor(() => /counted/.test(p.text('pvKey')), { label: 'the points row', ...SLOW });
-    assert.match(p.text('pvKey'), /11 from 3 deposits counted, 2 at 1\.2\u00d7/, p.text('pvKey'));
+    assert.match(p.text('pvKey'), /11 from 3 actions counted, 2 at 1\.2\u00d7/, p.text('pvKey'));
     p.close();
   });
 
@@ -1994,7 +1994,7 @@ describe('the points a wallet has been credited', () => {
       deposits: [{ pp_boosted: true }] });
     await unlock(p);
     await p.waitFor(() => /counted/.test(p.text('pvKey')), { label: 'the points row', ...SLOW });
-    assert.match(p.text('pvKey'), /1 deposit counted, all at 1\.2\u00d7/, p.text('pvKey'));
+    assert.match(p.text('pvKey'), /1 action counted, all at 1\.2\u00d7/, p.text('pvKey'));
     p.close();
   });
 
@@ -2006,7 +2006,7 @@ describe('the points a wallet has been credited', () => {
       deposits: [{ tx_hash: '0x' + 'ab'.repeat(32) }, { pp_boosted: 'yes' }] });
     await unlock(p);
     await p.waitFor(() => /counted/.test(p.text('pvKey')), { label: 'the points row', ...SLOW });
-    assert.match(p.text('pvKey'), /5 from 2 deposits counted/);
+    assert.match(p.text('pvKey'), /5 from 2 actions counted/);
     assert.doesNotMatch(p.text('pvKey'), /1\.2|boost/i, 'a truthy string is not the flag');
     p.close();
   });
@@ -2021,7 +2021,7 @@ describe('the points a wallet has been credited', () => {
     await unlock(p);
     await p.waitFor(() => /counted/.test(p.text('pvKey')), { label: 'the points row', ...SLOW });
     // Three distinct activities, so the summary spells out the breakdown.
-    assert.match(p.text('pvKey'), /3 deposits counted, 1 wrap, 1 cBTC lock and 1 cUSD loan/, p.text('pvKey'));
+    assert.match(p.text('pvKey'), /3 actions counted, 1 wrap, 1 cBTC lock and 1 cUSD loan/, p.text('pvKey'));
     p.click(p.$('pvKey').querySelector('button[data-a="ptshist"]'));
     await p.waitFor(() => !!p.$('pvKey').querySelector('.pvkh'), { label: 'the list to open', ...SLOW });
     const rows = [...p.$('pvKey').querySelectorAll('.pvkd')];
@@ -2035,12 +2035,72 @@ describe('the points a wallet has been credited', () => {
     p.close();
   });
 
+  test('swaps, bets and made markets are named, and an L2 swap links its own explorer', async () => {
+    const p = await open();
+    serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 70, deposit_count: 4, deposits: [
+      { tx_hash: '0x' + '61'.repeat(32), block_time: 1790500000, amount_wei: '100000000000000000', points: 49, activity: 'zswapeth', chain_id: 1 },
+      { tx_hash: '0x' + '62'.repeat(32), block_time: 1790400000, amount_wei: '20000000000000000', points: 10, activity: 'zswapeth', chain_id: 8453 },
+      { tx_hash: '0x' + '63'.repeat(32), block_time: 1790300000, amount_wei: '1230000000000000', points: 6, activity: 'pmbet', chain_id: 1 },
+      { tx_hash: '0x' + '64'.repeat(32), block_time: 1790200000, amount_wei: '0', points: 5, activity: 'pmcreate', chain_id: 1 },
+    ] });
+    await unlock(p);
+    await p.waitFor(() => /counted/.test(p.text('pvKey')), { label: 'the points row', ...SLOW });
+    assert.match(p.text('pvKey'), /70 from 4 actions counted, 2 swaps, 1 bet and 1 market/, p.text('pvKey'));
+    p.click(p.$('pvKey').querySelector('button[data-a="ptshist"]'));
+    await p.waitFor(() => !!p.$('pvKey').querySelector('.pvkh'), { label: 'the list', ...SLOW });
+    const rows = [...p.$('pvKey').querySelectorAll('.pvkd')];
+    assert.match(rows[0].textContent, /0\.1 ETH.*swap/);
+    assert.match(rows[1].textContent, /swap on Base/);
+    assert.equal(rows[1].querySelector('a').getAttribute('href'), 'https://basescan.org/tx/0x' + '62'.repeat(32));
+    assert.equal(rows[0].querySelector('a').getAttribute('href'), 'https://etherscan.io/tx/0x' + '61'.repeat(32));
+    assert.match(rows[2].textContent, /bet/);
+    assert.match(rows[3].textContent, /market/);
+    assert.doesNotMatch(rows[3].textContent, /ETH/, 'a made market carries no amount');
+    p.close();
+  });
+
+  test('a connected wallet sees its points under the swap, without opening Private', async () => {
+    const p = await loadPage({ chain: withPool(new MockChain(), {}) });
+    serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 608.9, deposit_count: 6,
+      today: { points: 50, totalPoints: 200, dayBudgetWei: '1000000000000000000000' } });
+    claiming(p, RELAY, { address: A.ACCOUNT.toLowerCase(), distributor: DIST, cumulativeAmount: '12000000000000000000', unclaimedWei: '12000000000000000000', proof: PROOF });
+    await p.connect();
+    await p.waitFor(() => p.visible('ptEl'), { label: 'the points line', ...SLOW });
+    assert.match(p.text('ptEl'), /608\.9 Tacit points · today ~250 TAC/, p.text('ptEl'));
+    await p.waitFor(() => p.$('ptEl').querySelector('[data-pf="pc"]'), { label: 'the claim', ...SLOW });
+    assert.match(p.$('ptEl').querySelector('[data-pf="pc"]').textContent, /Claim 12 TAC/);
+    p.click(p.$('ptEl').querySelector('[data-pf="pc"]'));
+    await p.waitFor(() => p.chain.sentTo(DIST).length, { label: 'the claim tx', ...SLOW });
+    assert.equal(p.chain.sentTo(DIST)[0].data.slice(2, 10), '2f52ebb7');
+    p.close();
+  });
+
+  test('a connected wallet with no points is told swaps earn them; History opens the full list', async () => {
+    const p = await loadPage({ chain: withPool(new MockChain(), {}) });
+    serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 0, deposit_count: 0 });
+    await p.connect();
+    await p.waitFor(() => p.visible('ptEl'), { label: 'the points line', ...SLOW });
+    assert.match(p.text('ptEl'), /ETH you swap in here earns Tacit points/);
+    assert.ok(!p.$('ptEl').querySelector('[data-pf="ph"]'), 'no history to open');
+    p.close();
+    const q = await loadPage({ chain: withPool(new MockChain(), {}) });
+    serve(q, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 5, deposit_count: 1, deposits: [
+      { tx_hash: '0x' + '71'.repeat(32), block_time: 1790500000, amount_wei: '10000000000000000', points: 5, activity: 'zswapeth', chain_id: 1 }] });
+    await q.connect();
+    await q.waitFor(() => q.$('ptEl').querySelector('[data-pf="ph"]'), { label: 'history', ...SLOW });
+    q.click(q.$('ptEl').querySelector('[data-pf="ph"]'));
+    await q.waitFor(() => q.visible('pvKey') && q.$('pvKey').querySelector('.pvkh'), { label: 'the list in Private', ...SLOW });
+    assert.ok(!q.visible('ptEl'), 'the line gives way to the panel');
+    await q.settle();
+    q.close();
+  });
+
   test('a wallet with only wraps sees no category breakdown', async () => {
     const p = await open();
     serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 5, deposit_count: 1 });
     await unlock(p);
     await p.waitFor(() => /counted/.test(p.text('pvKey')), { label: 'the points row', ...SLOW });
-    assert.match(p.text('pvKey'), /5 from 1 deposit counted/);
+    assert.match(p.text('pvKey'), /5 from 1 action counted/);
     assert.doesNotMatch(p.text('pvKey'), /wrap|cBTC lock|cUSD loan/, 'nothing to break down with one category');
     p.close();
   });
@@ -2125,7 +2185,7 @@ describe('the points a wallet has been credited', () => {
     serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 5, deposit_count: 1 });
     await p.waitFor(() => /Points/.test(p.text('pvKey')), { label: 'the points row before unlock', ...SLOW });
     assert.match(p.text('pvKey'), /Sign once to unlock/, 'still asking for the key');
-    assert.match(p.text('pvKey'), /5 from 1 deposit counted/, 'and already showing what the wallet earned');
+    assert.match(p.text('pvKey'), /5 from 1 action counted/, 'and already showing what the wallet earned');
     p.close();
   });
 
@@ -2134,7 +2194,7 @@ describe('the points a wallet has been credited', () => {
     serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 5, deposit_count: 1 });
     await unlock(p);
     await p.waitFor(() => /Points/.test(p.text('pvKey')), { label: 'the points row', ...SLOW });
-    assert.match(p.text('pvKey'), /5 from 1 deposit counted/);
+    assert.match(p.text('pvKey'), /5 from 1 action counted/);
     p.close();
   });
 
@@ -2143,7 +2203,7 @@ describe('the points a wallet has been credited', () => {
     serve(p, PTS, { address: A.ACCOUNT.toLowerCase(), points: 12.5, deposit_count: 3 });
     await unlock(p);
     await p.waitFor(() => /Points/.test(p.text('pvKey')), { label: 'the points row via fallback', ...SLOW });
-    assert.match(p.text('pvKey'), /12\.5 from 3 deposits counted/);
+    assert.match(p.text('pvKey'), /12\.5 from 3 actions counted/);
     p.close();
   });
 

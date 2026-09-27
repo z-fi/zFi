@@ -313,7 +313,7 @@ describe('quoting', () => {
   test('an amount above the balance is refused before any signing', async () => {
     const p = await setup();
     await p.typeAmount('amt', '999');
-    assert.equal(p.text('swap'), 'Insufficient balance');
+    assert.match(p.text('swap'), /^Insufficient \S+ balance$/, 'names the token that falls short');
     assert.equal(p.disabled('swap'), true);
     assert.equal(p.chain.sent.length, 0);
     p.close();
@@ -664,6 +664,19 @@ describe('transaction payload', () => {
     p.click('swap');
     await p.waitFor(() => /Done/.test(p.text('stat')), { label: 'settlement' });
     assert.match(p.$('stat').innerHTML, /etherscan\.io\/tx\/0x/, 'links the transaction');
+    p.close();
+  });
+
+  test('a settled swap clears the form so the next one starts fresh', async () => {
+    const p = await setup();
+    await p.typeAmount('amt', '1');
+    p.click('swap');
+    await p.waitFor(() => /Done/.test(p.text('stat')), { label: 'settlement' });
+    await p.settle();
+    assert.equal(p.$('amt').value, '');
+    assert.equal(p.$('outAmt').value, '');
+    assert.equal(p.text('rate'), '', 'no rate for a trade already made');
+    assert.equal(p.text('swap'), 'Enter an amount');
     p.close();
   });
 

@@ -66,8 +66,8 @@ async function openBand(p) {
   return bandRow(p);
 }
 async function addForm(p, r, { zap = false, eth = '', tac = '' }) {
-  p.click(r.querySelector('[data-act="a"]'));
   const box = r.querySelector('.lqadd');
+  if (box.classList.contains('hide')) p.click(r.querySelector('[data-act="a"]'));
   if (zap) { box.querySelector('.lqz').checked = true; box.querySelector('.lqz').dispatchEvent(new p.window.Event('change', { bubbles: true })); }
   const [i0, i1] = box.querySelectorAll('.lqin');
   for (const [el, v] of [[i0, eth], [i1, tac]]) if (v) { el.value = v; el.dispatchEvent(new p.window.Event('input', { bubbles: true })); }
@@ -139,8 +139,10 @@ describe('the farm on its band', () => {
     const p = await open();
     const r = await openBand(p);
     await addForm(p, r, { zap: true, eth: '0.01' });
+    p.queueConfirm(true);
     p.click(r.querySelector('[data-act="ac"]'));
     await p.waitFor(() => farmTx(p), { label: 'the zap' });
+    assert.match(p.asked.confirm.at(-1), /lost to the price move/, 'a zap this large next to the pool is confirmed first');
     const tx = farmTx(p);
     assert.equal(sel(tx.data), '8703a0d8');
     assert.equal(BigInt(tx.value), 10n ** 16n);
@@ -153,6 +155,7 @@ describe('the farm on its band', () => {
     const p = await open();
     const r = await openBand(p);
     await addForm(p, r, { zap: true, tac: '50' });
+    p.queueConfirm(true);
     p.click(r.querySelector('[data-act="ac"]'));
     await p.waitFor(() => farmTx(p), { label: 'the zap' });
     assert.equal(p.chain.signed.length, 1);
@@ -162,6 +165,57 @@ describe('the farm on its band', () => {
     assert.equal(sel(tx.data), '51291e77');
     assert.equal(word(args(tx.data), 0), 50n * ETH);
     assert.ok(floorOk(word(args(tx.data), 2), 10n ** 17n));
+    p.close();
+  });
+
+  // The band is small, so the swap leg of a one-sided deposit moves its price
+  // and the depositor pays for that move. The preview prices it and a large
+  // one waits for a yes; a declined confirm sends nothing.
+  test('a one-sided deposit large next to the pool states its loss and waits for a yes', async () => {
+    const p = await open();
+    const r = await openBand(p);
+    const box = await addForm(p, r, { zap: true, eth: '0.01' });
+    await p.waitFor(() => /lost to the price move/.test(box.querySelector('.lqpv').textContent), { label: 'the loss in the preview' });
+    assert.match(box.querySelector('.lqpv').textContent, /~8\d\.\d% of its value/);
+    p.click(r.querySelector('[data-act="ac"]'));
+    await p.waitFor(() => p.asked.confirm.length, { label: 'the confirm' });
+    await p.settle();
+    assert.equal(p.chain.sentTo(FARM).length, 0, 'declined, so nothing is sent');
+    p.close();
+  });
+
+  test('a small one-sided deposit priced at the pool says nothing about loss', async () => {
+    const p = await open();
+    p.chain.zapLp = 6170000000000000n;
+    const r = await openBand(p);
+    const box = await addForm(p, r, { zap: true, eth: '0.0001' });
+    await p.waitFor(() => /mints/.test(box.querySelector('.lqpv').textContent), { label: 'the preview' });
+    assert.doesNotMatch(box.querySelector('.lqpv').textContent, /lost/);
+    p.click(r.querySelector('[data-act="ac"]'));
+    await p.waitFor(() => farmTx(p), { label: 'the zap' });
+    assert.equal(p.asked.confirm.length, 0);
+    p.close();
+  });
+
+  test('arriving by Farm opens the deposit form, which says it stakes', async () => {
+    const p = await open();
+    const r = await openBand(p);
+    const box = r.querySelector('.lqadd');
+    assert.ok(!box.classList.contains('hide'), 'the form is open without a second click');
+    assert.equal(box.querySelector('[data-act="ac"]').textContent, 'Add & stake');
+    box.querySelector('.pfk').checked = false;
+    box.querySelector('.pfk').dispatchEvent(new p.window.Event('change', { bubbles: true }));
+    assert.equal(box.querySelector('[data-act="ac"]').textContent, 'Add liquidity');
+    p.close();
+  });
+
+  test('wallet LP is offered for staking from the swap line and marked as not earning on the band', async () => {
+    const p = await open({ lp: 5n * 10n ** 17n });
+    await p.waitFor(() => p.$('pfEl').querySelector('[data-pf="st"]'), { label: 'the stake button on the line' });
+    assert.match(p.$('pfEl').querySelector('[data-pf="st"]').textContent, /Stake 0\.5 LP/);
+    p.click(p.$('pfEl').querySelector('[data-pf="st"]'));
+    await p.waitFor(() => farmTx(p), { label: 'the stake' });
+    assert.equal(word(args(farmTx(p).data), 0), 5n * 10n ** 17n, 'all of it');
     p.close();
   });
 

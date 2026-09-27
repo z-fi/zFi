@@ -1533,7 +1533,10 @@ export class MockChain {
           return coder.encode(out, [false, 0n, 0n]);
         }
         const portion = this.zapPortion ?? amountIn / 2n;
-        const lp = this.zapLp ?? amountIn / 4n;
+        // What a small zap really mints: half the input's worth of the pool,
+        // so the page's value-loss estimate reads near zero by default.
+        const rIn = BigInt(tokenIn === this.poolPair(wordAddr(body, 0))[0] ? row.reserve0 : row.reserve1);
+        const lp = this.zapLp ?? (rIn > 0n ? supply * amountIn / (2n * rIn) : amountIn / 4n);
         return coder.encode(out, [true, portion, lp]);
       }
       if (sel === SEL.PREVIEW_ADD) {

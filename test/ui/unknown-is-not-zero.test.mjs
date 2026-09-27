@@ -59,11 +59,11 @@ describe('a balance the page could not read', () => {
     // insufficiency and the page is right to say so. If this stops holding,
     // the assertion underneath means nothing.
     p.window.eval(`${QUOTE};balUnread=false;render()`);
-    assert.equal(p.text('swap'), 'Insufficient balance', 'a known-zero balance no longer reports insufficiency');
+    assert.match(p.text('swap'), /^Insufficient (\S+ )?balance$/, 'a known-zero balance no longer reports insufficiency');
 
     p.window.eval('balUnread=true;render()');
-    assert.notEqual(
-      p.text('swap'), 'Insufficient balance',
+    assert.doesNotMatch(
+      p.text('swap'), /^Insufficient/,
       'the page claimed insufficiency on a balance it never read',
     );
     p.close();

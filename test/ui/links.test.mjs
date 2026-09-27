@@ -263,7 +263,7 @@ describe('amount parsing', () => {
   test('an amount beyond the balance still only prefills, and is caught', async () => {
     const p = await open('token=ETH&out=USDC&amount=9999');
     assert.equal(p.value('amt'), '9999');
-    await p.waitFor(() => p.text('swap') === 'Insufficient balance', { label: 'balance check' });
+    await p.waitFor(() => /^Insufficient \S+ balance$/.test(p.text('swap')), { label: 'balance check' });
     assert.equal(p.disabled('swap'), true);
     p.close();
   });
