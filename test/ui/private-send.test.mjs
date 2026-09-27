@@ -535,9 +535,12 @@ describe('private sends', () => {
     p.click(p.$('pvList').querySelector('button[data-a="sforget"]'));
     await p.settle();
     assert.match(p.text('pvList'), /relay not answering/, 'declining the warning keeps the send');
+    const outs = () => p.window.eval('cpNotes.filter(n=>n.sid&&n.i<0).length');
+    assert.ok(outs() > 0, 'the send holds pending outputs');
     p.queueConfirm(true);
     p.click(p.$('pvList').querySelector('button[data-a="sforget"]'));
     await p.waitFor(() => !/relay not answering/.test(p.text('pvList')), { label: 'the send to be released', ...SLOW });
+    assert.equal(outs(), 0, 'and forgetting it drops them, so they never read as incoming');
     p.close();
   });
 

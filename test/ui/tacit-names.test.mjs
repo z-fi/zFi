@@ -62,6 +62,26 @@ describe('paying a name privately', () => {
     p.close();
   });
 
+  test('a Basename whose record cannot be read right now is not offered as a public payout', async () => {
+    // A node that rate-limits the text() read says nothing about the record, so
+    // the sender is told to try again - never that the name published no key.
+    const chain = new MockChain();
+    chain.ensResolver = A.ENSRESOLVER;
+    chain.texts = new Map([['bob.base.eth|finance.tacit', 'PLACEHOLDER']]);
+    const p = await open(chain);
+    chain.texts.set('bob.base.eth|finance.tacit', tacitFor(p, RECIP));
+    const req = chain.request.bind(chain);
+    chain.request = async a => {
+      if (a.method === 'eth_call' && String(a.params?.[0]?.data || '').startsWith('0x59d1d43c'))
+        throw Object.assign(Error('rate limited'), { code: -32005 });
+      return req(a);
+    };
+    const r = await recip(p, 'bob.base.eth');
+    assert.match(r, /^ERR:Could not read bob\.base\.eth's records right now/, r);
+    assert.equal(p.asked.confirm.length, 0, 'no public payout is offered');
+    p.close();
+  });
+
   test('a .wei name is still read from its own registry', async () => {
     const chain = new MockChain();
     const p = await open(chain);

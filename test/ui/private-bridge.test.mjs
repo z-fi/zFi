@@ -1943,6 +1943,19 @@ describe('the points a wallet has been credited', () => {
     p.close();
   });
 
+  test('a relay total too small or too large to divide by leaves the key row standing', async () => {
+    for (const totalPoints of [1e-9, 1e308]) {
+      const p = await open();
+      serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 5, deposit_count: 1,
+        today: { points: 3, totalPoints, dayBudgetWei: '1111111111111111111111' } });
+      await unlock(p);
+      await p.waitFor(() => /Points/.test(p.text('pvKey')), { label: 'the points row', ...SLOW });
+      assert.match(p.text('pvKey'), /Key unlocked/);
+      assert.doesNotMatch(p.text('pvKey'), /NaN|Infinity|current split/);
+      p.close();
+    }
+  });
+
   test("names today's whole budget, and never a share of it", async () => {
     const p = await open();
     serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 5, deposit_count: 1,

@@ -1,5 +1,5 @@
 // The Tacit pool's private ETH receive address: one standing address per Tacit key, the same on every chain,
-// that shields whatever it is sent. The page derives the note key in page (Poseidon over BabyJubJub) and takes
+// that shields the ETH it is sent (any other token sent to it is lost). The page derives the note key in page (Poseidon over BabyJubJub) and takes
 // the address from the router's own receiveBoxOf, so nothing shows before the pool is live on the chain.
 import { test, describe, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -89,7 +89,8 @@ describe('the private ETH receive address', () => {
     await choose(p, 'Your private ETH address');
     await p.waitFor(() => okIn(p), { label: 'the address, in full' });
     assert.equal(p.$('wkList').querySelector('textarea').value, BOX);
-    assert.match(p.text('wkList'), /shielded into your Tacit balance on that chain, less at most 0\.25%/);
+    assert.match(p.text('wkList'), /ETH sent to it on Ethereum, Base or Robinhood is shielded into your Tacit balance there, less at most 0\.25%/);
+    assert.match(p.text('wkList'), /any other token is lost/);
     p.click(okIn(p));
     await p.settle();
     const call = p.chain.calls.find(c => c.to === ROUTER && c.selector === '7944b37a');
