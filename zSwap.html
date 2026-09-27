@@ -7814,7 +7814,7 @@ for(const l of lg){const leaf=String(l.topics[1]||"").toLowerCase(),debt=Bx((str
 const R=new Set(rs),rc=cpScanCdps.r||=new Map();if(!rc.has(l.blockNumber))try{rc.set(l.blockNumber,rw(await cfgRead(C,[{to:CP_CE,data:"0x2c4e722e"},l.blockNumber])))}catch{}if(rc.get(l.blockNumber))R.add(hx(rc.get(l.blockNumber)))
 hit:for(let i=0;i<16;i++){const S=SS[i]||=cdpSecrets(i);for(const n of z)for(const rate of R){const v=BigInt(n.v);if(cdpLeaf(debt,rate,S.owner,S.nonce,[[CP_CBTC,v]])===leaf){a.push({i,v:String(debt),cv:String(v),c:n.b,rate,leaf,at:0,js:"settled"});found++;break hit}}}}
 if(found)cpSaveCdps(a);return found};
-const cpCdpRows=()=>cpLoadCdps().map((p,j)=>{const st=p.job&&p.js!=="settled"?(p.js==="failed"?"loan failed":p.self&&p.pv?`<button type="button" class="fclink" data-a="csettle" data-c="${j}">settle</button>`:"opening…"):"open";
+const cpCdpRows=()=>cpLoadCdps().map((p,j)=>{const st=p.job&&p.js!=="settled"?(p.js==="failed"?"loan failed":p.self&&p.pv?`<button type="button" class="fclink" data-a="csettle" data-c="${j}">settle</button>`:"opening…"):'open · <a href="https://tacit.finance/#tab=cdp" target="_blank" rel="noreferrer">repay on tacit.finance</a>';
 return`<div class="cpr"><span><b>${trimAmt(BigInt(p.v),8)} cUSD</b> against ${trimAmt(BigInt(p.cv),8)} cBTC</span><span>${st}</span></div>`}).join("");
 const bEnvOf=h=>{const s=/^[0-9a-f]*$/i.test(h||"")?hexToBytes(h):U8(0);if(s.length<36||s[0]!==32||s[33]!==172||s[34]!==0||s[35]!==99)return null;let i=36,end=0;const P=[];
 while(i<s.length){const o=s[i];if(o===104){end=i+1;break}let n,j=i+1;if(o===0)n=0;else if(o<76)n=o;else if(o===76){n=s[j];j++}else if(o===77){n=s[j]|s[j+1]<<8;j+=2}else return null;if(j+n>s.length)return null;P.push(s.slice(j,j+n));i=j+n}

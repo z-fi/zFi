@@ -418,6 +418,9 @@ describe('borrowing cUSD against the cBTC note', () => {
     p.click(p.$('pvKey').querySelector('button[data-a="recover"]'));
     await p.waitFor(() => /30 cUSD/.test(p.text('pvList')), { label: 'the position to be recovered', ...SLOW });
     assert.match(p.text('pvList'), /30 cUSD against 0\.001 cBTC/);
+    const repay = p.$('pvList').querySelector('a[href="https://tacit.finance/#tab=cdp"]');
+    assert.ok(repay, 'an open loan links to where it can be repaid');
+    assert.equal(repay.target, '_blank');
     await p.settle();
     p.close();
   });
