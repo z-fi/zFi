@@ -84,6 +84,18 @@ describe('ether in the private panel on Ethereum', () => {
     p.close();
   });
 
+  test('a bp1 address pasted while V1 is chosen switches ether to the pool', async () => {
+    const p = await open(1, { 'zswap:pvin': 'v' });
+    p.click('pv');
+    await p.settle();
+    p.select('pvAct', 'send');
+    p.type('pvRc', 'bp1qfriend');
+    await p.settle();
+    assert.equal(p.value('pvIn'), 'p');
+    assert.match(p.text('pvHint'), /Pay a bp1… Tacit pool address privately/);
+    p.close();
+  });
+
   test('when the keeper refuses a payment, it is sent from this wallet only after asking', async () => {
     const p = await open();
     p.window.eval('twW.failRelay=1');

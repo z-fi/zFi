@@ -2061,13 +2061,23 @@ describe('the points a wallet has been credited', () => {
     p.close();
   });
 
-  test('a connected wallet sees its points under the swap, without opening Private', async () => {
+  // Connecting alone asks the points relay nothing: the address goes out only once the viewer asks (or has asked
+  // before in this browser, or unlocks their Tacit key).
+  const checkPoints = async p => {
+    await p.waitFor(() => p.$('ptEl').querySelector('[data-pf="pk"]'), { label: 'the check button', ...SLOW });
+    assert.ok(!(p.chain.httpLog || []).some(x => /\/points\//.test(x.url)), 'nothing reached the points relay before asking');
+    p.click(p.$('ptEl').querySelector('[data-pf="pk"]'));
+    await p.waitFor(() => !p.$('ptEl').querySelector('[data-pf="pk"]'), { label: 'the points read', ...SLOW });
+    assert.ok((p.chain.httpLog || []).some(x => /\/points\//.test(x.url)), 'read once asked');
+  };
+
+  test('a connected wallet sees its points under the swap once it asks, without opening Private', async () => {
     const p = await loadPage({ chain: withPool(new MockChain(), {}) });
     serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 608.9, deposit_count: 6,
       today: { points: 50, totalPoints: 200, dayBudgetWei: '1000000000000000000000' } });
     claiming(p, RELAY, { address: A.ACCOUNT.toLowerCase(), distributor: DIST, cumulativeAmount: '12000000000000000000', unclaimedWei: '12000000000000000000', proof: PROOF });
     await p.connect();
-    await p.waitFor(() => p.visible('ptEl'), { label: 'the points line', ...SLOW });
+    await checkPoints(p);
     assert.match(p.text('ptEl'), /608\.9 Tacit points · today ~250 TAC/, p.text('ptEl'));
     await p.waitFor(() => p.$('ptEl').querySelector('[data-pf="pc"]'), { label: 'the claim', ...SLOW });
     assert.match(p.$('ptEl').querySelector('[data-pf="pc"]').textContent, /Claim 12 TAC/);
@@ -2081,14 +2091,15 @@ describe('the points a wallet has been credited', () => {
     const p = await loadPage({ chain: withPool(new MockChain(), {}) });
     serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 0, deposit_count: 0 });
     await p.connect();
-    await p.waitFor(() => p.visible('ptEl'), { label: 'the points line', ...SLOW });
-    assert.match(p.text('ptEl'), /ETH you swap in here earns Tacit points/);
+    await checkPoints(p);
+    assert.match(p.text('ptEl'), /ETH you swap in through zSwap’s router earns Tacit points/);
     assert.ok(!p.$('ptEl').querySelector('[data-pf="ph"]'), 'no history to open');
     p.close();
     const q = await loadPage({ chain: withPool(new MockChain(), {}) });
     serve(q, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 5, deposit_count: 1, deposits: [
       { tx_hash: '0x' + '71'.repeat(32), block_time: 1790500000, amount_wei: '10000000000000000', points: 5, activity: 'zswapeth', chain_id: 1 }] });
     await q.connect();
+    await checkPoints(q);
     await q.waitFor(() => q.$('ptEl').querySelector('[data-pf="ph"]'), { label: 'history', ...SLOW });
     q.click(q.$('ptEl').querySelector('[data-pf="ph"]'));
     await q.waitFor(() => q.visible('pvKey') && q.$('pvKey').querySelector('.pvkh'), { label: 'the list in Private', ...SLOW });
