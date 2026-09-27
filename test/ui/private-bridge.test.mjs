@@ -1030,6 +1030,7 @@ describe('a browser that keeps nothing', () => {
   test('an Ethereum withdrawal still goes through', async () => {
     const p = await open(noStore);
     await unlock(p);
+    p.select('pvIn', 'v');   // nothing kept, so the page leads with the pool; these exercise V1
     await deposit(p);
     settleDeposit(p);
     poke(p);
@@ -1049,6 +1050,7 @@ describe('a browser that keeps nothing', () => {
   test('an exit to an L2 is refused before anything is proven', async () => {
     const p = await open(noStore);
     await unlock(p);
+    p.select('pvIn', 'v');   // nothing kept, so the page leads with the pool; these exercise V1
     await deposit(p);
     settleDeposit(p);
     poke(p);

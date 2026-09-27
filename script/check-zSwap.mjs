@@ -1151,7 +1151,7 @@ if (exported) {
     }
     const ask = between('async function preflightAsk(', 'const SEL_ORDER_FIXED=');
     if (!ask) throw Error('preflightAsk no longer recognizable — retarget this check');
-    if (!/catch\{throw Error\("order could not be read/.test(ask[0])) {
+    if (!/catch\{throw (?:Error|Er)\("order could not be read/.test(ask[0])) {
       throw Error('preflightAsk no longer fails closed on an unreadable order');
     }
     // A PARTIALLY TAKEN ORDER SHRINKS, and only the growth direction was

@@ -2076,6 +2076,10 @@ export async function loadPage(opts = {}) {
   let { chain = new MockChain(), hash = '', storage = {}, session = {}, patch = [], prefersDark = false,
     storageBroken = false } = opts;
   if (hash === '') hash = PINNED_PAIR + (Number(chain.chainId) !== 1 ? '&chain=' + Number(chain.chainId) : '');
+  // The V1 suites were written when ether in the private panel meant V1's tETH notes. The page now leads with
+  // the Tacit pool and remembers the choice in zswap:pvin; those suites keep V1 unless a test sets it itself.
+  // A file:// page has an opaque origin with no storage at all, so there is nothing to seed there.
+  if (!('zswap:pvin' in storage) && !/^file:/.test(opts.url || '')) storage = { 'zswap:pvin': 'v', ...storage };
   else if (hash === null) hash = '';
   // Tests that exercise the price tape or the liquidity panel repoint PPLENS
   // at a mock address through `patch`, matched by shape rather than by literal

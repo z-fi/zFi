@@ -5,6 +5,7 @@ import { test, describe, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash, webcrypto } from 'node:crypto';
 import { A, MockChain, loadPage, closeAllPages } from './harness.mjs';
+import { FAKE_POOL } from './tacit-fake-pool.mjs';
 
 after(closeAllPages);
 
@@ -46,7 +47,7 @@ async function open(id, { live = true, keepers = { [id]: [KEEPER] }, infoChain }
   return p;
 }
 const shown = p => !p.$('pv').classList.contains('hide');
-const unlock = p => p.window.eval(`cpUse(${JSON.stringify(KEY)})`);
+const unlock = p => { p.window.eval(`cpUse(${JSON.stringify(KEY)})`); p.window.eval(FAKE_POOL); };
 const okIn = p => [...p.$('wkList').querySelectorAll('button')].find(b => b.textContent === 'OK');
 const row = (p, name) => [...p.$('wkList').querySelectorAll('button.tkr')].find(b => b.textContent.startsWith(name));
 const menu = p => p.visible('wkWrap') && row(p, 'Your private ETH address');
