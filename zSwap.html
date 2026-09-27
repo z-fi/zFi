@@ -581,7 +581,7 @@ background:var(--e);margin:.5em auto .1em}
 </div>
 <footer id="foot"><span id="footV"></span><span id="footAddr"></span><span id="footBurn"></span><span>&middot; <a id="footDoc" href="#">how it works</a></span><span>&middot; <a id="footGov" href="#">governance</a></span><span>&middot; <a id="footList" target="_blank" rel="noopener" title="Token order here comes from zList, ranked by on-chain conviction staking. Stake to move a token up the list — or to get one listed at all.">token list</a></span></footer>
 </div>
-<script>const cE=t=>document.createElement(t),qS=(e,q)=>e.querySelector(q),aE=(e,...a)=>e.addEventListener(...a),aC=(e,c)=>e.appendChild(c),Js=JSON.stringify,Jp=JSON.parse,Pa=a=>Promise.all(a),Mf=Math.floor,Mx=Math.max,Mn=Math.min,U8=(...a)=>new Uint8Array(...a),Ia=Array.isArray,Ni=Number.isInteger,gE=i=>document.getElementById(i),Bx=h=>BigInt("0x"+h),Hd=(e,v)=>e.classList.toggle("hide",v),IC0='<svg width="14" height="14" viewBox="0 0 24 24" class="ik" aria-hidden="true">',
+<script>const cE=t=>document.createElement(t),Lc=x=>x.toLowerCase(),sAt=(e,k,v)=>e.setAttribute(k,v),qS=(e,q)=>e.querySelector(q),aE=(e,...a)=>e.addEventListener(...a),aC=(e,c)=>e.appendChild(c),Js=JSON.stringify,Jp=JSON.parse,Pa=a=>Promise.all(a),Mf=Math.floor,Mx=Math.max,Mn=Math.min,U8=(...a)=>new Uint8Array(...a),Ia=Array.isArray,Ni=Number.isInteger,gE=i=>document.getElementById(i),Bx=h=>BigInt("0x"+h),Hd=(e,v)=>e.classList.toggle("hide",v),IC0='<svg width="14" height="14" viewBox="0 0 24 24" class="ik" aria-hidden="true">',
 ICMOON=IC0+'<path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z"/></svg>',
 ICSUN=IC0+'<circle cx="12" cy="12" r="4.2"/><path d="M12 2v2m0 16v2M4.2 4.2l1.5 1.5m12.6 12.6 1.5 1.5M2 12h2m16 0h2M4.2 19.8l1.5-1.5M18.3 5.7l1.5-1.5"/></svg>';
 const ic=()=>{const d=H.className=='d';th.innerHTML=d?ICSUN:ICMOON;tc.content=d?'#0a0a0a':'#fff'};ic();
@@ -778,8 +778,8 @@ if(!/^0x[0-9a-f]{40}$/i.test(other)||!/^0x[0-9a-f]{40}$/i.test(hooks))continue;
 if(!/^\d{1,7}$/.test(p[2])||!/^\d{1,7}$/.test(p[3]))continue;
 const fee=Number(p[2]),ts=Number(p[3]);
 if(!Ni(fee)||!Ni(ts)||ts<1)continue;
-if(other.toLowerCase()===tokenAddr.toLowerCase())continue;
-const a=tokenAddr.toLowerCase(),b=other.toLowerCase();
+if(Lc(other)===Lc(tokenAddr))continue;
+const a=Lc(tokenAddr),b=Lc(other);
 const zeroFirst=BigInt(a)<BigInt(b);
 out.push({c0:zeroFirst?tokenAddr:other,c1:zeroFirst?other:tokenAddr,fee,ts,hooks});
 if(out.length===8)break;
@@ -787,12 +787,12 @@ if(out.length===8)break;
 return out;
 }
 function v4PoolsFor(f,t){
-const fa=f.addr.toLowerCase(),ta=t.addr.toLowerCase();
+const fa=Lc(f.addr),ta=Lc(t.addr);
 const seen=new Set(),out=[];
 for(const tok of [f,t])for(const p of (tok.v4||[])){
-const c0=p.c0.toLowerCase(),c1=p.c1.toLowerCase();
+const c0=Lc(p.c0),c1=Lc(p.c1);
 if(!((c0===fa&&c1===ta)||(c0===ta&&c1===fa)))continue;
-const id=`${c0}:${c1}:${p.fee}:${p.ts}:${p.hooks.toLowerCase()}`;
+const id=`${c0}:${c1}:${p.fee}:${p.ts}:${Lc(p.hooks)}`;
 if(seen.has(id))continue;
 seen.add(id);
 out.push({...p,zeroForOne:c0===fa});
@@ -819,17 +819,17 @@ const PPOLICY="0x00000045fc7b570Be4d71F67219508ebD295EC6D";
 const SEL_ROUTABLE="9662c498",SEL_QUOTE_ALL="89941805";
 const LQ_SCAN=128;
 const LQ_SHOW=24;
-const isEthLike=a=>a===ZERO||a.toLowerCase()===WETH.toLowerCase();
+const isEthLike=a=>a===ZERO||Lc(a)===Lc(WETH);
 async function quotePrecision(f,t,amountIn,sender,block){
 if(PROUTE===ZERO||amountIn<=0n)return null;
-const nat=a=>a.toLowerCase()===WETH.toLowerCase()?ZERO:a;
+const nat=a=>Lc(a)===Lc(WETH)?ZERO:a;
 const vars=[];
 const addVar=(a,b)=>{
-const [x,y]=a.toLowerCase()<b.toLowerCase()?[a,b]:[b,a];
+const [x,y]=Lc(a)<Lc(b)?[a,b]:[b,a];
 if(!vars.some(v=>v.c0===x&&v.c1===y&&v.tokenIn===a))vars.push({c0:x,c1:y,tokenIn:a});
 };
 const forms=a=>a===ZERO?[ZERO,WETH]
-:a.toLowerCase()===WETH.toLowerCase()?[WETH,ZERO]:[a];
+:Lc(a)===Lc(WETH)?[WETH,ZERO]:[a];
 for(const a of forms(f.addr))for(const b of forms(t.addr)){
 if(nat(a)===nat(b))continue;
 addVar(a,b);
@@ -920,7 +920,7 @@ return {pool,out};
 async function hubHop(f,t,amountIn,sender,block){
 if(isEthLike(f.addr)||isEthLike(t.addr))return null;
 const enc=(a,b,tokenIn,amt)=>{
-const [c0,c1]=a.toLowerCase()<b.toLowerCase()?[a,b]:[b,a];
+const [c0,c1]=Lc(a)<Lc(b)?[a,b]:[b,a];
 return [{to:PPLENS,data:"0x"+SEL_QUOTE_BEST+eA(c0)+eA(c1)
 +eA(sender)+eA(tokenIn)+eU(amt)+eU(0n)+eU(BigInt(LQ_SCAN))},
 {to:PFACTORY,data:"0x"+SEL_PAIR_COUNT+eA(c0)+eA(c1)}]};
@@ -958,7 +958,7 @@ let qBlind=[];
 const blindRead=async(c,tag)=>{
 const real=[...new Set([account,...qBlind].filter(x=>isAddr(x||"")).map(x=>Sx(x).toLowerCase()))],
 ph=real.map(()=>cpHex(crypto.getRandomValues(U8(20))));
-let data=c.data.toLowerCase();real.forEach((x,i)=>{data=data.split(x).join(ph[i])});
+let data=Lc(c.data);real.forEach((x,i)=>{data=data.split(x).join(ph[i])});
 if(real.some(x=>data.includes(x)))throw Error("blind");
 const q=[{to:c.to,data},tag||L];
 let r=await agreeRead(q).catch(()=>tag&&tag!==L?agreeRead([q[0],L]):null);
@@ -973,7 +973,7 @@ const SEL_BBS="e7798987";
 const HUBS=()=>cC().hubs||[WETH,...NUMERAIRES,"0x2260fac5e5542a773aa44fbcfedf7c193bc2c599","0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0"];
 async function hubRoute(f,t,amt,sb,dl,to,rf,block){
 const nf=(f.addr===ZERO?WETH:f.addr).toLowerCase(),nt=(t.addr===ZERO?WETH:t.addr).toLowerCase();
-const H=HUBS().filter(h=>h.toLowerCase()!==nf&&h.toLowerCase()!==nt);
+const H=HUBS().filter(h=>Lc(h)!==nf&&Lc(h)!==nt);
 if(!H.length)return null;
 const E=(x,i,o,n)=>({to:ZQUOTER,data:"0x"+SEL_BBS+eA(x)+eBo(false)+eA(i)+eA(o)+eU(n)+eU(sb)+eU(dl)});
 const D=h=>{try{return decQ(h,sb,false,0,4,0,6)}catch{return null}};
@@ -1054,22 +1054,22 @@ const std=t.p==="Native"||t.p==="ERC-20"?"ft":t.p==="ERC-721"?"nft":"";
 if(!std)continue;
 if(!/^0x[0-9a-f]{40}$/i.test(t.a||""))continue;
 if(!Ni(t.d)||t.d<0||t.d>36)continue;
-if(src.has(t.a.toLowerCase()))continue;
+if(src.has(Lc(t.a)))continue;
 const sym=safeSym(t.s).slice(0,12);
 const logo=safeDataUrl(t.l);
-next.push({sym,addr:t.a.toLowerCase(),dec:t.d,std,icon:logo?`<img src="${logo}" width="20" height="20" alt="">`:genIcon(sym),
+next.push({sym,addr:Lc(t.a),dec:t.d,std,icon:logo?`<img src="${logo}" width="20" height="20" alt="">`:genIcon(sym),
 name:String(t.n??"").slice(0,64),desc:[String(t.desc??"").slice(0,240),(()=>{const o=(t.e||[]).find(x=>x&&String(x.k).toLowerCase()==="origin");return o?`${String(o.v).slice(0,24)} origin`:""})()].filter(Boolean).join(" · "),
 v4:parseV4Pools(t.e,t.a)});
-src.set(t.a.toLowerCase(),row);
+src.set(Lc(t.a),row);
 }
 return{next,src}};
 const nftLast=(a,b)=>(a.std==="nft")-(b.std==="nft");
 const listMerge=(next,born)=>{
-const lc=t=>t.addr.toLowerCase(),at=new Set([...next,...born].map(lc));
+const lc=t=>Lc(t.addr),at=new Set([...next,...born].map(lc));
 const anchors=BUILTIN.filter(b=>(b.addr===ZERO||b.addr===WETH)&&!next.some(x=>x.addr===b.addr));
 const mine=TOKENS.filter(t=>t.cust&&!at.has(lc(t)));
-const taken=new Set([...next,...anchors,...born].map(t=>t.sym.toLowerCase()));
-for(const t of mine){if(taken.has(t.sym.toLowerCase()))t.sym+=" "+lc(t).slice(0,6)+"…";taken.add(t.sym.toLowerCase())}
+const taken=new Set([...next,...anchors,...born].map(t=>Lc(t.sym)));
+for(const t of mine){if(taken.has(Lc(t.sym)))t.sym+=" "+lc(t).slice(0,6)+"…";taken.add(Lc(t.sym))}
 TOKENS.splice(0,TOKENS.length,...next,...anchors,...born,...mine)};
 const LIST_KEEP=()=>CHAIN_ID===1?"zswap:list":"zswap:list:"+CHAIN_ID,LIST_KEEP_MAX=400000;
 let listSeeded=false;
@@ -1097,12 +1097,12 @@ const raw=take?await rpc(C,[{to:PFACTORY,data:"0x"+SEL_BYCREATOR+eA(PLAUNCH)+eU(
 const h=Sx(raw||""),n=h.length>=128?Number(BigInt("0x"+h.slice(64,128)||"0")):0;
 let pools=[];
 for(let i=0;i<n&&i<take;i++)pools.push("0x"+h.slice(128+i*64+24,128+(i+1)*64));
-const fresh=new Set(pools.map(x=>x.toLowerCase()));
-const carried=stickyPools().filter(x=>!fresh.has(x.toLowerCase()));
+const fresh=new Set(pools.map(x=>Lc(x)));
+const carried=stickyPools().filter(x=>!fresh.has(Lc(x)));
 if(carried.length){
 const fr=await mD(carried.map(a=>({to:a,data:"0x"+SEL_FEERECIP})));if(cid!==CHAIN_ID)throw 0;
 carried.forEach((x,i)=>{let a="";try{a=("0x"+Sx(fr[i]||"").slice(24)).toLowerCase()}catch{}
-if(a===PLAUNCH.toLowerCase())pools.push(x)});
+if(a===Lc(PLAUNCH))pools.push(x)});
 }
 if(!pools.length)return{pools,byDepth:[],toks:[],info:[]};
 const depth=await mD(pools.map(a=>[{to:a,data:"0x"+SEL_RESERVE0}]).flat());if(cid!==CHAIN_ID)throw 0;
@@ -1147,14 +1147,14 @@ if(!next.some(t=>t.std==="ft")){fb=fb||"registry returned nothing swappable";nex
 let born=[];const launched=[];
 try{
 const{pools,byDepth,toks,info}=await bornJob;
-const seen=new Set(next.map(x=>x.addr.toLowerCase()));
-const taken=new Set(next.map(x=>x.sym.toLowerCase()).concat(BUILTIN.filter(b=>b.addr===ZERO||b.addr===WETH).map(x=>x.sym.toLowerCase())));
+const seen=new Set(next.map(x=>Lc(x.addr)));
+const taken=new Set(next.map(x=>Lc(x.sym)).concat(BUILTIN.filter(b=>b.addr===ZERO||b.addr===WETH).map(x=>Lc(x.sym))));
 toks.forEach(({a,pi},i)=>{
 let sym="?";try{sym=safeSym(dS(info[i*3]||"0x").trim()).slice(0,12)}catch{}
 launched.push({addr:a,sym,pool:pools[pi]||""});
 if(seen.has(a)){for(const x of next)if(x.addr===a)x.fl=1;return}if(!sym||sym==="?")return;
 seen.add(a);
-if(taken.has(sym.toLowerCase()))sym+=" "+a.slice(0,6)+"…";else taken.add(sym.toLowerCase());
+if(taken.has(Lc(sym)))sym+=" "+a.slice(0,6)+"…";else taken.add(Lc(sym));
 let art="";try{art=imgFromContractURI(dS(info[i*3+1]||"0x"))}catch{}
 if(art)logoCache[a]=art;
 const dep=byDepth[pi]?byDepth[pi].d:0n;
@@ -1358,11 +1358,11 @@ const hc=sx?await hasCode(sx).catch(()=>null):false;if(id!==CHAIN_ID)return;if(h
 const ex=await nodeRead("eth_call",[{to:solverFill,data:"0x"+SEL_EXEC},L]).catch(()=>null);
 if(id!==CHAIN_ID)return;const exec="0x"+Sx(ex||"0x").slice(24);
 if(!isAddr(exec)){solversRetry=Date.now()+SOLVER_COOL;solversJob=null;return}
-if(exec.toLowerCase()!==SOLVER_EXEC_PIN.toLowerCase()){solverLanes=[];return}
+if(Lc(exec)!==Lc(SOLVER_EXEC_PIN)){solverLanes=[];return}
 solverExec=SOLVER_EXEC_PIN}
 const raw=await rj;if(id!==CHAIN_ID)return;
 solverLanes=decSolvers(raw).filter(x=>x.enabled
-&&x.adapter.toLowerCase()===SOLVER_ROW_TAG.toLowerCase()
+&&Lc(x.adapter)===Lc(SOLVER_ROW_TAG)
 &&/^https:\/\/\S+$/.test(x.endpoint)
 &&Object.hasOwn(SOLVER_SHAPES,x.name)
 &&x.chains.includes(CHAIN_ID)
@@ -1563,7 +1563,7 @@ await new Promise(res=>setTimeout(res,wait));
 }
 throw Error("tx not mined in time");
 };
-const cW=async()=>{if(!account)throw Error("Connect a wallet first.");const[c,a]=await Pa([rpc(I,[]),rpc("eth_accounts",[])]);if(+c!==CHAIN_ID)throw Error("Switch your wallet to "+cC().name);if(a[0]?.toLowerCase()!==account.toLowerCase())throw Error("wallet changed")};
+const cW=async()=>{if(!account)throw Error("Connect a wallet first.");const[c,a]=await Pa([rpc(I,[]),rpc("eth_accounts",[])]);if(+c!==CHAIN_ID)throw Error("Switch your wallet to "+cC().name);if(a[0]?.toLowerCase()!==Lc(account))throw Error("wallet changed")};
 const hB=h=>{const s=Sx(h);const o=U8(s.length/2);for(let i=0;i<o.length;i++)o[i]=parseInt(s.slice(i*2,i*2+2),16);return o};
 const KRC=[1n,0x8082n,0x800000000000808an,0x8000000080008000n,0x808bn,0x80000001n,0x8000000080008081n,0x8000000000008009n,0x8an,0x88n,0x80008009n,0x8000000an,0x8000808bn,0x800000000000008bn,0x8000000000008089n,0x8000000000008003n,0x8000000000008002n,0x8000000000000080n,0x800an,0x800000008000000an,0x8000000080008081n,0x8000000000008080n,0x80000001n,0x8000000080008008n];
 const KR=[0,1,62,28,27,36,44,6,55,20,3,10,43,25,39,41,45,15,21,8,18,2,61,56,14];
@@ -1623,7 +1623,7 @@ return null};
 const ensFwd=async(n,d=1)=>{const f=await ensFind(n);
 if(!f)return"";
 const nh=pad32(namehash(n)),inner="0x"+SEL_EADDR+nh,ci=c=>({to:f.r,data:"0xf1cb7e06"+nh+eU(2147483648+c)}),[w,a,...m]=await nsBatch([{to:f.r,data:supports(SEL_ERESOLVE)},{to:f.r,data:inner},...(d>1?[ci(d),ci(0)]:[])]),x=f.exact&&m.map(decBytes).find(y=>/^0x[0-9a-f]{40}$/i.test(y)&&!/^0x0{40}$/.test(y));
-if(x)return x.toLowerCase();
+if(x)return Lc(x);
 if(!/^0x0{63}1$/.test(w))return f.exact?retAddr(a):"";
 try{return retAddr(decBytes(await cfgRead(C,[{to:f.r,
 data:"0x"+SEL_ERESOLVE+encResolve(dnsEnc(n),inner)},L])))}
@@ -1678,9 +1678,9 @@ p.catch(()=>fwdCache.delete(k));
 return p};
 const nameRevRaw=async a=>{
 const agrees=async n=>{
-if(!n||!nameOk(n.toLowerCase()))return"";
-let f="";try{f=await nameFwdCached(n.toLowerCase())}catch{}
-return f&&f.toLowerCase()===a.toLowerCase()?n:""};
+if(!n||!nameOk(Lc(n)))return"";
+let f="";try{f=await nameFwdCached(Lc(n))}catch{}
+return f&&Lc(f)===Lc(a)?n:""};
 if(CHAIN_ID===BASE_ID){const b=await agrees(await bnRev(a));if(b)return b}
 const nd=namehash(Sx(a).toLowerCase()+".addr.reverse");
 const [w,g,er]=await nsBatch([
@@ -1692,7 +1692,7 @@ return await agrees(str(w))||await agrees(str(g))
 ||await agrees(await ensRevName(nd,retAddr(er)))||""};
 const REV_TTL=60000;
 const revCache=new Map();
-const nameRev=a=>{const k=CHAIN_ID+":"+a.toLowerCase(),hit=revCache.get(k);
+const nameRev=a=>{const k=CHAIN_ID+":"+Lc(a),hit=revCache.get(k);
 if(hit&&hit.exp>Date.now())return hit.p;
 const p=nameRevRaw(a);
 revCache.set(k,{p,exp:Date.now()+REV_TTL});
@@ -1707,7 +1707,7 @@ return new TextDecoder().decode(hB(h.slice(off+64,off+64+len)));
 };
 const kecStr=v=>keccak(cpU8(v));
 const cks=a=>{const s=Sx(a).toLowerCase(),h=Sx(kecStr(s));let o="0x";for(let i=0;i<40;i++)o+=h[i]>"7"?s[i].toUpperCase():s[i];return o};
-const ckAddr=a=>{const s=Sx(a);return s===s.toLowerCase()||s===s.toUpperCase()||"0x"+s===cks(a)};
+const ckAddr=a=>{const s=Sx(a);return s===Lc(s)||s===s.toUpperCase()||"0x"+s===cks(a)};
 const domainSep=(name,ver,tok)=>keccak(hB(
 kecStr(EIP712DOM)+pad32(kecStr(name))+pad32(kecStr(ver))+eU(CHAIN_ID)+eA(tok)));
 const permitInfo=async(tok,owner)=>{
@@ -1721,7 +1721,7 @@ if(th&&Sx(th).length>=64&&Sx(th).slice(0,64).toLowerCase()!==TH_2612)return null
 if(!nc||!nm)return null;
 const nonce=BigInt(nc);
 const name=dS(nm);
-for(const ver of ["1","2","1.0","V1",""])if(domainSep(name,ver,tok).toLowerCase()===ds.toLowerCase())
+for(const ver of ["1","2","1.0","V1",""])if(domainSep(name,ver,tok).toLowerCase()===Lc(ds))
 return{name,ver,nonce};
 }catch{}
 return null};
@@ -1942,7 +1942,7 @@ const artIcon=(a,s)=>a?`<img width="20" height="20" style="border-radius:50%;obj
 const STORE=()=>CHAIN_ID===1?"zswap:custom":"zswap:custom:"+CHAIN_ID;
 function keepToken(t){
 if(!t||!t.addr)return;
-const a=t.addr.toLowerCase();
+const a=Lc(t.addr);
 try{const arr=Jp(localStorage.getItem(STORE())||"[]")
 .filter(x=>String(x?.addr||"").toLowerCase()!==a);
 arr.push({sym:t.sym,addr:a,dec:t.dec,std:t.std,cause:t.cause?1:0,...(t.name?{name:t.name}:{})});
@@ -1971,22 +1971,22 @@ dec=Number(BigInt(decRet&&decRet!=="0x"?decRet:"0x0"));
 if(!decRet||decRet==="0x"||!Ni(dec)||dec<0||dec>36)throw Error("not an ERC-20 or ERC-721");
 }
 let art="";try{art=imgFromContractURI(uriRet?dS(uriRet):"")}catch{}
-return{sym,name:name.toLowerCase()===sym.toLowerCase()?"":name,addr:a,dec,std,art};
+return{sym,name:Lc(name)===Lc(sym)?"":name,addr:a,dec,std,art};
 }
 const tkProbes=new Map();
 const probeToken=a=>{const k=CHAIN_ID+":"+a;let r=tkProbes.get(k);
 if(!r||r.e){r={};r.p=readToken(a).then(t=>r.t=t,e=>{r.e=e;throw e});r.p.catch(()=>{});tkProbes.set(k,r);capMap(tkProbes,32)}
 return r};
 async function addCustomToken(a,keep=1){
-a=a.toLowerCase();
+a=Lc(a);
 if(!/^0x[0-9a-f]{40}$/.test(a))throw Error("invalid address");
-const i=TOKENS.findIndex(t=>t.addr.toLowerCase()===a);
+const i=TOKENS.findIndex(t=>Lc(t.addr)===a);
 if(i>=0)return i;
 const{sym:s0,name,dec,std,art}=await probeToken(a).p;
-const dup=TOKENS.findIndex(t=>t.addr.toLowerCase()===a);
+const dup=TOKENS.findIndex(t=>Lc(t.addr)===a);
 if(dup>=0)return dup;
 let sym=s0;
-if(TOKENS.some(t=>t.sym.toLowerCase()===sym.toLowerCase()))sym+=" "+a.slice(0,6)+"…";
+if(TOKENS.some(t=>Lc(t.sym)===Lc(sym)))sym+=" "+a.slice(0,6)+"…";
 if(art)logoCache[a]=art;
 TOKENS.push({sym,addr:a,dec,std,cust:1,...(name?{name}:{}),
 icon:artIcon(art||logoCache[a],sym)});
@@ -1996,7 +1996,7 @@ return TOKENS.length-1;
 function restoreCustom(){try{for(const t of Jp(localStorage.getItem(STORE())||"[]")){
 const addr=(t?.addr||"").toLowerCase();
 const dec=+t?.dec;
-if(/^0x[0-9a-f]{40}$/.test(addr)&&Ni(dec)&&dec>=0&&dec<=36&&!TOKENS.some(x=>x.addr.toLowerCase()===addr)){
+if(/^0x[0-9a-f]{40}$/.test(addr)&&Ni(dec)&&dec>=0&&dec<=36&&!TOKENS.some(x=>Lc(x.addr)===addr)){
 const sym=safeSym(t.sym,24),name=safeSym(t.name,40,"");
 TOKENS.push({sym,addr,dec,std:t.std==="nft"?"nft":"ft",cust:1,icon:genIcon(sym),...(name?{name}:{}),
 ...(t.cause?{cause:1}:{})});
@@ -2056,7 +2056,7 @@ const pairAddrs=()=>({fa:TOKENS[fromSel.value]?.addr,ta:TOKENS[toSel.value]?.add
 fi:String(fromSel.value),ti:String(toSel.value)});
 const restorePair=k=>{
 if(!k)return;
-const at=a=>a?TOKENS.findIndex(t=>t.addr.toLowerCase()===a.toLowerCase()):-1;
+const at=a=>a?TOKENS.findIndex(t=>Lc(t.addr)===Lc(a)):-1;
 const held=(cur,want)=>String(cur)===want||!TOKENS[cur];
 if(held(fromSel.value,k.fi)){const i=at(k.fa);if(i>=0)fromSel.value=i}
 if(held(toSel.value,k.ti)){const i=at(k.ta);if(i>=0&&String(i)!==String(fromSel.value))toSel.value=i}
@@ -2070,7 +2070,7 @@ if(i>=0&&(s===fromSel||String(i)!==String(fromSel.value)))s.value=i;
 const isNft=v=>TOKENS[v]?.std==="nft";
 let pairChosen=false;
 const wrapTwin=(a,b)=>{
-const x=(a||"").toLowerCase(),y=(b||"").toLowerCase(),w=WETH.toLowerCase();
+const x=(a||"").toLowerCase(),y=(b||"").toLowerCase(),w=Lc(WETH);
 return (x===ZERO&&y===w)||(x===w&&y===ZERO);
 };
 const rankedOutputs=fi=>TOKENS.map((t,i)=>i)
@@ -2096,7 +2096,7 @@ const advancePastDeadPair=()=>{
 if(!pairAuto||pairChosen)return false;
 const cur=TOKENS[toSel.value];
 if(!cur)return false;
-deadOutputs.add(cur.addr.toLowerCase());
+deadOutputs.add(Lc(cur.addr));
 const fi=Number(fromSel.value);
 const next=rankedOutputs(fi).find(i=>!deadOutputs.has(TOKENS[i].addr.toLowerCase()));
 if(next==null)return false;
@@ -2139,8 +2139,8 @@ toSel.innerHTML=optsHtml();listSig=tokSig();
 const seatPair=()=>{
 try{
 const [a,b]=Jp(LS[LAST_PAIR()]||"[]");
-const fi=TOKENS.findIndex(t=>t.addr.toLowerCase()===String(a).toLowerCase());
-const ti=TOKENS.findIndex(t=>t.addr.toLowerCase()===String(b).toLowerCase());
+const fi=TOKENS.findIndex(t=>Lc(t.addr)===String(a).toLowerCase());
+const ti=TOKENS.findIndex(t=>Lc(t.addr)===String(b).toLowerCase());
 if(fi>=0&&ti>=0&&fi!==ti){fromSel.value=String(fi);toSel.value=String(ti);return true}
 }catch{}
 return false;
@@ -2164,17 +2164,17 @@ const b=pickBtn(sel);if(!b)continue;
 const t=TOKENS[sel.value];
 b.classList.add("on");sel.classList.add("rich");
 qS(b,".tkbs").textContent=t?t.sym:(sel.selectedOptions[0]?.textContent||"");
-b.setAttribute("aria-label",`Token: ${t?t.sym:"none"} — change`);
+sAt(b,"aria-label",`Token: ${t?t.sym:"none"} — change`);
 const pill=b.closest(".pill");
 if(pill){
-const name=t?.name&&t.name.toLowerCase()!==t.sym.toLowerCase()?t.name:"";
+const name=t?.name&&Lc(t.name)!==Lc(t.sym)?t.name:"";
 const tg=tacitTag(t),extra=[name,t?.desc,tg].filter(Boolean);
 if(extra.length)pill.title=[`${t.sym}${name?" — "+name:""}`,t.desc,tg].filter(Boolean).join("\n\n");
 else pill.removeAttribute("title");
 }
 }
 };
-const tkAct=id=>{if(id)tkFind.setAttribute("aria-activedescendant",id);
+const tkAct=id=>{if(id)sAt(tkFind,"aria-activedescendant",id);
 else tkFind.removeAttribute("aria-activedescendant")};
 const icT=new Map(),icFrag=h=>{let t=icT.get(h);if(!t){t=cE("template");t.innerHTML=h;icT.set(h,t);capMap(icT,256)}return document.importNode(t.content,true)};
 let tkBal={};
@@ -2185,7 +2185,7 @@ mD(ts.map(t=>t.addr===ZERO?{to:MC3,data:"0x4d2301cc"+eA(account)}:{to:t.addr,dat
 ts.forEach((t,i)=>{try{tkBal[t.addr]=BigInt(r[i].slice(0,66))}catch{}});tkRe()}).catch(()=>{})};
 const tkScore=(q,sym,t)=>{
 if(!q)return tkBal[t?.addr]?0:1;
-const s=sym.toLowerCase(),n=(t?.name||"").toLowerCase(),a=(t?.addr||"").toLowerCase();
+const s=Lc(sym),n=(t?.name||"").toLowerCase(),a=(t?.addr||"").toLowerCase();
 let b=s===q?0:s.startsWith(q)?1:n===q?2:n.startsWith(q)||n.split(/[\s\-_.()]+/).some(w=>w.startsWith(q))?3:s.includes(q)?4:n.includes(q)?5:-1;
 if(/^0x[0-9a-f]{3,}$/.test(q)&&a.startsWith(q)){const x=a===q?0:6;if(b<0||x<b)b=x}
 return b};
@@ -2205,18 +2205,18 @@ for(const{opt,g}of hits){
 const t=TOKENS[opt.value];
 if(g&&g!==group){const h=cE("div");h.className="tkg";h.textContent=g;aC(frag,h);group=g}
 const r=cE("button");
-r.type="button";r.className="tkr";r.setAttribute("role","option");
+r.type="button";r.className="tkr";sAt(r,"role","option");
 r.id="tkr"+n;
 r.dataset.value=opt.value;
-r.setAttribute("aria-selected",String(opt.value===tkSel.value));
-if(opt.disabled)r.setAttribute("aria-disabled","true");
+sAt(r,"aria-selected",String(opt.value===tkSel.value));
+if(opt.disabled)sAt(r,"aria-disabled","true");
 const ic=cE("span");ic.className="tki";
 if(t?.icon)aC(ic,icFrag(t.icon));
 aC(r,ic);
 const tx=cE("span");tx.className="tkt";
 const top=cE("span");top.className="tks";
 const b=cE("b");b.textContent=opt.textContent.trim();aC(top,b);
-if(t?.name&&t.name.toLowerCase()!==b.textContent.toLowerCase()){
+if(t?.name&&Lc(t.name)!==Lc(b.textContent)){
 const nm=cE("span");nm.className="tkn";nm.textContent=t.name;aC(top,nm);
 }
 aC(tx,top);
@@ -2233,7 +2233,7 @@ if(a){
 const pr=probeToken(a),pt=pr.t;
 if(!pt&&!pr.e&&!pr.w){pr.w=1;pr.p.catch(()=>{}).finally(()=>{if(tkSel&&tkFind.value.trim().toLowerCase()===a)tkRows()})}
 const r=cE("button");
-r.type="button";r.className="tkr";r.setAttribute("role","option");r.id="tkr0";
+r.type="button";r.className="tkr";sAt(r,"role","option");r.id="tkr0";
 const ic=cE("span");ic.className="tki";
 if(pt)aC(ic,icFrag(artIcon(pt.art,pt.sym)));
 aC(r,ic);
@@ -2265,7 +2265,7 @@ if(top){top.classList.add("cur");tkCur=0;tkAct(top.id)}
 };
 const tkOpen=sel=>{
 if(tkSel&&tkSel!==sel)pickBtn(tkSel)?.setAttribute("aria-expanded","false");
-tkSel=sel;tkFind.value="";tkFind.setAttribute("aria-expanded","true");tkFind.placeholder="Search "+cC().name+" tokens, or paste an address";tkRows();tkBals();
+tkSel=sel;tkFind.value="";sAt(tkFind,"aria-expanded","true");tkFind.placeholder="Search "+cC().name+" tokens, or paste an address";tkRows();tkBals();
 Hd(tkPanel,0);
 if(matchMedia("(pointer:coarse)").matches){
 tkPanel.style.left=tkPanel.style.top=tkPanel.style.maxHeight=tkPanel.style.width="";
@@ -2292,7 +2292,7 @@ tkFind.focus({preventScroll:true});
 };
 const tkClose=()=>{
 if(!tkSel)return;
-pickBtn(tkSel)?.setAttribute("aria-expanded","false");tkFind.setAttribute("aria-expanded","false");
+pickBtn(tkSel)?.setAttribute("aria-expanded","false");sAt(tkFind,"aria-expanded","false");
 Hd(tkPanel,1);tkSel=null;tkCur=-1;tkAct("");
 };
 const tkChoose=v=>{
@@ -2397,7 +2397,7 @@ if(badOrderAmount){swap.textContent="Invalid order amount";swap.disabled=true;re
 if(!sell||!want){swap.textContent=bid?"Place bid":"Place order";swap.disabled=true;return}
 if(bid){
 if(t.addr===ZERO){swap.textContent="Pick a token to bid for";swap.disabled=true;return}
-if((f.addr===ZERO?WETH:f.addr).toLowerCase()===t.addr.toLowerCase()){
+if((f.addr===ZERO?WETH:f.addr).toLowerCase()===Lc(t.addr)){
 swap.textContent="Pick a different token";swap.disabled=true;return}
 if(!floor){swap.textContent="Set an opening bid";swap.disabled=true;return}
 if(floor>sell){swap.textContent="Opening exceeds maximum";swap.disabled=true;return}
@@ -2974,7 +2974,7 @@ await new Promise(r=>setTimeout(r,50));
 }};
 const dlg=(m,d,inp)=>new Promise(res=>{wkList.textContent="";wkHdr.textContent="zSwap";
 const t=cE("p");t.className="wcn dlgm";t.textContent=m;wkList.append(t);
-let ta=null;if(inp){ta=cE("textarea");ta.className="dlgt";ta.rows=3;ta.value=d??"";ta.setAttribute("aria-label",m.split("\n")[0].slice(0,80));wkList.append(ta)}
+let ta=null;if(inp){ta=cE("textarea");ta.className="dlgt";ta.rows=3;ta.value=d??"";sAt(ta,"aria-label",m.split("\n")[0].slice(0,80));wkList.append(ta)}
 const row=cE("div");row.className="dlgr";const back=document.activeElement;
 const mk=(x,f)=>{const b=cE("button");b.type="button";b.className="fclink";b.textContent=x;b.onclick=f;row.append(b);return b};
 const no=inp?null:false,end=v=>{Hd(wkWrap,1);removeEventListener("keydown",esc);removeEventListener("keydown",wkTrap,true);wkWrap.onclick=null;try{back&&back.focus()}catch{}res(v)};
@@ -3010,7 +3010,7 @@ if(c.icon){const im=cE("img");im.src=c.icon;im.alt="";aC(b,im)}
 else if(c.svg){const sp=cE("span");sp.className="wki";sp.innerHTML=c.svg;aC(b,sp)}
 aC(b,document.createTextNode(c.name));
 if(c.sub){const s=cE("span");s.className="wks";s.textContent=c.sub;aC(b,s)}
-if(c.on){b.classList.add("cur");b.setAttribute("aria-current","true")}
+if(c.on){b.classList.add("cur");sAt(b,"aria-current","true")}
 b.onclick=()=>end(c);
 aC(wkList,b)});
 const cx=cE("button");cx.type="button";cx.className="wnbtn";cx.textContent="Cancel";cx.onclick=()=>end(null);aC(wkList,cx);
@@ -3078,7 +3078,7 @@ const lqFillMax=(tok,max)=>{
 const box=qS(lqList,".lqadd:not(.hide)");
 const pair=chPair();
 if(!box||!pair)return false;
-const side=pair[0].addr.toLowerCase()===tok.addr.toLowerCase()?"0":"1";
+const side=pair[0].addr.toLowerCase()===Lc(tok.addr)?"0":"1";
 const el=qS(box,`.lqin[data-side="${side}"]`);
 if(!el)return false;
 el.value=fU(max,tok.dec);
@@ -3127,7 +3127,7 @@ setMode("in");
 update();
 });
 let seq=0;
-const UIM={},uim=t=>{if(CHAIN_ID!==4663||!t||t.addr===ZERO)return 0n;const a=t.addr.toLowerCase();if(!(a in UIM)){UIM[a]=0n;rpc(C,[{to:a,data:"0xa60bf13d"},L]).then(r=>{const v=BigInt(Sx(r||"")?r:"0x0");if(v&&v!==10n**18n)UIM[a]=v}).catch(()=>{})}return UIM[a]};
+const UIM={},uim=t=>{if(CHAIN_ID!==4663||!t||t.addr===ZERO)return 0n;const a=Lc(t.addr);if(!(a in UIM)){UIM[a]=0n;rpc(C,[{to:a,data:"0xa60bf13d"},L]).then(r=>{const v=BigInt(Sx(r||"")?r:"0x0");if(v&&v!==10n**18n)UIM[a]=v}).catch(()=>{})}return UIM[a]};
 const R_NS="This token does not move the exact amount sent: it takes a fee on transfer, rebases or is paused, so the contract refuses it.",R_SL="The price moved past your slippage bound. Try again, or raise slippage.";
 const R_OG="That order is no longer available — refresh the book.",R_RQ=" — refresh the quote and try again.";
 const REVERTS={
@@ -3276,7 +3276,7 @@ const _rq=[];
 const Q=(x,d,u,v,S,sb,mv,to=ZQUOTER)=>{_rq.push({to,data:"0x"+x+d,u,v,S,sb,mv});return _rq.length-1};
 const H3=CHAIN_ID===1?ZQUOTER:Z3H;
 let r=null;
-const candKey=CHAIN_ID+":"+f.addr.toLowerCase()+":"+t.addr.toLowerCase();
+const candKey=CHAIN_ID+":"+Lc(f.addr)+":"+Lc(t.addr);
 const quoteBlock=await blockNow().catch(e=>{mcGaveUp++;throw e});
 const ck2=candKey+"@"+quoteBlock,candJob=acct?(candFly[ck2]||(candFly[ck2]=swapCandidates(f.addr,t.addr,quoteBlock).finally(()=>delete candFly[ck2]))).catch(()=>{
 const x=[];x.unavailable=true;return x
@@ -3288,7 +3288,7 @@ const preJob=isIn?quotePrecision(f,t,swapAmt,PROUTE,quoteBlock).catch(()=>{venue
 const deepJob=isIn&&CHAIN_ID===4663&&f.addr!==ZERO&&t.addr!==ZERO?deepQuote(f.addr,t.addr,swapAmt,quoteBlock,deepK(slipBps)).catch(()=>null):Promise.resolve(null);
 const hopJob=isIn&&CHAIN_ID===4663?deepHop(f,t,swapAmt,s2,deadline,rcv||acct||ZERO,quoteBlock,acct).catch(()=>null):Promise.resolve(null);
 const tJob=isIn&&CHAIN_ID===1?tacitQuote(f,t,swapAmt,quoteBlock).catch(()=>null):Promise.resolve(null);
-const flJob=isIn&&(f.launched||f.fl)&&(t.addr===ZERO||t.addr.toLowerCase()===WETH.toLowerCase())?quoteFloor(f.addr,swapAmt,quoteBlock).catch(()=>0n):null,glJob=isIn?gLegs(deadline):null;
+const flJob=isIn&&(f.launched||f.fl)&&(t.addr===ZERO||Lc(t.addr)===Lc(WETH))?quoteFloor(f.addr,swapAmt,quoteBlock).catch(()=>0n):null,glJob=isIn?gLegs(deadline):null;
 let curveOnlyOut=false;
 const exactOutSafe=y=>{if(isIn||!y.sources||!y.sources.includes(SRC_CURVE))return true;curveOnlyOut=true;return false};
 const pick=y=>{if(!y)return;if(!exactOutSafe(y))return;const v=isIn?y.best.amountOut:y.best.amountIn;if(!v)return;
@@ -3321,7 +3321,7 @@ const iRef=refAmt>0n
 const mcRaw=await qWave(_rq.map(q=>({to:q.to,data:q.data})),quoteBlock);
 if(my!==seq)return;
 const dec=_rq.map((q,i)=>{try{return mcRaw[i]?decQ(mcRaw[i],q.sb||slipBps,!isIn,q.u,q.v,q.S,q.mv):null}catch{return null}});
-const hubSafe=y=>{if(!y||CHAIN_ID!==1||!isIn||y.sources.length<2)return y;const x=[f.addr,t.addr].map(s=>s.toLowerCase()),hs=HUBS().filter(h=>!x.includes(h.toLowerCase()));return{...y,callData:encCalls([...hs.map(h=>encSweep(h,0n,acct||ZERO)),y.callData])}};
+const hubSafe=y=>{if(!y||CHAIN_ID!==1||!isIn||y.sources.length<2)return y;const x=[f.addr,t.addr].map(s=>Lc(s)),hs=HUBS().filter(h=>!x.includes(Lc(h)));return{...y,callData:encCalls([...hs.map(h=>encSweep(h,0n,acct||ZERO)),y.callData])}};
 for(const g of jobs)pick(hubSafe(g.length>1?merge(dec[g[0]],dec[g[1]],!isIn):dec[g[0]]));
 const zr=r;
 if(isIn&&![...jobs[1],...(no3?[]:jobs[2])].some(i=>dec[i])){
@@ -3442,7 +3442,7 @@ return hubSafe(best);
 };
 const gasValue=async wei=>{
 const token=isIn?t.addr:f.addr;
-if(token===ZERO||token.toLowerCase()===WETH.toLowerCase())return wei;
+if(token===ZERO||Lc(token)===Lc(WETH))return wei;
 const eo=!isIn,ti=isIn?ZERO:token,to=isIn?token:ZERO;
 const z=eBo(eo)+eA(ti)+eA(to)+eU(wei)+eU(0n)+eU(deadline);
 try{
@@ -3451,8 +3451,8 @@ const q=decQ(raw,0n,eo,4,9);
 const v=isIn?q.best.amountOut:q.best.amountIn;
 if(v>0n)return v;
 }catch{}
-const ethSide=f.addr===ZERO||f.addr.toLowerCase()===WETH.toLowerCase();
-const tokSide=t.addr===ZERO||t.addr.toLowerCase()===WETH.toLowerCase();
+const ethSide=f.addr===ZERO||Lc(f.addr)===Lc(WETH);
+const tokSide=t.addr===ZERO||Lc(t.addr)===Lc(WETH);
 const inA=r.best.amountIn,outA=r.best.amountOut;
 if(inA>0n&&outA>0n){
 if(isIn&&ethSide)return wei*outA/inA;
@@ -3666,7 +3666,7 @@ row.title=x.n===pinNow?"Pinned — click again for the best floor"
 :x.f===top&&x.n!==used?"Best floor — click to use it":"Use this venue";
 const pick=()=>{const on=lanePin()===x.n;laneOverride=on?null:x.n;laneOverrideFor=on?"":laneScope();update()};
 row.onclick=pick;
-row.setAttribute("role","button");
+sAt(row,"role","button");
 row.tabIndex=0;
 row.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();pick()}};
 const n=cE("span");
@@ -3698,7 +3698,7 @@ if(r.slipBps>slipBps)rate.textContent+=` · Hybrid — bound widened to ${Number
 if(r.best.source!==SRC_SOLVER){if(bookUnavailable)rate.textContent+=" · AMM only (books offline)";else if(bookIncomplete)rate.textContent+=" · Book scan incomplete";
 if(plannerBounded)rate.textContent+=" · Book split approximate"}
 if(pq&&pq.capped)rate.textContent+=` · Precision scan capped (${LQ_SCAN})`;
-let flR=0n;if(isIn&&(f.launched||f.fl)&&(t.addr===ZERO||t.addr.toLowerCase()===WETH.toLowerCase())){
+let flR=0n;if(isIn&&(f.launched||f.fl)&&(t.addr===ZERO||Lc(t.addr)===Lc(WETH))){
 const floorOut=await flJob;
 if(my!==seq)return;
 if(floorOut>0n){
@@ -3736,12 +3736,12 @@ const car=cE("span");
 car.className="rk";
 car.textContent="▾";
 car.title="Compare venues";
-car.setAttribute("role","button");
+sAt(car,"role","button");
 car.tabIndex=0;
-car.setAttribute("aria-expanded",rankBox.classList.contains("hide")?"false":"true");
+sAt(car,"aria-expanded",rankBox.classList.contains("hide")?"false":"true");
 const carToggle=()=>{const shut=rankBox.classList.toggle("hide");
 rankOpen=!shut;
-car.setAttribute("aria-expanded",shut?"false":"true")};
+sAt(car,"aria-expanded",shut?"false":"true")};
 car.onclick=carToggle;
 car.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();carToggle()}};
 aC(rate,document.createTextNode(" "));
@@ -3811,7 +3811,7 @@ setChain(next);showNet();hcs(next);location.reload();
 };
 const DEEPLENS="0x000000d579c1829a4b9bb720f0c26062ae608c45";
 const TACIT_AMM="0x00000000E36C7EC997CC59DCda9E03673B448119",SEL_TQUOTE="3bc1414a",SEL_TSWAP="cfdf9dcc",TACIT_TIERS=[30,5,100,1];
-const tacitId=x=>!x||CHAIN_ID!==1?"":x.addr===ZERO?CP_ETH:(cpAssets.find(a=>a.tok!==ZERO&&a.tok===x.addr.toLowerCase())||{}).id||"";
+const tacitId=x=>!x||CHAIN_ID!==1?"":x.addr===ZERO?CP_ETH:(cpAssets.find(a=>a.tok!==ZERO&&a.tok===Lc(x.addr))||{}).id||"";
 const tacitPair=(f,t)=>{const a=tacitId(f),b=tacitId(t);return!!a&&!!b&&a!==b};
 async function tacitQuote(f,t,amt,blk){const a=tacitId(f),b=tacitId(t),A=cpAs(a);if(!a||!b||a===b||!A||!amt||amt<=0n||amt%A.scale)return null;
 const rs=await cfgBatch(TACIT_TIERS.map(fee=>({to:TACIT_AMM,data:"0x"+SEL_TQUOTE+pad32(a)+pad32(b)+eU(fee)+eU(amt)})),blk);let best=null;
@@ -3828,7 +3828,7 @@ if(out<=0n||inUsed<=0n)return null;
 const epoch=Bx(b.slice(128,192));
 const order="0x"+b.slice(192,256);
 const isBid=Bx(b.slice(256,320))===1n;
-const [t0,t1]=fa.toLowerCase()<ta.toLowerCase()?[fa,ta]:[ta,fa];
+const [t0,t1]=Lc(fa)<Lc(ta)?[fa,ta]:[ta,fa];
 if(isBid&&k>0n){const M=(1n<<160n)-1n,w=BigInt(order),q=(w>>64n)&M,o=out-out*k/10000n-1n;if(o<=0n)return null;
 return{inUsed:inUsed-inUsed*k/10000n,out:o,t0,t1,isBid,epoch,order:"0x"+(w&~(M<<64n)|(q-q*k/10000n)<<64n).toString(16).padStart(64,"0")}}
 return{inUsed,out,t0,t1,isBid,epoch,order};
@@ -3849,7 +3849,7 @@ const encDeepLeg=(bk,to,inMax,outMin,deadline)=>"0x"+SEL_SWAPDEEP+eA(to)+eA(bk.t
 const deepHop=async(f,t,swapAmt,slipBps,deadline,to,blk,acct)=>{
 if(CHAIN_ID!==4663||!swapAmt||swapAmt<=0n)return null;
 const mid=(MONEY()[0]||"").toLowerCase();
-if(!mid||f.addr.toLowerCase()===mid||t.addr.toLowerCase()===mid)return null;
+if(!mid||Lc(f.addr)===mid||Lc(t.addr)===mid)return null;
 const cut=x=>x-x/HOP_HAIR,sw=[encSweep(mid,0n,acct||to),encSweep(f.addr,0n,acct||to)];
 const cand=(inp,out,limit,calls,mv)=>({best:{source:SRC_DEEP,amountIn:inp,amountOut:out,feeBps:0n},
 callData:encCalls(calls),fundedCallData:null,amountLimit:limit,msgValue:mv,
@@ -3886,7 +3886,7 @@ return cand(swapAmt,bk.out,outMin,
 };
 const showAddr=async()=>{const a=account;tbScan();
 addr.textContent=short(a);addr.title=a+" — click to disconnect";addr.classList.add("on");
-addr.setAttribute("role","button");addr.tabIndex=0;
+sAt(addr,"role","button");addr.tabIndex=0;
 const n=await nameRev(a).catch(()=>"");if(n&&a===account)addr.textContent=n};
 async function disconnect(){
 SS.setItem("dc","1");
@@ -3897,17 +3897,17 @@ location.reload();
 addr.onclick=async()=>{if(!account)return connect();if(await sure("Disconnect "+short(account)+" from this page?"))disconnect()}
 const netPick=async()=>{
 if(switchNet.busy)return;
-net.setAttribute("aria-expanded","true");
+sAt(net,"aria-expanded","true");
 const c=await wkPick(Object.keys(CHAINS).map(Number).map(id=>
 ({id,name:CHAINS[id].name,svg:CHAINS[id].icon,on:id===CHAIN_ID}))
 .concat([{node:1,name:"Read node",sub:wcHost()}]),"Network");
-net.setAttribute("aria-expanded","false");
+sAt(net,"aria-expanded","false");
 if(c&&c.node)return askReadNode();
 if(c)switchNet(c.id);
 };
 net.onclick=()=>{netPick()}
 const ZNAV=[["Swap","trade any token","tab=swap"],["Send","to a name or address, on any chain","tab=send"],["Orders","limit, Dutch and NFT orders","tab=book"],["Liquidity","add to or leave a pool","m=lq"],["Farm","stake TAC / ETH liquidity","farm"],["Launch","a coin or a cause","m=ln"],["Names",".wei names","m=wn"],["Markets","yes / no prediction markets","m=mk"],["Private","Tacit: shield, send and withdraw","m=pv"],["zFi DAO","governs this page","gov"]],
-zNav=async()=>{logoLink.setAttribute("aria-expanded","true");const c=await wkPick(ZNAV.map(([name,sub,h])=>({name,sub,h})),"zSwap");logoLink.setAttribute("aria-expanded","false");
+zNav=async()=>{sAt(logoLink,"aria-expanded","true");const c=await wkPick(ZNAV.map(([name,sub,h])=>({name,sub,h})),"zSwap");sAt(logoLink,"aria-expanded","false");
 if(c)c.h==="gov"?footGov.click():/^h/.test(c.h)?window.open(c.h,"_blank","noopener"):location.hash==="#"+c.h?applyLink(1):location.hash=c.h};
 logoLink.onclick=zNav;
 net.onkeydown=e=>{if(e.key==="Enter"||e.key===" "||e.key==="ArrowDown"){e.preventDefault();netPick()}}
@@ -3922,7 +3922,7 @@ if(tab==="book"){fitFont(amt);render();return}setMode("in");fitFont(amt);updateS
 aE(outAmt,"input",()=>{
 if(lqMode){fitFont(outAmt);lqPreviewSoon();return}
 if(tab==="book"){fitFont(outAmt);seedFloor();render();return}setMode("out");fitFont(outAmt);updateSoon()});
-const slipWarn=()=>{const h=+slip.value>=3;slip.classList.toggle("warn",h);slip.title=h?"High slippage — you accept a much worse price":"";slip.setAttribute("aria-label",h?"Slippage (high)":"Slippage")};
+const slipWarn=()=>{const h=+slip.value>=3;slip.classList.toggle("warn",h);slip.title=h?"High slippage — you accept a much worse price":"";sAt(slip,"aria-label",h?"Slippage (high)":"Slippage")};
 if(LS.slip&&+LS.slip>=.01&&+LS.slip<=10)slip.value=LS.slip;
 slipWarn();
 aE(slip,"input",()=>{++seq;last=null;slipWarn();render();if(!lqMode)updateSoon()});
@@ -3983,7 +3983,7 @@ stat.textContent=msg;
 }
 flip.onclick=()=>{pairChosen=true;const a=fromSel.value,b=toSel.value,v=outAmt.value.replace(/,/g,"");fromSel.value=b;toSel.value=a;fromSel.dataset.prev=b;toSel.dataset.prev=a;
 amt.value=(v&&!isNaN(+v))?v:"";setMode("in");fitFont(amt);syncDisabled();syncNftUI();rBal();loadChart();update()};
-const sameAcct=(a,b)=>!!a&&!!b&&a.toLowerCase()===b.toLowerCase();
+const sameAcct=(a,b)=>!!a&&!!b&&Lc(a)===Lc(b);
 const wkBind=eth=>{
 if(!eth||eth.__zb)return;
 eth.__zb=1;
@@ -4022,7 +4022,7 @@ try{
 const ret=Sx(await l1Read(C,[{to:self,data:"0x"+SEL_LATEST},L])||"");
 if(ret.length!==64)return;
 let tip="0x"+ret.slice(24);
-const me=self.toLowerCase();
+const me=Lc(self);
 if(BigInt(tip)===0n||tip===me)return;
 const rd=async(to,sel)=>{const h=Sx(await l1Read(C,[{to,data:"0x"+sel},L])||"");return h.length===64?h:""};
 const now=Date.now()/1000;
@@ -4076,7 +4076,7 @@ async function floorRoutable(block){
 if(FLOOR===ZERO)return false;
 if(floorReady!==null)return floorReady;
 try{
-const id=CHAIN_ID,h=await rpc(C,[{to:SWAPBOL,data:"0x"+SEL_BOL_FLOOR},block||L]),ok=("0x"+Sx(h).slice(-40)).toLowerCase()===FLOOR.toLowerCase();
+const id=CHAIN_ID,h=await rpc(C,[{to:SWAPBOL,data:"0x"+SEL_BOL_FLOOR},block||L]),ok=("0x"+Sx(h).slice(-40)).toLowerCase()===Lc(FLOOR);
 if(id!==CHAIN_ID)return false;floorReady=ok;
 }catch{return false}
 return floorReady;
@@ -4096,8 +4096,8 @@ if(Sx(h).length<11*64)throw Error("bid could not be read — refresh and retry")
 const addr=i=>"0x"+at(i).slice(24);
 if(/^0x0{40}$/i.test(addr(0))||row.exp&&BigInt(nowS())>=row.exp)throw Error("bid is closed — refresh and retry");
 if(Bx(at(1)))throw Error("NFT bids are not routable from here");
-if(addr(4).toLowerCase()!==want.toLowerCase()
-||addr(6).toLowerCase()!==gets.toLowerCase())
+if(addr(4).toLowerCase()!==Lc(want)
+||addr(6).toLowerCase()!==Lc(gets))
 throw Error("bid changed — refresh and retry");
 if(Bx(at(10))<pay)throw Error("bid partly taken — refresh and retry");
 }
@@ -4105,28 +4105,28 @@ async function preflightFills(fills,tokenIn,tokenOut){
 if(!fills||!fills.length)return;
 const inA=(tokenIn===ZERO?WETH:tokenIn).toLowerCase();
 const outA=(tokenOut===ZERO?WETH:tokenOut).toLowerCase();
-const reads=fills.map(f=>f.board.toLowerCase()===FLOOR.toLowerCase()
+const reads=fills.map(f=>Lc(f.board)===Lc(FLOOR)
 ?{to:FLOOR,data:"0x"+SEL_BIDS+eU(f.id)}
-:f.board.toLowerCase()===DUTCH.toLowerCase()
+:Lc(f.board)===Lc(DUTCH)
 ?{to:DUTCH,data:"0xad5aeee9"+eU(f.id)}
 :{to:f.board,data:"0x"+SEL_GETORDERS+eU(32)+eU(1)+eU(f.id)});
-const fzI=fills.map(f=>f.board.toLowerCase()===SB2.toLowerCase()?reads.push({to:SB2,data:"0x"+SEL_FROZEN+eU(f.id)})-1:-1);
+const fzI=fills.map(f=>Lc(f.board)===Lc(SB2)?reads.push({to:SB2,data:"0x"+SEL_FROZEN+eU(f.id)})-1:-1);
 const res=await mD(reads);
 const stale=()=>{candCache={};bnAt=0;throw Error("an order in this route just changed — refreshing")};
 for(let i=0;i<fills.length;i++){
 const f=fills[i],raw=res[i];
 if(!raw||fzI[i]>=0&&res[fzI[i]]&&/[1-9a-f]/i.test(Sx(res[fzI[i]])))stale();
 const s=Sx(raw),at=k=>Bx(s.slice(k*64,(k+1)*64));
-if(f.board.toLowerCase()===FLOOR.toLowerCase()){
+if(Lc(f.board)===Lc(FLOOR)){
 if(s.length<11*64)stale();
 const ad=k=>"0x"+s.slice(k*64+24,(k+1)*64);
 if(/^0x0{40}$/i.test(ad(0))||at(1)||at(2)+at(3)<=BigInt(nowS()))stale();
 if(ad(4).toLowerCase()!==inA||ad(6).toLowerCase()!==outA)stale();
 if(at(10)<f.pay)stale();
-}else if(f.board.toLowerCase()===DUTCH.toLowerCase()){
+}else if(Lc(f.board)===Lc(DUTCH)){
 if(s.length<448||!at(0)||at(4)<f.get)stale();
 }else{
-const wds=WORDS(f.board.toLowerCase()===SB2.toLowerCase()?1:0);
+const wds=WORDS(Lc(f.board)===Lc(SB2)?1:0);
 if(s.length<(2+wds)*64)stale();
 const w=k=>at(2+k),ad=k=>"0x"+s.slice((2+k)*64+24,(3+k)*64);
 if(w(1)!==1n)stale();
@@ -4159,8 +4159,8 @@ const at=k=>Bx(s.slice(128+k*64,128+(k+1)*64));
 const ad=k=>"0x"+s.slice(128+k*64+24,128+(k+1)*64);
 if(at(1)!==1n)throw Error("order is no longer active — refresh and retry");
 const iA=row.v2?7:2,iB=row.v2?9:4;
-if(ad(iA).toLowerCase()!==row.tA.toLowerCase()
-||ad(iB).toLowerCase()!==row.tB.toLowerCase())
+if(ad(iA).toLowerCase()!==Lc(row.tA)
+||ad(iB).toLowerCase()!==Lc(row.tB))
 throw Error("order changed — refresh and retry");
 if(pay==null?at(iA+1)!==row.aA:at(iA+1)>row.aA||at(iB+1)>row.aB)throw Error("order changed — refresh and retry");
 if(pay!==undefined&&at(iB+1)<pay)throw Error("order partly taken — refresh and retry");
@@ -4202,7 +4202,7 @@ const m=meta||known(token)||{sym:token===ZERO?"ETH":"tokens",dec:18};
 throw Error(`Not enough ${m.sym}: this takes ${tM(need,m.dec)} `
 +`and you hold ${tM(have,m.dec)}.${x}`);
 };
-const known=a=>TOKENS.find(t=>t.addr.toLowerCase()===a.toLowerCase());
+const known=a=>TOKENS.find(t=>Lc(t.addr)===Lc(a));
 const sm=i=>i.replace('width="20" height="20"','width="15" height="15"');
 const escan=(a,id)=>!isAddr(a)?"":`<a href="${cC().explorer}/${id!=null?`nft/${a}/${id}`:`token/${a}`}" target="_blank" rel="noreferrer">${short(a)} ↗</a>`;
 const SEL_CONTRACTURI="e8a3d485";
@@ -4221,7 +4221,7 @@ const capMap=(m,max)=>{while(m.size>max)m.delete(m.keys().next().value)};
 const LOGO_MAX=192,CARD_MAX=64,META_MAX=256;
 const logoCache={};
 async function loadLogos(addrs){
-const cid=CHAIN_ID,want=[...new Set(addrs.map(a=>a.toLowerCase()))]
+const cid=CHAIN_ID,want=[...new Set(addrs.map(a=>Lc(a)))]
 .filter(a=>a!==ZERO&&!known(a)&&logoCache[a]===undefined);
 if(!want.length)return;
 const raw=CHAIN_ID===1?await cfgBatch(want.map(a=>({to:TOKENLIST,data:"0x"+SEL_LOGOOF+eA(a)}))).catch(()=>[]):[];
@@ -4241,7 +4241,7 @@ async function leg(addr,amt,isNft,meta){
 const k=known(addr);
 if(isNft)return{ic:k?sm(k.icon):genIcon("#"),txt:(k?safeSym(k.sym)+" ":"")+"#"+amt,ok:!!k&&!k.cust,link:escan(addr,amt)};
 const raw=meta&&meta.sym?meta:await tokMeta(addr),m={...raw,sym:safeSym(raw.sym)};
-const lg=k?"":logoCache[addr.toLowerCase()];
+const lg=k?"":logoCache[Lc(addr)];
 const ic=k?sm(k.icon):lg?`<img src="${lg}" width="15" height="15">`:genIcon(m.sym);
 return{ic,txt:`${tM(amt,m.dec)} ${k?safeSym(k.sym):'“'+m.sym+'”'}`,ok:!!k&&!k.cust&&!k.launched,
 sym:k?safeSym(k.sym):m.sym,dec:m.dec,link:addr===ZERO?"ETH":escan(addr)};
@@ -4323,8 +4323,8 @@ if(!raw){lost=true;break}
 cur=Bx((Sx(raw).slice(64,128)||0));
 for(const b of decBidRows(raw)){
 if(b.isNFT||b.remaining<=0n||b.initial<=0n||b.price<=0n||b.proceeds<=0n)continue;
-if(b.token.toLowerCase()!==bin.toLowerCase())continue;
-if(b.quote.toLowerCase()!==bout.toLowerCase())continue;
+if(Lc(b.token)!==Lc(bin))continue;
+if(Lc(b.quote)!==Lc(bout))continue;
 out.push({
 id:b.id,board:FLOOR,floor:1,v2:0,dutch:0,
 maker:b.bidder,pf:1,exp:b.expiry,nA:0,nB:0,cp:ZERO,
@@ -4384,7 +4384,7 @@ function planBookExactIn(rows,amountIn,ammOut,ammIn){
 if(!amountIn||!ammIn)return null;
 let c=rows.filter(o=>!o.nA&&!o.nB&&o.aA&&(o.aB||o.dutch)&&(o.pf||o.aB<=amountIn)
 &&o.aA*ammIn>ammOut*o.aB&&(!o.floor||(o.price>0n&&o.initial>0n))
-&&!(account&&o.maker&&o.maker.toLowerCase()===account.toLowerCase()));
+&&!(account&&o.maker&&Lc(o.maker)===Lc(account)));
 const candidateCapped=c.length>256;
 const aonCount=c.reduce((n,o)=>n+!o.pf,0);
 const aonBounded=aonCount>=3;
@@ -4428,7 +4428,7 @@ function planBookExactOut(rows,amountOut,ammIn,ammOut){
 if(!amountOut||!ammOut)return null;
 let c=rows.filter(o=>!o.nA&&!o.nB&&o.aA&&(o.aB||o.dutch)&&(o.pf||o.aA<=amountOut)
 &&o.aB*ammOut<ammIn*o.aA&&(!o.floor||(o.price>0n&&o.initial>0n))
-&&!(account&&o.maker&&o.maker.toLowerCase()===account.toLowerCase()));
+&&!(account&&o.maker&&Lc(o.maker)===Lc(account)));
 const candidateCapped=c.length>256;
 const aonCount=c.reduce((n,o)=>n+!o.pf,0);
 const aonBounded=aonCount>=3;
@@ -4516,8 +4516,8 @@ steps.push(encSweep(tokenIn,0n,refundTo));
 return encCalls(steps);
 }
 async function swapCandidates(tokenIn,tokenOut,block){
-if(tokenOut===ZERO&&tokenIn.toLowerCase()===WETH.toLowerCase())return[];
-const key=CHAIN_ID+":"+tokenIn.toLowerCase()+":"+tokenOut.toLowerCase(),old=candCache[key];
+if(tokenOut===ZERO&&Lc(tokenIn)===Lc(WETH))return[];
+const key=CHAIN_ID+":"+Lc(tokenIn)+":"+Lc(tokenOut),old=candCache[key];
 if(old&&Date.now()-old.at<15000&&old.block===block){
 old.rows.incomplete=old.incomplete;old.rows.unavailable=old.unavailable;
 return old.rows;
@@ -4537,7 +4537,7 @@ if(ld){
 specs.push({a:DUTCH,dutch:1,ti:tokenIn});
 if(tokenIn===ZERO)specs.push({a:DUTCH,dutch:1,ti:WETH});
 }
-const fcJob=tokenIn===ZERO&&tokenOut.toLowerCase()===WETH.toLowerCase()?null:floorRoutable(block).then(ok=>ok?floorCandidates(tokenIn,tokenOut,block):[]).catch(()=>[]);
+const fcJob=tokenIn===ZERO&&Lc(tokenOut)===Lc(WETH)?null:floorRoutable(block).then(ok=>ok?floorCandidates(tokenIn,tokenOut,block):[]).catch(()=>[]);
 const groups=await Pa(specs.map(async b=>{
 let cursor=0n,out=[],turns=0,incomplete=false,failed=false;
 try{do{
@@ -4554,8 +4554,8 @@ incomplete=incomplete||!!cursor;
 return{out,incomplete,failed};
 }));
 let rows=groups.flatMap(g=>g.out),fc=0;
-if(tokenIn===ZERO&&tokenOut.toLowerCase()===WETH.toLowerCase()){
-rows=rows.filter(r=>r.dutch&&r.tA.toLowerCase()===WETH.toLowerCase()&&r.tB===ZERO);
+if(tokenIn===ZERO&&Lc(tokenOut)===Lc(WETH)){
+rows=rows.filter(r=>r.dutch&&Lc(r.tA)===Lc(WETH)&&r.tB===ZERO);
 }
 else rows=rows.concat(fc=await fcJob);
 {const v2r=rows.filter(r=>r.v2&&!r.dutch&&!r.floor);if(v2r.length){const fz=await mD(v2r.map(r=>({to:r.board,data:"0x"+SEL_FROZEN+eU(r.id)})),block).catch(()=>(groups[0].incomplete=1,null));if(fz&&v2r.some((r,i)=>!fz[i]))groups[0].incomplete=1;const cold=new Set(v2r.filter((r,i)=>!fz||!fz[i]||/[1-9a-f]/i.test(Sx(fz[i]))));if(cold.size)rows=rows.filter(r=>!cold.has(r))}}
@@ -4592,7 +4592,7 @@ const exJob=(async()=>{const rows=[];if(account)try{
 const nx=Number(BigInt(await rpc(C,[{to:SB2,data:"0x"+SEL_NEXTID},L]).catch(()=>0)||0));
 for(const r of decViewPage(await rpc(C,[{to:SBVIEW,
 data:"0x"+SEL_EXPIRED+eA(SB2)+eU(Mx(0,nx-256))+eU(80)+eU(256)},L])).rows)
-if(r.maker&&r.maker.toLowerCase()===me())rows.push({...r,v2:1,dutch:0});
+if(r.maker&&Lc(r.maker)===me())rows.push({...r,v2:1,dutch:0});
 }catch{}return rows})();
 const flJob=(async()=>{const rows=[];if(FLOOR!==ZERO){
 const[,raw]=await Pa([floorRoutable(L),rpc(C,[{to:FLOORVIEW,
@@ -4701,11 +4701,11 @@ rows.push(o);
 if(my!==bookSeq)return;
 const cutoff=BigInt(nowS());
 rows=rows.filter(o=>{
-const mine=o.maker.toLowerCase()===me();
+const mine=Lc(o.maker)===me();
 if(o.exp&&(o.floor?cutoff>=o.exp:cutoff>o.exp)&&!mine)return false;
 return o.cp===ZERO
-||o.cp.toLowerCase()===me()
-||o.maker.toLowerCase()===me();
+||Lc(o.cp)===me()
+||Lc(o.maker)===me();
 });
 const dutchRows=rows.filter(r=>r.dutch);
 const bidRows=rows.filter(r=>r.floor);
@@ -4758,7 +4758,7 @@ let bookType=/^(all|limit|dutch|bid|nft)$/.test(LS.bkt||"")?LS.bkt:"all";
 const unitPx=r=>r.aA&&r.aB&&!r.nA&&!r.nB&&!r.isNFT
 ?r.aB*10n**BigInt(18+(r.dA??18))/(r.aA*10n**BigInt(r.dB??18)):null;
 const sameAsset=(a,b)=>{
-const w=x=>{x=(x||"").toLowerCase();return x===ZERO.toLowerCase()?WETH.toLowerCase():x};
+const w=x=>{x=(x||"").toLowerCase();return x===Lc(ZERO)?Lc(WETH):x};
 return w(a)===w(b);
 };
 const rowInPair=r=>{
@@ -4783,7 +4783,7 @@ const at=k.lastIndexOf(":");
 const c=cardCache[k.slice(0,at).toLowerCase()+":"+k.slice(at+1)];
 const box=qS(el.parentNode,".ic");
 if(!c||!box)continue;
-el.setAttribute("aria-expanded","true");
+sAt(el,"aria-expanded","true");
 box.innerHTML=cardHtml(c)||"No card for this order.";
 }};
 const bookOrder=rows=>{
@@ -4804,7 +4804,7 @@ const now=BigInt(nowS());
 bookOrder(rows).forEach(i=>{
 const r=rows[i],[a,bg]=legs[i]||[];
 if(!a||!bg)return;
-const mine=r.maker.toLowerCase()===me();
+const mine=Lc(r.maker)===me();
 const expired=!!(r.exp&&(r.floor?now>=r.exp:now>r.exp));
 const tags=(expired?'<span class="tg w" title="This order has lapsed and can no longer be filled, but its escrow is still held by the board. Reclaim returns it to you.">expired</span>':"")
 +(r.nA||r.nB||r.isNFT?'<span class="tg">NFT</span>':"")
@@ -4840,7 +4840,7 @@ const act=mine?`<button data-x="c" ${dset}>${expired?"Reclaim":"Cancel"}</button
 +(editable?`<button data-x="r" ${dset}>Edit</button>`:"")
 :takeable?`<button data-x="f" ${dset}>${r.floor?"Sell into":"Fill"}</button>`
 :`<button disabled>${r.isNFT?"NFT bid":"Not routable"}</button>`;
-const card=r.board.toLowerCase()!==SB1.toLowerCase();
+const card=Lc(r.board)!==Lc(SB1);
 const row=`<div class="ow"><div class="o${card?" ins":""}"${card?` data-k="${r.board}:${r.id}" role="button" tabindex="0" aria-expanded="false" title="Show the on-chain receipt"`:""}>`
 +`<span class="l">${a.ic}${bg.ic}<span><b>${a.txt} → ${bg.txt}</b>`
 +`<i>${pxOf(r,a,bg)}${a.link}${tags}${when}</i></span></span>${act}</div><div class="ic"></div></div>`;
@@ -4863,7 +4863,7 @@ return v?`<span class="px">${sigAmt(v,18,4)} ${bg.sym}/${a.sym}</span> · `:"";
 };
 const cardCache={};
 async function loadCard(board,id){
-const k=board.toLowerCase()+":"+id;
+const k=Lc(board)+":"+id;
 if(cardCache[k]&&Date.now()-cardCache[k].at<6e4)return cardCache[k];
 const raw=await rpc(C,[{to:board,data:"0x"+SEL_TOKENURI+eU(id)},L]);
 const uri=dS(raw);
@@ -4887,8 +4887,8 @@ let inspectSeq=0;
 async function inspect(el,k){
 const box=qS(el.parentNode,".ic");
 if(!box)return;
-if(box.innerHTML){box.innerHTML="";delete box.dataset.job;el.setAttribute("aria-expanded","false");return}
-el.setAttribute("aria-expanded","true");
+if(box.innerHTML){box.innerHTML="";delete box.dataset.job;sAt(el,"aria-expanded","false");return}
+sAt(el,"aria-expanded","true");
 const at=k.lastIndexOf(":"),board=k.slice(0,at),id=BigInt(k.slice(at+1));
 const job=String(++inspectSeq);box.dataset.job=job;
 box.textContent="Reading the receipt…";
@@ -4904,7 +4904,7 @@ const ty=BOOK_TYPES.find(([v])=>v===bookType);
 const what=bookType==="all"?"orders":`${ty?ty[1]:bookType} orders`;
 const where=bookPairOnly
 ?` on ${TOKENS[fromSel.value]?.sym||"?"}/${TOKENS[toSel.value]?.sym||"?"}`:"";
-return `No ${what.toLowerCase()}${where} from anyone else.`;
+return `No ${Lc(what)}${where} from anyone else.`;
 };
 function bookFilters(hidden){
 const f=TOKENS[fromSel.value]?.sym||"?",t=TOKENS[toSel.value]?.sym||"?";
@@ -4927,7 +4927,7 @@ const on=tab==="book"&&total>0;
 Hd(bkTog,!on);
 bkTog.firstChild.nodeValue=total
 ?`Orderbook (${n<total?`${n} of ${total}`:total}) `:"Orderbook ";
-bkTog.setAttribute("aria-expanded",on&&bkOpen?"true":"false");
+sAt(bkTog,"aria-expanded",on&&bkOpen?"true":"false");
 Hd(book,!on||!bkOpen);
 }
 bkTog.onclick=()=>{bkOpen=!bkOpen;syncBook(bookShown,bookRows.length);try{LS.bk=bkOpen?"1":"0"}catch{}};
@@ -4954,10 +4954,10 @@ try{
 await cW();
 const cid=CHAIN_ID,ak=async(m,d)=>{const v=await ask(m,d);if(v!==null&&cid!==CHAIN_ID)throw Error("The network changed after you pressed — press again.");return v};
 const id=BigInt(b.dataset.i),to=b.dataset.b,dl=BigInt(nowS()+1800);
-const row=bookRows.find(x=>String(x.id)===b.dataset.i&&x.board.toLowerCase()===to.toLowerCase());
-if(!row||![SB1,SB2,FLOOR,DUTCH].some(a=>a!==ZERO&&a.toLowerCase()===to.toLowerCase()))throw Error("order changed — refresh and retry");
+const row=bookRows.find(x=>String(x.id)===b.dataset.i&&Lc(x.board)===Lc(to));
+if(!row||![SB1,SB2,FLOOR,DUTCH].some(a=>a!==ZERO&&Lc(a)===Lc(to)))throw Error("order changed — refresh and retry");
 if(b.dataset.x==="c"){
-const native=!row.nA&&row.tA.toLowerCase()===WETH.toLowerCase()&&wantsUnwrap();
+const native=!row.nA&&Lc(row.tA)===Lc(WETH)&&wantsUnwrap();
 const floorish=b.dataset.d==="1"||b.dataset.f==="1";
 const sel=floorish
 ?(native?SEL_DUTCH_CANCEL_UNWRAP:SEL_DUTCH_CANCEL)
@@ -4972,7 +4972,7 @@ loadBook();rBal();return;
 }
 if(b.dataset.x==="w"){
 const refund=row.tA;
-const native=refund.toLowerCase()===WETH.toLowerCase()&&wantsUnwrap();
+const native=Lc(refund)===Lc(WETH)&&wantsUnwrap();
 const dec=row.dutch?(row.dA??18):(row.dB??18),sym=row.dutch?(row.sA||"tokens"):(row.sB||"tokens");
 const held=row.dutch?row.aA:row.aB;
 const answer=await ak(`Shrink this ${row.dutch?"lot":"bid"}.\n\nIt is escrowed for ${tM(held,dec)} ${sym}.\n\nEnter the amount to stop ${row.dutch?"selling":"bidding for"} — the escrow behind it returns${native?" as ETH":""}. The rest stays live:`,fU(held,dec));
@@ -5004,11 +5004,11 @@ loadBook();rBal();return;
 }
 const r=row;
 let payB=r.aB,getA=r.aA;
-if(r.pf&&!r.nA&&!r.nB&&!r.dutch&&!r.floor&&r.v2&&r.maker.toLowerCase()!==account.toLowerCase()){
+if(r.pf&&!r.nA&&!r.nB&&!r.dutch&&!r.floor&&r.v2&&Lc(r.maker)!==Lc(account)){
 const dB=r.dB??18,dA=r.dA??18,sB=r.sB||"tokens",sA=r.sA||"tokens";
 let have=0n;
 try{
-have=r.tB===ZERO||r.tB.toLowerCase()===WETH.toLowerCase()
+have=r.tB===ZERO||Lc(r.tB)===Lc(WETH)
 ?(await Pa([rpc("eth_getBalance",[account,L]),r.tB===ZERO?0:rpc(C,[{to:WETH,data:balOf(account)},L])])).reduce((a,x)=>a+BigInt(x),0n)
 :BigInt(await rpc(C,[{to:r.tB,data:balOf(account)},L]));
 }catch{}
@@ -5032,8 +5032,8 @@ if(!getA)throw Error("that amount buys nothing — try a larger one");
 stat.textContent=`Filling ${tM(payB,dB)} ${sB} of ${tM(r.aB,dB)} for ${tM(getA,dA)} ${sA}…`;
 }
 }
-const wt=r.dutch&&!r.nA||r.floor?" This button takes the whole order — to fill part of it, use the Swap tab, which fills it alongside the pools.":"",nativeOut=!r.nA&&r.tA.toLowerCase()===WETH.toLowerCase()&&wantsUnwrap();
-const wethLeg=!r.nB&&r.tB.toLowerCase()===WETH.toLowerCase()&&payB>0n;
+const wt=r.dutch&&!r.nA||r.floor?" This button takes the whole order — to fill part of it, use the Swap tab, which fills it alongside the pools.":"",nativeOut=!r.nA&&Lc(r.tA)===Lc(WETH)&&wantsUnwrap();
+const wethLeg=!r.nB&&Lc(r.tB)===Lc(WETH)&&payB>0n;
 const plan=wethLeg?await planWethPayment(payB):null;
 if(plan&&plan.rail==="short")
 throw Error(`Not enough ether: this takes ${tM(payB,18)} and you hold `
@@ -5046,8 +5046,8 @@ await rpc(C,[wtx,L]);await settle(await sendTx([wtx]));
 const nativeIn=plan?.rail==="eth";
 const routeIn=nativeIn?ZERO:r.tB;
 const routeOut=nativeOut?ZERO:r.tA;
-const canonicalNative=routeIn.toLowerCase()===routeOut.toLowerCase()
-||(routeOut===ZERO&&routeIn.toLowerCase()===WETH.toLowerCase());
+const canonicalNative=Lc(routeIn)===Lc(routeOut)
+||(routeOut===ZERO&&Lc(routeIn)===Lc(WETH));
 if(!r.nB)await assertFunded(routeIn,payB,
 known(routeIn)||(routeIn===ZERO?{sym:"ETH",dec:18}:{sym:r.sB||"TOKEN",dec:r.dB??18}),wt);
 if(!r.nA&&!r.nB&&r.cp===ZERO&&!canonicalNative){
@@ -5080,7 +5080,7 @@ const approvals=[];
 if(r.nB){
 let ap=ZERO;
 try{ap="0x"+Sx(await rpc(C,[{to:r.tB,data:"0x081812fc"+eU(payB)},L])).slice(-40)}catch{}
-if(ap.toLowerCase()!==to.toLowerCase()){
+if(Lc(ap)!==Lc(to)){
 approvals.push({to:r.tB,data:apEnc(to,payB),value:"0x0"});
 }
 }else if(r.tB!==ZERO&&payB&&!(nativeIn&&!r.dutch&&r.v2)){
@@ -5228,7 +5228,7 @@ hi=lo-1}
 return out};
 const rlFromLog=l=>{
 if(!l||typeof l.data!=="string"||!Ia(l.topics))return null;
-if(String(l.address||"").toLowerCase()!==RELAY.toLowerCase())return null;
+if(String(l.address||"").toLowerCase()!==Lc(RELAY))return null;
 if(String(l.topics[0]||"").toLowerCase()!==RL_OPENED)return null;
 const d=Sx(l.data),at=n=>"0x"+d.slice(n*64,n*64+64);
 if(d.length<12*64)return null;
@@ -5249,7 +5249,7 @@ if(!head){delete rlScanned[k];return false}
 const logs=await rlLogs(Mx(0,head-RL_SPAN[CHAIN_ID]),head);
 const have=rlLoad();let add=0;
 for(const l of logs){const i=rlFromLog(l);
-if(!i||i.s.toLowerCase()!==account.toLowerCase())continue;
+if(!i||Lc(i.s)!==Lc(account))continue;
 if(have.some(x=>x&&x.n===i.n))continue;
 have.push(i);add++}
 if(add)rlSave(have);
@@ -5265,7 +5265,7 @@ const me="0x"+pad32(Sx(account)).toLowerCase();
 const logs=await rlLogs(Mx(TIP_FROM[CHAIN_ID]||0,head-TIP_SPAN[CHAIN_ID]),head,{address:SLOW_GATE,topics:[TIP_POSTED,null,me]});
 const ids=[];
 for(const l of logs){const t=Ia(l&&l.topics)?l.topics:[];
-if(String(l.address||"").toLowerCase()!==SLOW_GATE.toLowerCase()||String(t[0]||"").toLowerCase()!==TIP_POSTED||String(t[2]||"").toLowerCase()!==me)continue;
+if(String(l.address||"").toLowerCase()!==Lc(SLOW_GATE)||String(t[0]||"").toLowerCase()!==TIP_POSTED||String(t[2]||"").toLowerCase()!==me)continue;
 try{ids.push(BigInt(t[1]).toString())}catch{}}
 const seen=new Set(tipSeen()),add=[...new Set(ids)].filter(i=>!seen.has(i));
 if(k!==CHAIN_ID+":"+(account||""))return false;
@@ -5292,7 +5292,7 @@ const c=brSelfCode.c;return brHasCode(c)&&!(x&&/^0xef0100[0-9a-f]{40}$/i.test(c)
 const brNum=h=>{const s=Sx(h||"");return /^[0-9a-fA-F]{1,64}$/.test(s)?Bx(s):0n};
 const brM=new Map(),brQ=(k,f)=>{const c=brM.get(k);if(c&&Date.now()-c.t<12e3)return c.p;const p=f();brM.set(k,{t:Date.now(),p});p.catch(()=>{if(brM.get(k)?.p===p)brM.delete(k)});return p};
 const brPlan=async(dest,to,wei,delay,q)=>{const rd=(k,f)=>q?brQ(k,f):f();
-if([ARRIVAL,RELAY,SLOW].some(a=>a.toLowerCase()===String(to).toLowerCase()))
+if([ARRIVAL,RELAY,SLOW].some(a=>Lc(a)===String(to).toLowerCase()))
 throw Error("That address is part of the bridge itself, and ether sent to it there cannot be recovered.");
 if(await brSelfIsC(!brCanon()||dest!==4663))throw Error("This wallet is a contract, and both rollups rewrite a contract sender's address on the far side — the refund and the reverse would land where nobody holds a key. Send from an ordinary account.");
 if(!brCanon()){
@@ -5375,9 +5375,9 @@ const idDelay=i=>i>>160n;
 const w=(h,n)=>Bx((Sx(h).slice(n*64,n*64+64)||"0"));
 const metaCache=new Map();
 async function tokMeta(a){
-a=a.toLowerCase();
+a=Lc(a);
 if(a===ZERO)return{sym:"ETH",dec:18};
-const k=TOKENS.find(t=>t.addr.toLowerCase()===a);
+const k=TOKENS.find(t=>Lc(t.addr)===a);
 if(k)return k;
 if(metaCache.has(a))return metaCache.get(a);
 let m={sym:a.slice(0,6)+"…",dec:18},ok=0;
@@ -5431,7 +5431,7 @@ const need=lists.flatMap(([who,ids])=>ids.filter(t=>!arOrg.has(ok(who,t))).map(t
 if(need.length){const os=await mD(need.map(([who,t])=>({to:who,data:"0x"+SEL_AORIGIN+eU(t)}))).catch(()=>[]);
 if(my!==posSeq)return;
 need.forEach(([who,t],i)=>{const a=os[i]&&retAddr(os[i]);if(a&&a!==ZERO)arOrg.set(ok(who,t),a)});capMap(arOrg,600)}
-for(const[who,ids]of lists)for(const t of ids)if(arOrg.get(ok(who,t))===account.toLowerCase())viaAr.set(t.toString(),who);
+for(const[who,ids]of lists)for(const t of ids)if(arOrg.get(ok(who,t))===Lc(account))viaAr.set(t.toString(),who);
 const dirs=new Map();
 for(const[t,d]of[...outIds.map(i=>[i,"out"]),...[...viaAr.keys()].map(k=>[BigInt(k),"out"]),
 ...inIds.map(i=>[i,"in"])]){
@@ -5450,7 +5450,7 @@ const now=chainNow||BigInt(nowS());
 const ready=rows.filter(r=>r.dir.includes("in")&&now>=r.ts+idDelay(r.id)).length+(heldWei>0n&&!slowGuard?1:0);
 tabSend.textContent=ready?`Send (${ready}${more?"+":""})`:"Send";
 if(tab!=="send"){pos.innerHTML="";return}
-let its=rlLoad().filter(i=>i&&i.s&&i.s.toLowerCase()===account.toLowerCase());
+let its=rlLoad().filter(i=>i&&i.s&&Lc(i.s)===Lc(account));
 const stP=its.length?mD(its.flatMap(i=>{const id=rlId(i);
 return[{to:RELAY,data:"0x"+SEL_RSTATUS+Sx(id)},{to:RELAY,data:"0x"+SEL_RPROVEN+Sx(id)}]})).catch(()=>[]):null;
 const stale=[];
@@ -5462,7 +5462,7 @@ if(probe.length){
 const ts=await mD(probe.map(k=>({to:SLOW_GATE,data:"0x"+SEL_TIPS+eU(BigInt(k))}))).catch(()=>[]);
 if(my!==posSeq)return;
 const mine=[],dead=new Set();
-ts.forEach((t,j)=>{if(t&&j>=live.length&&w(t,0)<=0n)dead.add(probe[j]);if(!t||w(t,0)<=0n||idTok(w(t,1))!==account.toLowerCase())return;
+ts.forEach((t,j)=>{if(t&&j>=live.length&&w(t,0)<=0n)dead.add(probe[j]);if(!t||w(t,0)<=0n||idTok(w(t,1))!==Lc(account))return;
 if(j<live.length)mine.push(probe[j]);else stale.push({tid:probe[j],amount:w(t,0)})});
 tipMark(mine);if(dead.size)try{LS[TIP_KEY()]=Js(tipSeen().filter(k=>!dead.has(k)))}catch{}
 }}
@@ -5541,7 +5541,7 @@ const a=b.dataset.a;
 if(a==="t"){if(!await refundTipBestEffort(b.dataset.t,"Tip",1))throw Error("the tip is no longer refundable");
 rBal();loadPos();return}
 if(a==="z"){const i=rlLoad().find(x=>x&&x.n===b.dataset.t
-&&x.s&&x.s.toLowerCase()===account.toLowerCase());
+&&x.s&&Lc(x.s)===Lc(account));
 if(!i)throw Error("that escrow is no longer on this device");
 const req={from:account,to:RELAY,data:"0x"+SEL_RCANCEL+rlEnc(i),value:"0x0"};
 await rpc(C,[req,L]);await settle(await sendTx([req]));
@@ -5585,14 +5585,14 @@ return true;
 }
 const rcErr=v=>isAddr(v)
 ?(/^0x0{40}$/i.test(v)?"Recipient cannot be the zero address"
-:[ZROUTER,GUARD,cC().sx,cC().fill].some(a=>a&&a.toLowerCase()===v.toLowerCase())?"That is a routing contract — anything sent there can be taken by anyone.":[SLOW,SLOW_GATE,ARRIVAL,RELAY].some(a=>a.toLowerCase()===v.toLowerCase())?"That address is part of the bridge itself — anything sent to it directly is lost."
+:[ZROUTER,GUARD,cC().sx,cC().fill].some(a=>a&&Lc(a)===Lc(v))?"That is a routing contract — anything sent there can be taken by anyone.":[SLOW,SLOW_GATE,ARRIVAL,RELAY].some(a=>Lc(a)===Lc(v))?"That address is part of the bridge itself — anything sent to it directly is lost."
 :!ckAddr(v)?"That address fails its checksum — a character is wrong. Paste it again.":"")
 :!/\.(g?wei|eth)$/i.test(v)?"Recipient must be an address or a .wei / .gwei / .eth name"
-:!nameOk(v.toLowerCase())?"That name uses characters this page cannot resolve.":"";
+:!nameOk(Lc(v))?"That name uses characters this page cannot resolve.":"";
 const rcvOf=async(v,fresh)=>{
 if(isAddr(v))return /^0x0{40}$/i.test(v)||!ckAddr(v)?"":v;
 if(!/\.(g?wei|eth)$/i.test(v))return "";
-const n=v.toLowerCase(),d=brDest()||CHAIN_ID;
+const n=Lc(v),d=brDest()||CHAIN_ID;
 if(!nameOk(n))return "";
 let a="";
 try{a=fresh?await nameFwd(n,d):await nameFwdCached(n,d)}
@@ -5618,7 +5618,7 @@ try{to=await rcvOf(v)}catch(e){toErr=e&&e.offchain?e.message:""}
 if(my!==sSeq)return;
 if(!to){rc.classList.add("bad");rcvEl.textContent="";
 stat.textContent=toErr||"Name not registered";render();return}
-if(to.toLowerCase()===f.addr.toLowerCase()){rc.classList.add("bad");stat.textContent="That is "+f.sym+"'s own contract — tokens sent there are lost.";render();return}
+if(Lc(to)===Lc(f.addr)){rc.classList.add("bad");stat.textContent="That is "+f.sym+"'s own contract — tokens sent there are lost.";render();return}
 const tb=tbChk(to,f.addr===ZERO&&!+dly.value&&!brDest()?amount:-1n);if(tb){rc.classList.add("bad");stat.textContent=tb;render();return}
 rc.classList.remove("bad");
 rcvEl.textContent=to;
@@ -5675,7 +5675,7 @@ const send=t==="send",bk=t==="book";
 tabSwap.classList.toggle("on",t==="swap");
 tabSend.classList.toggle("on",send);
 tabBook.classList.toggle("on",bk);
-for(const[el,on]of[[tabSwap,t==="swap"],[tabSend,send],[tabBook,bk]])el.setAttribute("aria-selected",on?"true":"false");
+for(const[el,on]of[[tabSwap,t==="swap"],[tabSend,send],[tabBook,bk]])sAt(el,"aria-selected",on?"true":"false");
 syncStops();
 Hd(rcvPanel,send||lnMode);Hd(flip,send||lqMode||lnMode);
 if(!bk)for(const[sel,other]of[[fromSel,toSel],[toSel,fromSel]]){
@@ -5821,7 +5821,7 @@ if(on&&lnMode)lnSet(false);
 if(on&&wnMode)wnSet(false);
 if(on&&pvMode)pvSet(false);
 if(on&&mkMode)mkSet(false);
-lq.setAttribute("aria-pressed",on?"true":"false");
+sAt(lq,"aria-pressed",on?"true":"false");
 lq.classList.toggle("on",on);
 qS(document,".card").classList.toggle("lqon",on);
 for(const el of [rate,flip,swap])
@@ -5990,9 +5990,9 @@ const eth=[t0,t1].filter(x=>isEthLike(x.addr));
 if(eth.length!==1)return null;
 const cur=eth[0],coin=t0===cur?t1:t0;
 const other=cur.addr===ZERO?WETH:ZERO;
-const idx=TOKENS.findIndex(x=>x.addr.toLowerCase()===other.toLowerCase());
+const idx=TOKENS.findIndex(x=>Lc(x.addr)===Lc(other));
 if(idx<0)return null;
-const [c0,c1]=other.toLowerCase()<coin.addr.toLowerCase()?[other,coin.addr]:[coin.addr,other];
+const [c0,c1]=Lc(other)<Lc(coin.addr)?[other,coin.addr]:[coin.addr,other];
 const [c]=await mc3([{to:PFACTORY,data:"0x"+SEL_PAIR_COUNT+eA(c0)+eA(c1)}]).catch(()=>[null]);
 let n=0;try{if(c)n=Number(BigInt(c))}catch{}
 if(!n)return null;
@@ -6087,7 +6087,7 @@ const to=await rcvOf(v,true).catch(e=>e);
 if(!isAddr(to)){rc.classList.add("bad");
 stat.textContent=to.message||"Recipient must be an address or a .wei / .gwei / .eth name that resolves.";
 return null}
-if((isAddr(shown)||!isAddr(v))&&shown.toLowerCase()!==to.toLowerCase()){
+if((isAddr(shown)||!isAddr(v))&&Lc(shown)!==Lc(to)){
 rc.classList.add("bad");
 rcvEl.textContent=to;
 stat.textContent="Recipient changed — check and retry.";
@@ -6229,7 +6229,7 @@ finally{--busy}
 let lqPvT,lqPvSeq=0;
 async function lqPreview(box){++lqPvSeq;
 const pool=box.closest(".lqrow")?.dataset.pool||"";
-const row=lqRows.find(x=>x.pool.toLowerCase()===pool.toLowerCase());
+const row=lqRows.find(x=>Lc(x.pool)===Lc(pool));
 const p=chPair();
 const out=qS(box,".lqpv"),go=qS(box,'[data-act="ac"]');
 if(!row||!p){out.textContent="";go.disabled=true;return}
@@ -6276,7 +6276,7 @@ try{return{tok,amt:pU(v0||v1,tok.dec)}}catch{return{err:"Invalid amount."}}
 function lqMirror(box,src){
 if(isZap(box))return;
 const pool=box.closest(".lqrow")?.dataset.pool||"";
-const row=lqRows.find(x=>x.pool.toLowerCase()===pool.toLowerCase());
+const row=lqRows.find(x=>Lc(x.pool)===Lc(pool));
 const p=chPair();
 if(!row||!p||!row.r0||!row.r1)return;
 const [t0,t1]=p,ins=box.querySelectorAll(".lqin");
@@ -6326,7 +6326,7 @@ const [t0,t1]=pair;
 const range=qS(box,"#lqRange").value;
 qS(box,"#lqCustom").classList.toggle("hide",range!=="custom");
 const payTok=TOKENS[fromSel.value];
-const payIs0=!!payTok&&payTok.addr.toLowerCase()===t0.addr.toLowerCase();
+const payIs0=!!payTok&&Lc(payTok.addr)===Lc(t0.addr);
 const el0=payIs0?amt:outAmt,el1=payIs0?outAmt:amt;
 let a0=0n,a1=0n;
 try{
@@ -6461,7 +6461,7 @@ const b=ev.target.closest("[data-act]");
 if(!b||busy)return;
 const p=chPair(); if(!p)return;
 const [t0,t1]=p,pool=b.dataset.pool;
-const row=lqRows.find(x=>x.pool.toLowerCase()===pool.toLowerCase());
+const row=lqRows.find(x=>Lc(x.pool)===Lc(pool));
 if(!row)return;
 const act=b.dataset.act;
 if(act!=="a"&&!account)return void(stat.textContent="Connect a wallet first.");
@@ -6500,11 +6500,11 @@ if((!a0&&row.r0)||(!a1&&row.r1)||!(a0||a1))return;
 try{await doAdd(pool,a0,a1,t0,t1)}catch(e){err(e)}finally{--busy;b.disabled=false}
 }
 };
-footDoc.setAttribute("aria-expanded","false");
+sAt(footDoc,"aria-expanded","false");
 footDoc.onclick=e=>{
 e.preventDefault();
 const on=docPanel.classList.contains("hide");
-footDoc.setAttribute("aria-expanded",on?"true":"false");
+sAt(footDoc,"aria-expanded",on?"true":"false");
 Hd(docPanel,!on);
 footDoc.textContent=on?"hide":"how it works";
 if(on){if(!gvPanel.classList.contains("hide"))footGov.click();docPanel.scrollIntoView({behavior:"smooth",block:"nearest"})}
@@ -6532,7 +6532,7 @@ const r=await gvQ([...ix(n,np,"9b644a23"),...ix(k,nm,"0d80fefd"),{to:v.at(-2)||Z
 for(const h of r.slice(n,-1))try{const d=Jp(/<<<PROPOSAL_DATA\n([\s\S]*?)\nPROPOSAL_DATA>>>/.exec(dS(h))[1]);map.set(gvId(d,Sx(cf)),d)}catch{}
 const t=await gvQ(ids.flatMap(i=>["3e4f49e6","1a32b237","9ac498de","50a1676e","ab38c38a","083ce0cf"].map(s=>s+eU(i)).concat("43859632"+eU(i)+eA(account)))),T=(i,j,w)=>gw(t[7*i+j],w),Z=v=>(v/10n**18n).toLocaleString();
 const rows=ids.map((id,i)=>{const d=map.get(id),st=Number(T(i,0)),f=T(i,1),a=T(i,1,1),c=f+a+T(i,1,2),q=Number(T(i,2)),end=Number(T(i,3)+gw(tt)),open=st&&st<5&&!q&&nowS()<end,need=T(i,4)*gw(qb)/10000n,hv=Number(T(i,6)),ds=d?String(d.description).split("\n"):[],
-up=d&&v.includes(d.to.toLowerCase())&&/^0x48215787/.test(d.data),row=cE("div"),sp=cE("span"),b=cE("b"),m=cE("i"),x=cE("i"),no=cE("small"),
+up=d&&v.includes(Lc(d.to))&&/^0x48215787/.test(d.data),row=cE("div"),sp=cE("span"),b=cE("b"),m=cE("i"),x=cE("i"),no=cE("small"),
 btn=(l,g)=>{const y=cE("button");y.textContent=l;y.onclick=()=>gvTx(g(),y);row.append(y)};
 row.className="p";x.className="dlgm hide";
 no.textContent=(d?"▸ ":"")+`#${np-i} `;b.append(no,(up?"↑ ":"")+(d?ds[0]:"no record in DAO chat"));
@@ -6623,7 +6623,7 @@ footBurn.innerHTML=` · <a href="https://etherscan.io/token/${BETH}?a=${TITHE_RE
 async function flRedeem(f,a,o){if(busy||!account)return;++busy;try{await cW();const to=await lqTo();if(!to)return;await settle(await sendWith(await apSeq(f.addr,PLAUNCH,a),{from:account,to:PLAUNCH,value:"0x0",data:"0x43bcfab6"+eA(f.addr)+eU(a)+eU(lessSlip(o))+eA(to)},"Redeeming…"));rBal();update()}catch(e){err(e)}finally{--busy}}
 async function quoteFloor(tok,amount,block){
 if(!tok||tok===ZERO||amount<=0n)return 0n;
-const key=tok.toLowerCase();
+const key=Lc(tok);
 const at=block||L;
 if(!fcFloorPx[key]||fcFloorPx[key].blk!==at){
 try{
@@ -6645,10 +6645,10 @@ const tkIc=(el,a,n=13,c="adic")=>{const k=known(a);if(k&&/^<(img|svg) /.test(k.i
 const adLine=(pre,n,post)=>{adEl.textContent="";tkIc(adEl,TAC_TOK);
 const s=cE("b");s.textContent=n;adEl.append(pre,s,post)};
 const adRoot=c=>{let h=keccak(hB(keccak(hB(eU(BigInt(c.index))+eA(c.a)+eU(BigInt(c.amount))))));
-for(const x of c.proof)h=BigInt(h)<BigInt(x)?keccak(hB(Sx(h)+Sx(x))):keccak(hB(Sx(x)+Sx(h)));return h.toLowerCase()};
+for(const x of c.proof)h=BigInt(h)<BigInt(x)?keccak(hB(Sx(h)+Sx(x))):keccak(hB(Sx(x)+Sx(h)));return Lc(h)};
 async function adSync(){const my=++adSeq;
 if(!account||CHAIN_ID!==1)return adHide();
-try{const a=account.toLowerCase(),[root,dl,pz]=await mc3([{to:TACAD,data:"0x51e75e8b"},{to:TACAD,data:"0x42f81580"},{to:TACAD,data:"0x5c975abb"}]);
+try{const a=Lc(account),[root,dl,pz]=await mc3([{to:TACAD,data:"0x51e75e8b"},{to:TACAD,data:"0x42f81580"},{to:TACAD,data:"0x5c975abb"}]);
 if(my!==adSeq)return;const end=Number(BigInt(dl||"0x0"));
 if(!root||!end||end<nowS()||BigInt(pz||"0x0")!==0n)return adHide();
 let c=null;for(const u of AD_API){try{const j=await relayFetch(a.slice(2,4)+".json",null,u);if(j&&j.claims){c=j.claims[a]||null;break}}catch{}}
@@ -6667,7 +6667,7 @@ for(const [k,t] of [["me","Claim"],["to","Claim to…"]]){const x=cE("button");x
 adEl.onclick=async e=>{const b=e.target.closest("button[data-ad]");if(!b||!adC||busy)return;const c=adC;let to=account;
 if(b.dataset.ad==="to"){const v=String(await ask("Send your "+tM(c.amt,18)+" TAC to which address or name?","")||"").trim();if(!v)return;
 to=await rcvOf(v,true).catch(()=>"");if(!to){stat.textContent="That is not an address or a registered name.";return}
-if(!isAddr(v)&&!await sure("Claim "+tM(c.amt,18)+" TAC to "+v.toLowerCase()+"?\n\n"+v.toLowerCase()+" → "+to.slice(0,8)+"…"+to.slice(-6)+"\n\nContinue only if that is the address you mean."))return;if(CHAIN_ID!==1||adC!==c)return}
+if(!isAddr(v)&&!await sure("Claim "+tM(c.amt,18)+" TAC to "+Lc(v)+"?\n\n"+Lc(v)+" → "+to.slice(0,8)+"…"+to.slice(-6)+"\n\nContinue only if that is the address you mean."))return;if(CHAIN_ID!==1||adC!==c)return}
 const pr=eU(BigInt(c.proof.length))+c.proof.map(x=>Sx(x)).join("");
 const data=to===account?"0x2e7ba6ef"+eU(c.index)+eA(account)+eU(c.amt)+eU(128n)+pr:"0x4f54d47c"+eU(c.index)+eU(c.amt)+eU(128n)+eA(to)+pr;
 ++busy;b.disabled=true;try{await cW();const req={from:account,to:TACAD,data,value:"0x0"};stat.textContent="Claiming "+tM(c.amt,18)+" TAC…";
@@ -6702,7 +6702,7 @@ if(pfS.ea>0n){const e=cE("b");e.textContent=tM(pfS.ea,18)+" TAC";pfEl.append(" �
 pfEl.append(pfBtn("go",on&&!pfMine()?"Farm":"Open"));if(pfS.ea>0n)pfEl.append(pfBtn("cl","Claim"));
 pfEl.title=on?pfHead().join(" · ")+". Stake liquidity in the TAC/ETH Precision pool to earn TAC by the second. The rate is shared by everyone staked, so it falls as more joins.":"This farm has stopped paying. Your stake and anything earned can be taken out at any time."}
 pfShow()}
-function pfPaint(){const row=[...lqList.querySelectorAll(".lqrow")].find(r=>(r.dataset.pool||"").toLowerCase()===PFPOOL.toLowerCase());if(!row)return;
+function pfPaint(){const row=[...lqList.querySelectorAll(".lqrow")].find(r=>(r.dataset.pool||"").toLowerCase()===Lc(PFPOOL));if(!row)return;
 let el=qS(row,".pfb");const on=!!pfS&&pfOn(),box=qS(row,".lqadd"),k=box&&qS(box,".pfk");
 if(box&&on&&!k)box.insertAdjacentHTML("afterbegin",'<label class="lqzap"><input type="checkbox" class="pfk" checked> Stake in the farm to earn TAC</label>');
 if(box&&!on&&k)k.parentElement.remove();
@@ -6711,7 +6711,7 @@ if(!el){el=cE("div");el.className="pfb";row.insertBefore(el,qS(row,".lqacts"))}
 el.textContent="";const h=cE("div"),S=pfS;h.className="pfh";pfIcon(h);h.append(on?"Farm · "+pfHead().join(" · "):"Farm ended");el.append(h);
 if(S.st>0n&&S.sup){const m=cE("div");m.className="lqmine";m.textContent="staked "+tM(S.st*S.r0/S.sup,18)+" ETH + "+tM(S.st*S.r1/S.sup,18)+" TAC · earned "+tM(S.ea,18)+" TAC";el.append(m)}
 const acts=cE("div");acts.className="lqacts";
-if(on&&S.lp>0n){const sp=cE("select");sp.className="pfsp";sp.setAttribute("aria-label","How much to stake");
+if(on&&S.lp>0n){const sp=cE("select");sp.className="pfsp";sAt(sp,"aria-label","How much to stake");
 sp.innerHTML=QP;
 const st=pfBtn("st","","lqbtn"),upd=()=>st.textContent="Stake "+tM(S.lp*BigInt(sp.value)/100n,18)+" LP";upd();sp.onchange=upd;acts.append(sp,st)}
 if(S.ea>0n)acts.append(pfBtn("cl","Claim","lqbtn"));
@@ -6761,7 +6761,7 @@ for(const x of LAUNCHED)reqs.push(
 {to:x.pool,data:"0x"+SEL_OWED0});
 const res=await mD(reqs);
 if(my!==fcMineSeq)return;
-const acct=account.toLowerCase();
+const acct=Lc(account);
 let total=0n;const mine=[];
 for(let i=0;i<LAUNCHED.length;i++){
 const c=res[i*2],o=res[i*2+1];
@@ -6811,7 +6811,7 @@ if(lnMode||lqMode||wnMode||pvMode||mkMode||tab!=="swap"||PLAUNCH===ZERO){Hd(fcEl
 if(fcMineToks.length){Hd(fcEl,0);return}
 if(!cand){Hd(fcEl,1);return}
 try{
-const key=cand.addr.toLowerCase();
+const key=Lc(cand.addr);
 let pool=fcPool[key];
 if(pool===undefined){
 const pr=await rpc(C,[{to:PLAUNCH,data:"0x"+SEL_POOLOF+eA(cand.addr)},L]);
@@ -6826,7 +6826,7 @@ fcOwner=cr?"0x"+Sx(cr).slice(24):"";
 const owed=BigInt(o0||"0x0");
 if(owed<FC_DUST){Hd(fcEl,1);return}
 fcTok=cand.addr;
-const mine=account&&fcOwner&&account.toLowerCase()===fcOwner.toLowerCase();
+const mine=account&&fcOwner&&Lc(account)===Lc(fcOwner);
 fcEl.innerHTML=`${(+fU(owed*8n/10n,18)).toFixed(4)} ETH in `
 +`${mine?"creator fees":"fees for this coin's creator"} `
 +`<button type="button" id="fcGo" class="fclink">Collect</button>`;
@@ -6863,7 +6863,7 @@ const cbDisarm=()=>{cbSeq++;cbDao="";cbAmt=0n;cbReady=0n;cbDue=0n;cbShares="";cb
 Hd(cbEl,1)};
 const cbWord=h=>{const b=Sx(h||"");return b.length>=64?"0x"+b.slice(24,64):""};
 async function cbLook(tok){
-const key=tok.toLowerCase(),cid=CHAIN_ID,hit=cbSeen[key];
+const key=Lc(tok),cid=CHAIN_ID,hit=cbSeen[key];
 if(hit&&(!hit.at||Date.now()-hit.at<6e4))return hit;
 let out={dao:"",shares:""};
 try{
@@ -6874,7 +6874,7 @@ if(lt==null||sh==null||cid!==CHAIN_ID)return out;
 if(cbWord(lt).toLowerCase()===key&&String(await rpc("eth_getCode",[dao,L])).toLowerCase()==="0x5f5f365f5f37365f73"+CIMPL+"5af43d5f5f3e6029573d5ffd5b3d5ff3"){out={dao,shares:cbWord(sh)};
 let art="";try{art=safeDataUrl(imgFromContractURI(dS(cu||"0x")))}catch{}
 if(art)logoCache[key]=art;
-const t=TOKENS.find(x=>x.addr&&x.addr.toLowerCase()===key);
+const t=TOKENS.find(x=>x.addr&&Lc(x.addr)===key);
 if(t&&(!t.cause||art)){t.cause=1;if(art)t.icon=artIcon(art,t.sym);rebuild();syncIcons()}}
 }
 }catch{
@@ -7060,7 +7060,7 @@ if(lost*100n>cbDue)throw Error(`This burn now pays ${tM(now2,18)} ETH, not ${tM(
 await rpc(C,[req,L]);
 await waitTx(await sendTx([req]));sGot();
 if(cbBuy&&cbTok){
-const kt=TOKENS.find(x=>x.addr&&x.addr.toLowerCase()===cbTok.toLowerCase());
+const kt=TOKENS.find(x=>x.addr&&Lc(x.addr)===Lc(cbTok));
 if(kt){kt.cause=1;if(kt.cust)keepToken(kt)}
 }
 stat.textContent=cbBuy?"Backed · burn it back any time for what is left."
@@ -7230,7 +7230,7 @@ lnPrev.classList.remove("set");lnArt.value="";
 let loot=cLoot(dao);
 try{
 const said=cbWord(await rpc(C,[{to:dao,data:"0x"+SEL_LOOTOF},L]));
-if(isAddr(said||"")&&said.toLowerCase()!==loot.toLowerCase())loot=said;
+if(isAddr(said||"")&&Lc(said)!==Lc(loot))loot=said;
 }catch{}
 try{lnLand(await addCustomToken(loot),"cause")}catch{}
 stat.innerHTML=`${safeSym(sym)} is raising at `
@@ -7248,7 +7248,7 @@ if(on&&lqMode)lqSet(false);
 if(on&&wnMode)wnSet(false);
 if(on&&pvMode)pvSet(false);
 if(on&&mkMode)mkSet(false);
-ln.setAttribute("aria-pressed",on?"true":"false");
+sAt(ln,"aria-pressed",on?"true":"false");
 ln.classList.toggle("on",on);
 for(const el of [rate,flip,swap])if(el)Hd(el,on);
 for(const el of [qS(document,".panel"),rcvPanel])if(el)Hd(el,on);
@@ -7426,7 +7426,7 @@ const av=r[0],f=r[1],pr=r[2];
 if(!account)wnOffer("Connect to enter");
 else if(free)wnOffer("A free name cannot enter the roll");
 else if(dec1(av,0)===1n)wnOffer(`${l}.wei is not registered yet`);
-else{const ow=retAddr(r[3]),mine=!!ow&&ow.toLowerCase()===account.toLowerCase();
+else{const ow=retAddr(r[3]),mine=!!ow&&Lc(ow)===Lc(account);
 const wt=r[4]&&dec1(r[4],0);
 if(r[5]){wnRound=dec1(r[5],1);wnPhase=dec1(r[5],0);wnOpen=wnPhase===1n&&Number(dec1(r[5],2))>Date.now()/1000}
 if(!mine||!wt)wnOffer(!mine?`${l}.wei is not yours`:`${l}.wei does not weigh`);
@@ -7473,13 +7473,13 @@ if(!weight){line+=` ${nm} does not weigh — only a paid .wei name does.`;
 wnOffer("Enter a name you own")}
 else if(dec1(t,0)){const odds=tw?Number(weight*10000n/tw)/100:0;
 line+=` ${nm} is in, at about ${odds<0.01?"<0.01":odds.toFixed(2)}%.`}
-else if(retAddr(o)!==account.toLowerCase())line+=` ${nm} is not yours to enter.`;
+else if(retAddr(o)!==Lc(account))line+=` ${nm} is not yours to enter.`;
 else if(!wnOpen)line+=` ${nm} can enter once the next round opens.`;
 else{line+=` ${nm} can enter, free.`;wnOffer(`Enter ${nm} in the roll`,pad32(id))}}}
 wnRollEl.textContent=line;
 }catch{wnRollEl.textContent="Could not read the roll."}};
 const wnPaint=()=>{const on=wnMode;
-wn.setAttribute("aria-pressed",on?"true":"false");
+sAt(wn,"aria-pressed",on?"true":"false");
 wn.classList.toggle("on",on);
 for(const el of [rate,flip,swap])if(el)Hd(el,on);
 for(const el of [qS(document,".panel"),rcvPanel])if(el)Hd(el,on);
@@ -7511,7 +7511,7 @@ wnQuote();wnRoll()}
 else{wnNote.textContent="";wnRollEl.textContent=""}
 fcSync();}
 const syncSnd=()=>{sdw.style.display=snd?"":"none";sdx.style.display=snd?"none":"";
-sd.style.opacity=snd?"":".5";sd.setAttribute("aria-pressed",snd?"true":"false");
+sd.style.opacity=snd?"":".5";sAt(sd,"aria-pressed",snd?"true":"false");
 sd.title=snd?"Sound on — click to mute":"Sound off — click to unmute"};
 sd.onclick=()=>{snd=!snd;try{LS.snd=snd?"1":"0"}catch{}syncSnd();if(snd)sBlip()};
 syncSnd();
@@ -7613,14 +7613,14 @@ data:"0x"+SEL_CPDEPTO+eA(x.to)+eU(200000)+pad32("60")+pad32("0")}
 data:"0x"+SEL_CPRETRY+eA(x.to)+eU(x.l2v)+eU(x.sc)+eA(x.to)+eA(x.to)+eU(x.gl)+eU(x.mf)+pad32("100")+pad32("0")}];
 return r};
 const SEL_PCLAIM="2f52ebb7";const CP_DIST="0x000000C918e44A3a443937fA7594eA4f7C95D6b9";let cpPts=null,cpPtsAt=0,cpPtsFor="",cpClm=null,cpClmBad=null;let cpPtsH=false;
-const cpClaimRead=async b=>{const who=account&&account.toLowerCase();if(!who)return;
+const cpClaimRead=async b=>{const who=account&&Lc(account);if(!who)return;
 try{const j=await relayFetch("/claim/"+who,null,b);
 if(!j||String(j.address||"").toLowerCase()!==who||!isAddr(j.distributor||"")||!Ia(j.proof))return void(cpClm=cpClmBad=null);
-if(String(j.distributor).toLowerCase()!==CP_DIST.toLowerCase())return void(cpClm=null,cpClmBad=1,pvMode&&cpPaint());
+if(String(j.distributor).toLowerCase()!==Lc(CP_DIST))return void(cpClm=null,cpClmBad=1,pvMode&&cpPaint());
 if(!/^\d{1,40}$/.test(String(j.unclaimedWei||""))||!/^\d{1,40}$/.test(String(j.cumulativeAmount||"")))return void(cpClm=null);
 const c=BigInt(j.cumulativeAmount),ow=await cfgRead(C,[{to:CP_DIST,data:"0x787eef2e"+eA(who)+eU(c)},L]).catch(()=>null),u=/^0x[0-9a-fA-F]{1,64}$/.test(ow||"")?BigInt(ow):0n;if(u<=0n||!j.proof.every(x=>/^0x[0-9a-fA-F]{64}$/.test(x)))return void(cpClm=null);
 if(String(account||"").toLowerCase()!==who)return;cpClm={d:CP_DIST,u,c,p:j.proof,b};cpClmBad=null;if(pvMode)cpPaint()}catch{}};
-const cpPtsRead=async()=>{if(cpPtsRead.f)return;cpPtsRead.f=1;try{await cpPtsRead0()}finally{cpPtsRead.f=0}},cpPtsRead0=async()=>{if(!account)return;const who=account.toLowerCase();
+const cpPtsRead=async()=>{if(cpPtsRead.f)return;cpPtsRead.f=1;try{await cpPtsRead0()}finally{cpPtsRead.f=0}},cpPtsRead0=async()=>{if(!account)return;const who=Lc(account);
 if(cpPtsFor===who&&Date.now()-cpPtsAt<12e4)return;cpPtsAt=Date.now();
 for(const b of new Set([cpRelayBase(),...CP_RELAYS])){try{const j=await relayFetch("/points/"+who,null,b);
 if(j&&typeof j.points!=="undefined"&&String(j.address||"").toLowerCase()===who){
@@ -7679,7 +7679,7 @@ const cpSK=t=>bHmac(b32(cpSeed),cpU8("zswap-store-"+t+"-v1")),cpSx=(k,iv,x)=>{co
 const cpSealS=a=>{const j=cpU8(Js(a)),iv=bHmac(cpSK("iv"),j).slice(0,16),c=cpSx(cpSK("enc"),iv,j);return"z1."+cpHex(iv)+cpHex(c)+"."+cpHex(bHmac(cpSK("mac"),cpCat(iv,c)))};
 const cpOpenS=r=>{if(!/^z1\./.test(r||""))return Jp(r||"[]");const[,h,t]=r.split("."),x=hB(h),iv=x.slice(0,16),c=x.slice(16);if(cpHex(bHmac(cpSK("mac"),cpCat(iv,c)))!==t)throw Error("sealed record");return Jp(new TextDecoder().decode(cpSx(cpSK("enc"),iv,c)))};
 const cpLoadNotes=()=>{try{const a=cpOpenS(LS[CP_NOTES+cpFp]);return Ia(a)?a.filter(cpRecOk):[]}catch{return[]}};
-const cpKeyFor=a=>{try{return LS[CP_KEY+a.toLowerCase()]}catch{return""}};
+const cpKeyFor=a=>{try{return LS[CP_KEY+Lc(a)]}catch{return""}};
 const cpRmd=m=>{const H=[0x67452301,0xefcdab89,0x98badcfe,0x10325476,0xc3d2e1f0],l=m.length,n=((l+8)>>6<<6)+64,b=U8(n);b.set(m);b[l]=128;const dv=new DataView(b.buffer);dv.setUint32(n-8,(l*8)>>>0,true);dv.setUint32(n-4,Mf(l/536870912),true);
 const P=s=>[...s].map(c=>parseInt(c,16)),RL=P("0123456789abcdef74d1a6f3c0952eb83ae49f812706db5c19ba08c4d37fe56240597c2ae138b6fd"),RR=P("5e7092b4d6f81a3c6b370d5aef8c4912f5137e69b8c2a04d86413bf05c2d97aecfa4158762de039b"),
 SL=P("befc5879bdef6798768db97f7cf9b7dcbd67e9dfe8d65c75bcefef989e56865c9f5b68dc5cdeb856"),SR=P("899bdff5778beec69df7c89b77c76fdb97fb866ecd5edd75f58bee6e69c9c5f885c9c5e68d65fdbb"),
@@ -7752,7 +7752,7 @@ const v=EP_Q.map((_,i)=>decStrArr(e,o+1+W(o+1+i)/32));v[11]=rl;epApply(ok?v.map(
 const epP=epLoad().catch(()=>{try{const c=Jp(LS[EP_KEY]);if(c.t<=Date.now())epApply(c.v)}catch{}});
 const TB_R="0x0000006C96Afa6f1cD4DF8FE19bc0d8B6A6Cd7B5",tbPin=c=>{try{const u=LS["zswap:evk:"+c]||"";return/^https:\/\/\S*[^/\s]$/.test(u)?u:""}catch{return""}},tbKs=c=>[...new Set([tbPin(c),...TB_K[c]].filter(Boolean))],tbL=()=>{try{return Jp(LS["zswap:tb"])||[]}catch{return[]}},tbPut=(b,x)=>{try{LS["zswap:tb"]=Js(tbL().filter(y=>y.b!==b).concat(x||[]))}catch{}},
 tbA=i=>[i.amount,i.outLeaf0,i.outLeaf1,i.memo0Hash,i.memo1Hash,i.refund,i.deadline,i.nonce].map(eU).join(""),tbE=w=>fU(w,18)+" ETH",tbW=async b=>BigInt(await nodeRead("eth_getBalance",[b,L])||"0x0"),
-tbChk=(to,w,c=CHAIN_ID)=>{const x=tbL().find(x=>x.b===to.toLowerCase());return x&&(x.c!==c||w!==BigInt(x.i.amount))?"A Tacit pool box takes exactly "+tbE(x.i.amount)+" on "+CHAINS[x.c].name+", sent directly.":""},
+tbChk=(to,w,c=CHAIN_ID)=>{const x=tbL().find(x=>x.b===Lc(to));return x&&(x.c!==c||w!==BigInt(x.i.amount))?"A Tacit pool box takes exactly "+tbE(x.i.amount)+" on "+CHAINS[x.c].name+", sent directly.":""},
 tbScan=async f=>{const k=CHAIN_ID+account;if(!account||tbScan.k===k&&!f)return;tbScan.k=k;for(const x of tbL())if(x.c===CHAIN_ID&&nowS()>x.i.deadline){const w=await tbW(x.b);
 if(!w)tbPut(x.b);else if(await sure("Your Tacit pool box holds "+tbE(w)+" past its deadline. Return it to "+x.i.refund+"?"))await sendTx([{from:account,to:TB_R,data:"0xf255eb45"+tbA(x.i)+eU(0)}])}},
 tbGo=async r=>{try{const j=Jp(atob(r.replace(/-/g,"+").replace(/_/g,"/"))),i=j.intent,c=+j.chainId,a=BigInt(i.amount),n=TB_K[c]&&CHAINS[c].name,x={c,b:0,i};if(!n)throw Error("That box is on a chain zSwap does not serve.");
@@ -7776,7 +7776,7 @@ rxPost=async()=>{const c=CHAIN_ID;if(cpSeed)for(const k of tbKs(c))try{await rel
 rxShow=async()=>{try{if(!account)throw Error("Connect a wallet to see your private ETH address.");if(!cpSeed)await cpUnlock();const c=CHAIN_ID,n=CHAINS[c].name,a=retAddr(await nodeRead(C,[{to:TB_R,data:"0x7944b37a"+eU(rxNpk())+eU(25)},L]).catch(()=>""));
 if(!a)throw Error("Could not read the Tacit pool on "+n+". Try again.");rxPost();const w=await tbW(a),m=((await relayFetch("/quote",null,tbKs(c)[0]).catch(()=>0))||{}).receiveMin;
 const g=await wkPick([{name:"Your private ETH address",sub:a.slice(0,8)+"…"+a.slice(-6)+(w?" · "+tbE(w)+" waiting":"")+(/^\d{1,30}$/.test(m)?" · send at least "+tbE(m):""),k:1},{name:"Shield ETH into it",sub:"a send from this wallet",k:2},{name:"Send privately ↗",sub:"on tacit.finance, same key",k:"send"},{name:"Withdraw ↗",sub:"on tacit.finance, same key",k:"withdraw"},{name:"Keeper",sub:(tbPin(c)?"yours · ":"")+tbKs(c)[0].split("/")[2],k:3}],"Private ETH · "+n);
-if(!g)return;if(g.k===1)return cpCopy("Your private ETH address. ETH sent to it on Ethereum, Base or Robinhood is shielded into your Tacit balance there, less at most 0.25% to whoever sweeps it in; any other token is lost.",a);if(g.k===2)return void(location.hash="chain="+c+"&token="+ZERO+"&to="+a);if(g.k===3){const u=await dlg("Keeper for "+n+": it sweeps your private ETH address into the pool, for at most 0.25%. Anyone can run one. Enter its URL, or leave blank for the listed keepers.",tbPin(c),1);if(u===null)return;const v=u.trim().replace(/\/$/,""),j=v&&await relayFetch("/info",null,v).catch(()=>({}));if(v&&(!/^https:\/\/\S*[^/\s]$/.test(v)||j.chainId!=c||String(j.router).toLowerCase()!==TB_R.toLowerCase()||j.minReceiveFeeBps>25))throw Error("That is not a Tacit pool keeper for "+n+".");try{v?LS["zswap:evk:"+c]=v:delete LS["zswap:evk:"+c]}catch{}rxPost();return void(stat.textContent="Keeper for "+n+": "+tbKs(c)[0].split("/")[2]+".")}window.open("https://tacit.finance/sats/#eth="+c+"&do="+g.k,"_blank","noopener")}catch(E){stat.textContent=E.message}};
+if(!g)return;if(g.k===1)return cpCopy("Your private ETH address. ETH sent to it on Ethereum, Base or Robinhood is shielded into your Tacit balance there, less at most 0.25% to whoever sweeps it in; any other token is lost.",a);if(g.k===2)return void(location.hash="chain="+c+"&token="+ZERO+"&to="+a);if(g.k===3){const u=await dlg("Keeper for "+n+": it sweeps your private ETH address into the pool, for at most 0.25%. Anyone can run one. Enter its URL, or leave blank for the listed keepers.",tbPin(c),1);if(u===null)return;const v=u.trim().replace(/\/$/,""),j=v&&await relayFetch("/info",null,v).catch(()=>({}));if(v&&(!/^https:\/\/\S*[^/\s]$/.test(v)||j.chainId!=c||String(j.router).toLowerCase()!==Lc(TB_R)||j.minReceiveFeeBps>25))throw Error("That is not a Tacit pool keeper for "+n+".");try{v?LS["zswap:evk:"+c]=v:delete LS["zswap:evk:"+c]}catch{}rxPost();return void(stat.textContent="Keeper for "+n+": "+tbKs(c)[0].split("/")[2]+".")}window.open("https://tacit.finance/sats/#eth="+c+"&do="+g.k,"_blank","noopener")}catch(E){stat.textContent=E.message}};
 const bGet=async p=>{let e;for(const u of B_API){try{const j=await relayFetch(p,null,u);if(j&&j.status!=="unknown")return j}catch(x){e=x}}throw e||Error("No Bitcoin node answered.")};
 const bPost=async h=>{let e;for(const u of B_API){try{return(await relayFetch("/tx",h,u)).text}catch(x){if(/already/i.test(x.message))return"";e=x}}throw e||Error("No Bitcoin node took the transaction.")};
 const bOp=l=>keccak(cpCat(bRev(l.t),bLE(1,4)));
@@ -7835,7 +7835,7 @@ const o=bOp(l),v=BigInt(l.v),r=BigInt(l.b),cb=cpBinding(),ctx=cpCtx("tacit-cbtc-
 const{j,rb}=await relaySub({type:"cbtcmint",op:{chainBinding:cb,outpoint:o,vBtc:String(v),fee:"0",cx:l.cx,cy:l.cy,sigR:s.R,sigZ:s.z},memos:["0x"],mode:self?"prove":"settle"});
 if(!j.jobId)throw Error("The relay did not take the mint.");l.job=j.jobId;l.js=j.status||"pending";l.rb=rb;l.self=self?1:0;delete l.pv;delete l.pr;cpSaveLocks();stat.textContent=self?"Proving the mint. Press settle when it appears.":"The relay is minting cBTC."};
 const cpLockPoll=async l=>{const st=await relayFetch("/confidential/status?id="+encodeURIComponent(l.job),null,l.rb);l.js=st.status||"unknown";const pr=st.proof||st.proofBytes;
-if(st.status==="proven"&&/^0x[0-9a-fA-F]+$/.test(st.publicValues||"")&&/^0x[0-9a-fA-F]+$/.test(pr||"")&&st.publicValues.toLowerCase().includes(Sx(bOp(l)))){l.pv=st.publicValues;l.pr=pr}cpSaveLocks()};
+if(st.status==="proven"&&/^0x[0-9a-fA-F]+$/.test(st.publicValues||"")&&/^0x[0-9a-fA-F]+$/.test(pr||"")&&Lc(st.publicValues).includes(Sx(bOp(l)))){l.pv=st.publicValues;l.pr=pr}cpSaveLocks()};
 const cpLockSettle=async l=>{if(!(l.pv&&l.pr))throw Error(PNR);const add=l.one?await cpEscrowNeed(l):0n,eth=add?await cpEthFor(add):0n;
 if(eth&&!await sure("Post the escrow with "+tM(eth,18)+" ETH and mint the cBTC in the same transaction? This wallet can take the escrow back once the lock is redeemed."))return;
 const a=encBytes(l.pv),b=encBytes(l.pr),m=eU(1)+eU(32)+encBytes("0x");
@@ -7870,7 +7870,7 @@ const undo=()=>{const q=cpLoadCdps().filter(x=>x.leaf!==p.leaf);cpSaveCdps(q);co
 let j,jrb;try{({j,rb:jrb}=await relaySub({type:"cdpmint",op:X.op,memos:[memo],mode:self?"prove":"settle"}))}catch(e){if(e&&e.rej)undo();throw e}if(!j.jobId){undo();throw Error("The relay did not take the loan.")}
 p.job=j.jobId;p.js=j.status||"pending";p.rb=jrb;p.self=self?1:0;cpSaveCdps(cdps);stat.textContent="Proving the loan. Press settle when it appears: a loan is opened from this wallet, and the tip covers the proof."};
 const cpCdpPoll=async p=>{const st=await relayFetch("/confidential/status?id="+encodeURIComponent(p.job),null,p.rb);p.js=st.status||"unknown";const pr=st.proof||st.proofBytes;
-if(st.status==="proven"&&/^0x[0-9a-fA-F]+$/.test(st.publicValues||"")&&/^0x[0-9a-fA-F]+$/.test(pr||"")&&st.publicValues.toLowerCase().includes(Sx(p.leaf))){p.pv=st.publicValues;p.pr=pr}};
+if(st.status==="proven"&&/^0x[0-9a-fA-F]+$/.test(st.publicValues||"")&&/^0x[0-9a-fA-F]+$/.test(pr||"")&&Lc(st.publicValues).includes(Sx(p.leaf))){p.pv=st.publicValues;p.pr=pr}};
 const cpCdpSettle=async p=>{if(!(p.pv&&p.pr))throw Error(PNR);const req=await cpSettleReq(p.pv,p.pr,[p.memo],900000);
 await rpc(C,[req,L]);p.stx=await sendTx([req]);const a=cpLoadCdps(),m=a.find(x=>x.leaf===p.leaf);if(m)Object.assign(m,p);cpSaveCdps(a);await settle(p.stx);p.js="settled";if(m)m.js="settled";cpSaveCdps(a);stat.textContent="Position opened."};
 const cpScanCdps=async()=>{const z=cpNotes.filter(n=>n.z);if(!z.length)return 0;const f={address:CP_CE,fromBlock:toHex(CP_BLOCK),toBlock:"latest",topics:[CDP_MINTED]};let lg=null;
@@ -7918,14 +7918,14 @@ const cpUse=s=>{cpBtcSat=null;cpBtcAt=0;cpSeed=s;cpFp=cpHex(sha2(cpU8("zswap-cp-
 const cpSign=async()=>{const sig=await rpc("personal_sign",["0x"+cpHex(cpU8(CP_MSG)),account]);
 if(!/^0x[0-9a-fA-F]{130}$/.test(sig||""))throw Error("The wallet returned an unusable signature.");
 if(Bx(sig.slice(66,130))>FN/2n)throw Error("This wallet signed the identity message in a form that has a second, equally valid spelling, so the key it derives is not reliably the same one. Use another wallet, or import a key you already hold.");
-const cur=await rpc("eth_accounts",[]).catch(()=>null);if(Ia(cur)&&cur.length&&String(cur[0]).toLowerCase()!==account.toLowerCase())throw Error("The wallet is on a different account than the one connected here. Switch it back to "+account+", or reconnect, and try again.");
-return sig.toLowerCase()};
+const cur=await rpc("eth_accounts",[]).catch(()=>null);if(Ia(cur)&&cur.length&&String(cur[0]).toLowerCase()!==Lc(account))throw Error("The wallet is on a different account than the one connected here. Switch it back to "+account+", or reconnect, and try again.");
+return Lc(sig)};
 const cpCw=async()=>{const code=await cfgRead("eth_getCode",[account,L]).catch(()=>"0x");return/^0x[0-9a-f]*$/i.test(code||"")&&!/^0x(0*|ef0100[0-9a-f]{40})$/i.test(code)};
 const cpOfSig=sig=>{const sb=hB(sig);if(sb[64]<2)sb[64]+=27;return"0x"+cpScalar(sha2(sb)).toString(16).padStart(64,"0")};
 const cpSk=d=>{if(!/^0x[0-9a-f]{64}$/.test(d))throw Error("No wallet key to seal with.");return crypto.subtle.importKey("raw",sha2(cpCat(cpU8("zswap-cpk-seal-v1"),b32(d))),"AES-GCM",false,["encrypt","decrypt"])};
-const cpKeep=async(d,s)=>{const r={v:1};if(s!==d){const iv=crypto.getRandomValues(U8(12));r.iv=cpHex(iv);r.ct=cpHex(U8(await crypto.subtle.encrypt({name:"AES-GCM",iv},await cpSk(d),b32(s))))}LS[CP_KEY+account.toLowerCase()]=Js(r)};
+const cpKeep=async(d,s)=>{const r={v:1};if(s!==d){const iv=crypto.getRandomValues(U8(12));r.iv=cpHex(iv);r.ct=cpHex(U8(await crypto.subtle.encrypt({name:"AES-GCM",iv},await cpSk(d),b32(s))))}LS[CP_KEY+Lc(account)]=Js(r)};
 const cpOpenK=async(d,t)=>{try{const r=Jp(t);const p=U8(await crypto.subtle.decrypt({name:"AES-GCM",iv:hB(r.iv)},await cpSk(d),hB(r.ct)));return p.length===32?"0x"+cpHex(p):""}catch{return""}};
-const cpUnlock=async()=>{await cW();const cw=await cpCw(),sig=await cpSign(),t=cpKeyFor(account)||"",old=/^0x[0-9a-f]{64}$/i.test(t)?t.toLowerCase():"",sealed=!old&&/"ct"/.test(t);
+const cpUnlock=async()=>{await cW();const cw=await cpCw(),sig=await cpSign(),t=cpKeyFor(account)||"",old=/^0x[0-9a-f]{64}$/i.test(t)?Lc(t):"",sealed=!old&&/"ct"/.test(t);
 if(cw){if(await cpSign()!==sig)throw Error("This contract wallet signed the same message two different ways, so it cannot hold a key that reconnecting restores. Use an ordinary account.");
 if(!t&&!await sure("This is a contract wallet. Its signature can change if its owners or modules change, and reconnecting would then not bring this key back. Keep the key that is shown next."))throw Error("Unlock cancelled.")}
 const d=cpOfSig(sig),o=sealed?await cpOpenK(d,t):"";let s=old||o||d,note="";
@@ -7965,9 +7965,9 @@ logs.sort((a,b)=>(parseInt(a.blockNumber,16)-parseInt(b.blockNumber,16))||(parse
 for(const l of logs){const t=l.topics[0].toLowerCase(),d=Sx(l.data||""),tx=String(l.transactionHash||"").toLowerCase();if((t===CP_T_LEAVES||t===CP_T_SPENT)&&/^0x[0-9a-f]{64}$/.test(tx)&&!c.tx.includes(tx)){c.q.push(tx);c.tx.push(tx);if(c.tx.length>256)c.tx.shift()}
 if(t===CP_T_LEAVES&&l.topics[1]){const first=Number(BigInt(l.topics[1])),off=Number(Bx(cpWord(d,0)))/32;
 cpArr(d,off).forEach((x,i)=>{c.leaves[first+i]=x});
-try{const ms=cpBArr(d,Number(Bx(cpWord(d,1)))/32).map(m=>m.toLowerCase());ms.forEach((m,i)=>{if(m.length===340)c.memos[first+i]=m});
-if(c.q.includes(tx))(c.qe[tx]||=[]).push(cpEvSig("L",cpArr(d,off).map(x=>x.toLowerCase()),ms))}catch{}}
-else if(t===CP_T_SPENT){const nu=cpArr(d,Number(Bx(cpWord(d,0)))/32).map(x=>x.toLowerCase());c.spent.push(...nu);if(c.q.includes(tx))(c.qe[tx]||=[]).push(cpEvSig("N",nu))}
+try{const ms=cpBArr(d,Number(Bx(cpWord(d,1)))/32).map(m=>Lc(m));ms.forEach((m,i)=>{if(m.length===340)c.memos[first+i]=m});
+if(c.q.includes(tx))(c.qe[tx]||=[]).push(cpEvSig("L",cpArr(d,off).map(x=>Lc(x)),ms))}catch{}}
+else if(t===CP_T_SPENT){const nu=cpArr(d,Number(Bx(cpWord(d,0)))/32).map(x=>Lc(x));c.spent.push(...nu);if(c.q.includes(tx))(c.qe[tx]||=[]).push(cpEvSig("N",nu))}
 else if(t===CP_T_WRAP&&l.topics[2])c.wraps.push([l.topics[1].toLowerCase(),"0x"+cpWord(d,0),l.topics[2].toLowerCase()])}
 c.to=head}
 const next=Number(BigInt(await cfgRead(C,[{to:CP_POOL,data:"0x"+SEL_CPNEXT},toHex(head)])||"0x0"));
@@ -7996,7 +7996,7 @@ if(!impl||impl===ZERO)throw Error("The router did not answer.");
 const a=Sx(get(ra)||"");
 if(Bx((cpWord(a,0)||"0"))!==1n||Bx((cpWord(a,1)||"0"))!==0n)throw Error("Native ETH is not registered in the pool.");
 const peer=retAddr(get(rp));
-if(peer!==l2.peer.toLowerCase())throw Error("The "+CHAINS[ch].name+" bridge did not answer as expected — refusing to continue.");
+if(peer!==Lc(l2.peer))throw Error("The "+CHAINS[ch].name+" bridge did not answer as expected — refusing to continue.");
 if(ch===4663&&parseInt(get(rc),16)!==4663)throw Error("The Robinhood node answered for another chain.");
 return impl};
 const cpRhGas=async to=>{const data="0x"+SEL_CPESTRT+eA(CP_ROUTER)+eU(10n**18n+1n)+eA(to)+eU(1)+eA(to)+eA(to)+pad32("e0")+pad32("0");
@@ -8024,8 +8024,8 @@ return{k,li,s:"pending"}};
 const cpJe=x=>x&&x.je?`<span title="${String(x.je).replace(/[^\w .,:;()%-]/g,"")}">relay failed</span>`:"relay failed";
 const cpRelayPoll=async n=>{const job=n.ex?n.ex.job:n.job;if(!job)return;
 const tgt=n.ex||n,st=await relayFetch("/confidential/status?id="+encodeURIComponent(job),null,tgt.rb);tgt.js=st.status||"unknown";tgt.je=st.status==="failed"&&st.error?String(st.error).slice(0,200):"";
-if(st.activation)tgt.ja=String(st.activation);if(st.status==="settled"&&!tgt.jst)tgt.jst=Date.now();if(n.ex&&!n.ex.atx&&/^0x[0-9a-fA-F]{64}$/.test(st.activateTx||"")){const rc=await cfgRead("eth_getTransactionReceipt",[st.activateTx]).catch(()=>null);if(rc&&rc.status==="0x1"&&(rc.logs||[]).some(l=>String(l.address||"").toLowerCase()===CP_ROUTER.toLowerCase()))n.ex.atx=st.activateTx}
-const pr=st.proof||st.proofBytes;if(st.status==="proven"&&/^0x[0-9a-fA-F]+$/.test(st.publicValues||"")&&/^0x[0-9a-fA-F]+$/.test(pr||"")&&st.publicValues.toLowerCase().includes(Sx(n.p?n.dep:cpNoteOf(n)[n.ex?"nu":"dep"]).toLowerCase())){tgt.pv=st.publicValues;tgt.pr=pr}
+if(st.activation)tgt.ja=String(st.activation);if(st.status==="settled"&&!tgt.jst)tgt.jst=Date.now();if(n.ex&&!n.ex.atx&&/^0x[0-9a-fA-F]{64}$/.test(st.activateTx||"")){const rc=await cfgRead("eth_getTransactionReceipt",[st.activateTx]).catch(()=>null);if(rc&&rc.status==="0x1"&&(rc.logs||[]).some(l=>String(l.address||"").toLowerCase()===Lc(CP_ROUTER)))n.ex.atx=st.activateTx}
+const pr=st.proof||st.proofBytes;if(st.status==="proven"&&/^0x[0-9a-fA-F]+$/.test(st.publicValues||"")&&/^0x[0-9a-fA-F]+$/.test(pr||"")&&Lc(st.publicValues).includes(Sx(n.p?n.dep:cpNoteOf(n)[n.ex?"nu":"dep"]).toLowerCase())){tgt.pv=st.publicValues;tgt.pr=pr}
 cpSaveNotes()};
 const cpSettleWrap=async n=>{try{if(BigInt(await l1Read(C,[{to:CP_POOL,data:"0x"+SEL_CPDEP+pad32(n.dep||cpNoteOf(n).dep)},L])||"0x0")===2n)return}catch{}const self=pvPath.value==="self",{j:r,rb}=await relaySub({type:"wrap",op:n.op,memos:[n.memo],mode:self?"prove":"settle"});
 if(!r.jobId)throw Error("The relay did not take the deposit.");n.job=r.jobId;n.js=r.status||"pending";n.rb=rb;n.self=self?1:0;delete n.stx;cpSaveNotes()};
@@ -8051,7 +8051,7 @@ const cpTokBal=async A=>BigInt(await rpc(C,[{to:A.tok,data:balOf(account)},L])||
 const CP_SETTLE_GAS=540000n;
 const CP_TIPFWD="0x000000D218B03db5837943b0b05DeA2965AE956e",CP_TIPTO="0x006CD14F36F65eCbB29b2519cCBe63A0DC8549F2",SEL_CPWTIP="fc24c435",TIPOFF="zswap:cptip";
 const cpTipRost=()=>CP_RELAYS.includes(cpRelayBase());
-const cpTipTo=j=>{const r=String(j&&j.recommendedTipRecipient||"");return!r||r.toLowerCase()===CP_TIPTO.toLowerCase()};
+const cpTipTo=j=>{const r=String(j&&j.recommendedTipRecipient||"");return!r||Lc(r)===Lc(CP_TIPTO)};
 const cpTipPref=()=>{try{return LS[TIPOFF]!=="0"}catch{return true}};
 const cpTipOn=()=>cpTipRost()&&cpTipPref();
 const cpTipSync=()=>{pvTip.checked=cpTipPref();Hd(pvTipL,!(pvAct.value==="dep"&&pvPath.value!=="self"&&cpTipRost()))};
@@ -8149,7 +8149,7 @@ if(why){if(p.auto)throw Error(why);if(!await sure(why+". Settle it from this wal
 const net=v-fee,wei=net*A.scale,tb=tbChk(to,A.tok===ZERO&&ch!==4663?wei:-1n,ch);if(tb)throw Error(tb+" Relay fee: "+cpFmt(fee,A)+" ETH.");
 const x={ch,to,dl:String((Mf(Date.now()/86400000)+3)*86400),nonce:(o&&/^\d{1,80}$/.test(String(o.nonce||""))?String(o.nonce):big(sha2(cpU8("zswap-exit-nonce-v1:"+cpFp+":"+(n.s?n.s+n.b:n.i)))).toString()),
 fee:String(fee),wei:String(wei),self,fin:to};if(part)x.v=String(v);
-let esc=to.toLowerCase(),warn="";
+let esc=Lc(to),warn="";
 if(ch!==1){const code=await cfgRead("eth_getCode",[to,L]),l1=Sx(code||"")!=="",l2=!l1&&!o&&Sx(await cpL2Read(ch,"eth_getCode",[to,"latest"]).catch(()=>"0x")||"")!=="";
 if(l1||l2){x.fin=cpRescue(n.s?BigInt(n.s):n.i).addr;x.rk=1;
 if(ch===4663&&l1)pvNote.textContent="That recipient has contract code on Ethereum, so Robinhood will refund unused gas to an aliased address rather than to it."}
@@ -8172,7 +8172,7 @@ x.du=dlu;n.ex=x;if(!cpSaveNotes()&&ch!==1){delete n.ex;throw Error(NOKEEP)}cpPai
 const{j:r2,rb:rb2}=await relaySub({type:ty,op,memos:ms,mode:self?"prove":"settle",exit:ch!==1&&!self?Jp(Js(cpRecipe(x),(_,v)=>typeof v==="bigint"?String(v):v)):void 0});
 if(!r2.jobId)throw Error("The relay did not take the exit.");
 x.job=r2.jobId;x.js=r2.status||"pending";x.rb=rb2;cpSaveNotes();
-stat.textContent=(self?"Proving. Press send when it appears.":ch===1?"The relay is settling the withdrawal.":"The relay is settling the exit, then bridging it; this wallet sends nothing. Export your notes now: until it is bridged, this exit exists only in this browser. If the relay cannot bridge it, its row offers activate; activating from this wallet links the exit to your deposit.")+(ch!==1&&to.toLowerCase()===String(account).toLowerCase()?" It also exits to this same wallet, which links it too.":"")+(warn?" "+warn:"");
+stat.textContent=(self?"Proving. Press send when it appears.":ch===1?"The relay is settling the withdrawal.":"The relay is settling the exit, then bridging it; this wallet sends nothing. Export your notes now: until it is bridged, this exit exists only in this browser. If the relay cannot bridge it, its row offers activate; activating from this wallet links the exit to your deposit.")+(ch!==1&&Lc(to)===String(account).toLowerCase()?" It also exits to this same wallet, which links it too.":"")+(warn?" "+warn:"");
 const h=cpHint(v,A);if(h)pvNote.textContent=(pvNote.textContent?pvNote.textContent+" ":"")+h};
 const cpSelfSend=async n=>{const x=n.ex;if(x.im)throw Error("Cancelled.");
 const req=x.ch===1?await cpSettleReq(x.pv,x.pr,x.m||[],700000,x.fee)
@@ -8278,10 +8278,10 @@ pvAct.value="out";pvChain.value="1";pvTo.value=to;pvAct.dispatchEvent(new Event(
 throw Object.assign(Error("Switched to a public payout to "+label+" — check the details, then press Withdraw."),{offChain:true})};
 const cpRecipAt=async s=>{s=String(s||"").trim();
 if(isAddr(s)){const lab=s.slice(0,8)+"…"+s.slice(-6),rt=()=>{throw Error("Could not check whether "+lab+" has a Tacit address right now — try again.")},n=await nameRev(s).catch(rt);
-const t=n&&/\.(g?wei|eth)$/i.test(n)?String(await nameText(n.toLowerCase()).catch(rt)||"").trim():"";
+const t=n&&/\.(g?wei|eth)$/i.test(n)?String(await nameText(Lc(n)).catch(rt)||"").trim():"";
 if(!/^tacit1/i.test(t))return cpToPublic(s,lab);
 const h=cpRecip(t);if(!await sure("Send privately to "+lab+"?\n\n"+lab+" → "+n+" → "+t.slice(0,12)+"…"+t.slice(-8)+"\n\nThis address's name publishes a Tacit address, so the payment stays private. Continue only if this is the person you mean to pay."))throw Error("cancelled");return h}
-if(/\.(g?wei|eth)$/i.test(s)&&!/^(0x|tacit1)/i.test(s)){const n=s.toLowerCase();if(!nameOk(n))throw Error("That is not a name.");
+if(/\.(g?wei|eth)$/i.test(s)&&!/^(0x|tacit1)/i.test(s)){const n=Lc(s);if(!nameOk(n))throw Error("That is not a name.");
 let t;try{t=String(await nameText(n)||"").trim()}catch(e){throw Error(e&&e.offchain?e.message:"Could not read "+n+"'s records right now — try again.")}
 if(!t){const a=await nameFwd(n).catch(()=>"");if(isAddr(a||""))return cpToPublic(a,n);throw Error(n+" has no Tacit address published. Its owner can publish one "+(/\.base\.eth$/i.test(n)?"as a finance.tacit record on Base":"from zSwap's private panel")+", or send to their tacit1… address.")}
 if(!/^tacit1/i.test(t))throw Error(n+"'s Tacit record is not a tacit1… address.");
@@ -8304,7 +8304,7 @@ return cs.flatMap(({pv,ms})=>{try{const p=Sx(pv),s=p.slice(W(p,0)*2),ar=i=>{cons
 const cpEvSig=(k,a,b=[])=>k+keccak(cpU8(a.join(",")+"|"+b.join(",")));
 const cpLockQ=async c=>{c.qf||(c.qf={});while(c.q.length){const ts=await Pa(c.q.slice(0,8).map(h=>cfgRead("eth_getTransactionByHash",[h]).catch(()=>null)));
 for(const t of ts){const h=c.q[0];if(!t||typeof t!=="object"){if((c.qf[h]=(c.qf[h]||0)+1)<5)return;delete c.qe[h];delete c.qf[h];c.q.shift();continue}
-const inp=String(t.input||"").toLowerCase(),to=String(t.to||"").toLowerCase(),cf=to!==CP_POOL.toLowerCase(),tr=!cf||to===CP_RELAYER,ev=c.qe[h]||[];
+const inp=String(t.input||"").toLowerCase(),to=String(t.to||"").toLowerCase(),cf=to!==Lc(CP_POOL),tr=!cf||to===CP_RELAYER,ev=c.qe[h]||[];
 try{for(const r of cpCalls(inp)){if(!r.lk.length&&!r.ln.length)continue;if(cf){const j=ev.indexOf(r.lv.length?cpEvSig("L",r.lv,r.ms):r.nu.length?cpEvSig("N",r.nu):"-");if(j<0)continue;ev.splice(j,1)}
 r.lk.forEach((x,i)=>{c.lk.push(x);c.lm.push(String(r.ms[r.nl+i]||""));c.ls.push(tr?1:0)});c.ln.push(...r.ln)}}catch{}delete c.qe[h];delete c.qf[h];c.q.shift()}}};
 const cpLockChk=async(c,head)=>{let n,r;try{[n,r]=await Pa([cpStor(84,toHex(head)),cpStor(85,toHex(head))])}catch{c.lkok=null;return}
@@ -8324,7 +8324,7 @@ const cpIn=(n,c)=>{const k=cpNoteOf(n),li=c.leaves.indexOf(k.leaf);if(li<0)throw
 return{v:n.v,b:k.blinding,s:n.z?"0x"+"00".repeat(32):k.secret,owner:k.owner,cx:k.cx,cy:k.cy,li,path:t.path,root:t.root,nu:k.nu}};
 const cpJob=async(t,op,m,self,nd)=>{const{j:r,rb}=await relaySub({type:t,op,memos:m,mode:self?"prove":"settle"});if(!r.jobId)throw Error("The relay did not take it.");return{job:r.jobId,js:r.status||"pending",rb,self:self?1:0,t,op,m,nd}};
 const cpJobPoll=async j=>{if(!j||!j.job||j.stx||j.pv||j.js==="settled"||j.js==="failed")return;const st=await relayFetch("/confidential/status?id="+encodeURIComponent(j.job),null,j.rb),pr=st.proof||st.proofBytes;j.js=st.status||"unknown";
-if(st.status==="proven"&&/^0x[0-9a-fA-F]+$/.test(st.publicValues||"")&&/^0x[0-9a-fA-F]+$/.test(pr||"")&&st.publicValues.toLowerCase().includes(Sx(j.nd).toLowerCase())){j.pv=st.publicValues;j.pr=pr}};
+if(st.status==="proven"&&/^0x[0-9a-fA-F]+$/.test(st.publicValues||"")&&/^0x[0-9a-fA-F]+$/.test(pr||"")&&Lc(st.publicValues).includes(Sx(j.nd).toLowerCase())){j.pv=st.publicValues;j.pr=pr}};
 const cpJobSend=async(j,gas)=>{if(!(j&&j.pv&&j.pr))throw Error(PNR);let wt=0n;if(j.t==="wraptransfer")try{wt=await cpProveTip()}catch{wt=0n}
 const req=j.t==="wraptransfer"?{from:account,to:CP_ROUTER,value:toHex(BigInt(j.w)+wt),data:cpWtData(BigInt(j.w),j.cm,j.pv,j.pr,j.m,wt>0n?CP_TIPTO:""),gas:toHex(1400000)}:await cpSettleReq(j.pv,j.pr,j.m,gas||900000,j.op&&j.op.fee);
 await rpc(C,[req,L]);await cpGasOk(req);j.stx=await sendTx([req]);cpSaveS();cpSaveI();cpPaint();try{await settle(j.stx)}catch(e){delete j.stx;cpSaveS();cpSaveI();throw e}j.js="settled";cpSaveS();cpSaveI()};
@@ -8431,12 +8431,12 @@ if(a.length<384||w(0)!==1n||!w(2)||w(5)>36n||(eth?u!==ZERO:w(4)!==1n||u===ZERO||
 out.push({id:c.id,tok:u,sym:c.sym,pub:eth?"ETH":TOKENS.find(t=>t.addr===u)?.sym||(c.id===CP_CBTC?"tacBTC":c.id===CP_CUSD?"tacUSD":c.sym),dec:Number(w(5)),scale:w(2),icon:c.icon})});
 const e=out.find(a=>a.id===CP_ETH);cpAssets=[e||CP_ETH_AS,...out.filter(a=>a!==e)];pvAssetPaint();if(pvMode)cpPaint();shieldSync();
 const f=TOKENS[fromSel.value],t=TOKENS[toSel.value];if(!pvMode&&[f,t].some(x=>x&&tacitId(x)))update(true)}catch{cpAsT=0}})());
-function tacitTag(t){try{if(!t||t.addr===ZERO||CHAIN_ID!==1)return"";const A=cpAssets.find(a=>a.tok===t.addr.toLowerCase());if(!A)return"";
+function tacitTag(t){try{if(!t||t.addr===ZERO||CHAIN_ID!==1)return"";const A=cpAssets.find(a=>a.tok===Lc(t.addr));if(!A)return"";
 let v=0n;if(cpSeed)for(const n of cpNotes){if(n.p||n.ex||(n.a||CP_ETH)!==A.id)continue;if(cpStatus(n).s==="ready")v+=BigInt(n.v)}
 return"Tacit · shields into the confidential pool as "+A.sym+(v>0n?" · you hold "+cpFmt(v,A)+" "+A.sym+" shielded":"")}catch{return""}}
 function shieldSync(){try{const f=TOKENS[fromSel.value];if(CHAIN_ID===1&&!cpAsT)cpLoadAssets();
-Hd(shieldGo,!(CHAIN_ID===1&&tab==="swap"&&!pvMode&&f&&f.addr!==ZERO&&cpAssets.some(a=>a.tok===f.addr.toLowerCase())))}catch{}}
-shieldGo.onclick=()=>{sBlip();const f=TOKENS[fromSel.value],A=f&&cpAssets.find(a=>a.tok===f.addr.toLowerCase());if(!A)return;const v=amt.value.trim();pvSet(true);pvAsset.value=A.id;pvAct.value="dep";pvAssetPaint();pvActSync();if(/^\d*\.?\d+$/.test(v))pvAmt.value=v;pvPrevSoon()};
+Hd(shieldGo,!(CHAIN_ID===1&&tab==="swap"&&!pvMode&&f&&f.addr!==ZERO&&cpAssets.some(a=>a.tok===Lc(f.addr))))}catch{}}
+shieldGo.onclick=()=>{sBlip();const f=TOKENS[fromSel.value],A=f&&cpAssets.find(a=>a.tok===Lc(f.addr));if(!A)return;const v=amt.value.trim();pvSet(true);pvAsset.value=A.id;pvAct.value="dep";pvAssetPaint();pvActSync();if(/^\d*\.?\d+$/.test(v))pvAmt.value=v;pvPrevSoon()};
 pvAsset.onchange=()=>{sBlip();pvAssetPaint()};
 pvAssetB.onclick=async()=>{sBlip();const c=await wkPick(cpAssets.map(a=>({name:a.sym,sub:"private "+(a.id===CP_CBTC?"bitcoin":a.id===CP_CUSD?"dollar":a.tok===ZERO?"ETH":a.pub),icon:a.icon,on:a.id===pvAsset.value,id:a.id})),"Shielded asset");if(c&&c.id!==pvAsset.value){pvAsset.value=c.id;pvAsset.dispatchEvent(new Event("change",{bubbles:true}))}};
 const pvActSync=()=>{const s=pvAct.value==="send";for(const e of[pvChain,pvTo])Hd(e.parentElement,pvAct.value!=="out");Hd(pvRcL,!s);pvHintSync()};
@@ -8448,7 +8448,7 @@ const rs=need.some(Boolean)?await cfgBatch(need.filter(Boolean).map(P=>({to:CP_P
 const pl=q.map((P,i)=>{if(!P)return null;const R=cs[i]._p.reserves;let a,rA,rB,sh;
 if(!need[i]){a=String(R.assetA).toLowerCase();rA=+R.reserveA;rB=+R.reserveB;sh=+R.lpTotalShares}
 else{const h=Sx(rs[k++]||""),w=n=>Bx((h.slice(n*64,n*64+64)||"0"));if(h.length<448||!w(0))return null;a="0x"+h.slice(64,128);rA=Number(w(3));rB=Number(w(4));sh=Number(w(6))}
-const E=a===CP_ETH.toLowerCase(),rE=E?rA:rB,rO=E?rB:rA;if(!(rE>0&&rO>0&&sh>0&&isFinite(rE+rO+sh)))return null;if(cs[i]._p.pair==="TAC/cETH")px=rE/rO;return{rE,sh}});
+const E=a===Lc(CP_ETH),rE=E?rA:rB,rO=E?rB:rA;if(!(rE>0&&rO>0&&sh>0&&isFinite(rE+rO+sh)))return null;if(cs[i]._p.pair==="TAC/cETH")px=rE/rO;return{rE,sh}});
 cs.forEach((c,i)=>{const o=pl[i],p=c._p;if(!o||!px||!o.sh)return;const st=2*o.rE/1e8*Mn(1,+p.totalShares/o.sh),apr=+p.tacPerDayForPool*365*px/(st+1)*100;
 if(!isFinite(apr)||apr<=0)return;const e=cE("i");e.className="fma";e.textContent="~"+Math.round(apr).toLocaleString()+"% APR on 1 ETH";c.append(e);
 c.title="Rewards valued at the TAC/tETH pool price ("+px.toPrecision(3)+" ETH per TAC). "+(+st.toPrecision(3))+" ETH staked here now; the rate falls as more joins."})};
@@ -8480,7 +8480,7 @@ if(r){const fe=await pvCost(r,A),ch=v==="out"&&e?+pvChain.value:1;
 if(fe===null)Q.push("The relay does not take a fee in "+A.sym+": choose Settle: from this wallet.");
 else if(v==="send"){Q.push((fe?"Relay fee "+s(fe):"No fee: it goes as one whole note")+(r+fe>sh?(e?" · not enough shielded, so it wraps the ETH from this wallet":" · more than you hold"):""));Q.push("They can see it in about 2–3 min and have 90 days to claim.")}
 else{const[mf,wf]=pvLegs||[0n,fe];Q.push((fe?"Relay fee "+s(fe)+(pvLegs?" in two: "+s(pvLegs[0])+" to merge your notes, then "+s(pvLegs[1])+" to withdraw":"")+" · ":"")+"≈"+f(r>wf?r-wf:0n,A)+" "+P+" arrives on "+CHAINS[ch].name+", "+(ch===8453?"usually 4–8 min":ch===4663?"usually 8–15 min":"usually 1.5–4 min")+(r+mf>sh?" · more than you hold":""));
-const to=pvTo.value.trim().toLowerCase();if(!to||to===account.toLowerCase())Q.push("Withdrawing to this same wallet links it to your deposit: for privacy, send it to a fresh address.")}}}
+const to=pvTo.value.trim().toLowerCase();if(!to||to===Lc(account))Q.push("Withdrawing to this same wallet links it to your deposit: for privacy, send it to a fresh address.")}}}
 if(my!==pvPS)return;pvPrev.textContent=Q.join("\n");Hd(pvPrev,!Q.length)}catch{if(my===pvPS)Hd(pvPrev,1)}};
 let pvPT=0;const pvPrevSoon=()=>{clearTimeout(pvPT);pvPT=setTimeout(pvPrevNow,250)};
 aE(pvPanel,"input",pvPrevSoon);aE(pvPanel,"change",pvPrevSoon);
@@ -8534,7 +8534,7 @@ const act=s==="ready"?(bz.has(cpKeyOf(n))?cpWatch(cpDoing(cpKeyOf(n))):(n.z?B("b
 const A=cpAs(n.a)||(cpAssets.length>1?0:{sym:"?",scale:CP_SCALE,dec:18,icon:""});if(!A)return"";return`<div class="cpr"><span><b>${A.icon?`<img src="${A.icon}" width="12" height="12" alt=""> `:""}${x&&x.v?cpFmt(x.v,A)+" of ":""}${cpFmt(n.v,A)} ${A.sym}</b> ${n.p?"paid":n.inv?"payment request":n.sid?"":n.s?"found":"#"+n.i}${x&&s!=="bridged"&&s!=="withdrawn"?" → "+ch:""}</span><span>${act}${x&&x.ch!==1&&!x.atx&&!x.rtx?B("keep","save exit"):""}${x&&x.rk?B("rescue","rescue key"):""}</span></div>`}).join("");
 const lr=cpSendRows()+cpInRows()+cpLockRows()+cpCdpRows()+cpBtcRows();cpSet(pvList,(cpSum()+rows+lr)||`<div class="cpr"><span>No deposits yet.</span></div>`)};
 const pvPaint=()=>{const on=pvMode;
-pv.setAttribute("aria-pressed",on?"true":"false");
+sAt(pv,"aria-pressed",on?"true":"false");
 pv.classList.toggle("on",on);
 for(const el of [rate,flip,swap])if(el)Hd(el,on);
 for(const el of [qS(document,".panel"),rcvPanel])if(el)Hd(el,on);
@@ -8556,7 +8556,7 @@ fcSync();shieldSync()}
 const PM="0x0000003b32cDD39bc950e56093df98aF220aB5C5",MK_WST="0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0",MK_AS=[[ZERO,"ETH",18,ETH_ICON,"ether"],[MK_WST,"wstETH",18,WSTETH_ICON,"staked ether, earns yield"],["0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48","USDC",6,USDC_ICON,"dollar"],["0x6440f144b7e50d6a8439336510312d2f54beb01d","BOLD",18,BOLD_ICON,"dollar"],["0x23cacffac2674514a6d4f6cd420b4cc2ac921564","tacUSD",18,"","Tacit dollar"]].map(([addr,sym,dec,icon,sub])=>({addr,sym,dec,icon,sub}));
 let mkMode=false,mkSeq=0,mkQSeq=0,mkRvSeq=0,mkAll=[],mkPos={},mkMeta={},mkSel=null,mkF="open",mkS="pot",mkTimer=0,mkBusy=0,mkQv=null,mkWant="",mkNew="",mkLoading=0,mkAgain=0,mkCount=-1,mkMore=false,mkCl=0,mkFee={},mkTick=0;
 const MK_MAX=200;
-const mkTok=a=>MK_AS.find(t=>t.addr===a)||TOKENS.find(t=>t.addr.toLowerCase()===a)||mkMeta[a]||(mkMeta[a]={addr:a,sym:a.slice(0,8),dec:18,u:1},tokMeta(a).then(t=>{if(!metaCache.has(a)){setTimeout(()=>{if(mkMeta[a]&&mkMeta[a].u)delete mkMeta[a]},3e4);return}mkMeta[a]={addr:a,sym:t.sym,dec:+t.dec||0};mkPaintList();mkDetPaint()}).catch(()=>{}),mkMeta[a]);
+const mkTok=a=>MK_AS.find(t=>t.addr===a)||TOKENS.find(t=>Lc(t.addr)===a)||mkMeta[a]||(mkMeta[a]={addr:a,sym:a.slice(0,8),dec:18,u:1},tokMeta(a).then(t=>{if(!metaCache.has(a)){setTimeout(()=>{if(mkMeta[a]&&mkMeta[a].u)delete mkMeta[a]},3e4);return}mkMeta[a]={addr:a,sym:t.sym,dec:+t.dec||0};mkPaintList();mkDetPaint()}).catch(()=>{}),mkMeta[a]);
 const mkEl=(h,e)=>{const n=i=>Bx((h.slice(i,i+64)||"0")),W=k=>n(e+k*64),so=e+Number(W(14))*2,sl=Mn(Number(n(so)),1024);
 return{id:W(0),r:"0x"+h.slice(e+88,e+128).toLowerCase(),a:"0x"+h.slice(e+152,e+192).toLowerCase(),o:Number(W(3)),c:Number(W(4)),f:Number(W(5)),x:Number(W(6)),l:Number(W(7)),cc:W(8)>0n,s:Number(W(9)),y:W(10),n:W(11),p:W(12),w:W(13),d:new TextDecoder().decode(hB(h.slice(so+64,so+64+sl*2)))}};
 const mkDec=h=>{h=Sx(h);const n=i=>Bx((h.slice(i,i+64)||"0")),o=Number(n(0))*2,len=Number(n(o)),r=[];
@@ -8566,7 +8566,7 @@ const mkDec1=h=>{h=Sx(h);return mkEl(h,Number(Bx((h.slice(0,64)||"0")))*2)};
 const mkPosDec=(h,ids,P)=>{h=Sx(h);const A=k=>{const o=Number(Bx(h.slice(k*64,k*64+64)))*2,c=Number(Bx(h.slice(o,o+64)));return Array.from({length:c},(_,i)=>Bx(h.slice(o+64+i*64,o+128+i*64)))},Y=A(0),N=A(1),K=A(2);
 Y.forEach((y,i)=>{if(y||N[i]||K[i])P[ids[i]]={y,n:N[i],c:K[i]};else delete P[ids[i]]});return P};
 const mkPosCall=ids=>({to:PM,data:"0xafa8f792"+eA(account)+pad32("40")+eU(ids.length)+ids.map(eU).join("")});
-const mkLive=m=>m.s===0&&nowS()<m.c,mkDue=m=>!!account&&m.r===account.toLowerCase()&&!m.s&&nowS()>=m.c&&nowS()<m.c+2592000;
+const mkLive=m=>m.s===0&&nowS()<m.c,mkDue=m=>!!account&&m.r===Lc(account)&&!m.s&&nowS()>=m.c&&nowS()<m.c+2592000;
 const mkLeft=c=>{const d=c-nowS();return d<3600?Mx(1,Math.ceil(d/60))+"m":d<86400?Mf(d/3600)+"h":Mf(d/86400)+"d"};
 const mkWhen=m=>m.s?["","YES won","NO won","void"][m.s]:nowS()<m.c?mkLeft(m.c)+" left":nowS()>=m.c+2592000?"unresolved — anyone can void":"awaiting result";
 const mkNow=m=>{const sp=m.c-m.o;return sp>0?Mf(m.l*Mn(Mx(nowS()-m.o,0),sp)/sp):m.l};
@@ -8596,10 +8596,10 @@ mkNote.textContent="";mkPaintList();mkDetPaint();if(mkAmt.value.trim())mkQuote()
 const cs=[];for(let s=0;s<n&&s<MK_MAX;s+=25)cs.push({to:PM,data:"0x80968d48"+eU(s)+eU(25)});
 const hs=cs.length?await mD(cs):[];
 if(hs.some(h=>!h))throw Error("partial");
-const all=hs.flatMap(mkDec),wq=mkWant.toLowerCase();if(wq&&/^(0x[0-9a-f]{1,64}|\d{1,78})$/.test(wq)&&!all.some(m=>String(m.id)===wq||toHex(m.id)===wq)){const h=await rpc(C,[{to:PM,data:"0xeb44fdd3"+eU(BigInt(wq))},L]).catch(()=>null),g=h&&mkDec1(h);if(g&&g.r!==ZERO&&g.id===BigInt(wq))all.push(g)}if(account&&n>MK_MAX)await mkOld(all).catch(()=>{});await mkPosLoad(all);if(my!==mkSeq)return;
+const all=hs.flatMap(mkDec),wq=Lc(mkWant);if(wq&&/^(0x[0-9a-f]{1,64}|\d{1,78})$/.test(wq)&&!all.some(m=>String(m.id)===wq||toHex(m.id)===wq)){const h=await rpc(C,[{to:PM,data:"0xeb44fdd3"+eU(BigInt(wq))},L]).catch(()=>null),g=h&&mkDec1(h);if(g&&g.r!==ZERO&&g.id===BigInt(wq))all.push(g)}if(account&&n>MK_MAX)await mkOld(all).catch(()=>{});await mkPosLoad(all);if(my!==mkSeq)return;
 mkAll=all;mkCount=n;mkMore=n>MK_MAX;mkFee={};
 if(mkNew){const d=mkNew;mkNew="";mkSel=all.find(m=>m.d===d)||mkSel}
-let nf="";if(mkWant){const w=mkWant.toLowerCase(),f=all.find(m=>String(m.id)===w||toHex(m.id)===w);mkWant="";if(!f)nf="That market was not found.";mkSel=f||mkSel;if(mkSel){mkF=mkLive(mkSel)?"open":"done";mkChipPaint()}}
+let nf="";if(mkWant){const w=Lc(mkWant),f=all.find(m=>String(m.id)===w||toHex(m.id)===w);mkWant="";if(!f)nf="That market was not found.";mkSel=f||mkSel;if(mkSel){mkF=mkLive(mkSel)?"open":"done";mkChipPaint()}}
 else if(mkSel)mkSel=all.find(m=>m.id===mkSel.id)||(mkMore?mkSel:null);
 mkNote.textContent=nf;mkPaintList();mkDetPaint();if(mkSel&&mkAmt.value.trim())mkQuote()}
 catch{if(my===mkSeq)mkNote.textContent=mkAll.length?"Could not refresh just now — showing the last read.":"Could not load markets — retrying."}};
@@ -8613,7 +8613,7 @@ r.sort(mkS==="pot"?(a,b)=>mkUsd(b)-mkUsd(a):mkS==="end"?(a,b)=>mkF==="done"?b.c-
 cpSet(mkList,r.length?r.slice(0,100).map(mkRow).join(""):`<div class="lqempty">${mkCount<0?"Reading markets…":!mkAll.length?"No markets yet — create the first.":mkF==="mine"&&!account?"Connect a wallet to see yours.":"No markets match."}</div>`);
 mkSub.textContent=mkAll.length?(mkMore?`newest ${MK_MAX} of ${mkCount}`:mkAll.length+(mkAll.length>1?" markets":" market"))+(mkCl?` · ${mkCl} waiting on you`:""):""};
 const mkDetPaint=()=>{if(!mkMode)return;const m=mkSel;Hd(mkDet,!m);if(!m)return;
-const t=mkTok(m.a),me=mkPos[m.id]||{y:0n,n:0n,c:0n},live=mkLive(m),isR=!!account&&m.r===account.toLowerCase(),net=m.p-m.p*BigInt(m.f)/10000n,X=s=>s?"×"+(Number(net*1000n/s)/1000).toFixed(2):"—",S=safeSym(t.sym),lapsed=nowS()>=m.c+2592000;
+const t=mkTok(m.a),me=mkPos[m.id]||{y:0n,n:0n,c:0n},live=mkLive(m),isR=!!account&&m.r===Lc(account),net=m.p-m.p*BigInt(m.f)/10000n,X=s=>s?"×"+(Number(net*1000n/s)/1000).toFixed(2):"—",S=safeSym(t.sym),lapsed=nowS()>=m.c+2592000;
 mkT.textContent=m.d.replace(/\p{C}/gu,"");Hd(mkT,m.d.length<141&&!!qS(mkList,".on"));
 mkInfo.innerHTML=`<span class="mkhd">${m.s?`<b>${m.s===3?"each share returns":"each winning share pays"} ${m.w?"×"+(Number(m.p*1000n/m.w)/1000).toFixed(2):"—"}</b>`:`<b class="y">YES pays ${X(m.y)}</b><b class="n">NO pays ${X(m.n)}</b>`}</span><span class="mkfp">Pot ${sigAmt(m.p,t.dec,6)} ${S} · ${m.s?mkWhen(m):live?"closes "+mkD(m.c):isR&&!lapsed?"closed — resolve by "+mkD(m.c+2592000)+(m.y&&m.n?"":"; a side is empty, so only void"):"closed — awaiting the resolver"} · resolver <span id="mkRv">${short(m.r)}</span>${m.f?` · resolver fee ${mkPc(m.f)}% of the pot`:""}${m.x?` · exit tax ${mkPc(live?mkTax(m):m.x)}%`:live?" · bets final":""}${m.l?` · late tax ${live?mkPc(mkNow(m))+"% now, "+mkPc(m.l)+"% at close":mkPc(m.l)+"% at close"}`:""}</span>${me.y||me.n?`<span class="mkyou">You hold ${[[me.y,m.y,"YES"],[me.n,m.n,"NO"]].filter(v=>v[0]).map(([q,T,l])=>sigAmt(q,t.dec,6)+" "+l+(m.s?"":` → ${sigAmt(q*net/T,t.dec,6)} ${S}`)).join(" · ")}${live&&!m.x?" · locked until it settles":m.s&&!me.c?" · lost":""}</span>`:""}`;
 nameRev(m.r).then(n=>{if(n&&mkSel===m)mkRv.textContent=safeSym(n,48)}).catch(()=>{});
@@ -8648,7 +8648,7 @@ const r2=await p2Ready(pay,account)>=v&&await tryReq(async()=>{const[n,tl]=await
 if(r2)return mkSend(r2,V);
 await settle(await sendWith(aps,T("0x28ccbb45"+b),V));mkCount=-1;mkLoad(1)};
 const mkPaint=()=>{const on=mkMode;
-mk.setAttribute("aria-pressed",on?"true":"false");
+sAt(mk,"aria-pressed",on?"true":"false");
 mk.classList.toggle("on",on);
 for(const el of [rate,flip,swap])if(el)Hd(el,on);
 for(const el of [qS(document,".panel"),rcvPanel])if(el)Hd(el,on);
@@ -8693,7 +8693,7 @@ mkClose.onchange=()=>{sBlip();Hd(mkAt,mkClose.value!=="0")};
 mkAdv.ontoggle=()=>sBlip();
 const mkResFee=async(a,my,pre)=>{let f=0;try{f=Number(BigInt(await rpc(C,[{to:PM,data:"0x4d5e9db0"+eA(a)},L])||"0x0"))}catch{return}
 if(my!==mkRvSeq)return;mkResEl.textContent=pre+(f?` · takes ${mkPc(f)}% of the pot`:" · takes no fee");
-if(account&&a.toLowerCase()===account.toLowerCase()){const b=cE("button");b.type="button";b.className="fclink";b.textContent="set fee";b.onclick=()=>mkFeeSet(f);mkResEl.append(" ",b)}};
+if(account&&Lc(a)===Lc(account)){const b=cE("button");b.type="button";b.className="fclink";b.textContent="set fee";b.onclick=()=>mkFeeSet(f);mkResEl.append(" ",b)}};
 const mkFeeSet=async f=>{if(mkBusy)return;sBlip();const v=String(await ask("Your fee as a resolver, in % of each pot (0 to 10). It applies only to markets created after you change it.",mkPc(f))??"").trim();if(!v)return;
 if(!/^\d{0,2}(\.\d{0,2})?$/.test(v)||!(+v<=10))return void(stat.textContent="A resolver fee is 0 to 10%, in steps of 0.01.");
 mkBusy=1;try{await mkSend({from:account,to:PM,data:"0xfb105091"+eU(BigInt(Math.round(+v*100))),value:"0x0"},"Setting your fee…");mkRes.oninput()}catch(x){err(x)}finally{mkBusy=0}};
@@ -8752,8 +8752,8 @@ if(/^\[/.test(s)){let arr;try{arr=Jp(s)}catch{}
 if(!Ia(arr))return void(stat.textContent="That is not a note list.");
 let add=0;for(const r of arr)if(cpRecOk(r)){const{rb:_r,...q}=r,m=cpNotes.find(n=>cpKeyOf(n)===cpKeyOf(q));if(q.ex){const{rb:_b,pv:_p,pr:_q,job:_j,js:_s,...e}=q.ex;if(+e.ch>1&&(!e.v||/^\d{1,78}$/.test(String(e.v))))q.ex={...e,im:1};else delete q.ex}if(!m){cpNotes.push(q);add++}}
 cpNotes.sort((a,b)=>a.i-b.i);cpSaveNotes();cpPaint();pvRefresh();stat.textContent=add?"Imported "+add+" note"+(add>1?"s":"")+".":"Nothing new in that list.";return}
-if(!/^0x[0-9a-fA-F]{64}$/.test(s))return void(stat.textContent="That is not a key.");if(cpBusy)return pvRun();if(s.toLowerCase()!==cpSeed&&!await sure("Replace this wallet's key? Back up the current one first."))return;
-const k=s.toLowerCase();let kept=1;try{await cpKeep(cpDk,k)}catch{kept=0}cpUse(k);cpVer=1;cpPaint();pvRefresh();if(!kept)stat.textContent="Imported for this visit only: this browser cannot seal a key.";return}
+if(!/^0x[0-9a-fA-F]{64}$/.test(s))return void(stat.textContent="That is not a key.");if(cpBusy)return pvRun();if(Lc(s)!==cpSeed&&!await sure("Replace this wallet's key? Back up the current one first."))return;
+const k=Lc(s);let kept=1;try{await cpKeep(cpDk,k)}catch{kept=0}cpUse(k);cpVer=1;cpPaint();pvRefresh();if(!kept)stat.textContent="Imported for this visit only: this browser cannot seal a key.";return}
 if(a==="export"){await ask("Your note records — keep them as safe as the key. Exit recipes cannot be rebuilt without them, and a received note's record can spend it on its own.",Js(cpNotes));return}
 if(a==="relay"){const nr=CP_RELAYS.length,sp=nr>1?", and "+(nr-1)+" more to fall back on":"";
 const u=(await ask("Relay to prove and settle through. Leave empty for the default ("+cpRelayBase()+sp+").",cpRelayPin())||"").trim().replace(/\/$/,"");
@@ -8777,7 +8777,7 @@ if(!pubOk(n)){n=String(await ask("Which name should point to your Tacit address?
 if(!n)return;
 if(!nameOk(n)||!pubOk(n))throw Error("zSwap publishes to .wei, .gwei and .eth names. A Basename takes a finance.tacit record set on Base.");
 const o=await nameFwd(n).catch(()=>"");
-if(!isAddr(o||"")||o.toLowerCase()!==account.toLowerCase())throw Error(n+" does not point at this wallet, so its records cannot be set from here.")}
+if(!isAddr(o||"")||Lc(o)!==Lc(account))throw Error(n+" does not point at this wallet, so its records cannot be set from here.")}
 const addr=cpTacAddr(cpSeed),cur=String(await nameText(n)||"").trim();if(cur===addr){pubName=n;cpPaint();return void(stat.textContent=n+" already points to your Tacit address.")}
 if(!await sure("Publish your Tacit address on "+n+"?\n\n"+addr+"\n\nAnyone can then pay you privately by typing "+n+". The record is public: it ties the name to this Tacit address and to the Bitcoin address it carries, though never to a balance."+(cur?"\n\nThis replaces "+cur.slice(0,12)+"…, which "+n+" carries now.":"")))return;
 const req=await setTextReq(n);await rpc(C,[req,L]).catch(e=>{throw isRejection(e)?e:Error("Only "+n+"'s owner can set its records — publish from that wallet.")});await settle(await sendTx([req]));pubName=n;cpPaint();stat.textContent=n+" now points to your Tacit address — anyone can send to it privately by name."},"Checking your name…");
@@ -8820,8 +8820,8 @@ if(invOff)return;
 const host=qS(document,".card");if(!host)return;
 const W=host.clientWidth,H=Mn(host.clientHeight,innerHeight-Mx(0,host.getBoundingClientRect().top)),COLS=6,ROWS=4,IW=22,IH=20,SW=22,SH=20;
 const mk=(c,h)=>{const d=cE("div");d.className=c;if(h)d.innerHTML=h;return d};
-const w=mk("inv");w.tabIndex=0;w.setAttribute("role","application");
-w.setAttribute("aria-label","Token invaders. Arrow keys move, space fires, escape leaves.");
+const w=mk("inv");w.tabIndex=0;sAt(w,"role","application");
+sAt(w,"aria-label","Token invaders. Arrow keys move, space fires, escape leaves.");
 aC(host,w);
 const hud=mk("invh");aC(w,hud);
 aE(hud,"pointerdown",e=>{e.stopPropagation();e.preventDefault()});
@@ -8949,7 +8949,7 @@ for(const ev of ["pointerup","pointerleave","pointercancel"])aE(wn,ev,cn);
 aE(wn,"click",e=>{if(hd){e.preventDefault();e.stopPropagation();hd=0}},true);
 aE(wn,"contextmenu",e=>e.preventDefault());
 })();
-wnName.oninput=()=>{wnName.value=wnName.value.toLowerCase();wnQuote()};
+wnName.oninput=()=>{wnName.value=Lc(wnName.value);wnQuote()};
 wnTld.onchange=wnQuote;
 wnEnter.onclick=async()=>{
 if(!account)return void connect();
@@ -9052,13 +9052,13 @@ const receipt=await waitTx(await sendTx([req]));sGot();
 lnSet(false);
 lnName.value=lnSym.value=lnAlloc.value="";
 const topic=kecStr("Launched(address,address,address,uint256,uint256,uint256)");
-const lg=(receipt.logs||[]).find(l=>(l.address||"").toLowerCase()===PLAUNCH.toLowerCase()
-&&(l.topics||[])[0]&&l.topics[0].toLowerCase()===topic.toLowerCase());
+const lg=(receipt.logs||[]).find(l=>(l.address||"").toLowerCase()===Lc(PLAUNCH)
+&&(l.topics||[])[0]&&l.topics[0].toLowerCase()===Lc(topic));
 let token=lg?"0x"+Sx(lg.topics[1]).slice(24):null;if(token&&!isAddr(token))token=null;
 if(!token&&candidate){
 try{
 const c=await rpc(C,[{to:PLAUNCH,data:"0x"+SEL_CREATOROF+eA(candidate)},L]);
-if(c&&"0x"+Sx(c).slice(24)===owner.toLowerCase())token=candidate;
+if(c&&"0x"+Sx(c).slice(24)===Lc(owner))token=candidate;
 }catch{}
 }
 if(token){
@@ -9068,7 +9068,7 @@ lnLand(await addCustomToken(token),"launched");
 }
 stat.innerHTML=(token?`${safeSym(sym)} is live at `
 +`<a href="${cC().explorer}/token/${token}" target="_blank" rel="noreferrer">${short(token)}</a>`
-:`${safeSym(sym)} is live`)+` · 0.4% of each trade goes to ${owner.toLowerCase()===account.toLowerCase()?"you — collect it from the coin panel":short(owner)}`;
+:`${safeSym(sym)} is live`)+` · 0.4% of each trade goes to ${Lc(owner)===Lc(account)?"you — collect it from the coin panel":short(owner)}`;
 lnArtBytes=null;++lnArtSeq;lnArtNote.textContent="none";lnArtNote.classList.remove("set");
 lnPrev.classList.remove("set");lnArt.value="";
 }catch(e){err(e)}
@@ -9117,7 +9117,7 @@ delete e.ov;delete e.cv;delete e.parts}
 return out};
 const chPair=()=>{const f=TOKENS[fromSel.value],t=TOKENS[toSel.value];
 if(!f||!t||f.addr===t.addr)return null;
-return f.addr.toLowerCase()<t.addr.toLowerCase()?[f,t]:[t,f]};
+return Lc(f.addr)<Lc(t.addr)?[f,t]:[t,f]};
 let chLoading="",chLoadSeq=0;
 async function loadChart(){
 const p0=chPair();
@@ -9203,23 +9203,23 @@ function syncChartUI(){
 const on=tab==="swap"&&!!chBars;
 Hd(chTog,!on);
 Hd(chBox,!on||!chOpen);
-chTog.setAttribute("aria-expanded",on&&chOpen?"true":"false");
+sAt(chTog,"aria-expanded",on&&chOpen?"true":"false");
 if(!on||!chOpen)return;
 const p=chEff();
 chNote.textContent=p?chLabel(p):"";
 drawChart();syncInv();
 }
 const moneyRank=a=>{a=(a||"").toLowerCase();
-return MONEY().includes(a)?2:(a===ZERO||a===WETH.toLowerCase())?1:0};
+return MONEY().includes(a)?2:(a===ZERO||a===Lc(WETH))?1:0};
 const chPairKey=p=>p?p[0].addr.toLowerCase()+":"+p[1].addr.toLowerCase():"";
 const chNaturalInv=p=>!!p&&moneyRank(p[0].addr)>moneyRank(p[1].addr);
 const chOtherForm=p=>{
 const eth=p.filter(x=>isEthLike(x.addr));
 if(eth.length!==1)return null;
 const cur=eth[0],rest=p[0]===cur?p[1]:p[0];
-const sub=TOKENS.find(x=>x.addr.toLowerCase()===(cur.addr===ZERO?WETH:ZERO).toLowerCase());
+const sub=TOKENS.find(x=>Lc(x.addr)===(cur.addr===ZERO?WETH:ZERO).toLowerCase());
 if(!sub)return null;
-return sub.addr.toLowerCase()<rest.addr.toLowerCase()?[sub,rest]:[rest,sub];
+return Lc(sub.addr)<Lc(rest.addr)?[sub,rest]:[rest,sub];
 };
 const chEff=()=>{const p=chPair();if(!p)return p;
 const hit=chCache[chPairKey(p)];
@@ -9315,14 +9315,14 @@ if(!chDraw.svg)return;
 let el=chDraw.cross;
 if(!el){
 el=document.createElementNS("http://www.w3.org/2000/svg","line");
-el.setAttribute("class","cross");
-el.setAttribute("y1","0");el.setAttribute("y2","150");
-el.setAttribute("stroke","currentColor");el.setAttribute("stroke-opacity",".35");
-el.setAttribute("stroke-width",".8");
+sAt(el,"class","cross");
+sAt(el,"y1","0");sAt(el,"y2","150");
+sAt(el,"stroke","currentColor");sAt(el,"stroke-opacity",".35");
+sAt(el,"stroke-width",".8");
 aC(chDraw.svg,el);chDraw.cross=el;
 }
 const cx=chDraw.X(i).toFixed(1);
-el.setAttribute("x1",cx);el.setAttribute("x2",cx);
+sAt(el,"x1",cx);sAt(el,"x2",cx);
 };
 aE(chArt,"pointermove",chPoint);
 aE(chArt,"pointerdown",chPoint);
@@ -9437,7 +9437,7 @@ aC(chTf,b)}
 const kindBtn=cE("button");
 kindBtn.className="chk";
 const syncKind=()=>{kindBtn.textContent=chKind==="candle"?"Line":"Candle";
-kindBtn.title=`Switch to ${kindBtn.textContent.toLowerCase()} chart`};
+kindBtn.title=`Switch to ${Lc(kindBtn.textContent)} chart`};
 syncKind();
 kindBtn.onclick=()=>{chKind=chKind==="candle"?"line":"candle";syncKind();drawChart();LS.ck=chKind};
 aC(chTf,kindBtn);
@@ -9446,7 +9446,7 @@ invBtn.className="chk";
 invBtn.textContent="⇅";
 const syncInv=()=>{const p=chEff();
 invBtn.title=p?`Price ${chInv?p[1].sym:p[0].sym} instead — currently ${chInv?p[0].sym:p[1].sym} per ${chInv?p[1].sym:p[0].sym}`:"Invert the price";
-invBtn.setAttribute("aria-pressed",chInv?"true":"false")};
+sAt(invBtn,"aria-pressed",chInv?"true":"false")};
 syncInv();
 invBtn.onclick=()=>{chInv=!chInv;syncInv();drawChart()};
 aC(chTf,invBtn);
@@ -9454,7 +9454,7 @@ const syncChart=()=>{chSyncOrientation();syncInv();loadChart()};
 chTog.onclick=()=>{chOpen=!chOpen;LS.ch=chOpen?"1":"0";syncChartUI()};
 const lsecs=v=>{const m=/^(\d+)([mhdw]?)$/.exec((v||"").trim());
 return m?+m[1]*(m[2]=="d"?86400:m[2]=="h"?3600:m[2]=="w"?604800:m[2]=="m"?60:1):NaN};
-const symAddr=x=>{const m=TOKENS.filter(t=>t.sym.toLowerCase()===x);
+const symAddr=x=>{const m=TOKENS.filter(t=>Lc(t.sym)===x);
 return m.length===1?m[0].addr.toLowerCase():""};
 const ARCADE=".arcade.wei",SC_TEXT="308e3386";
 const scEl=gE("scEl");
@@ -9524,7 +9524,7 @@ linkChain=wantChain;
 setChain(wantChain);showNet();await loadTokenList();if(my!==lSeq)return;
 }
 const md=q.get("m"),mb=/^(lq|ln|wn|pv|mk)$/.test(md)&&gE(md);if(mb){setTab("swap");if(mb.classList.contains("hide")){if(CHAIN_ID!==1)location.hash="chain=1&m="+md}else if(mb.getAttribute("aria-pressed")!=="true")mb.click();return}
-const at=a=>a?TOKENS.findIndex(t=>t.addr.toLowerCase()===a):-1;
+const at=a=>a?TOKENS.findIndex(t=>Lc(t.addr)===a):-1;
 const tok=async v=>{if(!v)return "";const x=v.trim().toLowerCase();
 if(!/^0x[0-9a-f]{40}$/.test(x))return symAddr(x);
 if(at(x)<0)try{await addCustomToken(x,0)}catch{}
@@ -9536,7 +9536,7 @@ if(my!==lSeq)return;
 if((fa&&at(fa)<0)||(ta&&at(ta)<0)){[fa,ta]=await both();if(my!==lSeq)return}
 if(!listReady){
 const named=["token","out"].map(k=>(q.get(k)||"").trim()).filter(Boolean);
-if(named.some(v=>!/^0x[0-9a-f]{40}$/i.test(v)&&!symAddr(v.toLowerCase())))return;
+if(named.some(v=>!/^0x[0-9a-f]{40}$/i.test(v)&&!symAddr(Lc(v))))return;
 }
 const fi=at(fa),oi=at(ta),pairHeld=lkEv&&!pairFree&&amt.value!==""&&amt.value!==lkWrote.amt;pairFree=0;
 if(fi>=0||oi>=0)pairChosen=true;
@@ -9583,13 +9583,13 @@ loadChart();
 if(t==="book")loadBook();
 if(listReady){
 const miss=["token","out"].map(k=>(q.get(k)||"").trim())
-.filter(v=>v&&(/^0x[0-9a-f]{40}$/i.test(v)?at(v.toLowerCase())<0:!symAddr(v.toLowerCase()))).map(v=>v.slice(0,24));
+.filter(v=>v&&(/^0x[0-9a-f]{40}$/i.test(v)?at(Lc(v))<0:!symAddr(Lc(v)))).map(v=>v.slice(0,24));
 if(miss.length){try{await upd}catch{}
 if(my===lSeq)stat.textContent=`Couldn’t find ${miss.join(" or ")}${/^0x/i.test(miss)?"":" — link it by address instead"}.`;}
 }
 }
 addEventListener("hashchange",applyLink);
-const tname=t=>t.cust||t.launched||/\s/.test(t.sym)||!symAddr(t.sym.toLowerCase())?t.addr:t.sym;
+const tname=t=>t.cust||t.launched||/\s/.test(t.sym)||!symAddr(Lc(t.sym))?t.addr:t.sym;
 lk.onclick=async()=>{
 const f=TOKENS[fromSel.value],t=TOKENS[toSel.value],p=new URLSearchParams();
 p.set("token",tname(f));
@@ -9646,7 +9646,7 @@ let openedIntent=null;
 try{
 const{to,amount,token}=sendReady;
 const fresh=await rcvOf(rc.value.trim(),true);
-if(fresh.toLowerCase()!==to.toLowerCase())throw Error("recipient changed — check and retry");
+if(Lc(fresh)!==Lc(to))throw Error("recipient changed — check and retry");
 if(amount>fromBalance)throw Error("insufficient balance");
 await cW();
 const dsec=BigInt(dly.value||0);
@@ -9717,7 +9717,7 @@ await settle(tx);
 }
 const PUSH_MAGIC="381bcb9ccaaab09ca206deb73834ed7b483c58bb3face9b43e8c7b50193253e2";
 const SEL_SAFE_TRANSFER_DATA="b88d4fde",SEL_OWNEROF="6352211e";
-const isWns=a=>(a||"").toLowerCase()===WNS.toLowerCase();
+const isWns=a=>(a||"").toLowerCase()===Lc(WNS);
 const weiName=v=>{const n=(v||"").trim().toLowerCase();return n.endsWith(".wei")?n:n+".wei"};
 const nftIdIn=(addr,v)=>{v=(v||"").trim();
 if(!v||/^\d+$/.test(v)||!isWns(addr))return v;
@@ -9733,7 +9733,7 @@ if(kind.value!=="fixed")throw Error("an NFT is indivisible, so it sells at a fix
 const want=pU(outAmt.value.trim()||"0",t.dec);
 if(!want)throw Error("name a price");
 const quote=t.addr===ZERO?WETH:t.addr;
-if(quote.toLowerCase()===f.addr.toLowerCase())throw Error("pick different tokens");
+if(Lc(quote)===Lc(f.addr))throw Error("pick different tokens");
 if(!await hasCode(SB2))throw Error("fixed orderbook not deployed yet");
 let cp=ZERO;
 const v=rc.value.trim();
@@ -9741,7 +9741,7 @@ if(v){cp=await rcvOf(v,true);if(!cp)throw Error("Private recipient not resolved"
 let owner=ZERO;
 try{owner="0x"+Sx(await rpc(C,[{to:f.addr,data:"0x"+SEL_OWNEROF+eU(tokenId)},L])).slice(-40)}
 catch{throw Error(`${f.sym} #${id} does not exist`)}
-if(owner.toLowerCase()!==account.toLowerCase())throw Error(`you do not own ${f.sym} #${id}`);
+if(Lc(owner)!==Lc(account))throw Error(`you do not own ${f.sym} #${id}`);
 const exp=+dly.value?BigInt(nowS()+ +dly.value):0n;
 const terms=PUSH_MAGIC+eA(quote)+eU(want)+eU(exp)+eBo(false)+eA(cp);
 const data="0x"+SEL_SAFE_TRANSFER_DATA+eA(account)+eA(SB2)+eU(tokenId)
@@ -9852,7 +9852,7 @@ if(!floor)throw Error("set an opening bid");
 if(floor>sell)throw Error("opening bid exceeds the maximum");
 if(want>(1n<<128n)-1n||sell>(1n<<96n)-1n)throw Error("bid amount too large");
 if(t.addr===ZERO)throw Error("a bid buys a token — pick one to bid for");
-if((f.addr===ZERO?WETH:f.addr).toLowerCase()===t.addr.toLowerCase())
+if((f.addr===ZERO?WETH:f.addr).toLowerCase()===Lc(t.addr))
 throw Error("pick different tokens");
 orderData="0x"+SEL_ORDER_FLOOR+eA(FLOOR)+eA(account)+eA(account)
 +eA(t.addr)+eA(f.addr)+eU(want)+eU(floor)+eU(sell)

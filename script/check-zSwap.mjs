@@ -176,7 +176,7 @@ check('recipient and orderbook metadata guards remain wired', () => {
   if (!html.includes('sA:safeSym(text(b,9))') || !html.includes('sB:safeSym(text(b,13))')) {
     throw Error('lens-provided token symbols bypass safeSym');
   }
-  if (!html.includes('o.maker.toLowerCase()===account.toLowerCase()')) {
+  if (!html.includes('Lc(o.maker)===Lc(account)')) {
     throw Error('private maker-owned rows are filtered out');
   }
 });
@@ -206,10 +206,10 @@ check('manual fills preserve native/WETH routing domains', () => {
   if (!html.includes('callData:"0xd0e30db0"')) {
     throw Error('the wrap does not call WETH deposit()');
   }
-  if (!html.includes('tokenIn===ZERO&&tokenOut.toLowerCase()===WETH.toLowerCase()')) {
+  if (!html.includes('tokenIn===ZERO&&Lc(tokenOut)===Lc(WETH)')) {
     throw Error('ETH -> WETH does not enter strict Dutch candidate filtering');
   }
-  if (!html.includes('r.dutch&&r.tA.toLowerCase()===WETH.toLowerCase()&&r.tB===ZERO')) {
+  if (!html.includes('r.dutch&&Lc(r.tA)===Lc(WETH)&&r.tB===ZERO')) {
     throw Error('ETH -> WETH candidates are not limited to native-quoted Dutch WETH');
   }
 });
