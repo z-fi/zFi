@@ -453,8 +453,8 @@ describe('a generation-bound note on Bitcoin', () => {
   test('decodes to the same asset and outputs as the plain transfer it binds', async () => {
     const p = await open(cbtcChain());
     const asset = 'a1'.repeat(32), sig = 'b2'.repeat(64), out = '02' + 'c3'.repeat(32) + 'd4'.repeat(8), tail = '01' + out + '0000';
-    const plain = p.window.eval(`JSON.stringify(bOutsOf(hexToBytes("23${asset}${sig}${tail}")))`);
-    const bound = p.window.eval(`JSON.stringify(bOutsOf(hexToBytes("39${'e5'.repeat(32)}${asset}${sig}${tail}")))`);
+    const plain = p.window.eval(`JSON.stringify(bOutsOf(hB("23${asset}${sig}${tail}")))`);
+    const bound = p.window.eval(`JSON.stringify(bOutsOf(hB("39${'e5'.repeat(32)}${asset}${sig}${tail}")))`);
     const a = JSON.parse(plain), b = JSON.parse(bound);
     assert.equal(a.asset, '0x' + asset);
     assert.equal(b.op, 57);

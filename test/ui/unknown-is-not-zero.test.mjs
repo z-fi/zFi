@@ -82,7 +82,7 @@ describe('a balance the page could not read', () => {
   test('is cleared by a later successful read', async () => {
     const p = await setup();
     p.window.eval('balUnread=true');
-    await p.window.eval('refreshBalance()');
+    await p.window.eval('rBal()');
     assert.equal(
       p.window.eval('balUnread'), false,
       'the unread flag survived a read that succeeded, so it would stick for the session',

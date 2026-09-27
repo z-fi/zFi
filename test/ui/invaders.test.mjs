@@ -403,9 +403,9 @@ describe('the game in the page', () => {
      * signature against a chain the minter does not exist on.
      */
     test('it checks the wallet before it builds anything', () => {
-      assert.match(body, /await checkWallet\(\)/,
+      assert.match(body, /await cW\(\)/,
         'the mint must verify chain and account like every other write');
-      assert.ok(body.indexOf('checkWallet') < body.indexOf('const req='),
+      assert.ok(body.indexOf('cW()') < body.indexOf('const req='),
         'and do it before building the transaction');
     });
 

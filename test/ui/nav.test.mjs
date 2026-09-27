@@ -80,7 +80,7 @@ describe('the corner menu', () => {
     await pick(p, 'zFi DAO');
     assert.equal(p.window.__opened.length, 0);
     assert.ok(p.visible('gvPanel'));
-    assert.match(p.$('gvPanel').querySelector('a').href, /^https:\/\/zfi\.wei\.is\/dao\/#\/dao\/1\/0x5E58BA0e06ED0F5558f83bE732a4b899a674053E$/);
+    assert.match(p.$('gvPanel').querySelector('a[target]').href, /^https:\/\/zfi\.wei\.is\/dao\/#\/dao\/1\/0x5E58BA0e06ED0F5558f83bE732a4b899a674053E$/);
     p.close();
   });
 

@@ -32,7 +32,7 @@ async function open(chain) {
   return p;
 }
 /** A tacit1 address for a key, with the Ethereum lane its flag byte declares. */
-const tacitFor = (p, key) => p.window.eval(`cpTacEnc("tacit",cpCat([0,3],hexToBytes("${key}"),hexToBytes("${key}"),hexToBytes("${key}")))`);
+const tacitFor = (p, key) => p.window.eval(`cpTacEnc("tacit",cpCat([0,3],hB("${key}"),hB("${key}"),hB("${key}")))`);
 /** What the page makes of a recipient the sender typed. */
 const recip = (p, s) => p.window.eval(`cpRecipAt(${JSON.stringify(s)}).then(h=>"OK:"+h,e=>"ERR:"+(e&&e.message||e))`);
 const pubBtn = p => p.$('pvKey').querySelector('button[data-a="pub"]');

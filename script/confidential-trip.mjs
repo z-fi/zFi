@@ -87,8 +87,8 @@ const line = (re, what) => { const m = html.match(re); if (!m) die(`page line no
 const helpers = [
   line(/^const ZERO="0x0{40}";$/m, 'ZERO'),
   line(/^const C="eth_call",S="eth_sendTransaction",L="latest",I="eth_chainId";$/m, 'rpc constants'),
-  html.slice(html.indexOf('const strip0x='), html.indexOf('\n', html.indexOf('const trimAmt='))),
-  slice('const hexToBytes=', 'return "0x"+out};', 'keccak'),
+  html.slice(html.indexOf('const Sx='), html.indexOf('\n', html.indexOf('const tM='))),
+  slice('const hB=', 'return "0x"+out};', 'keccak'),
   slice('const retAddr=', 'return /^0x0{40}$/.test(a)?"":a};', 'retAddr'),
   line(/^const encBytes=.*$/m, 'encBytes'),
 ].join('\n');
@@ -191,9 +191,9 @@ const sandbox = {
     if (!r || r.status !== 1) throw Error('tx reverted: ' + tx);
     console.log(`  mined in block ${r.blockNumber}`);
   },
-  checkWallet: async () => {},
+  cW: async () => {},
   connect: () => die('not connected'),
-  refreshBalance: () => {}, sBlip() {}, sGot() {}, sSend() {},
+  rBal: () => {}, sBlip() {}, sGot() {}, sSend() {},
   explain: (e) => 'Error: ' + String(e && e.message || e),
   err: (e) => { throw e; },
   cbDisarm() {}, lqSet() {}, lnSet() {}, wnSet() {}, fcSync() {}, seq: 0, quoting: false, lqMode: false, lnMode: false, wnMode: false,

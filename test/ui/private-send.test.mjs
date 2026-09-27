@@ -580,7 +580,7 @@ describe('private sends', () => {
  * and anyone can then pay them privately by typing the name.
  */
 describe('paying a name', () => {
-  const tacitFor = (p, key) => p.window.eval(`cpTacEnc("tacit",cpCat([0,3],hexToBytes("${key}"),hexToBytes("${key}"),hexToBytes("${key}")))`);
+  const tacitFor = (p, key) => p.window.eval(`cpTacEnc("tacit",cpCat([0,3],hB("${key}"),hB("${key}"),hB("${key}")))`);
   const sendTo = async (p, who, ok = true) => {
     p.window.Date.now = () => (Number(S.deadline) - 7776000) * 1000;
     p.select('pvAct', 'send');
@@ -698,7 +698,7 @@ describe('a recipient with only a 0x', () => {
     chain.reverse.set(A.OTHER.toLowerCase(), 'erin.wei');
     const p = await open(chain);
     await ready(p);
-    chain.texts = new Map([['erin.wei|finance.tacit', p.window.eval(`cpTacEnc("tacit",cpCat([0,3],hexToBytes("${S.lock.recipient}"),hexToBytes("${S.lock.recipient}"),hexToBytes("${S.lock.recipient}")))`)]]);
+    chain.texts = new Map([['erin.wei|finance.tacit', p.window.eval(`cpTacEnc("tacit",cpCat([0,3],hB("${S.lock.recipient}"),hB("${S.lock.recipient}"),hB("${S.lock.recipient}")))`)]]);
     p.window.Date.now = () => (Number(S.deadline) - 7776000) * 1000;
     p.select('pvAct', 'send');
     await p.settle();

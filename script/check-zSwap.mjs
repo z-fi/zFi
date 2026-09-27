@@ -386,9 +386,9 @@ check('element ids addressed by string exist in the markup', () => {
 // Run the page in a sandbox whose globals auto-vivify, so the DOM-touching
 // top-level code is inert and the pure helpers become reachable.
 const HELPERS = [
-  'decQ', 'parseUnits', 'formatUnits', 'trimAmt', 'maxAmt', 'merge', 'hasAtomicBatch', 'encCalls',
+  'decQ', 'pU', 'fU', 'tM', 'maxAmt', 'merge', 'hasAtomicBatch', 'encCalls',
   'eU', 'eA', 'pad32', 'Sx', 'keccak', 'namehash', 'nftIdIn', 'weiName',
-  'decodeString', 'idTok', 'idDelay',
+  'dS', 'idTok', 'idDelay',
   'decViewPage', 'planBookExactIn', 'planBookExactOut', 'decBar', 'rollUp', 'mergeTapes',
   'encFillPlan', 'encFillPlanAndSwap', 'encSnwap', 'encSweep',
   'encPermit2Hybrid', 'impactBps', 'safeSym', 'safeUrl', 'safeDataUrl', 'genIcon',
@@ -483,8 +483,8 @@ const eq = (got, want, what) => {
 
 if (exported) {
   const {
-    decQ, parseUnits, formatUnits, trimAmt, maxAmt, merge, hasAtomicBatch, encCalls, keccak, namehash,
-    decodeString, idTok, idDelay, decViewPage, planBookExactIn, planBookExactOut,
+    decQ, pU, fU, tM, maxAmt, merge, hasAtomicBatch, encCalls, keccak, namehash,
+    dS, idTok, idDelay, decViewPage, planBookExactIn, planBookExactOut,
     decBar, rollUp, mergeTapes,
     encFillPlan, encFillPlanAndSwap, encSnwap, encSweep,
     encPermit2Hybrid, impactBps, safeSym, safeUrl, safeDataUrl, genIcon,
@@ -1014,23 +1014,23 @@ if (exported) {
       '0x93cdeb708b7545dc668eb9280176169d1c33cfd8ed6f04690a0bcc88a93fc4ae', 'namehash("eth")');
   });
 
-  check('parseUnits / formatUnits / trimAmt round-trip', () => {
-    eq(parseUnits('1.5', 18), 1500000000000000000n, 'parseUnits 1.5e18');
-    eq(parseUnits('1,234.5', 6), 1234500000n, 'parseUnits strips commas');
-    eq(formatUnits(1500000000000000000n, 18), '1.5', 'formatUnits');
-    eq(formatUnits(1n, 18), '0.000000000000000001', 'formatUnits dust');
-    eq(trimAmt(1234567890123456789n, 18), '1.234567', 'trimAmt truncates to 6dp');
+  check('pU / fU / tM round-trip', () => {
+    eq(pU('1.5', 18), 1500000000000000000n, 'pU 1.5e18');
+    eq(pU('1,234.5', 6), 1234500000n, 'pU strips commas');
+    eq(fU(1500000000000000000n, 18), '1.5', 'fU');
+    eq(fU(1n, 18), '0.000000000000000001', 'fU dust');
+    eq(tM(1234567890123456789n, 18), '1.234567', 'tM truncates to 6dp');
     eq(maxAmt(1000000000000000001n, 18), '1.000001', 'Max rounds up');
     eq(maxAmt(1n, 18), '0.000001', 'dust Max rounds up');
     eq(maxAmt(1234567n, 6), '1.234567', 'Max preserves full token precision through 6dp');
     // a negative amount must not parse — it would encode as a huge uint256
     let threw = false;
-    try { parseUnits('-1', 18); } catch { threw = true; }
-    if (!threw) throw Error('parseUnits accepted a negative amount');
+    try { pU('-1', 18); } catch { threw = true; }
+    if (!threw) throw Error('pU accepted a negative amount');
     // more decimals than the token has must be rejected, not silently truncated
     threw = false;
-    try { parseUnits('1.1234567', 6); } catch (e) { threw = /decimals/.test(e.message); }
-    if (!threw) throw Error('parseUnits accepted more decimals than the token supports');
+    try { pU('1.1234567', 6); } catch (e) { threw = /decimals/.test(e.message); }
+    if (!threw) throw Error('pU accepted more decimals than the token supports');
   });
 
   check('safeSym strips markup, controls, and bounds untrusted metadata', () => {
@@ -1124,7 +1124,7 @@ if (exported) {
    * fill plan went out unvalidated. That is invisible on the ordinary path,
    * where the swap's own eth_call would fail too and block the send, but a
    * batching wallet goes straight to wallet_sendCalls with no simulation at
-   * all: an RPC blip and the user pays for a revert. mc3Deep already retries
+   * all: an RPC blip and the user pays for a revert. mD already retries
    * and splits, and reports an unreadable call as null, which the loop below
    * treats as stale — so the read is simply not wrapped in a swallow.
    */
@@ -1142,7 +1142,7 @@ if (exported) {
     if (/catch\s*\{\s*return\s*\}/.test(fills[0])) {
       throw Error('preflightFills swallows the read failure and validates nothing');
     }
-    if (!/await mc3Deep\(reads\)/.test(fills[0])) {
+    if (!/await mD\(reads\)/.test(fills[0])) {
       throw Error('preflightFills no longer reads through the retrying reader');
     }
     const ask = between('async function preflightAsk(', 'const SEL_ORDER_FIXED=');
@@ -1225,12 +1225,12 @@ if (exported) {
     eq(idDelay(id), 86400n, 'delay');
   });
 
-  check('decodeString handles bytes32 and dynamic string returns', () => {
+  check('dS handles bytes32 and dynamic string returns', () => {
     const b32 = '0x' + Buffer.from('USDC').toString('hex').padEnd(64, '0');
-    eq(decodeString(b32), 'USDC', 'bytes32 symbol');
+    eq(dS(b32), 'USDC', 'bytes32 symbol');
     const dyn = '0x' + (32).toString(16).padStart(64, '0') + (4).toString(16).padStart(64, '0') +
       Buffer.from('WBTC').toString('hex').padEnd(64, '0');
-    eq(decodeString(dyn), 'WBTC', 'dynamic symbol');
+    eq(dS(dyn), 'WBTC', 'dynamic symbol');
   });
 
   check('decViewPage validates and decodes the lens OrderView ABI', () => {
