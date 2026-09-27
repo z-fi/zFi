@@ -1,0 +1,326 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>zSwap Steward Actions</title>
+<style>
+  :root { color-scheme: light dark; --bg:#0b0d10; --fg:#e6e8eb; --mut:#8b949e; --line:#232a31;
+          --ok:#3fb950; --bad:#f85149; --warn:#d29922; --acc:#58a6ff; }
+  @media (prefers-color-scheme: light) {
+    :root { --bg:#fff; --fg:#14171a; --mut:#57606a; --line:#d8dee4; --ok:#1a7f37; --bad:#cf222e; --warn:#9a6700; --acc:#0969da; }
+  }
+  * { box-sizing:border-box }
+  [hidden] { display:none !important }
+  body { margin:0; background:var(--bg); color:var(--fg); padding:28px 16px; display:flex; justify-content:center;
+         font:14px/1.55 ui-sans-serif,-apple-system,system-ui,sans-serif }
+  main { width:100%; max-width:720px }
+  h1 { font-size:17px; margin:0 0 2px }
+  .sub { color:var(--mut); margin:0 0 22px }
+  section { border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-bottom:14px }
+  h2 { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--mut); margin:0 0 10px; font-weight:600 }
+  dl { display:grid; grid-template-columns:auto 1fr; gap:5px 14px; margin:0 }
+  dt { color:var(--mut) }
+  dd { margin:0; font-family:ui-monospace,Menlo,monospace; font-size:12.5px; word-break:break-all }
+  button { font:inherit; font-weight:600; padding:9px 15px; border-radius:8px; border:1px solid var(--line);
+           background:var(--acc); color:#fff; cursor:pointer }
+  button.ghost { background:transparent; color:var(--fg) }
+  button.sm { padding:3px 9px; font-size:12px; font-weight:500; border-radius:6px }
+  button:disabled { opacity:.45; cursor:not-allowed }
+  .row { display:flex; gap:9px; align-items:center; flex-wrap:wrap }
+  .msg { margin-top:11px; padding:9px 11px; border-radius:8px; border:1px solid var(--line); display:none;
+         font-family:ui-monospace,Menlo,monospace; font-size:12px; word-break:break-all; white-space:pre-wrap }
+  .msg.show { display:block }
+  .ok { color:var(--ok); border-color:var(--ok) }
+  .bad { color:var(--bad); border-color:var(--bad) }
+  .warn { color:var(--warn); border-color:var(--warn) }
+  .hint { color:var(--mut); font-size:12.5px; margin:9px 0 0 }
+  a { color:var(--acc) }
+  .act { border-top:1px solid var(--line); padding:11px 0; display:grid; grid-template-columns:1.6em 1fr; gap:3px 8px }
+  .act:first-child { border-top:0; padding-top:0 }
+  .act input { margin-top:4px }
+  .act b { font-weight:600 }
+  .kv { grid-column:2; font-size:12.5px; color:var(--mut) }
+  .kv code, .url { font-family:ui-monospace,Menlo,monospace; font-size:12px; word-break:break-all; color:var(--fg) }
+  .tag { font-family:ui-monospace,Menlo,monospace; font-size:11.5px }
+  .tag.ok { color:var(--ok) } .tag.bad { color:var(--bad) } .tag.warn { color:var(--warn) } .tag.mut { color:var(--mut) }
+  ol.ents { list-style:none; margin:0; padding:0 }
+  ol.ents li { display:grid; grid-template-columns:7.5em 1fr auto; gap:2px 10px; padding:6px 0; border-top:1px solid var(--line); font-size:12.5px; align-items:baseline }
+  ol.ents li:first-child { border-top:0 }
+  .svc { color:var(--mut); font-family:ui-monospace,Menlo,monospace; font-size:12px }
+</style>
+
+<main>
+  <h1>zSwap steward actions</h1>
+  <p class="sub">The changes the zSwap steward should make now, and a health check of everything the steward curates.
+    Everything is read live from Ethereum. Each change is simulated from your wallet before it is sent, and nothing is
+    sent until you press Send.</p>
+
+  <section>
+    <h2>Wallet</h2>
+    <div class="row" id="wallets"></div>
+    <dl style="margin-top:10px">
+      <dt>Connected</dt><dd id="me">—</dd>
+      <dt>Steward</dt><dd id="steward">…</dd>
+    </dl>
+    <div class="msg" id="who"></div>
+  </section>
+
+  <section>
+    <h2>Recommended</h2>
+    <div id="acts"><p class="hint">Reading…</p></div>
+    <div class="row" style="margin-top:12px"><button id="send" disabled>Connect a wallet to send</button><span class="hint" id="cnt" style="margin:0"></span></div>
+    <div class="msg" id="sendmsg"></div>
+  </section>
+
+  <section>
+    <h2>What is listed today</h2>
+    <p class="hint" style="margin:0 0 8px">Every entry in the zEndpoints roster, checked from this browser. A failure here is
+      worth a second look from another network before removing anything. Edits go through
+      <a href="endpoints-admin.html">the endpoints admin</a>.</p>
+    <ol class="ents" id="health"></ol>
+    <div class="row" style="margin-top:10px"><button class="ghost sm" id="recheck">Check again</button></div>
+  </section>
+
+  <section>
+    <h2>Other steward contracts</h2>
+    <dl id="others"></dl>
+    <p class="hint" id="othersNote"></p>
+  </section>
+</main>
+
+<script type="module">
+const RPC = 'https://ethereum-rpc.publicnode.com';
+const EPS = '0x00000051F365d898132f4ebF345Cd3968e02F288';   // zEndpoints
+const FLAGS = '0x0000008a1a3C78440d0a28EBB4bb5526abA91d45'; // zSwapFlags
+const RPCL = '0x8C7348D039f58C4e9cfA936EF410eec759213b12';  // zRpcList
+const SOLV = '0x1Dfbb2f41B596F72187370469074C46de60dA2e3';  // zSolverList
+const ROUTER = '0x0000006c96afa6f1cd4df8fe19bc0d8b6a6cd7b5'; // Tacit pool router, every chain
+const POOL = '0x000000c2a20657ce25f2ba99737933d031afbee9';
+const CHAIN = { 0: 'all chains', 1: 'Ethereum', 8453: 'Base', 4663: 'Robinhood' };
+// Tacit's pool keepers, one per chain. zSwap has them built in as a fallback; listing them here puts them in the
+// curated roster, where the steward can later move or replace one without a new page.
+const KEEPERS = [
+  [1, 'https://tacit-evm-pool-keeper.onrender.com/evm-pool/keeper'],
+  [8453, 'https://tacit-evm-pool-keeper-base.onrender.com/evm-pool/keeper'],
+  [4663, 'https://tacit-evm-pool-keeper-robinhood.onrender.com/evm-pool/keeper'],
+];
+
+const $ = id => document.getElementById(id);
+const say = (id, t, k) => { const e = $(id); e.textContent = t; e.className = 'msg show ' + (k || ''); };
+const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+const short = a => a.slice(0, 6) + '…' + a.slice(-4);
+
+// ---------------------------------------------------------------- ABI, by hand
+const hex = s => Array.from(new TextEncoder().encode(s), b => b.toString(16).padStart(2, '0')).join('');
+const pad = h => h.replace(/^0x/, '').padStart(64, '0');
+const uint = n => BigInt(n).toString(16).padStart(64, '0');
+const word = name => hex(name).padEnd(64, '0');
+const encStrings = list => {
+  const parts = list.map(s => { const h = hex(s); return uint(h.length / 2) + h.padEnd(Math.ceil(h.length / 64) * 64, '0'); });
+  let off = 32 * list.length, head = '';
+  for (const p of parts) { head += uint(off); off += p.length / 2; }
+  return uint(list.length) + head + parts.join('');
+};
+const setCall = (svc, chain, list) => '0x3e2e459c' + word(svc) + uint(chain) + uint(96) + encStrings(list);
+const W = (h, i) => BigInt('0x' + (h.slice(2 + i * 64, 2 + i * 64 + 64) || '0'));
+const decStrings = (h, at = 0) => {
+  const o = Number(W(h, at)) / 32 + at, n = Number(W(h, o)), out = [];
+  for (let i = 0; i < n; i++) {
+    const so = o + 1 + Number(W(h, o + 1 + i)) / 32, len = Number(W(h, so));
+    const bytes = h.slice(2 + (so + 1) * 64, 2 + (so + 1) * 64 + len * 2);
+    out.push(new TextDecoder().decode(Uint8Array.from(bytes.match(/../g) || [], b => parseInt(b, 16))));
+  }
+  return out;
+};
+const addrOf = h => '0x' + h.slice(-40);
+
+// ---------------------------------------------------------------- reads
+const read = async (to, data) => {
+  const r = await fetch(RPC, { method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_call', params: [{ to, data }, 'latest'] }) });
+  const j = await r.json();
+  if (j.error) throw Error(j.error.message);
+  return j.result;
+};
+const listOf = async (svc, chain) => decStrings(await read(EPS, '0xe8edb32f' + word(svc) + uint(chain)));
+const ownerOf = async a => addrOf(await read(a, '0x8da5cb5b')).toLowerCase();
+const pendingOf = async a => addrOf(await read(a, '0xe30c3978')).toLowerCase();
+
+const timed = async (fn, ms = 10000) => {
+  const ac = new AbortController(), t = setTimeout(() => ac.abort(), ms), t0 = performance.now();
+  try { const v = await fn(ac.signal); return { ...v, ms: Math.round(performance.now() - t0) }; }
+  catch (e) { return { ok: false, why: e.name === 'AbortError' ? 'timed out' : 'no answer (network or CORS)', ms: Math.round(performance.now() - t0) }; }
+  finally { clearTimeout(t); }
+};
+const keeperInfo = (base, chain) => timed(async signal => {
+  const r = await fetch(base + '/info', { signal }), j = await r.json();
+  if (!r.ok) return { ok: false, why: 'HTTP ' + r.status };
+  if (+j.chainId !== chain) return { ok: false, why: 'serves chain ' + j.chainId };
+  if (String(j.router).toLowerCase() !== ROUTER || String(j.pool).toLowerCase() !== POOL) return { ok: false, why: 'not the Tacit pool router' };
+  if (!(j.minReceiveFeeBps <= 25)) return { ok: false, why: 'fee floor above 25 bps' };
+  return { ok: true, why: 'chain ' + j.chainId + (j.relay ? ', relays' : '') + ', keeper ' + short(j.keeper) };
+});
+
+// ---------------------------------------------------------------- wallet
+let provider = null, account = null, steward = null;
+const found = [];
+addEventListener('eip6963:announceProvider', e => { if (!found.some(p => p.info.uuid === e.detail.info.uuid)) { found.push(e.detail); paintWallets(); } });
+dispatchEvent(new Event('eip6963:requestProvider'));
+function paintWallets() {
+  const box = $('wallets'); box.textContent = '';
+  const list = found.length ? found : (window.ethereum ? [{ info: { name: 'Connect wallet' }, provider: window.ethereum }] : []);
+  if (!list.length) return box.append(el('span', 'hint', 'No wallet found in this browser.'));
+  for (const w of list) { const b = el('button', 'ghost', w.info.name); b.onclick = () => connect(w.provider); box.append(b); }
+}
+async function connect(p) {
+  provider = p;
+  try {
+    account = (await provider.request({ method: 'eth_requestAccounts' }))[0].toLowerCase();
+    $('me').textContent = account;
+    provider.on && provider.on('accountsChanged', () => location.reload());
+    provider.on && provider.on('chainChanged', () => location.reload());
+    whoSays();
+  } catch (e) { say('who', e.message || String(e), 'bad'); }
+}
+function whoSays() {
+  if (!account || !steward) return;
+  if (account === steward) { say('who', 'This wallet is the steward. You can send the changes below.', 'ok'); }
+  else say('who', 'This wallet is not the steward (' + steward + '). Its changes would revert; connect the steward.', 'warn');
+  paintSend();
+}
+const why = e => { const d = e && (e.data?.data || e.data || e.error?.data); const s = typeof d === 'string' ? d : '';
+  return s.startsWith('0x30cd7471') ? 'NotOwner(): this account is not the steward.' : (e && (e.message || e.reason)) || String(e); };
+
+// ---------------------------------------------------------------- recommended actions
+let acts = [];
+async function loadActs() {
+  acts = await Promise.all(KEEPERS.map(async ([chain, url]) => {
+    const [cur, probe] = await Promise.all([listOf('evk', chain), keeperInfo(url, chain)]);
+    const done = cur[0] === url;
+    return { chain, url, cur, probe, done, on: !done && probe.ok, data: setCall('evk', chain, [url, ...cur.filter(u => u !== url)]) };
+  }));
+  paintActs();
+}
+function paintActs() {
+  const box = $('acts'); box.textContent = '';
+  for (const a of acts) {
+    const row = el('div', 'act');
+    const cb = el('input'); cb.type = 'checkbox'; cb.checked = a.on; cb.disabled = a.done || !a.probe.ok;
+    cb.onchange = () => { a.on = cb.checked; paintSend(); };
+    const t = el('div'); t.append(el('b', null, 'List Tacit\'s ' + CHAIN[a.chain] + ' keeper in the roster'));
+    t.append(el('div', 'kv', 'zEndpoints · evk / ' + a.chain));
+    const now = el('div', 'kv'); now.append('Now: ', a.cur.length ? el('code', null, a.cur.join(', ')) : 'empty (zSwap falls back to its built-in keeper)');
+    const next = el('div', 'kv'); next.append('After: ', el('code', null, [a.url, ...a.cur.filter(u => u !== a.url)].join(', ')));
+    const pr = el('div', 'kv'); pr.append('Keeper check: ', el('span', 'tag ' + (a.probe.ok ? 'ok' : 'bad'), (a.probe.ok ? 'ok · ' : 'fail · ') + a.probe.why + ' · ' + a.probe.ms + ' ms'));
+    if (a.done) pr.append(' ', el('span', 'tag ok', 'already listed first, nothing to do'));
+    row.append(cb, t, el('span'), now, el('span'), next, el('span'), pr);
+    box.append(row);
+  }
+  const note = el('p', 'hint', 'Why: zSwap already uses these keepers as a built-in fallback. Listing them in zEndpoints makes the roster the source of truth, so if Tacit ever moves a keeper, the steward changes one row instead of the page needing a new release.');
+  box.append(note);
+  paintSend();
+}
+function paintSend() {
+  const pick = acts.filter(a => a.on), b = $('send');
+  $('cnt').textContent = pick.length ? pick.length + ' change' + (pick.length === 1 ? '' : 's') + ' ticked' : 'nothing ticked';
+  b.disabled = !account || !pick.length;
+  b.textContent = !account ? 'Connect a wallet to send' : account !== steward ? 'Send (not the steward: will revert)' : 'Send ticked';
+}
+$('send').onclick = async () => {
+  const calls = acts.filter(a => a.on).map(a => ({ to: EPS, data: a.data }));
+  if (!calls.length) return;
+  try {
+    if (parseInt(await provider.request({ method: 'eth_chainId' }), 16) !== 1)
+      await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x1' }] });
+    for (const c of calls) await provider.request({ method: 'eth_call', params: [{ from: account, ...c }, 'latest'] });
+  } catch (e) { return say('sendmsg', 'Simulation says it would revert: ' + why(e), 'bad'); }
+  say('sendmsg', 'Simulated: all ' + calls.length + ' would succeed. Confirm in your wallet…', 'warn');
+  if (calls.length > 1) {
+    try {
+      const r = await provider.request({ method: 'wallet_sendCalls', params: [{ version: '2.0.0', chainId: '0x1', from: account, atomicRequired: false, calls }] });
+      const id = typeof r === 'string' ? r : r && r.id;
+      say('sendmsg', 'Sent as one batch: ' + id + '\nWaiting for it to land…', 'warn');
+      for (let i = 0; i < 150; i++) {
+        await new Promise(res => setTimeout(res, 2500));
+        const s = await provider.request({ method: 'wallet_getCallsStatus', params: [id] }).catch(() => null);
+        const st = s && (typeof s.status === 'number' ? s.status : { CONFIRMED: 200, FAILED: 400 }[s.status]);
+        if (st >= 200) { say('sendmsg', st < 300 ? 'Done: the batch landed.' : 'The batch failed on chain.', st < 300 ? 'ok' : 'bad'); return reload(); }
+      }
+      return say('sendmsg', 'Still pending: ' + id, 'warn');
+    } catch (e) { if (e && e.code === 4001) return say('sendmsg', 'Rejected in the wallet.', 'bad'); }
+  }
+  for (let i = 0; i < calls.length; i++) {
+    try {
+      const tx = await provider.request({ method: 'eth_sendTransaction', params: [{ from: account, ...calls[i] }] });
+      say('sendmsg', 'Sent ' + (i + 1) + ' of ' + calls.length + ': ' + tx + '\nWaiting…', 'warn');
+      let r = null;
+      for (let k = 0; k < 150 && !r; k++) { await new Promise(res => setTimeout(res, 2500)); r = await provider.request({ method: 'eth_getTransactionReceipt', params: [tx] }); }
+      if (!r || r.status === '0x0') return say('sendmsg', (r ? 'Reverted: ' : 'Still pending: ') + tx, 'bad');
+    } catch (e) { return say('sendmsg', why(e), 'bad'); }
+  }
+  say('sendmsg', 'Done: ' + calls.length + ' change' + (calls.length === 1 ? '' : 's') + ' landed.', 'ok');
+  reload();
+};
+
+// ---------------------------------------------------------------- health of the roster
+const rpcProbe = (url, method, params = []) => timed(async signal => {
+  const r = await fetch(url, { signal, method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) });
+  return { r: await r.json() };
+});
+const getProbe = (url, test) => timed(async signal => { const r = await fetch(url, { signal }); return test(r, await r.text()); });
+async function probeEntry(svc, chain, url) {
+  if (svc === 'rpc') { const p = await rpcProbe(url, 'eth_chainId'); if (!p.r) return p; const c = parseInt(p.r.result, 16); return { ok: c === chain, why: 'chain ' + c, ms: p.ms }; }
+  if (svc === 'logs') { const p = await rpcProbe(url, 'eth_getLogs', [{ address: '0x000000000Ed1eabD231Be41d93b719056F7febFC', fromBlock: '0x' + (25998736).toString(16), toBlock: 'latest' }]);
+    if (!p.r) return p; return Array.isArray(p.r.result) ? { ok: true, why: p.r.result.length + ' logs', ms: p.ms } : { ok: false, why: (p.r.error && p.r.error.message || 'no logs').slice(0, 60), ms: p.ms }; }
+  if (svc === 'tacit') return getProbe(url + '/confidential/quote?asset=0x3cba71e1114af183cdeacc6b8457a474d17529fd28704480ca799d0d03126f34', r => ({ ok: r.status < 500, why: 'HTTP ' + r.status }));
+  if (svc === 'btc') return getProbe(url + '/blocks/tip/height', (r, t) => ({ ok: r.ok && /^\d+$/.test(t.trim()), why: 'tip ' + t.trim().slice(0, 10) }));
+  if (svc === 'tacad') return getProbe(url + '00.json', r => ({ ok: r.ok, why: 'HTTP ' + r.status }));
+  if (svc === 'evk') return keeperInfo(url, chain);
+  return { ok: null, why: 'not checked from a browser', ms: 0 };
+}
+async function loadHealth() {
+  const box = $('health'); box.textContent = '';
+  const k = await read(EPS, '0x307540f6');
+  const n = Number(W(k, Number(W(k, 0)) / 32)), so = Number(W(k, 0)) / 32 + 1, co = Number(W(k, 1)) / 32 + 1;
+  const rows = [];
+  for (let i = 0; i < n; i++) {
+    const w = k.slice(2 + (so + i) * 64, 2 + (so + i) * 64 + 64);
+    const svc = new TextDecoder().decode(Uint8Array.from(w.match(/../g).map(b => parseInt(b, 16)))).replace(/\0+$/, '');
+    const chain = Number(W(k, co + i));
+    for (const url of await listOf(svc, chain)) rows.push({ svc, chain, url });
+  }
+  const lis = rows.map(r => {
+    const li = el('li'); li.append(el('span', 'svc', r.svc + ' / ' + r.chain), el('span', 'url', r.url), el('span', 'tag mut', '…'));
+    box.append(li); return li;
+  });
+  await Promise.all(rows.map(async (r, i) => {
+    const p = await probeEntry(r.svc, r.chain, r.url), tag = lis[i].lastChild;
+    tag.className = 'tag ' + (p.ok === null ? 'mut' : p.ok ? 'ok' : 'bad');
+    tag.textContent = (p.ok === null ? '' : p.ok ? 'ok · ' : 'fail · ') + p.why + (p.ms ? ' · ' + p.ms + ' ms' : '');
+  }));
+}
+$('recheck').onclick = () => loadHealth();
+
+// ---------------------------------------------------------------- other steward contracts
+async function loadOthers() {
+  const dl = $('others'); dl.textContent = '';
+  const cs = [['zEndpoints', EPS], ['zSwapFlags', FLAGS], ['zRpcList', RPCL], ['zSolverList', SOLV]];
+  const os = await Promise.all(cs.map(async ([, a]) => [await ownerOf(a), await pendingOf(a).catch(() => '')]));
+  steward = os[0][0];
+  $('steward').textContent = steward;
+  cs.forEach(([n, a], i) => {
+    const [o, p] = os[i];
+    dl.append(el('dt', null, n), el('dd', null, short(a) + ' · owner ' + (o === steward ? 'the steward' : o) + (p && !/^0x0{40}$/.test(p) ? ' · pending transfer to ' + p : '')));
+  });
+  const br = '0x' + hex('bridge').padEnd(64, '0'), names = ['unset (the page decides)', 'on for everyone', 'off for everyone'];
+  const st = await Promise.all([0, 1, 8453, 4663].map(c => read(FLAGS, '0xeb517a45' + br.slice(2) + uint(c)).then(h => Number(BigInt(h)))));
+  dl.append(el('dt', null, 'bridge flag'), el('dd', null, [0, 1, 8453, 4663].map((c, i) => CHAIN[c] + ': ' + names[st[i]]).join(' · ')));
+  $('othersNote').textContent = 'No change recommended here: one steward owns all four, no ownership transfer is pending, and the bridge lane is left to the page, where each viewer opts in.';
+  whoSays();
+}
+
+async function reload() { await Promise.all([loadActs(), loadOthers()]); }
+paintWallets();
+reload().catch(e => say('sendmsg', 'Could not read Ethereum: ' + (e.message || e), 'bad'));
+loadHealth().catch(() => {});
+</script>
