@@ -2487,10 +2487,10 @@ describe('the private form tells you before you press', () => {
     p.close();
   });
 
-  // A withdrawal with no exactly-sized note merges first, and the merge is its own
-  // relay job with its own fee. The preview used to quote ONE fee sized for a single
-  // job, so at the relay's flat floor the wallet was shown about half what it paid.
-  test('a withdrawal that must merge first previews both relay fees, and names them', async () => {
+  // A withdrawal is taken from one note whenever one covers it: an exact note exits
+  // whole, a bigger one exits in part, in one relay job whose fee comes out of the
+  // amount. Only when no single note covers it does the page merge first.
+  test('a withdrawal one note covers previews one fee, taken from the amount', async () => {
     const p = await open();
     await unlock(p);
     await deposit(p);
@@ -2499,13 +2499,20 @@ describe('the private form tells you before you press', () => {
     await p.waitFor(() => /exit/.test(p.text('pvList')), SLOW);
     p.select('pvChain', '1');
     p.select('pvAct', 'out');
-    p.type('pvAmt', '0.004');            // no note is exactly this, so it merges
+    p.type('pvAmt', '0.004');            // the 0.01 note covers it, so it exits in part
     await p.waitFor(() => /Relay fee/.test(p.text('pvPrev')), { label: 'the preview', ...SLOW });
     const t = p.text('pvPrev');
-    assert.match(t, /in two: [\d.]+ tETH to merge your notes, then [\d.]+ tETH to withdraw/, t);
-    const line = t.split('\n').find(l => /^Relay fee/.test(l));
-    const [total, merge, exit] = [...line.matchAll(/([\d.]+) tETH/g)].map(m => Number(m[1]));
-    assert.ok(Math.abs(total - (merge + exit)) < 1e-9, `the total is the two legs: ${total} vs ${merge}+${exit}`);
+    assert.doesNotMatch(t, /in two:|merge/, t);
+    const fee = Number(t.match(/Relay fee ([\d.]+) tETH/)[1]), got = Number(t.match(/≈([\d.]+) ETH arrives/)[1]);
+    assert.ok(Math.abs(got - (0.004 - fee)) < 1e-9, `what arrives is the amount less the fee: ${got} vs 0.004-${fee}`);
+    p.type('pvAmt', '0.01');             // the whole note: the fee still comes out of it
+    await p.waitFor(() => /≈[\d.]+ ETH arrives/.test(p.text('pvPrev')) && !/0\.004/.test(p.$('pvAmt').value), { label: 'the whole-note preview', ...SLOW });
+    await p.settle();
+    assert.doesNotMatch(p.text('pvPrev'), /more than you hold/, p.text('pvPrev'));
+    p.click('pvMax');
+    await p.waitFor(() => p.$('pvAmt').value === '0.01', { label: 'max to offer the whole note', ...SLOW });
+    await p.waitFor(() => /≈[\d.]+ ETH arrives/.test(p.text('pvPrev')), { label: 'the preview after max', ...SLOW });
+    await p.settle();
     p.close();
   });
 

@@ -193,6 +193,20 @@ describe('locking bitcoin into cBTC', () => {
     await p.settle();
     p.close();
   });
+  // A node that already has the transaction is a success; one that holds a DIFFERENT spend of the same
+  // coin is not, or the lock would read as sent while the reveal can never follow.
+  test('a broadcast only counts as sent when the node already has that transaction', async () => {
+    const p = await loadPage({ chain: new MockChain() });
+    const say = m => { p.window.fetch = async () => ({ ok: false, status: 400, text: async () => 'sendrawtransaction RPC error: {"code":-26,"message":"' + m + '"}' }); };
+    const post = () => p.window.eval('bPost("00").then(()=>"OK",e=>"ERR")');
+    say('txn-already-known');
+    assert.equal(await post(), 'OK');
+    say('txn-mempool-conflict');
+    assert.equal(await post(), 'ERR');
+    say('bad-txns-spends-conflicting-tx');
+    assert.equal(await post(), 'ERR');
+    p.close();
+  });
 });
 
 describe('escrow through CbtcEscrowHelper', () => {
@@ -421,6 +435,33 @@ describe('borrowing cUSD against the cBTC note', () => {
     const repay = p.$('pvList').querySelector('a[href="https://tacit.finance/#tab=cdp"]');
     assert.ok(repay, 'an open loan links to where it can be repaid');
     assert.equal(repay.target, '_blank');
+    await p.settle();
+    p.close();
+  });
+  // Tacit's pool marks a position spent at cdpPositionSpent[keccak("tacit-cdp-position-v1" ‖ leaf ‖ "spent")]
+  // (storage slot 163) when it is repaid, liquidated or topped up, so the row stops offering a repay.
+  test('a position spent on chain stops reading as open', async () => {
+    const chain = cbtcChain();
+    chain.logs.push({ address: ENGINE, blockNumber: '0x' + (B0 + 0x6).toString(16), logIndex: '0x0',
+      topics: ['0x232c7d098ca44092999087e6ee530a2171f95f9ecb1caa363f6dcf448fb7dd57', D.positionLeaf], data: '0x' + u256(D.debtValue) + u256(7676504869n) });
+    const hex = t => Buffer.from(t).toString('hex');
+    const nu = keccak256('0x' + hex('tacit-cdp-position-v1') + D.positionLeaf.slice(2) + hex('spent'));
+    const slot = keccak256(coder.encode(['bytes32', 'uint256'], [nu, 163]));
+    chain.storage = new Map();
+    const p = await loadPage({ chain, storage: withNote() });
+    await p.connect();
+    p.click('pv');
+    await p.settle();
+    p.click('pvGo');
+    await p.waitFor(() => /Key unlocked/.test(p.text('pvKey')), { label: 'the key to unlock' });
+    p.click(p.$('pvKey').querySelector('button[data-a="recover"]'));
+    await p.waitFor(() => /30 cUSD/.test(p.text('pvList')), { label: 'the position to be recovered', ...SLOW });
+    assert.match(p.text('pvList'), /repay on tacit\.finance/, 'unspent, it is open');
+    chain.storage.set(POOL.toLowerCase() + ':' + BigInt(slot).toString(16), '0x' + u256(1));
+    p.window.eval('pvTick=0');
+    p.window.eval('pvRefresh()');
+    await p.waitFor(() => /closed or topped up/.test(p.text('pvList')), { label: 'the spent position', ...SLOW });
+    assert.equal(p.$('pvList').querySelector('a[href="https://tacit.finance/#tab=cdp"]'), null, 'no repay link on a spent position');
     await p.settle();
     p.close();
   });

@@ -7780,7 +7780,7 @@ const g=await wkPick([{name:"Your private ETH address",sub:a.slice(0,8)+"…"+a.
 if(!g)return;if(g.k===1)return cpCopy("Your private ETH address. ETH sent to it on Ethereum, Base or Robinhood is shielded into your Tacit balance there, less at most 0.25% to whoever sweeps it in; any other token is lost.",a);if(g.k===2)return void(location.hash="chain="+c+"&token="+ZERO+"&to="+a);window.open("https://tacit.finance/sats/#eth="+c+"&do="+g.k,"_blank","noopener")}catch(E){stat.textContent=E.message}};
 rxProbe();
 const bGet=async p=>{let e;for(const u of B_API){try{const j=await relayFetch(p,null,u);if(j&&j.status!=="unknown")return j}catch(x){e=x}}throw e||Error("No Bitcoin node answered.")};
-const bPost=async h=>{let e;for(const u of B_API){try{return(await relayFetch("/tx",h,u)).text}catch(x){if(/already|known|in block|conflict/i.test(x.message))return"";e=x}}throw e||Error("No Bitcoin node took the transaction.")};
+const bPost=async h=>{let e;for(const u of B_API){try{return(await relayFetch("/tx",h,u)).text}catch(x){if(/already/i.test(x.message))return"";e=x}}throw e||Error("No Bitcoin node took the transaction.")};
 const bOp=l=>keccak(cpCat(bRev(l.t),bLE(1,4)));
 const cpLockOk=l=>!!l&&/^[0-9a-f]{64}$/.test(l.t||"")&&/^\d+$/.test(l.v||"")&&/^0x[0-9a-f]{64}$/.test(l.cx||"")&&/^0x[0-9a-f]{64}$/.test(l.cy||"")&&/^0x[0-9a-f]{64}$/.test(l.b||"");
 const cpLoadLocks=()=>{try{const a=cpOpenS(LS[CP_LOCKS+cpFp]);return Ia(a)?a.filter(cpLockOk):[]}catch{return[]}};
@@ -7861,10 +7861,10 @@ const cpLoadCdps=()=>{try{const a=Jp(LS[CP_CDPS+cpFp]||"[]");return Ia(a)?a.filt
 const cpSaveCdps=a=>{try{LS[CP_CDPS+cpFp]=Js(a)}catch{}};
 const cpCdpOpen=async n=>{const k=cpNoteOf(n),c=await cpSync(true,1),li=c.leaves.indexOf(k.leaf);if(li<0)throw Error("The cBTC note is not in the pool yet.");if(c.spent.includes(k.nu))throw Error("That note is already spent.");
 const w=h=>Bx((Sx(h||"").slice(0,64)||"0")),[u,rt,rb]=await cfgBatch([{to:CP_CE,data:"0xd5901347"+eU(k.value)},{to:CP_CE,data:"0x2c4e722e"},{to:CP_CE,data:"0x4827ecb3"}]);
-const usd=w(u),ratio=w(rb)||15000n,max=usd*9900n/ratio;if(!max)throw Error("The engine could not price this cBTC.");
+const usd=w(u),ratio=w(rb),max=w(rt)&&ratio&&usd*9900n/ratio;if(!max)throw Error("The engine could not price this cBTC — try again.");
 const s=(await ask("Borrow how many cUSD against "+tM(k.value,8)+" cBTC (worth $"+tM(usd,8)+")? At most "+tM(max,8)+"; the engine liquidates a position that falls below its liquidation ratio.",tM(max/2n,8))||"").trim();if(!s)return;
 const debt=pU(s,8);if(debt<=0n||debt>max)throw Error("Borrow more than zero and at most "+tM(max,8)+" cUSD.");
-await cpScanCdps().catch(()=>0);const cdps=cpLoadCdps(),i=cdps.reduce((m,p)=>Mx(m,p.i+1),0),{root,path}=cpTree(c.leaves,li),rate="0x"+(w(rt)||10n**27n).toString(16).padStart(64,"0"),X=cdpBuildOp(k,li,root,path,debt,rate,i),self=true;
+await cpScanCdps();const cdps=cpLoadCdps(),i=cdps.reduce((m,p)=>Mx(m,p.i+1),0),{root,path}=cpTree(c.leaves,li),rate="0x"+w(rt).toString(16).padStart(64,"0"),X=cdpBuildOp(k,li,root,path,debt,rate,i),self=true;
 const memo=cpSeal(cpPub,{value:debt,blinding:X.S.blind,secret:X.S.nk,owner:X.S.dOwner,asset:CP_CUSD},cpRandom());
 const p={i,v:String(debt),cv:String(k.value),c:n.b,rate,leaf:cdpLeaf(debt,rate,X.S.owner,X.S.nonce,[[k.asset,k.value]]),memo,at:Mf(Date.now()/1000)};cdps.push(p);cpSaveCdps(cdps);
 const nn=cpNotes.some(x=>x.s===X.S.nk)?null:{i:-1,v:String(debt),a:CP_CUSD,s:X.S.nk,b:"0x"+X.S.blind.toString(16).padStart(64,"0"),at:p.at};if(nn){cpNotes.push(nn);cpSaveNotes()}
@@ -7883,7 +7883,7 @@ for(const l of lg){const leaf=String(l.topics[1]||"").toLowerCase(),debt=Bx((Sx(
 const R=new Set(rs),rc=cpScanCdps.r||=new Map();if(!rc.has(l.blockNumber))try{rc.set(l.blockNumber,rw(await cfgRead(C,[{to:CP_CE,data:"0x2c4e722e"},l.blockNumber])))}catch{}if(rc.get(l.blockNumber))R.add(hx(rc.get(l.blockNumber)))
 hit:for(let i=0;i<16;i++){const S=SS[i]||=cdpSecrets(i);for(const n of z)for(const rate of R){const v=BigInt(n.v);if(cdpLeaf(debt,rate,S.owner,S.nonce,[[CP_CBTC,v]])===leaf){a.push({i,v:String(debt),cv:String(v),c:n.b,rate,leaf,at:0,js:"settled"});found++;break hit}}}}
 if(found)cpSaveCdps(a);return found};
-const cpCdpRows=()=>cpLoadCdps().map((p,j)=>{const st=p.job&&p.js!=="settled"?(p.js==="failed"?"loan failed":p.self&&p.pv?`<button type="button" class="fclink" data-a="csettle" data-c="${j}">settle</button>`:"opening…"):'open · <a href="https://tacit.finance/#tab=cdp" target="_blank" rel="noreferrer">repay on tacit.finance</a>';
+const cpCdpRows=()=>cpLoadCdps().map((p,j)=>{const st=p.job&&p.js!=="settled"?(p.js==="failed"?"loan failed":p.self&&p.pv?`<button type="button" class="fclink" data-a="csettle" data-c="${j}">settle</button>`:"opening…"):p.x?"closed or topped up":'open · <a href="https://tacit.finance/#tab=cdp" target="_blank" rel="noreferrer">repay on tacit.finance</a>';
 return`<div class="cpr"><span><b>${tM(BigInt(p.v),8)} cUSD</b> against ${tM(BigInt(p.cv),8)} cBTC</span><span>${st}</span></div>`}).join("");
 const bEnvOf=h=>{const s=/^[0-9a-f]*$/i.test(h||"")?hB(h):U8(0);if(s.length<36||s[0]!==32||s[33]!==172||s[34]!==0||s[35]!==99)return null;let i=36,end=0;const P=[];
 while(i<s.length){const o=s[i];if(o===104){end=i+1;break}let n,j=i+1;if(o===0)n=0;else if(o<76)n=o;else if(o===76){n=s[j];j++}else if(o===77){n=s[j]|s[j+1]<<8;j+=2}else return null;if(j+n>s.length)return null;P.push(s.slice(j,j+n));i=j+n}
@@ -8465,7 +8465,7 @@ const pvShV=A=>cpReady(A.id).reduce((s,n)=>s+BigInt(n.v),0n);
 const pvFeeFor=async(v,A,g)=>pvPath.value==="self"?0n:await cpFee(v,A,g).catch(()=>null);
 const pvCost=async(v,A)=>{const o=pvAct.value==="out",ch=A.tok===ZERO?+pvChain.value:1,x=cpReady(A.id).some(n=>BigInt(n.v)===v);
 if(!o)return x?0n:pvFeeFor(v,A,600000n);
-const xg=323000n+(ch!==1?CP_L2[ch].gas/2n:0n);if(x)return pvFeeFor(v,A,xg);
+const xg=323000n+(ch!==1?CP_L2[ch].gas/2n:0n);if(x)return pvFeeFor(v,A,xg);if(cpReady(A.id).some(n=>BigInt(n.v)>v))return pvFeeFor(v,A,xg+277000n);
 const[m,w]=await Pa([pvFeeFor(v,A,600000n),pvFeeFor(v,A,xg)]);
 return m===null||w===null?null:(pvLegs=[m,w],m+w)};let pvLegs=null;
 let pvPS=0;const pvPrevNow=async()=>{const my=++pvPS,A=cpSel(),e=A.tok===ZERO,P=A.pub,v=pvAct.value,f=cpFmt,s=a=>f(a,A)+" "+A.sym;
@@ -8481,7 +8481,7 @@ else{const sh=pvShV(A);Q.push(s(sh)+" shielded and ready");
 if(r){const fe=await pvCost(r,A),ch=v==="out"&&e?+pvChain.value:1;
 if(fe===null)Q.push("The relay does not take a fee in "+A.sym+": choose Settle: from this wallet.");
 else if(v==="send"){Q.push((fe?"Relay fee "+s(fe):"No fee: it goes as one whole note")+(r+fe>sh?(e?" · not enough shielded, so it wraps the ETH from this wallet":" · more than you hold"):""));Q.push("They can see it in about 2–3 min and have 90 days to claim.")}
-else{Q.push((fe?"Relay fee "+s(fe)+(pvLegs?" in two: "+s(pvLegs[0])+" to merge your notes, then "+s(pvLegs[1])+" to withdraw":"")+" · ":"")+"≈"+f(r>fe?r-fe:0n,A)+" "+P+" arrives on "+CHAINS[ch].name+", "+(ch===8453?"usually 4–8 min":ch===4663?"usually 8–15 min":"usually 1.5–4 min")+(r+fe>sh?" · more than you hold":""));
+else{const[mf,wf]=pvLegs||[0n,fe];Q.push((fe?"Relay fee "+s(fe)+(pvLegs?" in two: "+s(pvLegs[0])+" to merge your notes, then "+s(pvLegs[1])+" to withdraw":"")+" · ":"")+"≈"+f(r>wf?r-wf:0n,A)+" "+P+" arrives on "+CHAINS[ch].name+", "+(ch===8453?"usually 4–8 min":ch===4663?"usually 8–15 min":"usually 1.5–4 min")+(r+mf>sh?" · more than you hold":""));
 const to=pvTo.value.trim().toLowerCase();if(!to||to===account.toLowerCase())Q.push("Withdrawing to this same wallet links it to your deposit: for privacy, send it to a fresh address.")}}}
 if(my!==pvPS)return;pvPrev.textContent=Q.join("\n");Hd(pvPrev,!Q.length)}catch{if(my===pvPS)Hd(pvPrev,1)}};
 let pvPT=0;const pvPrevSoon=()=>{clearTimeout(pvPT);pvPT=setTimeout(pvPrevNow,250)};
@@ -8490,7 +8490,7 @@ pvAmt.addEventListener("change",()=>{const d=pvDp(),m=pvAmt.value.trim().match(n
 pvMax.onclick=async()=>{sBlip();if(!account||!cpSeed)return;const A=cpSel(),e=A.tok===ZERO;let v;
 try{if(pvAct.value==="dep"){const b=e?BigInt(await rpc("eth_getBalance",[account,L])||"0x0")-(await gasNow())*400000n:await cpTokBal(A);v=b>0n?b/A.scale:0n;
 if(v>0n&&e&&A.id===CP_ETH){const t=await cpTipFor(v*A.scale);if(t>0n)v=b-t>0n?(b-t)/A.scale:0n}}
-else{v=pvShV(A);const fe=await pvCost(v,A);if(fe)v=v>fe?v-fe:0n}}catch(x){return err(x)}
+else{v=pvShV(A);let fe=await pvCost(v,A);if(pvAct.value==="out")fe=pvLegs?pvLegs[0]:0n;if(fe)v=v>fe?v-fe:0n}}catch(x){return err(x)}
 pvAmt.value=v>0n?f0(v*A.scale,A.dec):"";pvPrevSoon()};
 const f0=(w,d)=>{const s=fU(w,d);return s.includes(".")?s.replace(/\.?0+$/,""):s};
 const pvHintSync=()=>{cpTipSync();const v=pvAct.value,A=cpSel(),e=A.tok===ZERO,P=A.pub,on=e?" on Ethereum, Base or Robinhood":" on Ethereum";pvHint.textContent=v==="send"?"Send "+(e?"tETH, or plain ETH straight from this wallet,":"shielded "+A.sym)+" to a tacit1 address or name. The amount and the recipient stay hidden; they claim it into their own notes.":v==="out"?"Pay out shielded "+A.sym+" as "+P+" to any 0x"+on+". You stay hidden as the sender; the amount and the recipient are public.":(e?"Deposit plain ETH from this wallet. It becomes tETH, private ETH, so you need no tETH first.":"Deposit "+P+" from this wallet. It becomes shielded "+A.sym+".")+" From there, send it privately or withdraw it as "+P+" to any 0x"+on+"."+(A.id===CP_CBTC?"\ncBTC is bitcoin locked on Bitcoin. "+(cpSeed?"Use lock btc under more on the key row below":"Unlock your key below, then use lock btc under more")+", or deposit tacBTC.":A.id===CP_CUSD?"\ncUSD is borrowed against shielded cBTC: use borrow cUSD on a cBTC note, or deposit tacUSD.":"");pvHint.textContent+="\n"+(pvPath.value==="self"?"Settling from this wallet: after the "+(v==="dep"?"deposit":"first")+" transaction you send the settle yourself. The relay takes no fee"+(cpTipOn()?", and the settle carries a tip for the proof it still made.":", and tipping is off, so it proves unpaid."):v==="dep"?(cpTipOn()?"The relay proves and settles your deposit; the tip beside Settle covers what that costs it.":"The relay proves and settles your deposit, free, paying its own gas."):"The relay proves and settles it, paying its own gas, for a flat fee taken from the amount.");if(cpRet)pvHint.textContent=CP_RET+"\n"+pvHint.textContent};
@@ -8733,7 +8733,7 @@ const pvRefresh=async()=>{cpPtsRead();if(cpSeed)cpBtcRead();if(!cpSeed||cpBusy||
 const d0=cpDone();
 try{await cpSync(cpNotes.some(n=>/pending|exiting/.test(cpStatus(n).s))||cpSends.some(S=>!CP_DONE.test(S.st)&&!/fail$/.test(S.st))||cpInbox.some(x=>x.cj&&x.st!=="claimed"));await cpFind().catch(()=>0);
 if(cpLocks.length){await cpLockSync().catch(()=>{});for(const l of cpLocks)if(l.job&&!["settled","failed","proven"].includes(l.js||""))await cpLockPoll(l).catch(()=>{})}
-{const q=cpLoadCdps();let ch=0;for(const p of q)if(p.job&&!["settled","failed","proven"].includes(p.js||"")){await cpCdpPoll(p).catch(()=>{});ch=1}if(ch)cpSaveCdps(q)}
+{const q=cpLoadCdps();let ch=0;for(const p of q)if(p.job&&!["settled","failed","proven"].includes(p.js||"")){await cpCdpPoll(p).catch(()=>{});ch=1}else if(!p.x&&p.js==="settled")try{if(BigInt(await cpStor(cpSlot(keccak(cpCat(cpU8("tacit-cdp-position-v1"),b32(p.leaf),cpU8("spent"))),163)))){p.x=1;ch=1}}catch{}if(ch)cpSaveCdps(q)}
 for(const n of cpNotes){const t=n.ex||n;if(t.job&&(n.ex||t.js!=="unknown"||cpStatus(n).s!=="ready")&&(!["settled","failed","proven"].includes(t.js||"")||n.ex&&!t.atx&&t.ja==="pending"&&Date.now()-(t.jst||0)<6e5))await cpRelayPoll(n).catch(()=>{});
 if(n.inv&&!n.job&&!n.p&&cpPool&&cpPool.wraps.some(w=>w[0]===cpNoteOf(n).dep))try{await cpSettleWrap(n)}catch{}}
 await cpSendTick();await cpInTick();if(pvMode)cpPaint();if(!cpBusy&&[...cpDone()].some(k=>!d0.has(k)))sGot()}catch(e){try{if(pvMode)pvNote.textContent=explain(e)}catch{}}pvTick=0};
