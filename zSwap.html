@@ -581,7 +581,7 @@ background:var(--e);margin:.5em auto .1em}
 </div>
 <footer id="foot"><span id="footV"></span><span id="footAddr"></span><span id="footBurn"></span><span>&middot; <a id="footDoc" href="#">how it works</a></span><span>&middot; <a id="footGov" href="#">governance</a></span><span>&middot; <a id="footList" target="_blank" rel="noopener" title="Token order here comes from zList, ranked by on-chain conviction staking. Stake to move a token up the list — or to get one listed at all.">token list</a></span></footer>
 </div>
-<script>const cE=t=>document.createElement(t),Js=JSON.stringify,Jp=JSON.parse,Pa=a=>Promise.all(a),Mf=Math.floor,Mx=Math.max,Mn=Math.min,U8=(...a)=>new Uint8Array(...a),Ia=Array.isArray,Ni=Number.isInteger,gE=i=>document.getElementById(i),Bx=h=>BigInt("0x"+h),Hd=(e,v)=>e.classList.toggle("hide",v),IC0='<svg width="14" height="14" viewBox="0 0 24 24" class="ik" aria-hidden="true">',
+<script>const cE=t=>document.createElement(t),qS=(e,q)=>e.querySelector(q),aE=(e,...a)=>e.addEventListener(...a),aC=(e,c)=>e.appendChild(c),Js=JSON.stringify,Jp=JSON.parse,Pa=a=>Promise.all(a),Mf=Math.floor,Mx=Math.max,Mn=Math.min,U8=(...a)=>new Uint8Array(...a),Ia=Array.isArray,Ni=Number.isInteger,gE=i=>document.getElementById(i),Bx=h=>BigInt("0x"+h),Hd=(e,v)=>e.classList.toggle("hide",v),IC0='<svg width="14" height="14" viewBox="0 0 24 24" class="ik" aria-hidden="true">',
 ICMOON=IC0+'<path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z"/></svg>',
 ICSUN=IC0+'<circle cx="12" cy="12" r="4.2"/><path d="M12 2v2m0 16v2M4.2 4.2l1.5 1.5m12.6 12.6 1.5 1.5M2 12h2m16 0h2M4.2 19.8l1.5-1.5M18.3 5.7l1.5-1.5"/></svg>';
 const ic=()=>{const d=H.className=='d';th.innerHTML=d?ICSUN:ICMOON;tc.content=d?'#0a0a0a':'#fff'};ic();
@@ -1007,7 +1007,7 @@ const setListNote=t=>{
 const el=gE("listNote");
 if(!el)return;
 el.textContent=t||"";
-if(t&&/\u2026$/.test(t)){const s=cE("span");s.className="spin";el.appendChild(s)}
+if(t&&/\u2026$/.test(t)){const s=cE("span");s.className="spin";aC(el,s)}
 Hd(el,!t)};
 const setListSource=w=>setListNote(w?"Built-in token list — "+w:"");
 let rankFellBack=false,listLive=false;
@@ -2163,7 +2163,7 @@ for(const sel of [fromSel,toSel]){
 const b=pickBtn(sel);if(!b)continue;
 const t=TOKENS[sel.value];
 b.classList.add("on");sel.classList.add("rich");
-b.querySelector(".tkbs").textContent=t?t.sym:(sel.selectedOptions[0]?.textContent||"");
+qS(b,".tkbs").textContent=t?t.sym:(sel.selectedOptions[0]?.textContent||"");
 b.setAttribute("aria-label",`Token: ${t?t.sym:"none"} — change`);
 const pill=b.closest(".pill");
 if(pill){
@@ -2203,7 +2203,7 @@ const sc=tkScore(q,opt.textContent.trim(),TOKENS[opt.value]);if(sc>=0)hits.push(
 hits.sort((x,y)=>gAt.get(x.g)-gAt.get(y.g)||x.sc-y.sc||x.i-y.i);
 for(const{opt,g}of hits){
 const t=TOKENS[opt.value];
-if(g&&g!==group){const h=cE("div");h.className="tkg";h.textContent=g;frag.appendChild(h);group=g}
+if(g&&g!==group){const h=cE("div");h.className="tkg";h.textContent=g;aC(frag,h);group=g}
 const r=cE("button");
 r.type="button";r.className="tkr";r.setAttribute("role","option");
 r.id="tkr"+n;
@@ -2211,21 +2211,21 @@ r.dataset.value=opt.value;
 r.setAttribute("aria-selected",String(opt.value===tkSel.value));
 if(opt.disabled)r.setAttribute("aria-disabled","true");
 const ic=cE("span");ic.className="tki";
-if(t?.icon)ic.appendChild(icFrag(t.icon));
-r.appendChild(ic);
+if(t?.icon)aC(ic,icFrag(t.icon));
+aC(r,ic);
 const tx=cE("span");tx.className="tkt";
 const top=cE("span");top.className="tks";
-const b=cE("b");b.textContent=opt.textContent.trim();top.appendChild(b);
+const b=cE("b");b.textContent=opt.textContent.trim();aC(top,b);
 if(t?.name&&t.name.toLowerCase()!==b.textContent.toLowerCase()){
-const nm=cE("span");nm.className="tkn";nm.textContent=t.name;top.appendChild(nm);
+const nm=cE("span");nm.className="tkn";nm.textContent=t.name;aC(top,nm);
 }
-tx.appendChild(top);
-if(t?.desc){const d=cE("span");d.className="tkd";d.textContent=t.desc;tx.appendChild(d)}
-const tg=tacitTag(t);if(tg){const d=cE("span");d.className="tkd";d.textContent=tg;tx.appendChild(d)}
-r.appendChild(tx);
-const mk=x=>{const m=cE("span");m.className="tkmark";m.textContent=x;r.appendChild(m)},v=t&&tkBal[t.addr];
+aC(tx,top);
+if(t?.desc){const d=cE("span");d.className="tkd";d.textContent=t.desc;aC(tx,d)}
+const tg=tacitTag(t);if(tg){const d=cE("span");d.className="tkd";d.textContent=tg;aC(tx,d)}
+aC(r,tx);
+const mk=x=>{const m=cE("span");m.className="tkmark";m.textContent=x;aC(r,m)},v=t&&tkBal[t.addr];
 if(v)mk(sigAmt(v,t.dec,4));if(opt.value===tkSel.value)mk("✓");
-frag.appendChild(r);n++;
+aC(frag,r);n++;
 }
 if(!n){
 const a=/^0x[0-9a-f]{40}$/.test(q)?q:"";
@@ -2235,17 +2235,17 @@ if(!pt&&!pr.e&&!pr.w){pr.w=1;pr.p.catch(()=>{}).finally(()=>{if(tkSel&&tkFind.va
 const r=cE("button");
 r.type="button";r.className="tkr";r.setAttribute("role","option");r.id="tkr0";
 const ic=cE("span");ic.className="tki";
-if(pt)ic.appendChild(icFrag(artIcon(pt.art,pt.sym)));
-r.appendChild(ic);
+if(pt)aC(ic,icFrag(artIcon(pt.art,pt.sym)));
+aC(r,ic);
 const tx=cE("span");tx.className="tkt";
 const top=cE("span");top.className="tks";
-const b=cE("b");b.textContent=pt?pt.sym:"Reading "+short(a)+"…";top.appendChild(b);
-if(pt?.name){const nm=cE("span");nm.className="tkn";nm.textContent=pt.name;top.appendChild(nm)}
-tx.appendChild(top);
+const b=cE("b");b.textContent=pt?pt.sym:"Reading "+short(a)+"…";aC(top,b);
+if(pt?.name){const nm=cE("span");nm.className="tkn";nm.textContent=pt.name;aC(top,nm)}
+aC(tx,top);
 const d=cE("span");d.className="tkd";
 d.textContent=pr.e?(pr.e.message||"could not read that address")+" — tap to retry"
 :pt?`Import ${short(a)} — not on zList${pt.std==="nft"?" · NFT collection":""}`:"Not listed — reading it from chain";
-tx.appendChild(d);r.appendChild(tx);
+aC(tx,d);aC(r,tx);
 r.onclick=async e=>{
 e.stopPropagation();
 if(r.dataset.busy)return;
@@ -2253,14 +2253,14 @@ r.dataset.busy="1";if(!pt)b.textContent="Reading…";
 try{const i=await addCustomToken(a);rebuild();tkChoose(String(i))}
 catch(e){delete r.dataset.busy;b.textContent="Use "+short(a);
 d.textContent=(e&&e.message)||"could not read that address"}};
-frag.appendChild(r);
-}else{const e=cE("div");e.className="tkempty";e.textContent="No token matches that.";frag.appendChild(e)}
+aC(frag,r);
+}else{const e=cE("div");e.className="tkempty";e.textContent="No token matches that.";aC(frag,e)}
 }
 tkList.classList.toggle("fresh",listFresh);
 listFresh=false;
-tkList.appendChild(frag);
+aC(tkList,frag);
 tkCur=-1;
-const top=q&&tkList.querySelector('.tkr:not([aria-disabled="true"])');
+const top=q&&qS(tkList,'.tkr:not([aria-disabled="true"])');
 if(top){top.classList.add("cur");tkCur=0;tkAct(top.id)}
 };
 const tkOpen=sel=>{
@@ -2274,7 +2274,7 @@ tkFind.focus({preventScroll:true});
 return;
 }
 const b=pickBtn(sel).getBoundingClientRect();
-const card=document.querySelector(".card").getBoundingClientRect();
+const card=qS(document,".card").getBoundingClientRect();
 const w=Mn(Mx(card.width,240),innerWidth-16);
 tkPanel.style.width=w+"px";
 const left=Mx(8,Mn(card.left,innerWidth-w-8));
@@ -2304,15 +2304,15 @@ sel.dispatchEvent(new Event("change",{bubbles:true}));
 };
 for(const sel of [fromSel,toSel]){
 const b=pickBtn(sel);
-if(b)b.addEventListener("click",e=>{e.stopPropagation();tkSel===sel?tkClose():tkOpen(sel)});
+if(b)aE(b,"click",e=>{e.stopPropagation();tkSel===sel?tkClose():tkOpen(sel)});
 }
-tkList.addEventListener("click",e=>{
+aE(tkList,"click",e=>{
 const r=e.target.closest(".tkr");
 if(!r||r.getAttribute("aria-disabled")==="true")return;
 tkChoose(r.dataset.value);
 });
-tkFind.addEventListener("input",tkRows);
-tkPanel.addEventListener("keydown",e=>{
+aE(tkFind,"input",tkRows);
+aE(tkPanel,"keydown",e=>{
 const rows=[...tkList.querySelectorAll('.tkr:not([aria-disabled="true"])')];
 if(e.key==="Escape"||e.key==="Tab"){e.key>"T"||e.preventDefault();const s=tkSel;tkClose();pickBtn(s)?.focus();return}
 if(e.key==="ArrowDown"||e.key==="ArrowUp"){
@@ -2329,8 +2329,8 @@ const r=tkCur>=0?rows[tkCur]:rows.length===1?rows[0]:null;
 if(r){e.preventDefault();r.dataset.value?tkChoose(r.dataset.value):r.click()}
 }
 });
-tkPanel.addEventListener("click",e=>e.stopPropagation());
-document.addEventListener("click",tkClose);
+aE(tkPanel,"click",e=>e.stopPropagation());
+aE(document,"click",tkClose);
 addEventListener("resize",()=>{if(!matchMedia("(pointer:coarse)").matches)tkClose()});
 addEventListener("scroll",e=>{if(tkSel&&!tkPanel.contains(e.target))tkClose()},true);
 const render=()=>{
@@ -2882,15 +2882,15 @@ cp.onclick=()=>{navigator.clipboard?navigator.clipboard.writeText(uri).then(()=>
 const note=cE("div");
 note.className="wcn";
 note.textContent="Scan with a mobile wallet, or ";
-note.appendChild(cp);
+aC(note,cp);
 const nd=cE("div");
 nd.className="wcn wcnode";
-nd.appendChild(document.createTextNode("Reads via "+wcHost()+" "));
+aC(nd,document.createTextNode("Reads via "+wcHost()+" "));
 const ch=cE("button");
 ch.type="button";ch.className="fclink";ch.textContent="change";
 ch.onclick=async()=>{if(await askReadNode())nd.firstChild.nodeValue="Reads via "+wcHost()+" "};
-nd.appendChild(ch);
-wkList.appendChild(box);wkList.appendChild(note);wkList.appendChild(nd);
+aC(nd,ch);
+aC(wkList,box);aC(wkList,note);aC(wkList,nd);
 wkHdr.textContent="WalletConnect";
 Hd(wkWrap,0);
 const back=document.activeElement;
@@ -3006,19 +3006,19 @@ const esc=e=>{if(e.key==="Escape")end(null)};
 cs.forEach(c=>{
 const b=cE("button");
 b.type="button";b.className="tkr";
-if(c.icon){const im=cE("img");im.src=c.icon;im.alt="";b.appendChild(im)}
-else if(c.svg){const sp=cE("span");sp.className="wki";sp.innerHTML=c.svg;b.appendChild(sp)}
-b.appendChild(document.createTextNode(c.name));
-if(c.sub){const s=cE("span");s.className="wks";s.textContent=c.sub;b.appendChild(s)}
+if(c.icon){const im=cE("img");im.src=c.icon;im.alt="";aC(b,im)}
+else if(c.svg){const sp=cE("span");sp.className="wki";sp.innerHTML=c.svg;aC(b,sp)}
+aC(b,document.createTextNode(c.name));
+if(c.sub){const s=cE("span");s.className="wks";s.textContent=c.sub;aC(b,s)}
 if(c.on){b.classList.add("cur");b.setAttribute("aria-current","true")}
 b.onclick=()=>end(c);
-wkList.appendChild(b)});
-const cx=cE("button");cx.type="button";cx.className="wnbtn";cx.textContent="Cancel";cx.onclick=()=>end(null);wkList.appendChild(cx);
+aC(wkList,b)});
+const cx=cE("button");cx.type="button";cx.className="wnbtn";cx.textContent="Cancel";cx.onclick=()=>end(null);aC(wkList,cx);
 wkWrap.onclick=e=>{if(e.target===wkWrap)end(null)};
 addEventListener("keydown",esc);
 addEventListener("keydown",wkTrap,true);
 Hd(wkWrap,0);
-(wkList.querySelector(".cur")||wkList.firstChild)?.focus()});
+(qS(wkList,".cur")||wkList.firstChild)?.focus()});
 async function wkResolve(){
 if(PROV)return true;
 wkScan();
@@ -3073,19 +3073,19 @@ wnGo.disabled=false;
 if(wnMode){wnPaint();wnQuote();wnRoll()}else wnGo.textContent="Register";
 if(pvMode)pvWake();if(mkMode){mkCount=-1;mkLoad(1)}render()}
 }
-const lqReserveGas=()=>lqList.querySelector(".lqnew")?LQ_CREATE_GAS+300000n:400000n;
+const lqReserveGas=()=>qS(lqList,".lqnew")?LQ_CREATE_GAS+300000n:400000n;
 const lqFillMax=(tok,max)=>{
-const box=lqList.querySelector(".lqadd:not(.hide)");
+const box=qS(lqList,".lqadd:not(.hide)");
 const pair=chPair();
 if(!box||!pair)return false;
 const side=pair[0].addr.toLowerCase()===tok.addr.toLowerCase()?"0":"1";
-const el=box.querySelector(`.lqin[data-side="${side}"]`);
+const el=qS(box,`.lqin[data-side="${side}"]`);
 if(!el)return false;
 el.value=fU(max,tok.dec);
 el.dispatchEvent(new Event("input",{bubbles:true}));
 return true;
 };
-bal1.addEventListener("click",async e=>{
+aE(bal1,"click",async e=>{
 if(e.target.tagName!=="A")return;
 e.preventDefault();
 const t=TOKENS[toSel.value];
@@ -3103,7 +3103,7 @@ outAmt.value=fU(max,t.dec);
 fitFont(outAmt);
 lqPreviewSoon();
 });
-bal.addEventListener("click",async e=>{
+aE(bal,"click",async e=>{
 if(e.target.tagName!=="A")return;
 e.preventDefault();
 const f=TOKENS[fromSel.value];
@@ -3675,7 +3675,7 @@ const v=cE("u");
 const gap=top>0n?Number((x.f>top?x.f-top:top-x.f)*10000n/top)/100:0;
 v.textContent=`${isIn?"min":"max"} ${sigAmt(x.f,isIn?t.dec:f.dec)}${gap>0.004?` · ${worse}${gap.toFixed(2)}%`:""}`;
 row.append(n,v);
-rankBox.appendChild(row);
+aC(rankBox,row);
 }
 }
 rankBox.title=isIn?"The least each venue guarantees you receive, after slippage":"The most each venue may take, after slippage";Hd(rankBox,!(rankOpen&&rankBox.firstChild));
@@ -3744,8 +3744,8 @@ rankOpen=!shut;
 car.setAttribute("aria-expanded",shut?"false":"true")};
 car.onclick=carToggle;
 car.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();carToggle()}};
-rate.appendChild(document.createTextNode(" "));
-rate.appendChild(car);
+aC(rate,document.createTextNode(" "));
+aC(rate,car);
 }
 if(flR){const b=cE("button");b.type="button";b.className="fclink";b.textContent="Redeem";b.onclick=()=>flRedeem(f,swapAmt,flR);rate.append(" ",b)}
 const inApprove=isIn?swapAmt:r.amountLimit;
@@ -3916,17 +3916,17 @@ addr.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();addr.oncl
 const AUTO_Q_MAX=5;
 const updateSoon=()=>{clearTimeout(debounceT);if(tab==="swap"&&!offChain())blockNow().catch(()=>{});debounceT=setTimeout(()=>{debounceT=0;update()},250)};
 const setMode=m=>{++seq;quoting=false;mode=m;const o=m==="in"?outAmt:amt;o.value="";fitFont(o);last=null;sendReady=null;render()};
-amt.addEventListener("input",()=>{
+aE(amt,"input",()=>{
 if(lqMode){fitFont(amt);lqPreviewSoon();return}
 if(tab==="book"){fitFont(amt);render();return}setMode("in");fitFont(amt);updateSoon()});
-outAmt.addEventListener("input",()=>{
+aE(outAmt,"input",()=>{
 if(lqMode){fitFont(outAmt);lqPreviewSoon();return}
 if(tab==="book"){fitFont(outAmt);seedFloor();render();return}setMode("out");fitFont(outAmt);updateSoon()});
 const slipWarn=()=>{const h=+slip.value>=3;slip.classList.toggle("warn",h);slip.title=h?"High slippage — you accept a much worse price":"";slip.setAttribute("aria-label",h?"Slippage (high)":"Slippage")};
 if(LS.slip&&+LS.slip>=.01&&+LS.slip<=10)slip.value=LS.slip;
 slipWarn();
-slip.addEventListener("input",()=>{++seq;last=null;slipWarn();render();if(!lqMode)updateSoon()});
-rc.addEventListener("input",()=>{
+aE(slip,"input",()=>{++seq;last=null;slipWarn();render();if(!lqMode)updateSoon()});
+aE(rc,"input",()=>{
 if(lnMode)return;
 if(lqMode){clearTimeout(lqToT);lqToT=setTimeout(lqShowTo,300);return}
 last=null;sendReady=null;render();updateSoon()});
@@ -3940,11 +3940,11 @@ if(debounceT){clearTimeout(debounceT);debounceT=0;update();return}
 if(!go.disabled)go.click();
 };
 for(const el of[amt,outAmt,rc,slip,floorAmt,nftId,lnName,lnSym,lnSupply,lnMcap,lnAlloc,lnGoal,lnDays])
-if(el)el.addEventListener("keydown",onEnter);
-slip.addEventListener("change",()=>{slip.value=slipPct();slipWarn();try{LS.slip=slip.value}catch{}});
+if(el)aE(el,"keydown",onEnter);
+aE(slip,"change",()=>{slip.value=slipPct();slipWarn();try{LS.slip=slip.value}catch{}});
 for(const sel of [fromSel,toSel]){
 sel.dataset.prev=sel.value;
-sel.addEventListener("change",async()=>{
+aE(sel,"change",async()=>{
 if(sel.value!=="__custom"){if(isNft(sel.value)&&tab!=="book")setTab("book");
 sel.dataset.prev=sel.value;
 sel.dataset.addr=TOKENS[sel.value]?.addr||"";
@@ -4046,7 +4046,7 @@ footAddr.innerHTML+=` · <a href="${url}" target="_blank" rel="noopener" `
 }catch{}
 })();
 const wkGo=()=>{wireWallet(prov());
-if(!prov())window.addEventListener("ethereum#initialized",()=>wireWallet(prov()),{once:true})};
+if(!prov())aE(window,"ethereum#initialized",()=>wireWallet(prov()),{once:true})};
 if(!PROV&&LS[WK])wkRestore().then(wkGo,wkGo);else wkGo();
 setTimeout(burnTotal,0);
 setTimeout(loadEthUsd,0);
@@ -4247,7 +4247,7 @@ return{ic,txt:`${tM(amt,m.dec)} ${k?safeSym(k.sym):'“'+m.sym+'”'}`,ok:!!k&&!
 sym:k?safeSym(k.sym):m.sym,dec:m.dec,link:addr===ZERO?"ETH":escan(addr)};
 }
 let floorSeq=0;
-nftId.addEventListener("input",()=>{syncOrderType();showFloor();render()});
+aE(nftId,"input",()=>{syncOrderType();showFloor();render()});
 async function showFloor(){
 const el=gE("floorNote");if(!el)return;
 const side=isNft(fromSel.value)?fromSel.value:isNft(toSel.value)?toSel.value:null;
@@ -4777,11 +4777,11 @@ if(el.dataset.k)s.push(el.dataset.k);
 return s};
 const bookReopen=ks=>{
 for(const k of ks){
-const el=book.querySelector('.o.ins[data-k="'+k+'"]');
+const el=qS(book,'.o.ins[data-k="'+k+'"]');
 if(!el)continue;
 const at=k.lastIndexOf(":");
 const c=cardCache[k.slice(0,at).toLowerCase()+":"+k.slice(at+1)];
-const box=el.parentNode.querySelector(".ic");
+const box=qS(el.parentNode,".ic");
 if(!c||!box)continue;
 el.setAttribute("aria-expanded","true");
 box.innerHTML=cardHtml(c)||"No card for this order.";
@@ -4885,7 +4885,7 @@ return(rows?`<dl>${rows}</dl>`:"")+(c.img?`<img src="${c.img}" alt="" loading="l
 }
 let inspectSeq=0;
 async function inspect(el,k){
-const box=el.parentNode.querySelector(".ic");
+const box=qS(el.parentNode,".ic");
 if(!box)return;
 if(box.innerHTML){box.innerHTML="";delete box.dataset.job;el.setAttribute("aria-expanded","false");return}
 el.setAttribute("aria-expanded","true");
@@ -4931,13 +4931,13 @@ bkTog.setAttribute("aria-expanded",on&&bkOpen?"true":"false");
 Hd(book,!on||!bkOpen);
 }
 bkTog.onclick=()=>{bkOpen=!bkOpen;syncBook(bookShown,bookRows.length);try{LS.bk=bkOpen?"1":"0"}catch{}};
-book.addEventListener("keydown",e=>{
+aE(book,"keydown",e=>{
 if(e.key!=="Enter"&&e.key!==" ")return;
 const row=e.target.closest(".o.ins");
 if(!row||e.target!==row)return;
 e.preventDefault();inspect(row,row.dataset.k);
 });
-book.addEventListener("click",async e=>{
+aE(book,"click",async e=>{
 const fc=e.target.closest("[data-bf]"),tc=e.target.closest("[data-bt]");
 if(fc){bookPairOnly=fc.dataset.bf==="1";paintBook();try{LS.bkp=bookPairOnly?"1":"0"}catch{}return}
 if(tc){bookType=tc.dataset.bt;paintBook();try{LS.bkt=bookType}catch{}return}
@@ -5528,7 +5528,7 @@ if(heldWei>0n)html+=`<div class="p"><span><b>↩ ${tM(heldWei,18)} ETH</b>`
 if(more)html+=`<div class="p" style="justify-content:center"><button data-a="m">Show ${Mn(more,POSPAGE)} more of ${more}</button></div>`;
 pos.innerHTML=html;pos.dataset.k=CHAIN_ID+account;
 }
-pos.addEventListener("click",async e=>{
+aE(pos,"click",async e=>{
 const m=e.target.closest('button[data-a="m"]');
 if(m){posShown+=POSPAGE;m.disabled=true;Promise.resolve(loadPos()).finally(()=>{if(m.isConnected)m.disabled=false});return}
 const b=e.target.closest("button[data-t]");
@@ -5658,7 +5658,7 @@ if(lnMode&&PLAUNCH===ZERO)lnSet(false);
 if(wnMode&&CHAIN_ID!==1)wnSet(false);
 if(pvMode&&CHAIN_ID!==1)pvSet(false);
 if(mkMode&&CHAIN_ID!==1)mkSet(false);
-const co=lnKind.querySelector('option[value="cause"]');co.hidden=co.disabled=CHAIN_ID!==1;
+const co=qS(lnKind,'option[value="cause"]');co.hidden=co.disabled=CHAIN_ID!==1;
 if(co.disabled&&lnKind.value==="cause"){lnKind.value="coin";if(lnMode)cauKind()}
 try{if(CHAIN_ID===1&&cpInvGet())cpInvGo();tbScan();rxProbe()}catch{}
 }
@@ -5720,10 +5720,10 @@ if(!await sure("Send to another chain from here?\n\nThere is no bridge off an L2
 try{LS[RL_ON]="1"}catch{}
 if(!rlOn())return void(stat.textContent="This browser will not remember the setting.");
 brOpts();brPaint();syncSlowLink();updateSend()};
-for(const el of[amt,rc])el.addEventListener("input",syncSlowLink);
-fromSel.addEventListener("change",syncSlowLink);
-dly.addEventListener("change",()=>{dlyUser=true});
-for(const el of[fromSel,toSel])el.addEventListener("change",()=>{pairUser=true});
+for(const el of[amt,rc])aE(el,"input",syncSlowLink);
+aE(fromSel,"change",syncSlowLink);
+aE(dly,"change",()=>{dlyUser=true});
+for(const el of[fromSel,toSel])aE(el,"change",()=>{pairUser=true});
 tipCk.onchange=()=>{syncTip();render()};
 fill.onchange=render;
 dRest.onchange=render;
@@ -5765,7 +5765,7 @@ let start;try{start=pU(raw,t.dec)}catch{return}
 if(!start)return;
 floorAmt.value=tM(start/2n,t.dec);
 };
-floorAmt.addEventListener("input",()=>{
+aE(floorAmt,"input",()=>{
 floorTouched=true;
 render();
 });
@@ -5775,7 +5775,7 @@ setInterval(()=>{
 if(tab!=="swap"||!account||document.hidden||!last||swap.disabled||busy)return;
 if(Date.now()>=last.exp-5000)autoQ++<AUTO_Q_MAX?update(1):render();
 },5e3);
-document.addEventListener("visibilitychange",()=>{
+aE(document,"visibilitychange",()=>{
 if(document.hidden)return;
 if(wnMode){wnSync();wnRoll()}
 if(pvMode)pvRefresh();
@@ -5809,7 +5809,7 @@ const digits=m.replace(".","").replace(/0+$/,"")||"1";
 return zeros<4?v.toFixed(Mn(8,-Number(e)+2)):`0.0${sub(zeros)}${digits}`;
 };
 const lqSyncAmounts=()=>{
-const show=!lqMode||!!lqList.querySelector(".lqnew");
+const show=!lqMode||!!qS(lqList,".lqnew");
 for(const el of [amtRow,outRow])if(el)Hd(el,!show);
 };
 function lqSet(on){
@@ -5823,7 +5823,7 @@ if(on&&pvMode)pvSet(false);
 if(on&&mkMode)mkSet(false);
 lq.setAttribute("aria-pressed",on?"true":"false");
 lq.classList.toggle("on",on);
-document.querySelector(".card").classList.toggle("lqon",on);
+qS(document,".card").classList.toggle("lqon",on);
 for(const el of [rate,flip,swap])
 if(el)Hd(el,on);
 rc.value="";rc.classList.remove("bad");rcvEl.textContent="";
@@ -6041,7 +6041,7 @@ lqList.innerHTML=`<div class="lqempty">This pair's band holds ${alt.sym}, not ${
 +`<button class="lqbtn" id="lqSwitch">Switch to ${alt.sym}</button></div>`;
 lqSyncAmounts();
 lqRows=[];
-lqList.querySelector("#lqSwitch").onclick=()=>{
+qS(lqList,"#lqSwitch").onclick=()=>{
 const sel=TOKENS[fromSel.value]&&isEthLike(TOKENS[fromSel.value].addr)?fromSel:toSel;
 sel.value=String(alt.idx);sel.dataset.prev=sel.value;
 pairChosen=true;
@@ -6231,7 +6231,7 @@ async function lqPreview(box){++lqPvSeq;
 const pool=box.closest(".lqrow")?.dataset.pool||"";
 const row=lqRows.find(x=>x.pool.toLowerCase()===pool.toLowerCase());
 const p=chPair();
-const out=box.querySelector(".lqpv"),go=box.querySelector('[data-act="ac"]');
+const out=qS(box,".lqpv"),go=qS(box,'[data-act="ac"]');
 if(!row||!p){out.textContent="";go.disabled=true;return}
 const [t0,t1]=p,ins=box.querySelectorAll(".lqin");
 let a0,a1;
@@ -6264,7 +6264,7 @@ const ref=(pv.ref0>0n?` · refunds ${tM(pv.ref0,t0.dec)} ${t0.sym}`:"")
 out.textContent=`deposits ${tM(pv.used0,t0.dec)} ${t0.sym} + ${tM(pv.used1,t1.dec)} ${t1.sym}${ref}`;
 go.disabled=false;
 }
-const isZap=box=>!!box.querySelector(".lqz")?.checked;
+const isZap=box=>!!qS(box,".lqz")?.checked;
 function zapSide(box,t0,t1){
 const ins=box.querySelectorAll(".lqin");
 const v0=ins[0].value.trim(),v1=ins[1].value.trim();
@@ -6290,15 +6290,15 @@ const raw=pU(v,i===0?t0.dec:t1.dec);
 other.value=fU(i===0?raw*row.r1/row.r0:raw*row.r0/row.r1,i===0?t1.dec:t0.dec);
 }catch{}
 }
-lqList.addEventListener("input",e=>{
+aE(lqList,"input",e=>{
 const box=e.target.closest(".lqadd");
 if(box&&e.target.classList.contains("lqin")){
-box.querySelector('[data-act="ac"]').disabled=true;
+qS(box,'[data-act="ac"]').disabled=true;
 lqMirror(box,e.target);clearTimeout(lqPvT);lqPvT=setTimeout(()=>lqPreview(box),300);return}
 const nb=e.target.closest(".lqnew");
 if(nb)lqPreviewSoon()
 });
-lqList.addEventListener("change",e=>{
+aE(lqList,"change",e=>{
 if(e.target.id==="lqFee"||e.target.id==="lqRange")return lqNewPreview();
 if(!e.target.classList.contains("lqz"))return;
 const box=e.target.closest(".lqadd"),ins=box.querySelectorAll(".lqin");
@@ -6306,25 +6306,25 @@ const on=e.target.checked;
 const mir=box.dataset.mir;
 if(on&&mir&&ins[0].value.trim()&&ins[1].value.trim())ins[+mir].value="";
 if(!on)lqMirror(box,ins[0].value.trim()||!ins[1].value.trim()?ins[0]:ins[1]);
-box.querySelector('[data-act="ac"]').textContent=on?"Zap in":"Add liquidity";
+qS(box,'[data-act="ac"]').textContent=on?"Zap in":"Add liquidity";
 lqPreview(box);
 });
 let lqNewSeq=0;
 let lqPvT2;
-const lqPreviewSoon=()=>{++lqNewSeq;const g=lqList.querySelector("#lqCreate");if(g)g.disabled=true;
+const lqPreviewSoon=()=>{++lqNewSeq;const g=qS(lqList,"#lqCreate");if(g)g.disabled=true;
 clearTimeout(lqPvT2);lqPvT2=setTimeout(lqNewPreview,320)};
 async function lqNewPreview(){
-const box=lqList.querySelector(".lqnew");
+const box=qS(lqList,".lqnew");
 if(!box)return;
-const out=box.querySelector("#lqPv"),go=box.querySelector("#lqCreate");
-const bandOut=box.querySelector("#lqRangeOut");bandOut.textContent="";
+const out=qS(box,"#lqPv"),go=qS(box,"#lqCreate");
+const bandOut=qS(box,"#lqRangeOut");bandOut.textContent="";
 const my=++lqNewSeq;
 go.disabled=true;
 const pair=chPair();
 if(!pair){out.textContent="";return}
 const [t0,t1]=pair;
-const range=box.querySelector("#lqRange").value;
-box.querySelector("#lqCustom").classList.toggle("hide",range!=="custom");
+const range=qS(box,"#lqRange").value;
+qS(box,"#lqCustom").classList.toggle("hide",range!=="custom");
 const payTok=TOKENS[fromSel.value];
 const payIs0=!!payTok&&payTok.addr.toLowerCase()===t0.addr.toLowerCase();
 const el0=payIs0?amt:outAmt,el1=payIs0?outAmt:amt;
@@ -6334,11 +6334,11 @@ const v0=el0.value.trim(),v1=el1.value.trim();
 a0=v0?pU(v0,t0.dec):0n;a1=v1?pU(v1,t1.dec):0n;
 }catch{out.textContent="Check the amounts.";return}
 const oneSided=(a0&&!a1)?0:(a1&&!a0)?1:-1;
-box.querySelector("#lqPxRow").classList.toggle("hide",oneSided<0);
+qS(box,"#lqPxRow").classList.toggle("hide",oneSided<0);
 if(!a0&&!a1){
 out.textContent=`Enter how much ${t0.sym} and ${t1.sym} to deposit — the ratio sets the opening price.`;
 return}
-const pxIn=box.querySelector("#lqPx").value.trim();
+const pxIn=qS(box,"#lqPx").value.trim();
 const px=oneSided<0
 ?(Number(a1)/10**t1.dec)/(Number(a0)/10**t0.dec)
 :(pxIn?+pxIn:NaN);
@@ -6347,10 +6347,10 @@ const only=oneSided===0?t0.sym:t1.sym;
 out.textContent=`${/^[AEIOU]/i.test(only)?"An":"A"} ${only}-only band has no ratio to`
 +` read a price from — name one.`;
 return}
-const fee=BigInt(box.querySelector("#lqFee").value);
+const fee=BigInt(qS(box,"#lqFee").value);
 let lo,hi;
 if(range==="custom"){
-const n=id=>{const v=box.querySelector("#"+id).value.trim();return v?+v:NaN};
+const n=id=>{const v=qS(box,"#"+id).value.trim();return v?+v:NaN};
 lo=n("lqLo");hi=n("lqHi");
 if(!(lo>0)||!(hi>0)){out.textContent="Name both prices.";return}
 if(lo>=hi){out.textContent="The low price must be below the high one.";return}
@@ -6372,10 +6372,10 @@ const sp=oneSided===0?sl:oneSided===1?sh:lqSeedPrice(sl,sh,a0,a1);
 if(!sp){out.textContent="Those amounts cannot open a band that wide.";return}
 const openAt=bandPrice(sp,t0.dec,t1.dec);
 bandOut.innerHTML=lqBar(lo,hi,openAt)+`<span></span>`;
-bandOut.querySelector("span").textContent=
+qS(bandOut,"span").textContent=
 `${fmtPx(lo)} – ${fmtPx(hi)} · opens at ${fmtPx(openAt)} ${t1.sym} per ${t0.sym}`
 +(oneSided===0?` · ${t0.sym} only`:oneSided===1?` · ${t1.sym} only`:"");
-box.querySelector("#lqOwnNote").textContent=
+qS(box,"#lqOwnNote").textContent=
 `Unowned, like any AMM pool: anyone may add, and no creator fee can ever be`
 +` charged. Prices are ${t1.sym} per ${t0.sym}.`;
 lqGasNote(box);
@@ -6407,7 +6407,7 @@ out.textContent="Could not reach the factory.";
 }
 const LQ_CREATE_GAS=4700000n;
 async function lqGasNote(box){
-const el=box.querySelector("#lqGas");
+const el=qS(box,"#lqGas");
 if(!el||el.textContent)return;
 el.textContent=`Creating deploys the pool contract — about `
 +`${(Number(LQ_CREATE_GAS)/1e6).toFixed(1)}M gas.`;
@@ -6420,11 +6420,11 @@ el.textContent=`Creating deploys the pool contract — about `
 }catch{}
 }
 async function lqCreate(){
-const box=lqList.querySelector(".lqnew");
+const box=qS(lqList,".lqnew");
 if(!box||busy||!account)return;
 const pair=chPair(); if(!pair)return;
 const [t0,t1]=pair;
-const go=box.querySelector("#lqCreate"),out=box.querySelector("#lqPv");
+const go=qS(box,"#lqCreate"),out=qS(box,"#lqPv");
 const sl=BigInt(box.dataset.sl||0),sh=BigInt(box.dataset.sh||0),sp=BigInt(box.dataset.sp||0);
 const a0=BigInt(box.dataset.a0||0),a1=BigInt(box.dataset.a1||0),fee=BigInt(box.dataset.fee||0);
 if(!sl||!sh||!sp){out.textContent="Preview the band first.";return}
@@ -6454,7 +6454,7 @@ const pr=chPair();if(!pr)return;
 ev.target.outerHTML=lqNewForm(pr[0],pr[1]);
 lqSyncAmounts();
 lqNewPreview();
-lqList.querySelector(".lqnew")?.scrollIntoView?.({block:"nearest"});
+qS(lqList,".lqnew")?.scrollIntoView?.({block:"nearest"});
 return}
 const pb=ev.target.closest("[data-pf]");if(pb)return void pfDo(pb.dataset.pf,pb);
 const b=ev.target.closest("[data-act]");
@@ -6469,11 +6469,11 @@ if(act==="a"){
 const box=b.closest(".lqrow").querySelector(".lqadd");
 box.classList.toggle("hide");
 b.textContent=box.classList.contains("hide")?"Add":"Cancel";
-if(!box.classList.contains("hide"))box.querySelector(".lqin").focus();
+if(!box.classList.contains("hide"))qS(box,".lqin").focus();
 return;
 }
 if(act==="w"){
-const sh=row.shares*BigInt(b.parentElement.querySelector(".lqwp")?.value||100)/100n;
+const sh=row.shares*BigInt(qS(b.parentElement,".lqwp")?.value||100)/100n;
 if(sh===0n)return;
 ++busy;b.disabled=true;
 try{await doRemove(pool,sh,t0,t1)}catch(e){err(e)}finally{--busy;b.disabled=false}
@@ -6482,7 +6482,7 @@ return;
 if(act==="ac"){
 const box=b.closest(".lqadd");
 const ins=box.querySelectorAll(".lqin");
-if(box.querySelector(".pfk:checked")){++busy;b.disabled=true;try{await pfAdd(box,t0,t1)}catch(e){err(e)}finally{--busy;b.disabled=false;loadLq();rBal();pfSync(1).catch(()=>{})}return}
+if(qS(box,".pfk:checked")){++busy;b.disabled=true;try{await pfAdd(box,t0,t1)}catch(e){err(e)}finally{--busy;b.disabled=false;loadLq();rBal();pfSync(1).catch(()=>{})}return}
 if(isZap(box)){
 const z=zapSide(box,t0,t1);
 if(z.err){stat.textContent=z.err;return}
@@ -6550,7 +6550,7 @@ return row});
 if(my!=gvSeq)return;
 const hd=cE("p"),ln=a=>`<a href="https://etherscan.io/address/${cks(a)}#code" target="_blank" rel="noopener">${short(cks(a))}</a>`;hd.innerHTML=`${v.length} versions · the name serves ${ln(cur)}`+(cur==gvTip?"":` · ${ln(gvTip)} from ${new Date((Number(gw(r.at(-1)))+259200)*1e3).toLocaleDateString()}`)+(n?"":" · no proposals yet");
 gvList.replaceChildren(hd,...rows);Hd(gvNew,!gw(bd))}
-catch(e){if(my==gvSeq){if(!gvList.querySelector(".p"))gvList.textContent="";gvS.textContent=gvE(e)}}}
+catch(e){if(my==gvSeq){if(!qS(gvList,".p"))gvList.textContent="";gvS.textContent=gvE(e)}}}
 gvGo.onclick=async()=>{try{
 const to=gvTo.value.trim(),data=gvData.value.trim()||"0x",description=gvDesc.value.trim();
 if(!isAddr(to)||!/^0x([0-9a-f]{2})*$/i.test(data)||!description)throw Error("A proposal needs a description, a target address and hex calldata.");
@@ -6703,11 +6703,11 @@ pfEl.append(pfBtn("go",on&&!pfMine()?"Farm":"Open"));if(pfS.ea>0n)pfEl.append(pf
 pfEl.title=on?pfHead().join(" · ")+". Stake liquidity in the TAC/ETH Precision pool to earn TAC by the second. The rate is shared by everyone staked, so it falls as more joins.":"This farm has stopped paying. Your stake and anything earned can be taken out at any time."}
 pfShow()}
 function pfPaint(){const row=[...lqList.querySelectorAll(".lqrow")].find(r=>(r.dataset.pool||"").toLowerCase()===PFPOOL.toLowerCase());if(!row)return;
-let el=row.querySelector(".pfb");const on=!!pfS&&pfOn(),box=row.querySelector(".lqadd"),k=box&&box.querySelector(".pfk");
+let el=qS(row,".pfb");const on=!!pfS&&pfOn(),box=qS(row,".lqadd"),k=box&&qS(box,".pfk");
 if(box&&on&&!k)box.insertAdjacentHTML("afterbegin",'<label class="lqzap"><input type="checkbox" class="pfk" checked> Stake in the farm to earn TAC</label>');
 if(box&&!on&&k)k.parentElement.remove();
 if(!pfS||!(on||pfMine())){if(el)el.remove();return}
-if(!el){el=cE("div");el.className="pfb";row.insertBefore(el,row.querySelector(".lqacts"))}
+if(!el){el=cE("div");el.className="pfb";row.insertBefore(el,qS(row,".lqacts"))}
 el.textContent="";const h=cE("div"),S=pfS;h.className="pfh";pfIcon(h);h.append(on?"Farm · "+pfHead().join(" · "):"Farm ended");el.append(h);
 if(S.st>0n&&S.sup){const m=cE("div");m.className="lqmine";m.textContent="staked "+tM(S.st*S.r0/S.sup,18)+" ETH + "+tM(S.st*S.r1/S.sup,18)+" TAC · earned "+tM(S.ea,18)+" TAC";el.append(m)}
 const acts=cE("div");acts.className="lqacts";
@@ -6717,9 +6717,9 @@ const st=pfBtn("st","","lqbtn"),upd=()=>st.textContent="Stake "+tM(S.lp*BigInt(s
 if(S.ea>0n)acts.append(pfBtn("cl","Claim","lqbtn"));
 if(S.st>0n){acts.insertAdjacentHTML("beforeend",'<select class="pfp" aria-label="How much">'+QP+'</select><select class="pfo" aria-label="Withdraw as"><option value="both">as ETH + TAC</option><option value="eth">as ETH</option><option value="tac">as TAC</option><option value="lp">as LP</option></select>');const w=pfBtn("wd","Withdraw","lqbtn");w.title="Withdrawing all also claims your TAC; a part leaves it to claim.";acts.append(w)}
 if(acts.childNodes.length)el.append(acts)}
-function fmPf(){pvFarm.querySelector(".fmpf")?.remove();if(!pfS||!pfOn()||pvFarm.classList.contains("hide"))return;
+function fmPf(){qS(pvFarm,".fmpf")?.remove();if(!pfS||!pfOn()||pvFarm.classList.contains("hide"))return;
 const c=pfBtn("go","","fmc fmpf"),nm=cE("span"),a=pfApr();pfIcon(c,16,"");nm.className="fmn";nm.textContent="TAC/ETH zSwap "+Math.round(pfDay()).toLocaleString()+" TAC/day";c.append(nm);
-if(a){const e=cE("i");e.className="fma";e.textContent=a;c.append(e)}pvFarm.insertBefore(c,pvFarm.querySelector("a"))}
+if(a){const e=cE("i");e.className="fma";e.textContent=a;c.append(e)}pvFarm.insertBefore(c,qS(pvFarm,"a"))}
 function pfGo(){pairUser=false;pairFree=1;if(location.hash==="#farm")applyLink(1);else location.hash="farm"}
 const pfTx=async(data,val,verb)=>settle(await sendWith([],{from:account,to:PFARM,data,value:toHex(val)},verb));
 async function pfTok(tok,amt,plain,withP,val,verb){const dl=BigInt(nowS()+1800),aps=await apSeq(tok,PFARM,amt);
@@ -6739,15 +6739,15 @@ return pfTok(TAC_TOK,a1,d=>"0x6d15c09b"+eU(a1)+eU(m)+eU(d),(d,s)=>"0xddd9f3fb"+e
 async function pfDo(k,b){if(busy||!pfS)return;if(k==="go")return pfGo();if(!account)return void(stat.textContent="Connect a wallet first.");
 ++busy;b.disabled=true;try{await cW();const S=pfS,dl=eU(BigInt(nowS()+1800));
 if(k==="cl")await pfTx("0x4e71d92d",0n,"Claiming TAC…");
-else if(k==="st"){const sh=S.lp*BigInt(b.parentElement.querySelector(".pfsp")?.value||100)/100n;if(!sh)throw Error("Nothing to stake.");
+else if(k==="st"){const sh=S.lp*BigInt(qS(b.parentElement,".pfsp")?.value||100)/100n;if(!sh)throw Error("Nothing to stake.");
 await pfTok(PFPOOL,sh,()=>"0xa694fc3a"+eU(sh),(d,s)=>"0xecd9ba82"+eU(sh)+eU(d)+s,0n,"Staking…")}
-else if(k==="wd"){const r=b.parentElement,o=r.querySelector(".pfo")?.value,f=BigInt(r.querySelector(".pfp")?.value||100),all=f===100n,sh=eU(S.st*f/100n);
+else if(k==="wd"){const r=b.parentElement,o=qS(r,".pfo")?.value,f=BigInt(qS(r,".pfp")?.value||100),all=f===100n,sh=eU(S.st*f/100n);
 if(o==="lp")await pfTx(all?"0xe9fad8ee":"0x2e1a7d4d"+sh,0n,"Withdrawing…");
 else if(o==="both"){const s=all?"0xbccbe38a":"0xbd8196a9"+sh,q=await pfSim(s+eU(0n)+eU(0n)+dl);await pfTx(s+eU(pfW(q,0))+eU(pfW(q,1))+dl,0n,"Withdrawing…")}
 else{const e=eBo(o==="eth"),s=all?"0x6ae36ea7"+e:"0x47d1eebd"+e+sh,q=await pfSim(s+eU(0n)+dl);await pfTx(s+eU(pfW(q,0))+dl,0n,"Withdrawing…")}}
 }catch(e){err(e)}finally{--busy;b.disabled=false;rBal();lqMode&&loadLq();pfSync(1).catch(()=>{})}}
 pfEl.onclick=e=>{const b=e.target.closest("button[data-pf]");if(b){sBlip();pfDo(b.dataset.pf,b)}};
-pvFarm.addEventListener("click",e=>{const b=e.target.closest("button[data-pf]");if(b){sBlip();pfGo()}});
+aE(pvFarm,"click",e=>{const b=e.target.closest("button[data-pf]");if(b){sBlip();pfGo()}});
 setInterval(()=>{if(!document.hidden&&CHAIN_ID===1&&(lqMode||!pfEl.classList.contains("hide")))pfSync().catch(()=>{})},6e4);pfSync().catch(()=>{});
 let fcMineToks=[],fcSeq=0,fcMineSeq=0;
 async function fcMine(){adSync().catch(()=>{});pfSync().catch(()=>{});
@@ -7251,8 +7251,8 @@ if(on&&mkMode)mkSet(false);
 ln.setAttribute("aria-pressed",on?"true":"false");
 ln.classList.toggle("on",on);
 for(const el of [rate,flip,swap])if(el)Hd(el,on);
-for(const el of [document.querySelector(".panel"),rcvPanel])if(el)Hd(el,on);
-document.querySelector(".card").classList.toggle("lnon",on);
+for(const el of [qS(document,".panel"),rcvPanel])if(el)Hd(el,on);
+qS(document,".card").classList.toggle("lnon",on);
 for(const el of [lnPanel,lnNote,lnGo])Hd(el,!on);
 rc.value="";rc.classList.remove("bad");rcvEl.textContent="";
 rc.title="";if(!on)rc.placeholder="Recipient (optional) — 0x or name";
@@ -7482,9 +7482,9 @@ const wnPaint=()=>{const on=wnMode;
 wn.setAttribute("aria-pressed",on?"true":"false");
 wn.classList.toggle("on",on);
 for(const el of [rate,flip,swap])if(el)Hd(el,on);
-for(const el of [document.querySelector(".panel"),rcvPanel])if(el)Hd(el,on);
+for(const el of [qS(document,".panel"),rcvPanel])if(el)Hd(el,on);
 for(const el of [wnPanel,wnGo,wnRollPanel])Hd(el,!on);
-for(const el of [rc,rcvEl])if(el)Hd(el,on);document.querySelector(".card").classList.toggle("wnon",on)};
+for(const el of [rc,rcvEl])if(el)Hd(el,on);qS(document,".card").classList.toggle("wnon",on)};
 function wnSet(on){
 if(on&&CHAIN_ID!==1)return;
 if(on)cbDisarm();
@@ -8485,8 +8485,8 @@ else{const[mf,wf]=pvLegs||[0n,fe];Q.push((fe?"Relay fee "+s(fe)+(pvLegs?" in two
 const to=pvTo.value.trim().toLowerCase();if(!to||to===account.toLowerCase())Q.push("Withdrawing to this same wallet links it to your deposit: for privacy, send it to a fresh address.")}}}
 if(my!==pvPS)return;pvPrev.textContent=Q.join("\n");Hd(pvPrev,!Q.length)}catch{if(my===pvPS)Hd(pvPrev,1)}};
 let pvPT=0;const pvPrevSoon=()=>{clearTimeout(pvPT);pvPT=setTimeout(pvPrevNow,250)};
-pvPanel.addEventListener("input",pvPrevSoon);pvPanel.addEventListener("change",pvPrevSoon);
-pvAmt.addEventListener("change",()=>{const d=pvDp(),m=pvAmt.value.trim().match(new RegExp("^(\\d*\\.\\d{"+d+"})\\d+$"));if(m){pvAmt.value=m[1];pvPrevSoon()}});
+aE(pvPanel,"input",pvPrevSoon);aE(pvPanel,"change",pvPrevSoon);
+aE(pvAmt,"change",()=>{const d=pvDp(),m=pvAmt.value.trim().match(new RegExp("^(\\d*\\.\\d{"+d+"})\\d+$"));if(m){pvAmt.value=m[1];pvPrevSoon()}});
 pvMax.onclick=async()=>{sBlip();if(!account||!cpSeed)return;const A=cpSel(),e=A.tok===ZERO;let v;
 try{if(pvAct.value==="dep"){const b=e?BigInt(await rpc("eth_getBalance",[account,L])||"0x0")-(await gasNow())*400000n:await cpTokBal(A);v=b>0n?b/A.scale:0n;
 if(v>0n&&e&&A.id===CP_ETH){const t=await cpTipFor(v*A.scale);if(t>0n)v=b-t>0n?(b-t)/A.scale:0n}}
@@ -8539,9 +8539,9 @@ const pvPaint=()=>{const on=pvMode;
 pv.setAttribute("aria-pressed",on?"true":"false");
 pv.classList.toggle("on",on);
 for(const el of [rate,flip,swap])if(el)Hd(el,on);
-for(const el of [document.querySelector(".panel"),rcvPanel])if(el)Hd(el,on);
+for(const el of [qS(document,".panel"),rcvPanel])if(el)Hd(el,on);
 for(const el of [pvPanel,pvGo])Hd(el,!on);
-for(const el of [rc,rcvEl])if(el)Hd(el,on);document.querySelector(".card").classList.toggle("pvon",on)};
+for(const el of [rc,rcvEl])if(el)Hd(el,on);qS(document,".card").classList.toggle("pvon",on)};
 function pvSet(on){
 if(on)cbDisarm();
 ++seq;quoting=false;
@@ -8609,14 +8609,14 @@ const mkChipPaint=()=>{for(const c of mkChips.querySelectorAll("[data-f]"))c.cla
 const mkRow=m=>{const t=mkTok(m.a),p=mkPct(m),me=mkPos[m.id];
 return`<div class="lqrow mkr${mkSel&&mkSel.id===m.id?" on":""}" data-k="${m.id}" role="button" tabindex="0"><div class="lqband">${m.d.replace(/\p{C}/gu,"").slice(0,140).replace(/[<&]/g,c=>c<"<"?"&amp;":"&lt;")}${m.d.length>140?"…":""}</div><div class="mkbar"><i style="width:${p}%"></i></div><div class="lqmeta"><span>YES ${p}%</span><span>${sigAmt(m.p,t.dec,4)} ${safeSym(t.sym)}</span><span>${mkWhen(m)}</span>${m.s&&me?.c||mkDue(m)?`<span class="lqtag mkt">${me?.c?"claim":"resolve"}</span>`:me?`<span class="lqtag">yours</span>`:""}</div></div>`};
 const mkPaintList=()=>{if(!mkMode)return;mkCl=mkAll.reduce((n,m)=>n+(m.s&&(mkPos[m.id]||{}).c||mkDue(m)?1:0),0);
-mkChips.querySelector('[data-f="mine"]').textContent=mkCl?`Mine (${mkCl})`:"Mine";const me=(account||"").toLowerCase(),q=mkFind.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+qS(mkChips,'[data-f="mine"]').textContent=mkCl?`Mine (${mkCl})`:"Mine";const me=(account||"").toLowerCase(),q=mkFind.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
 const r=mkAll.filter(m=>(mkF==="open"?mkLive(m):mkF==="done"?!mkLive(m):!!mkPos[m.id]||m.r===me)&&q.every(t=>(m.d+" "+mkTok(m.a).sym+" "+m.r).toLowerCase().includes(t)));
 r.sort(mkS==="pot"?(a,b)=>mkUsd(b)-mkUsd(a):mkS==="end"?(a,b)=>mkF==="done"?b.c-a.c:a.c-b.c:(a,b)=>b.o-a.o);
 cpSet(mkList,r.length?r.slice(0,100).map(mkRow).join(""):`<div class="lqempty">${mkCount<0?"Reading markets…":!mkAll.length?"No markets yet — create the first.":mkF==="mine"&&!account?"Connect a wallet to see yours.":"No markets match."}</div>`);
 mkSub.textContent=mkAll.length?(mkMore?`newest ${MK_MAX} of ${mkCount}`:mkAll.length+(mkAll.length>1?" markets":" market"))+(mkCl?` · ${mkCl} waiting on you`:""):""};
 const mkDetPaint=()=>{if(!mkMode)return;const m=mkSel;Hd(mkDet,!m);if(!m)return;
 const t=mkTok(m.a),me=mkPos[m.id]||{y:0n,n:0n,c:0n},live=mkLive(m),isR=!!account&&m.r===account.toLowerCase(),net=m.p-m.p*BigInt(m.f)/10000n,X=s=>s?"×"+(Number(net*1000n/s)/1000).toFixed(2):"—",S=safeSym(t.sym),lapsed=nowS()>=m.c+2592000;
-mkT.textContent=m.d.replace(/\p{C}/gu,"");Hd(mkT,m.d.length<141&&!!mkList.querySelector(".on"));
+mkT.textContent=m.d.replace(/\p{C}/gu,"");Hd(mkT,m.d.length<141&&!!qS(mkList,".on"));
 mkInfo.innerHTML=`<span class="mkhd">${m.s?`<b>${m.s===3?"each share returns":"each winning share pays"} ${m.w?"×"+(Number(m.p*1000n/m.w)/1000).toFixed(2):"—"}</b>`:`<b class="y">YES pays ${X(m.y)}</b><b class="n">NO pays ${X(m.n)}</b>`}</span><span class="mkfp">Pot ${sigAmt(m.p,t.dec,6)} ${S} · ${m.s?mkWhen(m):live?"closes "+mkD(m.c):isR&&!lapsed?"closed — resolve by "+mkD(m.c+2592000)+(m.y&&m.n?"":"; a side is empty, so only void"):"closed — awaiting the resolver"} · resolver <span id="mkRv">${short(m.r)}</span>${m.f?` · resolver fee ${mkPc(m.f)}% of the pot`:""}${m.x?` · exit tax ${mkPc(live?mkTax(m):m.x)}%`:live?" · bets final":""}${m.l?` · late tax ${live?mkPc(mkNow(m))+"% now, "+mkPc(m.l)+"% at close":mkPc(m.l)+"% at close"}`:""}</span>${me.y||me.n?`<span class="mkyou">You hold ${[[me.y,m.y,"YES"],[me.n,m.n,"NO"]].filter(v=>v[0]).map(([q,T,l])=>sigAmt(q,t.dec,6)+" "+l+(m.s?"":` → ${sigAmt(q*net/T,t.dec,6)} ${S}`)).join(" · ")}${live&&!m.x?" · locked until it settles":m.s&&!me.c?" · lost":""}</span>`:""}`;
 nameRev(m.r).then(n=>{if(n&&mkSel===m)mkRv.textContent=safeSym(n,48)}).catch(()=>{});
 Hd(mkAmtL,!live);
@@ -8653,9 +8653,9 @@ const mkPaint=()=>{const on=mkMode;
 mk.setAttribute("aria-pressed",on?"true":"false");
 mk.classList.toggle("on",on);
 for(const el of [rate,flip,swap])if(el)Hd(el,on);
-for(const el of [document.querySelector(".panel"),rcvPanel])if(el)Hd(el,on);
+for(const el of [qS(document,".panel"),rcvPanel])if(el)Hd(el,on);
 for(const el of [mkPanel,mkGo])Hd(el,!on);
-for(const el of [rc,rcvEl])if(el)Hd(el,on);document.querySelector(".card").classList.toggle("mkon",on)};
+for(const el of [rc,rcvEl])if(el)Hd(el,on);qS(document,".card").classList.toggle("mkon",on)};
 function mkSet(on){
 if(on&&CHAIN_ID!==1)return;
 if(on)cbDisarm();
@@ -8819,19 +8819,19 @@ return o};
 const invWei=n=>`<svg width="${n}" height="${n}" viewBox="0 0 16 16" fill="currentColor" fill-rule="evenodd" shape-rendering="crispEdges"><path d="M3 1h1v1H3zM5 2h1v1H5zM10 2h1v1h-1zM12 1h1v1h-1zM4 4h8v1H4zM3 5h10v1H3zM2 6h12v3H2zM3 9h10v1H3zM4 10h8v1H4zM5 11h2v1H5zM9 11h2v1H9zM2 12h3v1H2zM7 12h2v1H7zM11 12h3v1h-3zM1 13h2v1H1zM13 13h2v1h-2zM3 6h3v2H3zM10 6h3v2h-3z"/></svg>`;
 function invPlay(){
 if(invOff)return;
-const host=document.querySelector(".card");if(!host)return;
+const host=qS(document,".card");if(!host)return;
 const W=host.clientWidth,H=Mn(host.clientHeight,innerHeight-Mx(0,host.getBoundingClientRect().top)),COLS=6,ROWS=4,IW=22,IH=20,SW=22,SH=20;
 const mk=(c,h)=>{const d=cE("div");d.className=c;if(h)d.innerHTML=h;return d};
 const w=mk("inv");w.tabIndex=0;w.setAttribute("role","application");
 w.setAttribute("aria-label","Token invaders. Arrow keys move, space fires, escape leaves.");
-host.appendChild(w);
-const hud=mk("invh");w.appendChild(hud);
-hud.addEventListener("pointerdown",e=>{e.stopPropagation();e.preventDefault()});
+aC(host,w);
+const hud=mk("invh");aC(w,hud);
+aE(hud,"pointerdown",e=>{e.stopPropagation();e.preventDefault()});
 hud.onclick=e=>{const k=e.target.className;
 if(k==="invq"){sBlip();quit()}
 else if(k==="invm")mint();
 else if(k==="invsh"){sBlip();shareMsg="";shareScore()}};
-const ship=mk("invs",ETH_ICON);w.appendChild(ship);
+const ship=mk("invs",ETH_ICON);aC(w,ship);
 const pool=invIcons();
 let al=[],bu=[],bo=[],sx=(W-SW)/2,lf=0,rt=0,sc=0,lv=3,wv=1,ov=0,dir=1,sa=0,fa=-1e9,rq=0,lt=performance.now();
 let tEnd=0,minted="",minting=0,mintMsg="",shareMsg="",runId=0;
@@ -8847,7 +8847,7 @@ const born=()=>{for(const a of al)a.node.remove();al=[];
 tEnd=performance.now()+WAVE_MS;
 const px=(W-COLS*IW)/2;
 for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){const t=face(r,c,r*COLS+c),n=mk("invx",t.h);
-n.title=t.s;w.appendChild(n);al.push({node:n,s:t.s,x:px+c*IW,y:18+r*IH,c})}
+n.title=t.s;aC(w,n);al.push({node:n,s:t.s,x:px+c*IW,y:18+r*IH,c})}
 dir=1};
 let hudWas="";
 const hud2=()=>{const t=left();
@@ -8860,12 +8860,12 @@ const html=(ov?`<span>game over · ${sc}</span><span class="${minted||minting||!
 if(html===hudWas)return;
 hudWas=html;hud.innerHTML=html};
 const fire=()=>{const t=performance.now();
-if(ov||bu.length||t-fa<120)return;fa=t;sPew();const n=mk("invb");w.appendChild(n);
+if(ov||bu.length||t-fa<120)return;fa=t;sPew();const n=mk("invb");aC(w,n);
 bu.push({node:n,x:sx+SW/2-1,y:H-SH-12})};
 const bomb=()=>{if(!al.length)return;const m=new Map();
 for(const a of al){const p=m.get(a.c);if(!p||a.y>p.y)m.set(a.c,a)}
 const f=[...m.values()],a=f[(Math.random()*f.length)|0],n=mk("invd");
-w.appendChild(n);bo.push({node:n,x:a.x+IW/2,y:a.y+IH})};
+aC(w,n);bo.push({node:n,x:a.x+IW/2,y:a.y+IH})};
 const ht=(ax,ay,aw,ah,bx,by,bw,bh)=>ax<bx+bw&&ax+aw>bx&&ay<by+bh&&ay+ah>by;
 const end=()=>{ov=performance.now();sFail();hud2()};
 const step=(dt,t)=>{
@@ -8937,19 +8937,19 @@ if(e.key==="ArrowLeft"){lf=1;e.preventDefault()}
 else if(e.key==="ArrowRight"){rt=1;e.preventDefault()}
 else if(e.key===" "||e.key==="Enter"){e.preventDefault();ov?e.repeat||again():fire()}}
 function ku(e){if(e.key==="ArrowLeft")lf=0;if(e.key==="ArrowRight")rt=0}
-document.addEventListener("keydown",kd,true);document.addEventListener("keyup",ku,true);
+aE(document,"keydown",kd,true);aE(document,"keyup",ku,true);
 let tp=0;
-w.addEventListener("pointerdown",e=>{tp=1;sx=Mx(0,Mn(W-SW,e.offsetX-SW/2));ov?again():fire()});
-w.addEventListener("pointermove",e=>{if(tp)sx=Mx(0,Mn(W-SW,e.offsetX-SW/2))});
-w.addEventListener("pointerup",()=>{tp=0});
+aE(w,"pointerdown",e=>{tp=1;sx=Mx(0,Mn(W-SW,e.offsetX-SW/2));ov?again():fire()});
+aE(w,"pointermove",e=>{if(tp)sx=Mx(0,Mn(W-SW,e.offsetX-SW/2))});
+aE(w,"pointerup",()=>{tp=0});
 invOff=quit;born();hud2();w.focus();sOpen();rq=requestAnimationFrame(loop);
 }
 (()=>{let tm=0,hd=0;
 const cn=()=>{if(tm)clearTimeout(tm);tm=0};
-wn.addEventListener("pointerdown",()=>{hd=0;cn();tm=setTimeout(()=>{tm=0;hd=1;invPlay()},550)});
-for(const ev of ["pointerup","pointerleave","pointercancel"])wn.addEventListener(ev,cn);
-wn.addEventListener("click",e=>{if(hd){e.preventDefault();e.stopPropagation();hd=0}},true);
-wn.addEventListener("contextmenu",e=>e.preventDefault());
+aE(wn,"pointerdown",()=>{hd=0;cn();tm=setTimeout(()=>{tm=0;hd=1;invPlay()},550)});
+for(const ev of ["pointerup","pointerleave","pointercancel"])aE(wn,ev,cn);
+aE(wn,"click",e=>{if(hd){e.preventDefault();e.stopPropagation();hd=0}},true);
+aE(wn,"contextmenu",e=>e.preventDefault());
 })();
 wnName.oninput=()=>{wnName.value=wnName.value.toLowerCase();wnQuote()};
 wnTld.onchange=wnQuote;
@@ -9321,14 +9321,14 @@ el.setAttribute("class","cross");
 el.setAttribute("y1","0");el.setAttribute("y2","150");
 el.setAttribute("stroke","currentColor");el.setAttribute("stroke-opacity",".35");
 el.setAttribute("stroke-width",".8");
-chDraw.svg.appendChild(el);chDraw.cross=el;
+aC(chDraw.svg,el);chDraw.cross=el;
 }
 const cx=chDraw.X(i).toFixed(1);
 el.setAttribute("x1",cx);el.setAttribute("x2",cx);
 };
-chArt.addEventListener("pointermove",chPoint);
-chArt.addEventListener("pointerdown",chPoint);
-chArt.addEventListener("pointerleave",()=>{
+aE(chArt,"pointermove",chPoint);
+aE(chArt,"pointerdown",chPoint);
+aE(chArt,"pointerleave",()=>{
 if(chDraw&&chDraw.cross){chDraw.cross.remove();chDraw.cross=null}
 hudFor(-1)});
 function drawChart(){
@@ -9415,7 +9415,7 @@ s+="</svg>";
 const last=pts[n-1],first=pts[0],ch=((last.c-first.o)/first.o)*100;
 chArt.innerHTML=s+'<div class="hd"></div>';
 chDraw={pts,X,W,PL,st,b0,num,UP,DN,ch,per,
-hd:chArt.querySelector(".hd"),svg:chArt.querySelector("svg"),cross:null};
+hd:qS(chArt,".hd"),svg:qS(chArt,"svg"),cross:null};
 hudFor(-1);
 const took=rel(Mx(per,(slots-1)*per));
 const np=chPoolsAt(ser.step);
@@ -9435,14 +9435,14 @@ chFloorFor(p0).then(()=>{if(chFloor+":"+chSupply+":"+chCoin1!==was)drawChart()})
 for(const[label,secs]of TFS){const b=cE("button");
 b.textContent=label;b.dataset.secs=String(secs);if(secs===chPeriod)b.className="on";
 b.onclick=()=>{chPeriod=secs;chTfKey=chPairKey(chEff());drawChart()};
-chTf.appendChild(b)}
+aC(chTf,b)}
 const kindBtn=cE("button");
 kindBtn.className="chk";
 const syncKind=()=>{kindBtn.textContent=chKind==="candle"?"Line":"Candle";
 kindBtn.title=`Switch to ${kindBtn.textContent.toLowerCase()} chart`};
 syncKind();
 kindBtn.onclick=()=>{chKind=chKind==="candle"?"line":"candle";syncKind();drawChart();LS.ck=chKind};
-chTf.appendChild(kindBtn);
+aC(chTf,kindBtn);
 const invBtn=cE("button");
 invBtn.className="chk";
 invBtn.textContent="⇅";
@@ -9451,7 +9451,7 @@ invBtn.title=p?`Price ${chInv?p[1].sym:p[0].sym} instead — currently ${chInv?p
 invBtn.setAttribute("aria-pressed",chInv?"true":"false")};
 syncInv();
 invBtn.onclick=()=>{chInv=!chInv;syncInv();drawChart()};
-chTf.appendChild(invBtn);
+aC(chTf,invBtn);
 const syncChart=()=>{chSyncOrientation();syncInv();loadChart()};
 chTog.onclick=()=>{chOpen=!chOpen;LS.ch=chOpen?"1":"0";syncChartUI()};
 const lsecs=v=>{const m=/^(\d+)([mhdw]?)$/.exec((v||"").trim());
@@ -9481,8 +9481,8 @@ try{rec=decStr(t)}catch{}
 }catch{if(my===scSeq)scEl.textContent="No such name — "+n+" has never been minted.";return}
 const m=/^(\d+)(?:-w(\d+))?-[0-9a-z]+$/.exec(lbl);
 scEl.textContent="";
-const b=cE("b");b.textContent=n;scEl.appendChild(b);
-const line=t=>{const d=cE("div");d.textContent=t;scEl.appendChild(d);return d};
+const b=cE("b");b.textContent=n;aC(scEl,b);
+const line=t=>{const d=cE("div");d.textContent=t;aC(scEl,d);return d};
 if(m)line(`Minted score ${(+m[1]).toLocaleString("en-US")}`+(m[2]?` · reached wave ${m[2]}`:""));
 else line("Not a score name — the label carries no run.");
 line("Held by "+short(owner));
@@ -9490,7 +9490,7 @@ if(m)line("Anyone can mint a name with any number — this says it was claimed, 
 if(m&&rec&&rec!==m[1])line(`The score record now reads ${rec}, not ${m[1]} — the holder changed it.`).className="scw";
 const go=cE("button");go.type="button";go.textContent="Play invaders";
 go.onclick=()=>{sBlip();invPlay()};
-scEl.appendChild(go);
+aC(scEl,go);
 };
 let lSeq=0,listReady=false,linkChain=0,dlyUser=false,pairUser=false,pairFree=0;
 const lkWrote=Object.create(null);
@@ -9621,7 +9621,7 @@ catch{stat.textContent=u}
 tabSwap.onclick=()=>{sBlip();if(lnMode)lnSet(false);if(wnMode)wnSet(false);if(pvMode)pvSet(false);if(mkMode)mkSet(false);setTab("swap")};
 tabSend.onclick=()=>{sBlip();setTab("send")};
 {const TABS=[tabSwap,tabSend,tabBook],NAMES=["swap","send","book"];
-for(const el of TABS)el.addEventListener("keydown",e=>{
+for(const el of TABS)aE(el,"keydown",e=>{
 const i=TABS.indexOf(e.target);
 const j=e.key==="ArrowRight"?(i+1)%TABS.length:e.key==="ArrowLeft"?(i+TABS.length-1)%TABS.length
 :e.key==="Home"?0:e.key==="End"?TABS.length-1:-1;
@@ -9629,8 +9629,8 @@ if(j<0)return;
 e.preventDefault();TABS[j].focus();sBlip();setTab(NAMES[j]);
 });
 syncStops=()=>TABS.forEach(el=>el.tabIndex=el.classList.contains("on")?0:-1);
-syncStops();for(const el of TABS)el.addEventListener("click",syncStops);
-for(const el of TABS)el.addEventListener("keyup",syncStops);}
+syncStops();for(const el of TABS)aE(el,"click",syncStops);
+for(const el of TABS)aE(el,"keyup",syncStops);}
 try{const sc=+localStorage[CHAIN_STORE];if(!prov()&&CHAINS[sc]&&!/(^#|[?&])chain=/.test(location.hash)){setChain(sc);showNet()}}catch{}
 applyLink();
 loadTokenList().then(()=>{
