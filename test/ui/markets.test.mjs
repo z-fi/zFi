@@ -255,6 +255,38 @@ test('markets mode', async (t) => {
     assert.match(p.$('mkInfo').textContent, /only void/);
   });
 
+  await t.test('past the newest 200, markets you hold or resolve are found from PM logs and stay claimable', async () => {
+    // Only the newest 200 are paged in. A market older than that is reached
+    // through the ERC6909 Transfer logs sent to you and the Created logs that
+    // name you as resolver, so its winnings and its resolution stay in reach.
+    const OLD = 0x100n, RES = 0x102n, t0 = now();
+    const olds = {
+      [OLD]: { id: OLD, d: 'An old market you won', r: A.OTHER, a: A.ZERO, o: t0 - 90 * 86400, c: t0 - 60 * 86400, s: 1, y: ONE, n: ONE, p: 2n * ONE, w: ONE },
+      [RES]: { id: RES, d: 'An old market you resolve', r: A.ACCOUNT, a: A.ZERO, o: t0 - 40 * 86400, c: t0 - 86400, y: ONE, n: ONE, p: 2n * ONE },
+    };
+    const chain = pmChain({ held: { [OLD]: [ONE, 0n, 2n * ONE] } });
+    chain.blockNumber = '0x' + (27_000_000).toString(16);
+    chain.answer(PM, 'ec979082', '0x' + w(260));
+    chain.answer(PM, 'eb44fdd3', (d) => { const m = olds[word(d, 0)]; return m ? '0x' + w(32) + marketsRet([m]).slice(2 + 4 * 64) : '0x' + w(32) + marketsRet([{ id: 0n, d: 'x', r: A.ZERO, a: A.ZERO, o: 0, c: 0, y: 0n, n: 0n, p: 0n }]).slice(2 + 4 * 64); });
+    const me = '0x' + aw(A.ACCOUNT);
+    chain.logs.push(
+      { address: PM, topics: ['0x1b3d7edb2e9c0b0e7c525b20aaaef0f5940d2ed71663c7d39266ecafac728859', '0x' + w(0), me, '0x' + w(OLD | 1n)], data: '0x' + w(0) + w(ONE), blockNumber: '0x1', logIndex: '0x0' },
+      { address: PM, topics: ['0xc3e5212544f78a2b458c9621887723f6ca533eeb530edd436925865b21dc4a7f', '0x' + w(RES), me, me], data: '0x', blockNumber: '0x1', logIndex: '0x1' },
+    );
+    const p = await openMarkets(chain);
+    await p.waitFor(() => /Mine \(2\)/.test(p.$('mkChips').textContent), { label: 'the old claim and the old resolve are counted' });
+    assert.match(p.text('mkSub'), /^newest 200 of 260/);
+    p.$('mkChips').querySelector('[data-f="mine"]').click();
+    await p.waitFor(() => rows(p).some((r) => /old market you won/.test(r)), { label: 'the old win is under Mine' });
+    assert.ok(rows(p).some((r) => /old market you resolve/.test(r) && /resolve/.test(r)));
+    await pick(p, OLD);
+    act(p, 'claim').click();
+    await p_wait(chain, 'claim');
+    const tx = chain.sentTo(PM)[0];
+    assert.equal(tx.data.slice(2, 10), 'ddd5e1b2');
+    assert.equal(word(tx.data, 0), OLD);
+  });
+
   await t.test('a losing position says so instead of offering a claim', async () => {
     const p = await openMarkets(pmChain({ held: { [BALL]: [0n, ONE, 0n] } }));
     p.$('mkChips').querySelector('[data-f="done"]').click();

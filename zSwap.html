@@ -234,7 +234,7 @@ margin-top:.55em;padding-top:.55em;border-top:1px solid var(--e);color:var(--f)}
 #lnNote,#floorNote,#wnNote,#mkNote{display:block;font-size:.7em;line-height:1.45;color:var(--m);text-align:center;text-wrap:balance;margin:.55em .2em 0}
 #lnNote:empty,#floorNote:empty,#wnNote:empty,#mkNote:empty{display:none}
 .mkbar{height:4px;background:var(--w);margin:.45em 0 .2em}
-.mkbar i{display:block;height:100%;background:var(--g)}#mkActs [data-a^=y],#mkActs [data-a$=y],.mkhd>.y{color:var(--g)}#mkActs [data-a=no],#mkActs [data-a$=n],.mkhd>.n{color:var(--w)}.lqtag.mkt{color:var(--f);border-color:var(--f)}
+.mkbar i{display:block;height:100%;background:var(--g)}#mkActs [data-a*=y],.mkhd>.y{color:var(--g)}#mkActs [data-a*=n],.mkhd>.n{color:var(--w)}.lqtag.mkt{color:var(--f);border-color:var(--f)}
 .mkr{cursor:pointer}
 .mkr.on{border-color:var(--f);position:relative}
 #mkList{max-height:22em;overflow:auto;margin:.2em 0 .5em;padding-top:1px}
@@ -8511,6 +8511,9 @@ const mkPosLoad=async all=>{const P={};if(account&&all.length){const ps=[];
 for(let i=0;i<all.length;i+=100)ps.push(all.slice(i,i+100).map(m=>m.id));
 (await mc3Deep(ps.map(mkPosCall))).forEach((h,j)=>{if(h)mkPosDec(h,ps[j],P);else for(const id of ps[j])if(mkPos[id])P[id]=mkPos[id]})}
 mkPos=P};
+const mkOld=async all=>{const hd=+await rpc("eth_blockNumber",[]),me="0x"+encAddr(account),I=new Set,F=async(t,k)=>{for(const l of await rlLogs(26033835,hd,{address:PM,topics:t}))I.add(BigInt(l.topics[k])&~1n)};
+await F(["0x1b3d7edb2e9c0b0e7c525b20aaaef0f5940d2ed71663c7d39266ecafac728859",null,me],3);await F(["0xc3e5212544f78a2b458c9621887723f6ca533eeb530edd436925865b21dc4a7f",null,null,me],1);
+for(const h of await mc3Deep([...I].filter(i=>!all.some(m=>m.id===i)).map(i=>({to:PM,data:"0xeb44fdd3"+encUint(i)}))))if(h){const g=mkDec1(h);if(g.r!==ZERO)all.push(g)}};
 const mkLoad=async full=>{if(!mkMode)return;if(mkLoading){mkAgain=mkAgain||!!full||!!mkWant;return}
 mkLoading=1;
 try{await mkLoad0(full)}finally{mkLoading=0;if(mkAgain){mkAgain=0;mkLoad(1)}}};
@@ -8526,7 +8529,7 @@ mkNote.textContent="";mkPaintList();mkDetPaint();if(mkAmt.value.trim())mkQuote()
 const cs=[];for(let s=0;s<n&&s<MK_MAX;s+=25)cs.push({to:PM,data:"0x80968d48"+encUint(s)+encUint(25)});
 const hs=cs.length?await mc3Deep(cs):[];
 if(hs.some(h=>!h))throw Error("partial");
-const all=hs.flatMap(mkDec),wq=mkWant.toLowerCase();if(wq&&/^(0x[0-9a-f]{1,64}|\d{1,78})$/.test(wq)&&!all.some(m=>String(m.id)===wq||toHex(m.id)===wq)){const h=await rpc(C,[{to:PM,data:"0xeb44fdd3"+encUint(BigInt(wq))},L]).catch(()=>null),g=h&&mkDec1(h);if(g&&g.r!==ZERO&&g.id===BigInt(wq))all.push(g)}await mkPosLoad(all);if(my!==mkSeq)return;
+const all=hs.flatMap(mkDec),wq=mkWant.toLowerCase();if(wq&&/^(0x[0-9a-f]{1,64}|\d{1,78})$/.test(wq)&&!all.some(m=>String(m.id)===wq||toHex(m.id)===wq)){const h=await rpc(C,[{to:PM,data:"0xeb44fdd3"+encUint(BigInt(wq))},L]).catch(()=>null),g=h&&mkDec1(h);if(g&&g.r!==ZERO&&g.id===BigInt(wq))all.push(g)}if(account&&n>MK_MAX)await mkOld(all).catch(()=>{});await mkPosLoad(all);if(my!==mkSeq)return;
 mkAll=all;mkCount=n;mkMore=n>MK_MAX;mkFee={};
 if(mkNew){const d=mkNew;mkNew="";mkSel=all.find(m=>m.d===d)||mkSel}
 let nf="";if(mkWant){const w=mkWant.toLowerCase(),f=all.find(m=>String(m.id)===w||toHex(m.id)===w);mkWant="";if(!f)nf="That market was not found.";mkSel=f||mkSel;if(mkSel){mkF=mkLive(mkSel)?"open":"done";mkChipPaint()}}
@@ -8541,7 +8544,7 @@ mkChips.querySelector('[data-f="mine"]').textContent=mkCl?`Mine (${mkCl})`:"Mine
 const r=mkAll.filter(m=>(mkF==="open"?mkLive(m):mkF==="done"?!mkLive(m):!!mkPos[m.id]||m.r===me)&&q.every(t=>(m.d+" "+mkTok(m.a).sym+" "+m.r).toLowerCase().includes(t)));
 r.sort(mkS==="pot"?(a,b)=>mkUsd(b)-mkUsd(a):mkS==="end"?(a,b)=>mkF==="done"?b.c-a.c:a.c-b.c:(a,b)=>b.o-a.o);
 cpSet(mkList,r.length?r.slice(0,100).map(mkRow).join(""):`<div class="lqempty">${mkCount<0?"Reading markets…":!mkAll.length?"No markets yet — create the first.":mkF==="mine"&&!account?"Connect a wallet to see yours.":"No markets match."}</div>`);
-mkSub.textContent=mkAll.length?(mkMore?`newest ${mkAll.length} of ${mkCount}`:mkAll.length+(mkAll.length>1?" markets":" market"))+(mkCl?` · ${mkCl} waiting on you`:""):""};
+mkSub.textContent=mkAll.length?(mkMore?`newest ${MK_MAX} of ${mkCount}`:mkAll.length+(mkAll.length>1?" markets":" market"))+(mkCl?` · ${mkCl} waiting on you`:""):""};
 const mkDetPaint=()=>{if(!mkMode)return;const m=mkSel;Hd(mkDet,!m);if(!m)return;
 const t=mkTok(m.a),me=mkPos[m.id]||{y:0n,n:0n,c:0n},live=mkLive(m),isR=!!account&&m.r===account.toLowerCase(),net=m.p-m.p*BigInt(m.f)/10000n,X=s=>s?"×"+(Number(net*1000n/s)/1000).toFixed(2):"—",S=safeSym(t.sym),lapsed=nowS()>=m.c+2592000;
 mkT.textContent=m.d.replace(/\p{C}/gu,"");Hd(mkT,m.d.length<141&&!!mkList.querySelector(".on"));
