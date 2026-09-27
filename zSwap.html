@@ -1775,7 +1775,7 @@ const c=await(capC[CHAIN_ID+owner]??=Promise.race([rpc("wallet_getCapabilities",
 canBatch.up=(capsFor(c||{},BigInt(CHAIN_ID))??capsFor(c||{},0n))?.atomic?.status==="ready";
 return hasAtomicBatch(c)};
 let snd=LS.snd!=="0";
-let AC;const play=ns=>{if(!snd)return;try{AC=AC||new(window.AudioContext||window.webkitAudioContext);if(AC.state==="suspended")AC.resume();const t=AC.currentTime+.02;ns.forEach(([f,d,l,v])=>{const o=AC.createOscillator(),g=AC.createGain();o.type="triangle";o.frequency.value=f;o.connect(g);g.connect(AC.destination);g.gain.setValueAtTime(0,t+d);g.gain.linearRampToValueAtTime(v,t+d+.012);g.gain.exponentialRampToValueAtTime(1e-4,t+d+l);o.start(t+d);o.stop(t+d+l+.02)})}catch{}};
+let AC;const play=ns=>{if(!snd)return;if(!AC){AC={};return setTimeout(()=>{try{AC=new(window.AudioContext||window.webkitAudioContext)}catch{}play(ns)})}try{if(AC.state==="suspended")AC.resume();const t=AC.currentTime+.02;ns.forEach(([f,d,l,v])=>{const o=AC.createOscillator(),g=AC.createGain();o.type="triangle";o.frequency.value=f;o.connect(g);g.connect(AC.destination);g.gain.setValueAtTime(0,t+d);g.gain.linearRampToValueAtTime(v,t+d+.012);g.gain.exponentialRampToValueAtTime(1e-4,t+d+l);o.start(t+d);o.stop(t+d+l+.02)})}catch{}};
 const sBlip=()=>play([[880,0,.07,.05]]);
 const sOpen=()=>play([[523.25,0,.3,.1],[783.99,.09,.3,.1]]);
 const sSend=()=>play([[392,0,.12,.07],[587.33,.07,.24,.07]]);
@@ -3268,8 +3268,8 @@ const deadline=BigInt(nowS()+600);
 outEl.value="...";fitFont(outEl);quoting=true;render();
 const acct=account;qBlind=[...new Set([rcv,...qBlind].filter(Boolean))].slice(0,8);
 const gaveUp0=mcGaveUp,ok0=mcOk,failed0=mcFailed;
-loadSolvers().then(()=>{if(my!==seq||!solverLanes||!solverFill||!solverExec)return;const S0=isIn?SOLVER_SHAPES:SOLVER_SHAPES_OUT,ck=(isIn?"":"o|")+`${CHAIN_ID}|${f.addr}|${t.addr}|${swapAmt}|${slipBps}`;
-for(const x of solverLanes)if(!laneDown(x.name)&&S0[x.name])try{laneCached(`${x.name}|${ck}`,()=>S0[x.name](x.endpoint,f.addr,t.addr,swapAmt,Number(slipBps),SOLVER_DEADLINE,f.dec,t.dec)).catch(()=>{})}catch{}}).catch(()=>{});
+const sDl=loadSolvers().then(()=>{if(my!==seq||!solverLanes||!solverFill||!solverExec)return;const S0=isIn?SOLVER_SHAPES:SOLVER_SHAPES_OUT,ck=(isIn?"":"o|")+`${CHAIN_ID}|${f.addr}|${t.addr}|${swapAmt}|${slipBps}`;
+for(const x of solverLanes)if(!laneDown(x.name)&&S0[x.name])try{laneCached(`${x.name}|${ck}`,()=>S0[x.name](x.endpoint,f.addr,t.addr,swapAmt,Number(slipBps),SOLVER_DEADLINE,f.dec,t.dec)).catch(()=>{})}catch{}}).catch(()=>{}).then(()=>new Promise(r=>setTimeout(r,SOLVER_DEADLINE,null)));
 try{
 const a=eA(rcv||acct||ZERO),rf=eA(acct||ZERO),tk=(x,s)=>eBo(!isIn)+eA(f.addr)+eA(t.addr)+eU(x)+eU(s)+eU(deadline),tl=tk(swapAmt,slipBps),s2=slipBps/2n||1n,s3=slipBps/3n||1n;
 const _rq=[];
@@ -3550,12 +3550,11 @@ try{
 await loadSolvers();
 const lanes=(solverLanes||[]).filter(x=>!laneDown(x.name)&&SOLVER_SHAPES_OUT[x.name]);
 if(lanes.length&&solverFill&&solverExec){
-const dl=new Promise(res=>setTimeout(()=>res(null),SOLVER_DEADLINE));
 const ck=`o|${CHAIN_ID}|${f.addr}|${t.addr}|${swapAmt}|${slipBps}`;
 const tried=await Pa(lanes.map(x=>Promise.race([
 laneCached(`${x.name}|${ck}`,
 ()=>SOLVER_SHAPES_OUT[x.name](x.endpoint,f.addr,t.addr,swapAmt,Number(slipBps),SOLVER_DEADLINE,f.dec,t.dec))
-.then(q=>q?{...q,lane:x}:null).catch(()=>null),dl])));
+.then(q=>q?{...q,lane:x}:null).catch(()=>null),sDl])));
 const laneCeil=c=>{const d=(c.inp*(10000n+slipBps)+9999n)/10000n;
 return c.cap&&c.cap>0n?bmin(c.cap,d):d};
 const chainCeil=r.amountLimit;
@@ -3600,13 +3599,12 @@ try{
 await loadSolvers();
 const lanes=(solverLanes||[]).filter(x=>!laneDown(x.name));
 if(lanes.length&&solverFill&&solverExec){
-const deadline_=new Promise(res=>setTimeout(()=>res(null),SOLVER_DEADLINE));
 const ck=`${CHAIN_ID}|${f.addr}|${t.addr}|${swapAmt}|${slipBps}`;
 const tried=await Pa(lanes.map(x=>Promise.race([
 laneCached(`${x.name}|${ck}`,
 ()=>SOLVER_SHAPES[x.name](x.endpoint,f.addr,t.addr,swapAmt,Number(slipBps),SOLVER_DEADLINE,f.dec,t.dec))
 .then(q=>q?{...q,lane:x}:null).catch(()=>null),
-deadline_])));
+sDl])));
 const chainFloor=r.amountLimit,chainCmp=r.callData==="0x"?1n:r.best.amountOut*(10000n-slipBps)/10000n;
 let win=null;
 for(const c of tried){
@@ -3914,9 +3912,9 @@ net.onkeydown=e=>{if(e.key==="Enter"||e.key===" "||e.key==="ArrowDown"){e.preven
 showNet();
 addr.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();addr.onclick()}};
 const AUTO_Q_MAX=5;
-const updateSoon=()=>{clearTimeout(debounceT);if(tab==="swap"&&!offChain())blockNow().catch(()=>{});debounceT=setTimeout(()=>{debounceT=0;update()},250)};
+const bnWarm=()=>{if(tab==="swap"&&!offChain())blockNow().catch(()=>{})},updateSoon=()=>{clearTimeout(debounceT);bnWarm();debounceT=setTimeout(()=>{debounceT=0;update()},250)};
 const setMode=m=>{++seq;quoting=false;mode=m;const o=m==="in"?outAmt:amt;o.value="";fitFont(o);last=null;sendReady=null;render()};
-aE(amt,"input",()=>{
+aE(amt,"focus",bnWarm);aE(outAmt,"focus",bnWarm);aE(amt,"input",()=>{
 if(lqMode){fitFont(amt);lqPreviewSoon();return}
 if(tab==="book"){fitFont(amt);render();return}setMode("in");fitFont(amt);updateSoon()});
 aE(outAmt,"input",()=>{

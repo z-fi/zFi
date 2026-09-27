@@ -42,6 +42,11 @@ describe('the interaction sounds', () => {
     const p = await loadPage({ chime: true, chain: new MockChain() });
     await p.settle();
     p.click('tabSend');
+    // Building the first context can hold the main thread for hundreds of
+    // milliseconds while the browser opens its audio device, so it happens
+    // after the click has painted, not inside it.
+    assert.equal(p.window.__chime.ctx, 0, 'the first context was built inside the click');
+    await p.settle();
     assert.equal(p.window.__chime.ctx, 1, 'each session tunes exactly one context');
     assert.deepEqual(last(p), BLIP, 'a tab should blip, not sing');
     p.close();
