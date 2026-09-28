@@ -96,6 +96,35 @@ describe('a batch the wallet will not run', () => {
     p.close();
   });
 
+  test('a batch the wallet may have taken is never sent again as steps', async () => {
+    for (const code of [4900, -32603, undefined]) {
+      const p = await erc20Swap(c => {
+        c.capabilities = SUPPORTED;
+        intercept(c, async (m, a, d) => { if (m === 'wallet_sendCalls') { await d(m, a); throw Object.assign(Error('Disconnected from provider'), { code }); } });
+      });
+      p.click('swap');
+      await p.waitFor(() => /may have been sent/.test(p.text('stat')), { label: 'the indeterminate batch', timeout: 20000 });
+      assert.equal(p.chain.batches.length, 1, 'the batch went once');
+      assert.equal(p.chain.sent.filter(t => !t.batched).length, 0, 'and nothing was replayed on its own');
+      assert.match(p.text('stat'), /check your wallet's activity/);
+      assert.equal(p.window.eval('noBatch'), 0);
+      p.close();
+    }
+  });
+
+  test('a quote that expires during a separate approval is not sent after it', async () => {
+    let page;
+    const p = await erc20Swap(c => intercept(c, (m, a) => {
+      if (m === 'eth_sendTransaction' && isApprove(a[0])) page.window.eval('last&&(last.exp=0)');
+    }));
+    page = p;
+    p.click('swap');
+    await p.waitFor(() => /Quote expired/.test(p.text('stat')), { label: 'the expiry after approving', timeout: 20000 });
+    assert.ok(p.chain.sent.some(isApprove), 'the approval went');
+    assert.ok(!p.chain.sent.some(t => (t.to || '').toLowerCase() === A.ZROUTER.toLowerCase()), 'but the stale swap did not');
+    p.close();
+  });
+
   test('declining the smart-account upgrade is remembered for the session', async () => {
     const p = await erc20Swap(c => {
       c.capabilities = { '0x1': { atomic: { status: 'ready' } } };

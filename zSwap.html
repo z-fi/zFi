@@ -1776,11 +1776,11 @@ let clickChain=0;addEventListener("click",()=>{clickChain=CHAIN_ID},true);
 const chainHeld=()=>clickChain&&clickChain!==CHAIN_ID?Promise.reject(Oa(Er("The network changed after you pressed — check the details and press again."),{offChain:true})):cW();
 const sendTx=req=>live(chainHeld().then(()=>rpc(S,req))).then(r=>{sSend();return r});
 const sendBatch=(owner,calls)=>live(sendBatch0(owner,calls)).catch(e=>{if(/^batch (reverted|failed)/.test(e&&e.message))sFail();throw e}).finally(()=>{brM.clear();brSelfCode=null});
-const sendBatch0=async(owner,calls)=>{
+const CWA=" — check your wallet's activity before retrying",sendBatch0=async(owner,calls)=>{
 await chainHeld();let res,bad=0;
 try{res=await rpc("wallet_sendCalls",[{version:"2.0.0",chainId:toHex(CHAIN_ID),from:owner,atomicRequired:true,calls}])}
 catch(e){if(isRejection(e)){if(canBatch.up)noBatch=1;throw e}
-if(/timed out/i.test(e?.message||""))throw e;
+if(![4200,-32601,-32602,5700,5710,5740,5750,5760].includes(e?.code))throw Er("batch may have been sent"+CWA);
 noBatch=1;let h;
 for(let i=0;i<calls.length;i++){const c=calls[i],req={from:owner,to:c.to,data:c.data,value:c.value||"0x0"},z=i===calls.length-1;
 stat.textContent=`Step ${i+1} of ${calls.length}…`;
@@ -1796,8 +1796,8 @@ const q=String(st&&st.status),done=q==="200"||/CONFIRMED|SUCCESS/i.test(q);
 const last=rs.length&&(done||rs.length>=calls.length)?rs[rs.length-1]:null,x=last&&(last.transactionHash||last.hash);
 if(x)return x;
 if(q==="400"||q==="500"||q==="600"||/fail|revert|reject/i.test(q))throw Er("batch failed");
-if(done)throw Er("batch confirmed on chain, but the wallet returned no receipt — check your wallet's activity before retrying");
-}catch(e){if(/^batch /.test(e.message))throw e;if(++bad>9)throw Er("batch sent, but the wallet cannot report its status — check your wallet's activity before retrying")}
+if(done)throw Er("batch confirmed on chain, but the wallet returned no receipt"+CWA);
+}catch(e){if(/^batch /.test(e.message))throw e;if(++bad>9)throw Er("batch sent, but the wallet cannot report its status"+CWA)}
 await Zz(1000)}
 throw Er("batch timed out")};
 const apSeq=async(tok,sp,need)=>{
@@ -9946,7 +9946,7 @@ stat.textContent=`This trade is ${pct}% away from the market and this browser bl
 return;
 }
 }
-if(last!==q0)return void(stat.textContent="The quote refreshed while you were deciding — check it and press again.");
+if(last!==q0||Dn()>q0.exp){updateSoon();return void(stat.textContent="The quote refreshed while you were deciding — check it and press again.")}
 swap.disabled=true;++busy;
 try{
 const q=last;
@@ -10001,6 +10001,7 @@ if(prep.length&&batchCalls){
 batchCalls=[...prep.map(({to,data,value})=>({to,data,value})),...batchCalls];
 prep=[];
 }
+if(Dn()>q.exp){updateSoon();throw Er("Quote expired — refreshing…")}
 let tx;
 const mainTx={from:account,to:target,data:cd2,value:toHex(msgValue)};
 if(prep.length&&!batchCalls){
