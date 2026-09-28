@@ -179,11 +179,15 @@ describe('submitting a private settle yourself', () => {
 });
 
 describe('amounts are read the way they are written', () => {
-  test('a comma after a leading zero is a decimal comma, not a thousands separator', async () => {
+  test('a lone comma is a decimal comma unless it could be a thousands group', async () => {
     const p = await loadPage({ chain: new MockChain() });
-    assert.throws(() => p.window.eval('pU("0,123",6)'), /unclear comma/);
-    assert.equal(p.window.eval('pU("1,234",6)'), 1234000000n);
+    assert.equal(p.window.eval('pU("0,123",6)'), 123000n, 'a thousands group never starts with 0, so this is 0.123');
+    assert.throws(() => p.window.eval('pU("1,234",6)'), /write 1234 or 1\.234/, 'one comma and three digits reads either way, so it is refused');
+    assert.equal(p.window.eval('pU("0,05",6)'), 50000n, 'a comma keypad can type a decimal');
+    assert.equal(p.window.eval('pU("1,5",6)'), 1500000n);
+    assert.equal(p.window.eval('pU("1234,5",6)'), 1234500000n, 'four digits before the comma cannot be a group');
     assert.equal(p.window.eval('pU("12,345,678.5",6)'), 12345678500000n);
+    assert.equal(p.window.eval('pU("1,234.5",6)'), 1234500000n);
     p.close();
   });
 });

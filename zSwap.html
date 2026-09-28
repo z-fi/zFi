@@ -1184,11 +1184,9 @@ for(let i=0;i<n;i++)o.push(Bx(h.slice(128+i*64,192+i*64)));return o};
 const eBo=b=>pad32(b?"1":"0");
 const toHex=v=>"0x"+Bi(v).toString(16);
 const pU=(s,dec)=>{
-const r=s.trim();
-if(r.includes(",")&&!/^[1-9]\d{0,2}(?:,\d{3})+(?:\.\d*)?$/.test(r))
-throw Er(r.indexOf(",")===r.lastIndexOf(",")
-?`unclear comma — for decimals write ${r.replace(",",".")}`
-:"unclear commas — use . for decimals");
+let r=s.trim();
+if(/^\d*,\d+$/.test(r)){if(/^[1-9]\d{0,2},\d{3}$/.test(r))throw Er(`unclear comma — write ${r.replace(",","")} or ${r.replace(",",".")}`);r=r.replace(",",".")}
+else if(r.includes(",")&&!/^[1-9]\d{0,2}(?:,\d{3})+(?:\.\d*)?$/.test(r))throw Er("unclear commas — use . for decimals");
 const t=r.replace(/,/g,"");
 if(!/^(?:\d+|\d*\.\d+|\d+\.)$/.test(t))throw Er("invalid amount");
 const[ip,fp=""]=t.split(".");
@@ -3120,7 +3118,7 @@ const UIM={},uim=t=>{if(CHAIN_ID!==4663||!t||t.addr===ZERO)return 0n;const a=Lc(
 const R_NS="This token does not move the exact amount sent: it takes a fee on transfer, rebases or is paused, so the contract refuses it.",R_SL="The price moved past your slippage bound. Try again, or raise slippage.";
 const R_OG="That order is no longer available — refresh the book.",R_RQ=" — refresh the quote and try again.";
 const REVERTS={
-"e2c865df":"Betting on this market has closed.","969bf728":"There is nothing to claim on this market.","8fc6f59b":"That market already exists.","97088ec3":"This market has already settled.","7db1be50":"That market does not exist.","19918280":"This market does not allow selling back before it resolves.",
+"cba3a53b":"The name commitment is still too new — wait a few more seconds.","cfef9a95":"That name commitment is over a day old — commit again.","e2c865df":"Betting on this market has closed.","969bf728":"There is nothing to claim on this market.","8fc6f59b":"That market already exists.","97088ec3":"This market has already settled.","7db1be50":"That market does not exist.","19918280":"This market does not allow selling back before it resolves.",
 "646cf558":"That airdrop has already been claimed.","7ca55c77":"That claim's proof does not match — reload the page and try again.","797dba54":"There is nothing left to claim — it has all been paid out.","5088d84e":"The distributor cannot cover that claim yet — try again later.",
 "f0f25a33":"The airdrop claim window has closed.","9e87fac8":"Claims are paused right now.","67a2cc26":"That address cannot receive the airdrop.",
 "2746152a":R_SL,"2c19b8b8":R_SL,"bb2875c3":R_SL,"349465f1":R_SL,"d0b3be44":R_SL,
@@ -7393,10 +7391,10 @@ if(!p.since){wnSave({...p,since:Mf(Dn()/1000)});wnGo.disabled=true;Tx(wnGo,"Conf
 if(Mf(Dn()/1000)-p.since>600){wnGo.disabled=false;Tx(wnGo,"Commit again");return}
 wnGo.disabled=true;Tx(wnGo,"Confirming…");return}
 if(p){
-const left=WN_MIN-(Mf(Dn()/1000)-p.at);
+const left=WN_MIN-(nowS()-p.at);
 wnGo.disabled=left>0;
 Tx(wnGo,left>0?`Ready in ${left}s`:`Register ${p.label}.wei`);
-if(Mf(Dn()/1000)-p.at>=WN_MAX){wnGo.disabled=false;Tx(wnGo,"Commit again")}
+if(nowS()-p.at>=WN_MAX){wnGo.disabled=false;Tx(wnGo,"Commit again")}
 return}
 wnGo.disabled=!!account&&!wnQ;
 Tx(wnGo,!account?CW:wnQ?(wnQ.free?`Claim ${wnQ.label}.id.wei`:"Commit"):"Register")};
@@ -7909,7 +7907,7 @@ const cpCdpSettle=async p=>{if(!(p.pv&&p.pr))throw Er(PNR);const req=await cpSet
 await rpc(C,[req,L]);p.stx=await sendTx([req]);const a=cpLoadCdps(),m=a.find(x=>x.leaf===p.leaf);if(m)Oa(m,p);cpSaveCdps(a);await settle(p.stx);p.js="settled";if(m)m.js="settled";cpSaveCdps(a);Sm("Position opened.")};
 const cpScanCdps=async()=>{const z=cpNotes.filter(n=>n.z);if(!z.length)return 0;const f={address:CP_CE,fromBlock:toHex(CP_BLOCK),toBlock:"latest",topics:[CDP_MINTED]};let lg=null;
 try{lg=await cfgRead("eth_getLogs",[f])}catch{}if(!cpLogsOk(lg))for(const u of CP_LOGS){try{lg=await httpRead(u,"eth_getLogs",[f]);if(cpLogsOk(lg))break}catch{}}if(!cpLogsOk(lg))throw Er("No node served the loan history.");
-const tq=cpScanCdps.t||=new Map(),SS=[];let nx=0;try{for(const l of lg){const h=l.transactionHash;if(!tq.has(h))tq.set(h,Lc((await cfgRead("eth_getTransactionByHash",[h])).input));for(let i=nx;i<nx+8;i++)if(tq.get(h).includes(Sx((SS[i]||=cdpSecrets(i)).owner)))nx=i+1}}catch{nx=-1}cpScanCdps.n=nx;
+const tq=cpScanCdps.t||=new Map(),SS=[];let nx=0;try{for(const l of lg){const h=l.transactionHash;if(!tq.has(h))tq.set(h,Lc((await cfgRead("eth_getTransactionByHash",[h])).input));for(let i=nx;i<nx+20;i++)if(tq.get(h).includes(Sx((SS[i]||=cdpSecrets(i)).owner)))nx=i+1}}catch{nx=-1}cpScanCdps.n=nx;
 const a=cpLoadCdps(),hx=x=>"0x"+h16(x).padStart(64,"0"),rw=v=>Bx((Sx(v||"").slice(0,64)||"0")),rs=new Set([hx(10n**27n)]);let found=0;
 try{const r=rw(await cfgRead(C,[{to:CP_CE,data:"0x2c4e722e"},L]));if(r)rs.add(hx(r))}catch{}
 for(const l of lg){const leaf=St(l.topics[1]||"").toLowerCase(),debt=Bx((Sx(l.data).slice(0,64)||"0"));if(!/^0x[0-9a-f]{64}$/.test(leaf)||a.some(p=>p.leaf===leaf))continue;
@@ -9002,12 +9000,12 @@ await cW();
 const p=wnPend();
 if(p){
 if(!p.at){
-if(Mf(Dn()/1000)-(p.since||0)<=600)throw Er("The commitment has not confirmed yet.");
+if(nowS()-(p.since||0)<=600)throw Er("The commitment has not confirmed yet.");
 await wnStamp();const p2=wnPend();
 if(p2&&p2.at)return void(Sm("That commitment landed after all — reveal it below."),wnSync());
 wnSave(null);Sm("That commitment never reached the chain. Commit again.");
 await wnQuote();return}
-const age=Mf(Dn()/1000)-p.at;
+const age=nowS()-p.at;
 if(age<WN_MIN)throw Er(`Wait ${WN_MIN-age} more seconds.`);
 if(age>=WN_MAX){wnSave(null);Sm("That commitment lapsed. Commit again.");wnQuote();return}
 const cost=await wnCost(p.label);

@@ -10,7 +10,7 @@ after(closeAllPages);
 const ETH = 10n ** 18n;
 
 describe('a decimal comma is never read as a thousands separator', () => {
-  test('flipping an amount typed as 1,5 does not carry 15 across', async () => {
+  test('flipping an amount typed as 1,5 carries 1.5 across, not 15', async () => {
     const chain = new MockChain();
     chain.setNative(A.ACCOUNT, 10n * ETH);
     chain.quoteHandler = fixedRateQuoter({ rate: 3000n * ETH });
@@ -20,11 +20,11 @@ describe('a decimal comma is never read as a thousands separator', () => {
     p.click('flip');
     await p.settle();
     assert.equal(p.value('amt'), '1,5', 'the text is carried as typed');
-    assert.match(p.text('stat'), /unclear comma/, 'and the parser refuses it rather than quoting 15');
+    assert.equal(p.window.eval('pU(amt.value,18)'), 15n * 10n ** 17n, 'and read as 1.5');
     p.close();
   });
 
-  test('a cause goal typed as 1,5 does not launch a 15 ETH raise', async () => {
+  test('a cause goal typed as 1,500 is refused rather than read as 1500 or 1.5', async () => {
     const chain = new MockChain();
     chain.setNative(A.ACCOUNT, 10n ** 19n);
     const p = await loadPage({ chain });
@@ -34,7 +34,7 @@ describe('a decimal comma is never read as a thousands separator', () => {
     await p.settle();
     p.type('lnName', 'Clean Water');
     p.type('lnSym', 'WATER');
-    p.type('lnGoal', '1,5');
+    p.type('lnGoal', '1,500');
     p.type('lnDays', '30');
     await p.settle();
     p.click('lnGo');

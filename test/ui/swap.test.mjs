@@ -330,23 +330,29 @@ describe('quoting', () => {
     p.close();
   });
 
-  test('a decimal comma is questioned, not read as a tenfold amount', async () => {
-    // "1,5" is 1.5 in most of Europe. Stripping the comma reads it as 15 and
-    // quotes a swap ten times the intended size, which the user may then sign.
+  test('a decimal comma is read as a decimal, never as a tenfold amount', async () => {
+    // "1,5" is 1.5 in most of Europe, and an iOS decimal keypad there has no "."
+    // key at all. Stripping the comma would quote a swap ten times the size.
     const p = await setup();
     await p.typeAmount('amt', '1,5');
-    assert.match(p.text('stat'), /unclear comma/, 'the mistake is named');
-    assert.match(p.text('stat'), /1\.5/, 'and the correction is offered');
+    assert.doesNotMatch(p.text('stat'), /comma/);
+    assert.equal(p.window.eval('last&&last.amountIn'), 15n * 10n ** 17n, 'the quote is for 1.5');
+    p.close();
+  });
+
+  test('one comma before three digits reads either way, so it is refused', async () => {
+    const p = await setup();
+    await p.typeAmount('amt', '1,000');
+    assert.match(p.text('stat'), /write 1000 or 1\.000/, 'both readings are offered');
     assert.equal(p.disabled('swap'), true);
     assert.equal(p.chain.sent.length, 0);
     p.close();
   });
 
-  test('grouped thousands still parse as thousands', async () => {
+  test('grouped thousands with more than one comma still parse as thousands', async () => {
     const p = await setup();
-    await p.typeAmount('amt', '1,000');
+    await p.typeAmount('amt', '1,000,000');
     assert.doesNotMatch(p.text('stat'), /comma/, 'strict grouping is not ambiguous');
-    assert.notEqual(p.value('outAmt'), '', 'and the quote proceeds');
     p.close();
   });
 
