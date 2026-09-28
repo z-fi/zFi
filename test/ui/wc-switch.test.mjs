@@ -43,6 +43,7 @@ async function wcPeer(p, { chains = [1, 8453], account = A.ACCOUNT } = {}) {
     if (!m || m.method !== 'wc_sessionRequest') return;
     const { request, chainId } = m.params;
     peer.requests.push({ method: request.method, chainId, params: request.params });
+    if (peer.before) await peer.before(m);
     if (peer.hold && request.method === 'eth_sendTransaction') await peer.hold;
     let result, error = null;
     try { result = await p.chain.request({ method: request.method, params: request.params }); }
@@ -86,6 +87,7 @@ async function wcPeer(p, { chains = [1, 8453], account = A.ACCOUNT } = {}) {
         events: ['chainChanged', 'accountsChanged'] } } } });
   };
   peer.send = toSession;
+  peer.raw = toPage;
   peer.event = (name, data) => toSession({ id: rid++, method: 'wc_sessionEvent',
     params: { chainId: 'eip155:1', event: { name, data } } });
   peer.update = cs => toSession({ id: rid++, method: 'wc_sessionUpdate',
@@ -359,6 +361,19 @@ describe('a WalletConnect network switch', () => {
 
     peer.update([1]);
     await p.waitFor(() => p.reloads() === 1, { label: 'the reload' });
+    p.close();
+  });
+});
+
+describe('the relay carries WalletConnect messages but cannot answer for the wallet', () => {
+  test('a plain relay frame named like a session reply does not settle the request', async () => {
+    const { p, peer } = await connectWc();
+    const forged = '0x' + 'ee'.repeat(65);
+    peer.before = m => peer.raw({ id: 's' + m.id, jsonrpc: '2.0', result: forged });
+    p.window.eval(`window.__sig=rpc("personal_sign",["0x00","${A.ACCOUNT}"]).catch(e=>"err:"+e.message)`);
+    const got = await p.waitFor(async () => { const r = await p.window.__sig; return r; }, { label: 'the signature' });
+    assert.notEqual(got, forged, 'only the wallet\'s encrypted reply settles the request');
+    assert.ok(peer.requests.some(r => r.method === 'personal_sign'));
     p.close();
   });
 });

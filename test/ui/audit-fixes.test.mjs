@@ -177,3 +177,13 @@ describe('submitting a private settle yourself', () => {
     p.close();
   });
 });
+
+describe('amounts are read the way they are written', () => {
+  test('a comma after a leading zero is a decimal comma, not a thousands separator', async () => {
+    const p = await loadPage({ chain: new MockChain() });
+    assert.throws(() => p.window.eval('pU("0,123",6)'), /unclear comma/);
+    assert.equal(p.window.eval('pU("1,234",6)'), 1234000000n);
+    assert.equal(p.window.eval('pU("12,345,678.5",6)'), 12345678500000n);
+    p.close();
+  });
+});

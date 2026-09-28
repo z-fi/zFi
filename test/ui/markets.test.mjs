@@ -563,9 +563,10 @@ test('markets mode', async (t) => {
   await t.test('opens the market it just created', async () => {
     const chain = pmChain();
     const q = 'Fresh question for the list';
-    chain.answer(PM, '6f406fa1', () => {
+    chain.answer(PM, '6f406fa1', (d) => {
       const t = now();
-      chain.__extra = [{ id: 0xe0n, d: q, r: A.ACCOUNT, a: A.ZERO, o: t, c: t + 86400, y: 0n, n: 0n, p: 0n, cc: true }];
+      chain.__extra = [{ id: 0xe1n, d: q, r: '0x' + 'ba'.repeat(20), a: A.ZERO, o: t, c: Number(word(d, 3)), y: 0n, n: 0n, p: 0n, cc: true },
+        { id: 0xe0n, d: q, r: A.ACCOUNT, a: A.ZERO, o: t, c: Number(word(d, 3)), y: 0n, n: 0n, p: 0n, cc: true }];
       return '0x' + w(1);
     });
     const p = await openMarkets(chain);
@@ -576,6 +577,7 @@ test('markets mode', async (t) => {
     assert.equal(word(chain.sentTo(PM)[0].data, 5), 100n, 'a new market lets holders sell back at 1% by default');
     assert.equal(word(chain.sentTo(PM)[0].data, 6), 0n, 'no late tax by default');
     await p.waitFor(() => p.$('mkT').textContent === q, { label: 'created market selected' });
+    assert.equal(p.window.eval('mkSel.id'), 0xe0n, 'the market with this resolver, not a copy of its text');
   });
 
   await t.test('a load costs one count read, one page and one positions read', async () => {

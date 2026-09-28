@@ -83,6 +83,29 @@ async function resolvesPublic(host) {
   } catch { return false; }
 }
 
+// Reads a request body without holding more than `max` bytes: a declared
+// Content-Length over the cap is refused before reading, and a streamed body
+// is cut off at the cap. Returns null when the body is too large.
+export async function readCapped(request, max) {
+  const declared = Number(request.headers.get('content-length'));
+  if (declared > max) return null;
+  if (!request.body) return new Uint8Array(0);
+  const reader = request.body.getReader();
+  const parts = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) { reader.cancel().catch(() => {}); return null; }
+    parts.push(value);
+  }
+  const out = new Uint8Array(size);
+  let at = 0;
+  for (const p of parts) { out.set(p, at); at += p.byteLength; }
+  return out;
+}
+
 function originAllowed(origin) {
   if (ALLOWED_ORIGINS.includes(origin)) return true;
   let u;
@@ -372,7 +395,10 @@ export default {
       const ct = request.headers.get('content-type') || '';
       if (!ct.includes('multipart/form-data')) return json(request, { error: 'multipart/form-data required' }, 400);
 
-      const form = await request.formData();
+      const raw = await readCapped(request, MAX_IMAGE + 64 * 1024);
+      if (!raw) return json(request, { error: 'file too large (5MB max)' }, 413);
+      let form;
+      try { form = await new Response(raw, { headers: { 'content-type': ct } }).formData(); } catch { return json(request, { error: 'invalid form data' }, 400); }
       const file = form.get('file');
       if (!file || !file.size) return json(request, { error: 'no file' }, 400);
       if (file.size > MAX_IMAGE) return json(request, { error: 'file too large (5MB max)' }, 400);
@@ -383,14 +409,16 @@ export default {
       try {
         return json(request, { cid: await filebasePut(env, key, bytes, file.type || 'application/octet-stream') });
       } catch (e) {
-        return json(request, { error: 'pin failed: ' + (e.message || 'unknown') }, 502);
+        console.error('pin-image:', e.message);
+        return json(request, { error: 'pin failed' }, 502);
       }
     }
 
     // POST /pin-json  — JSON metadata → pinned to IPFS via Filebase
     if (url.pathname === '/pin-json') {
-      const body = await request.text();
-      if (body.length > MAX_JSON) return json(request, { error: 'payload too large' }, 400);
+      const raw = await readCapped(request, MAX_JSON);
+      if (!raw) return json(request, { error: 'payload too large' }, 413);
+      const body = new TextDecoder().decode(raw);
 
       let metadata;
       try { metadata = JSON.parse(body); } catch { return json(request, { error: 'invalid JSON' }, 400); }
@@ -401,7 +429,8 @@ export default {
       try {
         return json(request, { cid: await filebasePut(env, key, canonical, 'application/json') });
       } catch (e) {
-        return json(request, { error: 'pin failed: ' + (e.message || 'unknown') }, 502);
+        console.error('pin-json:', e.message);
+        return json(request, { error: 'pin failed' }, 502);
       }
     }
 

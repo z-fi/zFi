@@ -7,6 +7,7 @@
 // is the off-chain aggregator lanes: a mainnet-shaped answer to a Base quote
 // is executable calldata for the wrong chain, and a spender with no code there
 // takes no approval. So each chain names the lanes it asks - see LANES.
+import { readCapped } from './pin.js';
 
 // Moved off 0x0000002d9a651b729e3aFBE57Fc84FFDa4a98a13, which offered Curve for
 // EXACT-OUT routes it cannot execute: Curve's `exchange` is exact-in only, the
@@ -1195,7 +1196,9 @@ export default {
       if (request.method !== 'POST') return jsonResponse({ error: 'POST only' }, 405);
       if (!env.TENDERLY_ACCESS_TOKEN) return jsonResponse({ error: 'Tenderly not configured' }, 503);
       let body;
-      try { body = await request.json(); } catch { return jsonResponse({ error: 'Invalid JSON body' }, 400); }
+      const raw = await readCapped(request, 64 * 1024);
+      if (!raw) return jsonResponse({ error: 'payload too large' }, 413);
+      try { body = JSON.parse(new TextDecoder().decode(raw)); } catch { return jsonResponse({ error: 'Invalid JSON body' }, 400); }
       const { from, to, data, value } = body;
       if (!from || !to || !data) return jsonResponse({ error: 'Missing from, to, or data' }, 400);
       // Tenderly has no Robinhood network, so a simulation there would either
@@ -1212,6 +1215,7 @@ export default {
           {
             method: 'POST',
             headers: { 'X-Access-Key': env.TENDERLY_ACCESS_TOKEN, 'Content-Type': 'application/json' },
+            signal: AbortSignal.timeout(20000),
             body: JSON.stringify({
               network_id: String(simChain),
               from,
@@ -1225,8 +1229,8 @@ export default {
           }
         );
         if (!simRes.ok) {
-          const err = await simRes.text();
-          return jsonResponse({ error: 'Tenderly API error', detail: err }, 502);
+          console.error('tenderly:', simRes.status, (await simRes.text().catch(() => '')).slice(0, 200));
+          return jsonResponse({ error: 'Tenderly API error' }, 502);
         }
         const sim = await simRes.json();
         const simId = sim.simulation?.id;
@@ -1234,7 +1238,7 @@ export default {
         // Make the simulation publicly shareable
         const shareRes = await fetch(
           `https://api.tenderly.co/api/v1/account/${acct}/project/${proj}/simulations/${simId}/share`,
-          { method: 'POST', headers: { 'X-Access-Key': env.TENDERLY_ACCESS_TOKEN, 'Content-Type': 'application/json' }, body: '{}' }
+          { method: 'POST', headers: { 'X-Access-Key': env.TENDERLY_ACCESS_TOKEN, 'Content-Type': 'application/json' }, body: '{}', signal: AbortSignal.timeout(20000) }
         );
         const shared = shareRes.ok;
         if (!shared) console.warn('Tenderly share failed:', shareRes.status, await shareRes.text().catch(() => ''));
