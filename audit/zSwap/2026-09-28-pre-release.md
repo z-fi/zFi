@@ -6,22 +6,22 @@ An external pre-release audit (GPT Astra) reviewed `zSwap.html` at `66f3067` on 
 
 | | |
 |---|---|
-| Commit | `9a3f23e` |
-| Page | `zSwap.html`, 675,532 bytes, 28 chunks |
-| keccak256(zSwap.html) | `0x09a32ba0baec8cd435c3e12b1e909c7d8d1a2649cd11e2f20b63b00db6a1310c` |
-| Resolver relay gas | 29,529,953 of the 30,000,000 eth_call budget |
-| Tests | UI 97 files and the browser suite: 1,703 tests, 0 failures; Foundry zSwap 83/83; check-zSwap all pass |
+| Commit | `7ad72ac` |
+| Page | `zSwap.html`, 675,719 bytes, 28 chunks |
+| keccak256(zSwap.html) | `0x547db090050daea66ad23806bd83153bcd3bf8fcbb082be8e66e921cede442f8` |
+| Resolver relay gas | 29,549,188 of the 30,000,000 eth_call budget |
+| Tests | UI 97 files and the browser suite: 1,704 tests, 0 failures; Foundry zSwap 83/83; check-zSwap all pass |
 
-The audit's two fixes first shipped in `3b051c0` (680,829 B, keccak `0x055e22c2…ae32`). The lock moved to `2f0254a` after the final review below, then to `a040769` for cUSD loan parity with tacit.finance, then to `9a3f23e`, where a points claim is offered only when the distributor's own `verify` accepts its proof; everything in `3b051c0` is carried forward unchanged in behaviour.
+The audit's two fixes first shipped in `3b051c0` (680,829 B, keccak `0x055e22c2…ae32`). The lock moved to `2f0254a` after the final review below, then to `a040769` for cUSD loan parity with tacit.finance, then to `9a3f23e`, where a points claim is offered only when the distributor's own `verify` accepts its proof, then to `7ad72ac`, where a lone decimal comma reads as a decimal (so iOS comma keypads can type amounts) and .wei reveals wait on chain time; everything in `3b051c0` is carried forward unchanged in behaviour.
 
-The hash and length are pinned in `test/zSwap.t.sol`, the registry calldata and `deploy/zSwap-v0.3-LAUNCH.md`. `node script/sync-zSwap-artifacts.mjs --committed` confirms that every pinned copy agrees with the committed page. Any change to `zSwap.html` after `9a3f23e` voids this lock and needs the full pin sequence and test sweep again.
+The hash and length are pinned in `test/zSwap.t.sol`, the registry calldata and `deploy/zSwap-v0.3-LAUNCH.md`. `node script/sync-zSwap-artifacts.mjs --committed` confirms that every pinned copy agrees with the committed page. Any change to `zSwap.html` after `7ad72ac` voids this lock and needs the full pin sequence and test sweep again.
 
 ## Findings at a glance
 
 | Item | Audit | Verdict | Outcome |
 |---|---|---|---|
-| P1: an ambiguous batch failure replays transactions | Hold release | Confirmed at HEAD | Fixed in `3b051c0`, carried into `9a3f23e` |
-| P2: quote expiry is not rechecked before submission | Hold release | Confirmed at HEAD | Fixed in `3b051c0`, carried into `9a3f23e` |
+| P1: an ambiguous batch failure replays transactions | Hold release | Confirmed at HEAD | Fixed in `3b051c0`, carried into `7ad72ac` |
+| P2: quote expiry is not rechecked before submission | Hold release | Confirmed at HEAD | Fixed in `3b051c0`, carried into `7ad72ac` |
 | Browser: the picker gap is −0.25 px | Low, unresolved gate | Not reproduced | No change |
 | UI harness: 26 failed, 4 cancelled | Environmental, passed alone | Agreed | Clean full run |
 
@@ -85,7 +85,7 @@ After the audit fixes, the final page was read by hand and then reviewed again b
 |---|---|---|
 | High | A cBTC loan record stored the collateral note's blinding, its spend secret, in unsealed browser storage | The field is no longer stored; nothing read it |
 | Medium | After a laptop sleep or a suspended mobile tab, a mined swap could be reported as unconfirmed, inviting a second swap | The receipt wait counts only time the page is awake |
-| Medium | Flip turned an amount typed as "1,5" into 15 | Flip carries the text as typed; the parser refuses the ambiguous comma |
+| Medium | Flip turned an amount typed as "1,5" into 15 | Flip carries the text as typed; since `7ad72ac` the parser reads a lone decimal comma as a decimal and refuses only the ambiguous "1,000" form |
 | Medium | A cause's goal and days read "1,5" as 15, written into an immutable DAO | Both go through the same parser as a swap amount |
 | Medium | A device clock more than 10 minutes slow made every swap revert `Expired()` | The page reads chain time once per visit and offsets its clock when it is more than 90 s off |
 | Medium | A taken-back private send was labelled "claimed" | It reads "refunded" once the refund output is in the pool |
@@ -109,6 +109,7 @@ New tests: `test/ui/final-edges.test.mjs` (the comma and clock cases) and an ass
 
 - `23bdb00`: Bitcoin reads skip unusable node answers and promote the node that answered. A Bitcoin transaction is broadcast to every node at once.
 - `c88ce01`: pool ether moves into V1 as a tETH note from the Private ETH menu. The note is saved before the move is sent, and recover finds it from the key alone.
+- `7ad72ac`: one comma reads as the decimal point unless it could be a thousands group ("1,000" is refused with both readings), matching tacit.finance; .wei reveals time from the chain clock; the loan-key walk allows Tacit's 20-key gap.
 - `9a3f23e`: a Tacit points claim is shown only when the distributor's `owed` and `verify` both accept it; the 1M TAC airdrop's 8,652 proofs were each checked against the on-chain root.
 - `a040769`: cUSD loan keys and position index match tacit.finance.
 - `2f0254a`, `df9a51c`: the final-review fixes above.
@@ -116,7 +117,7 @@ New tests: `test/ui/final-edges.test.mjs` (the comma and clock cases) and an ass
 
 Deferred by decision: an in-page cBTC CDP repay. It needs several KB of new proving logic, and the page links to tacit.finance for it instead.
 
-Next step: deploy the 28 chunks for `9a3f23e`, run the DAO's `deployNext`, then repoint `zswap.wei`.
+Next step: deploy the 28 chunks for `7ad72ac`, run the DAO's `deployNext`, then repoint `zswap.wei`.
 
 ---
 
