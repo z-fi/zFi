@@ -6,22 +6,22 @@ An external pre-release audit (GPT Astra) reviewed `zSwap.html` at `66f3067` on 
 
 | | |
 |---|---|
-| Commit | `2f0254a` |
-| Page | `zSwap.html`, 674,899 bytes, 28 chunks |
-| keccak256(zSwap.html) | `0xaba7143b2d7afc7b0599492bee4cc2906c5d3e019a19437aa83831de987c18d6` |
-| Resolver relay gas | 29,476,818 of the 30,000,000 eth_call budget |
-| Tests | UI 97 files and the browser suite: 1,691 tests, 0 failures; Foundry zSwap 83/83; check-zSwap all pass |
+| Commit | `a040769` |
+| Page | `zSwap.html`, 675,354 bytes, 28 chunks |
+| keccak256(zSwap.html) | `0x225ffe7fa1d5424f541c209a255a8137a880ee0aaa4fab27f946b8abf02eddc2` |
+| Resolver relay gas | 29,515,382 of the 30,000,000 eth_call budget |
+| Tests | UI 97 files and the browser suite: 1,702 tests, 0 failures; Foundry zSwap 83/83; check-zSwap all pass |
 
-The audit's two fixes first shipped in `3b051c0` (680,829 B, keccak `0x055e22c2…ae32`). The lock moved to `2f0254a` after the final review below; everything in `3b051c0` is carried forward unchanged in behaviour.
+The audit's two fixes first shipped in `3b051c0` (680,829 B, keccak `0x055e22c2…ae32`). The lock moved to `2f0254a` after the final review below, then to `a040769` for cUSD loan parity with tacit.finance; everything in `3b051c0` is carried forward unchanged in behaviour.
 
-The hash and length are pinned in `test/zSwap.t.sol`, the registry calldata and `deploy/zSwap-v0.3-LAUNCH.md`. `node script/sync-zSwap-artifacts.mjs --committed` confirms that every pinned copy agrees with the committed page. Any change to `zSwap.html` after `2f0254a` voids this lock and needs the full pin sequence and test sweep again.
+The hash and length are pinned in `test/zSwap.t.sol`, the registry calldata and `deploy/zSwap-v0.3-LAUNCH.md`. `node script/sync-zSwap-artifacts.mjs --committed` confirms that every pinned copy agrees with the committed page. Any change to `zSwap.html` after `a040769` voids this lock and needs the full pin sequence and test sweep again.
 
 ## Findings at a glance
 
 | Item | Audit | Verdict | Outcome |
 |---|---|---|---|
-| P1: an ambiguous batch failure replays transactions | Hold release | Confirmed at HEAD | Fixed in `3b051c0`, carried into `2f0254a` |
-| P2: quote expiry is not rechecked before submission | Hold release | Confirmed at HEAD | Fixed in `3b051c0`, carried into `2f0254a` |
+| P1: an ambiguous batch failure replays transactions | Hold release | Confirmed at HEAD | Fixed in `3b051c0`, carried into `a040769` |
+| P2: quote expiry is not rechecked before submission | Hold release | Confirmed at HEAD | Fixed in `3b051c0`, carried into `a040769` |
 | Browser: the picker gap is −0.25 px | Low, unresolved gate | Not reproduced | No change |
 | UI harness: 26 failed, 4 cancelled | Environmental, passed alone | Agreed | Clean full run |
 
@@ -95,6 +95,8 @@ After the audit fixes, the final page was read by hand and then reviewed again b
 | Low | A wallet injected after load was never bound to chain and account events | It is bound on connect |
 | Low | The chart toggle stopped working with full browser storage; solver lanes failed on iOS before 15.4 | Storage is written after the UI update; `hasOwnProperty` replaces `Object.hasOwn` |
 
+A cross-check against Tacit's own modules (about 3,000 comparisons over 12 random keys, by the Tacit team) found zSwap's Tacit cryptography byte-identical except two cUSD loan details, fixed in `a040769`: the debt note's keys now use Tacit's `deriveOutputKeys(key, anchor, "cdpDebt", 0)`, so tacit.finance finds a zSwap loan from the key alone, and the next position index comes from the chain's `CdpPositionInserted` settles, so a key already used on tacit.finance is never reused. The mint op is byte-identical to Tacit's `buildCdpMintOp` at tacit `6df65935`, and check-zSwap pins it.
+
 Checked and found clean: every order-book, SLOW, Precision, Markets, names, launch and governance selector, argument order, value and approval spender against the compiled ABIs; all 69 HTML sinks traced to validated data, with no eval, postMessage or unpinned code; every wallet and chain switch path.
 
 Deferred as rare or bounded: a key import racing a background refresh, two open tabs saving notes at the same moment, a Private ETH proof interrupted by a network switch (costs gas at most), and cosmetic bidi characters in token-list names.
@@ -107,12 +109,13 @@ New tests: `test/ui/final-edges.test.mjs` (the comma and clock cases) and an ass
 
 - `23bdb00`: Bitcoin reads skip unusable node answers and promote the node that answered. A Bitcoin transaction is broadcast to every node at once.
 - `c88ce01`: pool ether moves into V1 as a tETH note from the Private ETH menu. The note is saved before the move is sent, and recover finds it from the key alone.
+- `a040769`: cUSD loan keys and position index match tacit.finance.
 - `2f0254a`, `df9a51c`: the final-review fixes above.
 - `d0abc1f`: Precision-pool deposits check the balance before quoting, and a partial withdrawal previews what it returns.
 
 Deferred by decision: an in-page cBTC CDP repay. It needs several KB of new proving logic, and the page links to tacit.finance for it instead.
 
-Next step: deploy the 28 chunks for `2f0254a`, run the DAO's `deployNext`, then repoint `zswap.wei`.
+Next step: deploy the 28 chunks for `a040769`, run the DAO's `deployNext`, then repoint `zswap.wei`.
 
 ---
 
