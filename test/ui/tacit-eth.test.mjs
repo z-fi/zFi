@@ -151,6 +151,24 @@ describe('ether in the private panel on Ethereum', () => {
   });
 });
 
+describe('a move into V1 that does not go', () => {
+  test('leaves no V1 note behind', async () => {
+    const p = await open();
+    p.chain.answers.set('0x000000000ed1eabd231be41d93b719056f7febfc:7da9874f', '0x' + word(0));
+    p.window.eval('twW.failV1=1');
+    p.click('pv');
+    await p.settle();
+    p.click(p.$('pvKey').querySelector('button[data-a="rx"]'));
+    await p.waitFor(() => row(p, 'Move it into V1'), { label: 'the move row' });
+    p.click(row(p, 'Move it into V1'));
+    await answer(p, '0.1');
+    await p.waitFor(() => /not enough in the pool/.test(p.text('stat')), { label: 'the refusal' });
+    assert.equal(p.window.eval('cpNotes.filter(n=>n.v==="10000000").length'), 0, 'the note saved for it is dropped');
+    assert.equal(p.window.eval('cpLoadNotes().filter(n=>n.v==="10000000").length'), 0, 'from storage too');
+    p.close();
+  });
+});
+
 describe('the pool bridges out to an L2', () => {
   test('picking Base or Robinhood hides the recipient, updates the hint, and bridges instead of withdrawing', async () => {
     const p = await open();
