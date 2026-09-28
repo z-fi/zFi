@@ -51,8 +51,7 @@
 <main>
   <h1>zSwap steward actions</h1>
   <p class="sub">The changes the zSwap steward should make now, and a health check of everything the steward curates.
-    Everything is read live from Ethereum. Each change is simulated from your wallet before it is sent, and nothing is
-    sent until you press Send.</p>
+    Everything is read live from Ethereum. Press Apply recommended: every ticked change is simulated from your wallet first, then sent as one batch.</p>
 
   <section>
     <h2>Wallet</h2>
@@ -67,7 +66,7 @@
   <section>
     <h2>Recommended</h2>
     <div id="acts"><p class="hint">Reading…</p></div>
-    <div class="row" style="margin-top:12px"><button id="send" disabled>Connect a wallet to send</button><span class="hint" id="cnt" style="margin:0"></span></div>
+    <div class="row" style="margin-top:12px"><button id="send" disabled>Connect a wallet to apply</button><span class="hint" id="cnt" style="margin:0"></span></div>
     <div class="msg" id="sendmsg"></div>
   </section>
 
@@ -96,13 +95,17 @@ const SOLV = '0x1Dfbb2f41B596F72187370469074C46de60dA2e3';  // zSolverList
 const ROUTER = '0x0000006c96afa6f1cd4df8fe19bc0d8b6a6cd7b5'; // Tacit pool router, every chain
 const POOL = '0x000000c2a20657ce25f2ba99737933d031afbee9';
 const CHAIN = { 0: 'all chains', 1: 'Ethereum', 8453: 'Base', 4663: 'Robinhood' };
-// Tacit's pool keepers, one per chain. zSwap has them built in as a fallback; listing them here puts them in the
-// curated roster, where the steward can later move or replace one without a new page.
-const KEEPERS = [
-  [1, 'https://tacit-evm-pool-keeper.onrender.com/evm-pool/keeper'],
-  [8453, 'https://tacit-evm-pool-keeper-base.onrender.com/evm-pool/keeper'],
-  [4663, 'https://tacit-evm-pool-keeper-robinhood.onrender.com/evm-pool/keeper'],
+// Entries worth adding, each checked from this browser before it is offered. Tacit's pool keepers are built into
+// zSwap as a fallback; listing them puts them in the curated roster, where the steward can later move or replace one
+// without a new page. The extra Bitcoin mirror is an esplora API that answers with open CORS.
+const CANDIDATES = [
+  ['evk', 1, 'https://tacit-evm-pool-keeper.onrender.com/evm-pool/keeper'],
+  ['evk', 8453, 'https://tacit-evm-pool-keeper-base.onrender.com/evm-pool/keeper'],
+  ['evk', 4663, 'https://tacit-evm-pool-keeper-robinhood.onrender.com/evm-pool/keeper'],
+  ['btc', 0, 'https://blockstream.info/api'],
+  ['btc', 0, 'https://mempool.emzy.de/api'],
 ];
+const SVC = { rpc: 'RPC nodes', logs: 'log nodes', tacit: 'Tacit relay', btc: 'Bitcoin APIs', wc: 'WalletConnect relay', wcpid: 'WalletConnect project id', tacad: 'TAC airdrop mirrors', evk: 'Tacit pool keeper' };
 
 const $ = id => document.getElementById(id);
 const say = (id, t, k) => { const e = $(id); e.textContent = t; e.className = 'msg show ' + (k || ''); };
@@ -191,39 +194,68 @@ const why = e => { const d = e && (e.data?.data || e.data || e.error?.data); con
   return s.startsWith('0x30cd7471') ? 'NotOwner(): this account is not the steward.' : (e && (e.message || e.reason)) || String(e); };
 
 // ---------------------------------------------------------------- recommended actions
+// One `set` per roster list: entries that answer keep their order and go first, verified candidates follow, and
+// entries that failed from this browser move to the end. A failure can be local to one network, so they are kept
+// unless "also drop" is ticked.
 let acts = [];
+const probed = {};
+const probe = (svc, chain, url) => probed[svc + '|' + chain + '|' + url] ||= probeEntry(svc, chain, url);
+async function rosterKeys() {
+  const k = await read(EPS, '0x307540f6');
+  const n = Number(W(k, Number(W(k, 0)) / 32)), so = Number(W(k, 0)) / 32 + 1, co = Number(W(k, 1)) / 32 + 1, out = [];
+  for (let i = 0; i < n; i++) {
+    const w = k.slice(2 + (so + i) * 64, 2 + (so + i) * 64 + 64);
+    out.push([new TextDecoder().decode(Uint8Array.from(w.match(/../g).map(b => parseInt(b, 16)))).replace(/\0+$/, ''), Number(W(k, co + i))]);
+  }
+  return out;
+}
 async function loadActs() {
-  acts = await Promise.all(KEEPERS.map(async ([chain, url]) => {
-    const [cur, probe] = await Promise.all([listOf('evk', chain), keeperInfo(url, chain)]);
-    const done = cur[0] === url;
-    return { chain, url, cur, probe, done, on: !done && probe.ok, data: setCall('evk', chain, [url, ...cur.filter(u => u !== url)]) };
+  const keys = await rosterKeys();
+  for (const [svc, chain] of CANDIDATES) if (!keys.some(([s, c]) => s === svc && c === chain)) keys.push([svc, chain]);
+  const all = await Promise.all(keys.map(async ([svc, chain]) => {
+    const cur = await listOf(svc, chain), add = CANDIDATES.filter(([s, c, u]) => s === svc && c === chain && !cur.includes(u)).map(x => x[2]);
+    const ps = await Promise.all([...cur, ...add].map(u => probe(svc, chain, u)));
+    const st = {}; [...cur, ...add].forEach((u, i) => st[u] = ps[i]);
+    const good = u => st[u].ok !== false, okAdd = add.filter(good), bad = cur.filter(u => !good(u));
+    const keep = [...cur.filter(good), ...okAdd], next = [...keep, ...bad];
+    return { svc, chain, cur, st, okAdd, bad, keep, next, drop: false, on: true };
   }));
+  acts = all.filter(a => a.next.join() !== a.cur.join() || a.bad.length && a.keep.length);
   paintActs();
 }
+const planOf = a => a.drop ? a.keep : a.next;
 function paintActs() {
   const box = $('acts'); box.textContent = '';
+  if (!acts.length) box.append(el('p', 'hint', 'Nothing to change: every list answers from this browser and is in a sensible order.'));
   for (const a of acts) {
-    const row = el('div', 'act');
-    const cb = el('input'); cb.type = 'checkbox'; cb.checked = a.on; cb.disabled = a.done || !a.probe.ok;
+    const row = el('div', 'act'), plan = planOf(a), same = plan.join() === a.cur.join();
+    a.data = setCall(a.svc, a.chain, plan);
+    const cb = el('input'); cb.type = 'checkbox'; cb.checked = a.on && !same; cb.disabled = same; a.on = cb.checked;
     cb.onchange = () => { a.on = cb.checked; paintSend(); };
-    const t = el('div'); t.append(el('b', null, 'List Tacit\'s ' + CHAIN[a.chain] + ' keeper in the roster'));
-    t.append(el('div', 'kv', 'zEndpoints · evk / ' + a.chain));
-    const now = el('div', 'kv'); now.append('Now: ', a.cur.length ? el('code', null, a.cur.join(', ')) : 'empty (zSwap falls back to its built-in keeper)');
-    const next = el('div', 'kv'); next.append('After: ', el('code', null, [a.url, ...a.cur.filter(u => u !== a.url)].join(', ')));
-    const pr = el('div', 'kv'); pr.append('Keeper check: ', el('span', 'tag ' + (a.probe.ok ? 'ok' : 'bad'), (a.probe.ok ? 'ok · ' : 'fail · ') + a.probe.why + ' · ' + a.probe.ms + ' ms'));
-    if (a.done) pr.append(' ', el('span', 'tag ok', 'already listed first, nothing to do'));
+    const what = [a.okAdd.length && 'add ' + a.okAdd.length + ' verified', a.bad.length && (a.drop ? 'drop ' : 'move down ') + a.bad.length + ' failing'].filter(Boolean).join(', ') || 'reorder';
+    const t = el('div'); t.append(el('b', null, (SVC[a.svc] || a.svc) + ' · ' + CHAIN[a.chain] + ': ' + what));
+    t.append(el('div', 'kv', 'zEndpoints · ' + a.svc + ' / ' + a.chain));
+    const now = el('div', 'kv'); now.append('Now: ', a.cur.length ? el('code', null, a.cur.join(', ')) : 'empty (zSwap falls back to its built-in list)');
+    const next = el('div', 'kv'); next.append('After: ', el('code', null, plan.join(', ')));
+    const pr = el('div', 'kv');
+    for (const u of [...a.cur, ...a.okAdd]) { const p = a.st[u]; pr.append(el('div', null, '')); pr.lastChild.append(el('span', 'tag ' + (p.ok === false ? 'bad' : p.ok ? 'ok' : 'mut'), (p.ok === false ? 'fail · ' : p.ok ? 'ok · ' : '') + p.why + (p.ms ? ' · ' + p.ms + ' ms' : '')), ' ', el('span', 'url', u)); }
     row.append(cb, t, el('span'), now, el('span'), next, el('span'), pr);
+    if (a.bad.length && a.keep.length) {
+      const d = el('label', 'kv'), x = el('input'); x.type = 'checkbox'; x.checked = a.drop;
+      x.onchange = () => { a.drop = x.checked; a.on = true; paintActs(); };
+      d.append(x, ' also drop the failing entr' + (a.bad.length === 1 ? 'y' : 'ies') + ' (check from another network first)');
+      row.append(el('span'), d);
+    }
     box.append(row);
   }
-  const note = el('p', 'hint', 'Why: zSwap already uses these keepers as a built-in fallback. Listing them in zEndpoints makes the roster the source of truth, so if Tacit ever moves a keeper, the steward changes one row instead of the page needing a new release.');
-  box.append(note);
+  box.append(el('p', 'hint', 'Why: zSwap reads these lists on chain and tries them in order, so the first entry is the one every visitor waits on. Healthy first means fast first loads; the page already falls through to later entries when one fails.'));
   paintSend();
 }
 function paintSend() {
   const pick = acts.filter(a => a.on), b = $('send');
   $('cnt').textContent = pick.length ? pick.length + ' change' + (pick.length === 1 ? '' : 's') + ' ticked' : 'nothing ticked';
   b.disabled = !account || !pick.length;
-  b.textContent = !account ? 'Connect a wallet to send' : account !== steward ? 'Send (not the steward: will revert)' : 'Send ticked';
+  b.textContent = !account ? 'Connect a wallet to apply' : account !== steward ? 'Apply (not the steward: will revert)' : !pick.length ? 'Nothing to apply' : 'Apply recommended';
 }
 $('send').onclick = async () => {
   const calls = acts.filter(a => a.on).map(a => ({ to: EPS, data: a.data }));
@@ -267,39 +299,36 @@ const rpcProbe = (url, method, params = []) => timed(async signal => {
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) });
   return { r: await r.json() };
 });
-const getProbe = (url, test) => timed(async signal => { const r = await fetch(url, { signal }); return test(r, await r.text()); });
+const getProbe = (url, test) => timed(async signal => { const r = await fetch(url, { signal }); return await test(r, await r.text()); });
 async function probeEntry(svc, chain, url) {
   if (svc === 'rpc') { const p = await rpcProbe(url, 'eth_chainId'); if (!p.r) return p; const c = parseInt(p.r.result, 16); return { ok: c === chain, why: 'chain ' + c, ms: p.ms }; }
   if (svc === 'logs') { const p = await rpcProbe(url, 'eth_getLogs', [{ address: '0x000000000Ed1eabD231Be41d93b719056F7febFC', fromBlock: '0x' + (25998736).toString(16), toBlock: 'latest' }]);
     if (!p.r) return p; return Array.isArray(p.r.result) ? { ok: true, why: p.r.result.length + ' logs', ms: p.ms } : { ok: false, why: (p.r.error && p.r.error.message || 'no logs').slice(0, 60), ms: p.ms }; }
   if (svc === 'tacit') return getProbe(url + '/confidential/quote?asset=0x3cba71e1114af183cdeacc6b8457a474d17529fd28704480ca799d0d03126f34', r => ({ ok: r.status < 500, why: 'HTTP ' + r.status }));
-  if (svc === 'btc') return getProbe(url + '/blocks/tip/height', (r, t) => ({ ok: r.ok && /^\d+$/.test(t.trim()), why: 'tip ' + t.trim().slice(0, 10) }));
+  if (svc === 'btc') return getProbe(url + '/blocks/tip/height', async (r, t) => {
+    if (!r.ok || !/^\d+$/.test(t.trim())) return { ok: false, why: 'HTTP ' + r.status };
+    const f = await fetch(url + '/fee-estimates').then(x => x.json()).catch(() => null);
+    return f && f['2'] > 0 ? { ok: true, why: 'tip ' + t.trim() } : { ok: false, why: 'no fee table' };
+  });
   if (svc === 'tacad') return getProbe(url + '00.json', r => ({ ok: r.ok, why: 'HTTP ' + r.status }));
   if (svc === 'evk') return keeperInfo(url, chain);
   return { ok: null, why: 'not checked from a browser', ms: 0 };
 }
 async function loadHealth() {
   const box = $('health'); box.textContent = '';
-  const k = await read(EPS, '0x307540f6');
-  const n = Number(W(k, Number(W(k, 0)) / 32)), so = Number(W(k, 0)) / 32 + 1, co = Number(W(k, 1)) / 32 + 1;
   const rows = [];
-  for (let i = 0; i < n; i++) {
-    const w = k.slice(2 + (so + i) * 64, 2 + (so + i) * 64 + 64);
-    const svc = new TextDecoder().decode(Uint8Array.from(w.match(/../g).map(b => parseInt(b, 16)))).replace(/\0+$/, '');
-    const chain = Number(W(k, co + i));
-    for (const url of await listOf(svc, chain)) rows.push({ svc, chain, url });
-  }
+  for (const [svc, chain] of await rosterKeys()) for (const url of await listOf(svc, chain)) rows.push({ svc, chain, url });
   const lis = rows.map(r => {
     const li = el('li'); li.append(el('span', 'svc', r.svc + ' / ' + r.chain), el('span', 'url', r.url), el('span', 'tag mut', '…'));
     box.append(li); return li;
   });
   await Promise.all(rows.map(async (r, i) => {
-    const p = await probeEntry(r.svc, r.chain, r.url), tag = lis[i].lastChild;
+    const p = await probe(r.svc, r.chain, r.url), tag = lis[i].lastChild;
     tag.className = 'tag ' + (p.ok === null ? 'mut' : p.ok ? 'ok' : 'bad');
     tag.textContent = (p.ok === null ? '' : p.ok ? 'ok · ' : 'fail · ') + p.why + (p.ms ? ' · ' + p.ms + ' ms' : '');
   }));
 }
-$('recheck').onclick = () => loadHealth();
+$('recheck').onclick = () => { for (const k in probed) delete probed[k]; loadHealth(); loadActs(); };
 
 // ---------------------------------------------------------------- other steward contracts
 async function loadOthers() {
