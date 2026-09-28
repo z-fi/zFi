@@ -14,14 +14,21 @@
  * outlive a reload, burns the commit fee and leaves the name unclaimable
  * until the commitment lapses. That is what most of this file is about.
  *
+ * A paid name commits for zRouter and reveals through zRouter.revealName, so
+ * the registration counts toward Tacit's points. The router reveals with the
+ * derived secret keccak256(abi.encode(secret, buyer)), so the commitment is
+ * makeCommitment(label, zRouter, derived).
+ *
  * The expected commitment below is not derived here. It was read from mainnet:
  *
  *   cast call 0x0000000000696760E15f265e828DB644A0c242EB \
  *     "makeCommitment(string,address,bytes32)(bytes32)" \
- *     "zswaptest" 0x1111...1111 0x2222...2222
+ *     "zswaptest" 0x000000000000FB114709235f1ccBFfb925F600e4 \
+ *     $(cast keccak $(cast abi-encode "f(bytes32,address)" 0x2222...2222 0x1111...1111))
  *
- * which is why the fixtures below use that label, that account and that
- * secret: the page has to reproduce a value the registry itself produced.
+ * which is why the fixtures use that label, that account and that secret: the
+ * page has to reproduce a value the registry itself produced. A commitment made
+ * before the router path is still revealed directly at the registry.
  */
 import { test, describe, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -42,7 +49,7 @@ const SEL = {
 };
 
 // Read from mainnet, not computed here. See the header.
-const MAINNET_COMMITMENT = '0xcb53c3959d18f8c373553bde8c221b25531ee561ee917e0dec88b859b4677c29';
+const MAINNET_COMMITMENT = '0x4c7eb929e24b139f029892c280a69362fcecfe99a76368e6384e65be660bff13';
 const SECRET = '0x' + '22'.repeat(32);
 
 const ETH = 10n ** 18n;
@@ -292,6 +299,7 @@ describe('claiming a name', () => {
     const held = JSON.parse(p.window.localStorage.getItem(key));
     assert.equal(held.label, 'zswaptest', 'the label was not kept');
     assert.equal(held.secret, SECRET, 'the secret was not kept');
+    assert.equal(held.r, 1, 'the commitment was not marked as the router\'s');
     assert.ok(Number.isFinite(held.at), 'the commit time was not kept');
     p.close();
   });
@@ -498,7 +506,33 @@ describe('claiming a name', () => {
     p.close();
   });
 
-  test('a ripe commitment reveals with the fee attached', async () => {
+  test('a ripe commitment reveals through zRouter with the fee, and sweeps any excess back', async () => {
+    const p = await openNames();
+    const key = 'zswap:wns:' + A.ACCOUNT.toLowerCase();
+    p.window.localStorage.setItem(key, JSON.stringify({
+      label: 'zswaptest', secret: SECRET, r: 1, at: Math.floor(Date.now() / 1000) - 120,
+    }));
+    p.click('wn'); await p.settle();
+    p.click('wn'); await p.settle();
+    p.click('wnGo');
+    await p.settle();
+    assert.ok(!p.chain.sent.some(t => (t.to || '').toLowerCase() === WNS.toLowerCase()),
+      'a router commitment revealed at the registry, where it can never match');
+    const tx = p.chain.sent.find(t => (t.to || '').toLowerCase() === A.ZROUTER.toLowerCase());
+    assert.ok(tx, 'nothing was revealed');
+    assert.equal(tx.data.slice(0, 10), '0xac9650d8', 'the reveal should be one zRouter multicall');
+    const acct = A.ACCOUNT.slice(2).toLowerCase().padStart(64, '0');
+    assert.ok(tx.data.includes('2cb9f974' + '0'.repeat(62) + '60' + SECRET.slice(2) + acct),
+      'the multicall should revealName(label, secret, buyer)');
+    assert.ok(tx.data.includes('cb019b84' + '0'.repeat(64) + '0'.repeat(64) + '0'.repeat(64) + acct),
+      'the multicall should sweep any refunded ether back to the buyer');
+    assert.equal(BigInt(tx.value), FEE, `the reveal must carry the fee, got ${BigInt(tx.value)}`);
+    assert.equal(p.window.localStorage.getItem(key), null,
+      'a completed registration should release the secret');
+    p.close();
+  });
+
+  test('a commitment made before the router path still reveals at the registry', async () => {
     const p = await openNames();
     const key = 'zswap:wns:' + A.ACCOUNT.toLowerCase();
     p.window.localStorage.setItem(key, JSON.stringify({

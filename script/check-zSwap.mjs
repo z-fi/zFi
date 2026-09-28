@@ -158,11 +158,13 @@ check('actionable quotes expire after 45 seconds', () => {
   // everything else. This read 2 until ETH -> WETH gained its own path.
   // The routed quote is also capped at 30 s from when a solver lane answered,
   // since a lane's calldata is reused as-is and ages from the lane's clock.
-  const uses = html.match(/exp:Date\.now\(\)\+QUOTE_TTL/g) || [];
+  // The page spells the clock `Dn()` (its alias for Date.now()); read it back as one.
+  const h = html.replace(/(?<![\w$.])Dn\(\)/g, 'Date.now()');
+  const uses = h.match(/exp:Date\.now\(\)\+QUOTE_TTL/g) || [];
   if (uses.length !== 2) throw Error(`expected 2 shortcut quote-expiry uses, found ${uses.length}`);
-  if (!html.includes('exp:r.best.at?Mn(Date.now()+QUOTE_TTL,r.best.at+3e4):Date.now()+QUOTE_TTL'))
+  if (!h.includes('exp:r.best.at?Mn(Date.now()+QUOTE_TTL,r.best.at+3e4):Date.now()+QUOTE_TTL'))
     throw Error('the routed quote no longer expires on QUOTE_TTL capped by the lane answer');
-  if (html.includes('Date.now()+1500000')) throw Error('legacy 25-minute quote expiry remains');
+  if (h.includes('Date.now()+1500000')) throw Error('legacy 25-minute quote expiry remains');
 });
 
 check('recipient and orderbook metadata guards remain wired', () => {
