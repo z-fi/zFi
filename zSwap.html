@@ -2935,7 +2935,7 @@ if(s.method==="wc_sessionUpdate"){sess.accounts=Object.values(s.params&&s.params
 if(s.method==="wc_sessionExtend"){sess.exp=+s.params?.expiry||sess.exp;wcSave(sess)}if(s.method!=="wc_sessionEvent")return;
 const e=s.params&&s.params.event||{};let d=e.data;
 if(e.name==="chainChanged"&&typeof d==="string"&&d.includes(":"))d=d.split(":").pop();
-if(e.name==="accountsChanged"&&Ia(d)){d=d.map(a=>typeof a==="string"&&a.includes(":")?a.split(":").pop():a);if(/^0x[0-9a-f]{40}$/i.test(d[0])&&!sameAcct(d[0],accts[0])){sess.accounts=["eip155:"+wcChain+":"+d[0],...sess.accounts];wcSave(sess)}}
+if(e.name==="accountsChanged"&&Ia(d)){d=d.map(a=>typeof a==="string"&&a.includes(":")?a.split(":").pop():a);if(isAddr(d[0])&&!sameAcct(d[0],accts[0])){sess.accounts=["eip155:"+wcChain+":"+d[0],...sess.accounts];wcSave(sess)}}
 if(e.name==="chainChanged"||e.name==="accountsChanged")evs.forEach(f=>f(e.name,d))});
 return{request:({method,params})=>
 method==="eth_requestAccounts"||method==="eth_accounts"?Promise.resolve(accts):
@@ -6828,7 +6828,7 @@ const pr=await rpc(C,[{to:PLAUNCH,data:"0x"+SEL_POOLOF+eA(cand.addr)},L]);
 if(my!==fcSeq||fcMineToks.length)return;
 pool=fcPool[key]="0x"+Sx(pr||"").slice(24);
 }
-if(!/^0x[0-9a-f]{40}$/i.test(pool)||/^0x0{40}$/i.test(pool)){Hd(fcEl,1);return}
+if(!isAddr(pool)||/^0x0{40}$/i.test(pool)){Hd(fcEl,1);return}
 const [o0,cr]=await mD([{to:pool,data:"0x"+SEL_OWED0},
 {to:PLAUNCH,data:"0x"+SEL_CREATOROF+eA(cand.addr)}]);
 if(my!==fcSeq||fcMineToks.length)return;
@@ -6878,7 +6878,7 @@ if(hit&&(!hit.at||Dn()-hit.at<6e4))return hit;
 let out={dao:"",shares:""};
 try{
 const dao=cbWord(await rpc(C,[{to:tok,data:"0x"+SEL_DAOOF},L]));
-if(/^0x[0-9a-f]{40}$/i.test(dao)&&!/^0x0{40}$/i.test(dao)){
+if(isAddr(dao)&&!/^0x0{40}$/i.test(dao)){
 const [lt,sh,cu]=await mD([{to:dao,data:"0x"+SEL_LOOTOF},{to:dao,data:"0x"+SEL_SHARESOF},{to:dao,data:"0x"+SEL_CONTRACTURI}]);
 if(lt==null||sh==null||cid!==CHAIN_ID)return out;
 if(cbWord(lt).toLowerCase()===key&&String(await rpc(GC,[dao,L])).toLowerCase()==="0x5f5f365f5f37365f73"+CIMPL+"5af43d5f5f3e6029573d5ffd5b3d5ff3"){out={dao,shares:cbWord(sh)};
@@ -7801,8 +7801,9 @@ throw Er("Could not load "+f+" from any mirror.")},
 twLoad=()=>{const c=CHAIN_ID,k=cpSeed;if(twW&&twW.c===c&&twW.k===k)return Promise.resolve(twW);if(twJob&&twJob.c===c&&twJob.k===k)return twJob;twW&&twW.terminate();twW=null;const j=twJob=(async()=>{
 const m=await import(URL.createObjectURL(new Blob([await twGet("tacit-evm-pool-wallet.js","f96e94b3e1e79cdc0b94deac36f2a0308660676662a84f85d0772d1140aeb732",["https://ipfs.filebase.io/ipfs/bafybeigponpwb4w2f74kttfg7oaccd2gsogfp7nhfwhevjl6o3erfsi52u"])],{type:"text/javascript"})));
 const W=await m.makeEvmPoolWallet({provider:prov(),chainId:c,identityKey:b32(Bi(k)),artifacts:async()=>{stat.textContent="Loading the prover (about 33 MB, once)…";const[w,z,v]=await Pa([["transact.wasm",m.PIN.wasm_sha256],["transact_final.zkey",m.PIN.zkey_sha256],["transact_vk.json","f3e36ac06ad59428003b90abd80b807180badeb06c3960c50b060ebc59b626b3"]].map(a=>twGet(...a)));return{wasm:w,zkey:z,vk:v}},relay:tbKs(c)[0],rpc:c===1?CP_LOGS:CHAINS[c].rpcs});W.c=c;W.k=k;if(twJob===j)twW=W;return W})();j.c=c;j.k=k;j.catch(()=>{if(twJob===j)twJob=null});return j},
-twDo=async(f,...a)=>{if(f==="withdraw"){if(!isAddr(a[0]))throw Er("Withdraw to a 0x address.");if(Lc(a[0])===Lc(account)&&!await sure("That links this wallet to the pool on chain. Go ahead?"))throw Er("Not withdrawn.")}const W=await twLoad(),F=(...x)=>f==="sweep"?W.receive.sweep(...x):W[f](...x),o={onStep:t=>stat.textContent=t,...(f==="bridgeOut"&&a[0]===4663?{l2Rpc:CHAINS[4663].rpcs}:0)};let t;try{t=await F(...a,o)}catch(E){if(!/send|withdraw/.test(f)||!await sure("The keeper did not take it ("+E.message+"). Send it from this wallet instead? That links this wallet to it on chain."))throw E;t=await F(...a,{...o,via:"self"})}
+twDo=async(f,...a)=>{if(f==="withdraw"){if(!isAddr(a[0]))throw Er("Withdraw to a 0x address.");if(Lc(a[0])===Lc(account)&&!await sure("That links this wallet to the pool on chain. Go ahead?"))throw Er("Not withdrawn.")}const W=await twLoad(),F=(...x)=>f==="sweep"?W.receive.sweep(...x):W[f](...x),o={onStep:t=>stat.textContent=t,...(f==="bridgeOut"&&a[0]===4663?{l2Rpc:CHAINS[4663].rpcs}:0)};let t;try{t=await F(...a,o)}catch(E){if(!/send|withdraw|toV1/.test(f)||!await sure("The keeper did not take it ("+E.message+"). Send it from this wallet instead? That links this wallet to it on chain."))throw E;t=await F(...a,{...o,via:"self"})}
 stat.textContent="Sent: "+t;W.sync().then(()=>cpPaint()).catch(Np);return t},
+twV1=async v=>{if(v<=0n)throw Er("How much ether?");const{i,k}=await cpFresh(v),n=cpNote(i,k);cpNotes.push(n);cpSaveNotes();n.tx=await twDo("toV1",v*CP_SCALE,cpDepCommit(k.cx,k.cy,k.owner));cpSaveNotes();await settle(n.tx,1);await cpSettleWrap(n)},
 twAct=async()=>{const v=pU(pvAmt.value||"",18),a=pvAct.value,r=vT(pvRc);if(v<=0n)throw Er("How much ether?");if(a==="dep")return twDo("deposit",v);
 if(a==="send"){if(!/^bp1/.test(r))throw Er("A pool payment goes to a bp1… Tacit address.");return twDo("send",r,v)}const ch=+pvChain.value;if(ch!==1)return twDo("bridgeOut",ch,v);return twDo("withdraw",vT(pvTo)||account,v)},
 rxS=(t,...m)=>{const x=cpCat(cpU8("tacit-btc-pool-zk-"+t),...m);return big(cpCat(sha2(cpCat(x,[0])),sha2(cpCat(x,[1]))))%rxL},rxK={},
@@ -7811,9 +7812,9 @@ return rxH([...rxB(a+rxS("auth-tweak-v1",s)),...rxB(n+rxS("nk-tweak-v1",s))])})(
 rxPost=async()=>{const c=CHAIN_ID;if(cpSeed)for(const k of tbKs(c))try{await relayFetch("/receive",{chainId:c,npk:String(rxNpk()),feeBps:25},k);break}catch{}},
 rxShow=async()=>{try{if(!account)throw Er("Connect a wallet to see your private ETH address.");if(!cpSeed)await cpUnlock();const c=CHAIN_ID,n=CHAINS[c].name,a=retAddr(await tbR(C,[{to:TB_R,data:"0x7944b37a"+eU(rxNpk())+eU(25)},L]).catch(()=>""));
 if(!a)throw Er("Could not read the Tacit pool on "+n+". Try again.");rxPost();const P=twW&&twW.c===c&&twW.k===cpSeed?twW:null,w=await tbW(a),m=((await relayFetch("/quote",null,tbKs(c)[0]).catch(()=>0))||{}).receiveMin;
-twLoad().then(W=>W.sync()).catch(Np);const g=await wkPick([{name:"Your private ETH address",sub:a.slice(0,8)+"…"+a.slice(-6)+(w?" · "+tbE(w)+" waiting":"")+(/^\d{1,30}$/.test(m)?" · send at least "+tbE(m):""),k:1},{name:"Shield ETH into it",sub:"a send from this wallet",k:2},{name:"Your pool address",sub:P?P.address.slice(0,12)+"… · "+tbE(P.balance())+" held privately":"bp1 address and balance",k:9},{name:"Sweep it in yourself",sub:"proved on this device · no keeper, no fee",k:4},{name:"Send privately",sub:"to a Tacit address, proved on this device",k:5},{name:"Withdraw",sub:"to any address, proved on this device",k:6},{name:"tacit.finance ↗",sub:"the same balance, same key",k:7},...c===1?[{name:"Move V1 ETH into it",sub:"a V1 withdrawal to this address",k:8}]:[],{name:"Keeper",sub:(tbPin(c)?"yours · ":"")+tbKs(c)[0].split("/")[2],k:3}],"Private ETH · "+n);
+twLoad().then(W=>W.sync()).catch(Np);const g=await wkPick([{name:"Your private ETH address",sub:a.slice(0,8)+"…"+a.slice(-6)+(w?" · "+tbE(w)+" waiting":"")+(/^\d{1,30}$/.test(m)?" · send at least "+tbE(m):""),k:1},{name:"Shield ETH into it",sub:"a send from this wallet",k:2},{name:"Your pool address",sub:P?P.address.slice(0,12)+"… · "+tbE(P.balance())+" held privately":"bp1 address and balance",k:9},{name:"Sweep it in yourself",sub:"proved on this device · no keeper, no fee",k:4},{name:"Send privately",sub:"to a Tacit address, proved on this device",k:5},{name:"Withdraw",sub:"to any address, proved on this device",k:6},{name:"tacit.finance ↗",sub:"the same balance, same key",k:7},...c===1?[{name:"Move V1 ETH into it",sub:"a V1 withdrawal to this address",k:8},{name:"Move it into V1",sub:"as a tETH note",k:10}]:[],{name:"Keeper",sub:(tbPin(c)?"yours · ":"")+tbKs(c)[0].split("/")[2],k:3}],"Private ETH · "+n);
 if(!g)return;if(g.k===1)return cpCopy("Your private ETH address. ETH sent to it on Ethereum, Base or Robinhood is shielded into your Tacit balance there, less at most 0.25% to whoever sweeps it in; any other token is lost.",a);if(g.k===2)return void(location.hash="chain="+c+"&token="+ZERO+"&to="+a);if(g.k===3){const u=await dlg("Keeper for "+n+": it sweeps your private ETH address into the pool, for at most 0.25%. Anyone can run one. Enter its URL, or leave blank for the listed keepers.",tbPin(c),1);if(u===null)return;const v=u.trim().replace(/\/$/,""),j=v&&await relayFetch("/info",null,v).catch(()=>({}));if(v&&(!/^https:\/\/\S*[^/\s]$/.test(v)||j.chainId!=c||String(j.router).toLowerCase()!==Lc(TB_R)||j.minReceiveFeeBps>25))throw Er("That is not a Tacit pool keeper for "+n+".");try{v?LS["zswap:evk:"+c]=v:delete LS["zswap:evk:"+c]}catch{}rxPost();return void(stat.textContent="Keeper for "+n+": "+tbKs(c)[0].split("/")[2]+".")}if(g.k===7)return void window.open("https://tacit.finance/sats/#eth="+c,"_blank","noopener");if(g.k===8){pvSet(true);pvIn.value="v";pvAct.value="out";pvChain.value="1";pvTo.value=a;pvActSync();cpPaint();return void(stat.textContent="Enter the V1 ETH to move, then Withdraw: it lands in the pool.")}
-if(g.k===9)return cpCopy("Your Tacit pool address on "+n+". Anyone in the pool can pay it privately.",(P||await twLoad()).address);if(g.k===4)return void await twDo("sweep");const W=await twLoad(),f=g.k===5?"send":"withdraw",to=await dlg(g.k===5?"Pay which Tacit address (bp1…)?":"Withdraw to which address? It is public on chain.",g.k===6?account:"",1);if(!to)return;const v=await dlg("How much ETH? You hold "+tbE((await W.sync()).balance)+" privately on "+n+".","",1);if(v)await twDo(f,to.trim(),pU(v.trim(),18))}catch(E){stat.textContent=E.message}};
+if(g.k===9)return cpCopy("Your Tacit pool address on "+n+". Anyone in the pool can pay it privately.",(P||await twLoad()).address);if(g.k===4)return void await twDo("sweep");if(g.k===10){const v=await dlg("How much ETH into V1?","",1);return void(v&&await pvRun(()=>twV1(pU(v.trim(),18)/CP_SCALE)))}const W=await twLoad(),f=g.k===5?"send":"withdraw",to=await dlg(g.k===5?"Pay which Tacit address (bp1…)?":"Withdraw to which address? It is public on chain.",g.k===6?account:"",1);if(!to)return;const v=await dlg("How much ETH? You hold "+tbE((await W.sync()).balance)+" privately on "+n+".","",1);if(v)await twDo(f,to.trim(),pU(v.trim(),18))}catch(E){stat.textContent=E.message}};
 const bGet=async p=>{let e;for(const u of[...B_API]){try{const j=await relayFetch(p,null,u);if(Ia(j)||j&&Ok(j).length&&j.status!=="unknown"){if(u!==B_API[0])B_API.splice(B_API.indexOf(u),1),B_API.unshift(u);return j}}catch(x){e=x}}throw e||Er("No Bitcoin node answered.")};
 const bPost=h=>Promise.any(B_API.map(u=>relayFetch("/tx",h,u).then(r=>r.text))).catch(a=>{const e=a.errors||[];if(e.some(x=>/already/i.test(x?.message)))return"";throw e[0]||Er("No Bitcoin node took the transaction.")});
 const bOp=l=>keccak(cpCat(bRev(l.t),bLE(1,4)));
@@ -8534,7 +8535,7 @@ pvAct.onchange=()=>{sBlip();pvActSync();cpPaint()};pvChain.onchange=()=>{sBlip()
 pvPath.onchange=()=>{sBlip();pvHintSync()};
 const cpExplorerLink=(base,value,label,kind)=>{
 if(typeof value!=="string")return label;
-const ok=kind==="tx"?/^0x[0-9a-fA-F]{64}$/.test(value):/^0x[0-9a-fA-F]{40}$/.test(value);
+const ok=kind==="tx"?/^0x[0-9a-fA-F]{64}$/.test(value):isAddr(value);
 return ok?`<a href="${base}/${kind}/${value}" target="_blank" rel="noreferrer">${label}</a>`:label;
 };
 const pubOk=n=>!!n&&/\.(g?wei|eth)$/i.test(n)&&!/\.base\.eth$/i.test(n);
@@ -9504,7 +9505,7 @@ const[o,t]=await cfgBatch([{to:WNS,data:"0x"+SEL_WOWNER+pad32(id)},
 {to:WNS,data:"0x"+SC_TEXT+pad32(id)+eU(64)+strTail("score")}]);
 if(my!==scSeq)return;
 const a="0x"+Sx(o||"").slice(24);
-if(!/^0x[0-9a-f]{40}$/i.test(a)||/^0x0{40}$/i.test(a))throw Er("gone");
+if(!isAddr(a)||/^0x0{40}$/i.test(a))throw Er("gone");
 owner=a;
 try{rec=decStr(t)}catch{}
 }catch{if(my===scSeq)scEl.textContent="No such name — "+n+" has never been minted.";return}
@@ -9567,7 +9568,7 @@ if(my!==lSeq)return;
 if((fa&&at(fa)<0)||(ta&&at(ta)<0)){[fa,ta]=await both();if(my!==lSeq)return}
 if(!listReady){
 const named=["token","out"].map(k=>(q.get(k)||"").trim()).filter(Boolean);
-if(named.some(v=>!/^0x[0-9a-f]{40}$/i.test(v)&&!symAddr(Lc(v))))return;
+if(named.some(v=>!isAddr(v)&&!symAddr(Lc(v))))return;
 }
 const fi=at(fa),oi=at(ta),pairHeld=lkEv&&!pairFree&&amt.value!==""&&amt.value!==lkWrote.amt;pairFree=0;
 if(fi>=0||oi>=0)pairChosen=true;
@@ -9614,7 +9615,7 @@ loadChart();
 if(t==="book")loadBook();
 if(listReady){
 const miss=["token","out"].map(k=>(q.get(k)||"").trim())
-.filter(v=>v&&(/^0x[0-9a-f]{40}$/i.test(v)?at(Lc(v))<0:!symAddr(Lc(v)))).map(v=>v.slice(0,24));
+.filter(v=>v&&(isAddr(v)?at(Lc(v))<0:!symAddr(Lc(v)))).map(v=>v.slice(0,24));
 if(miss.length){try{await upd}catch{}
 if(my===lSeq)stat.textContent=`Couldn’t find ${miss.join(" or ")}${/^0x/i.test(miss)?"":" — link it by address instead"}.`;}
 }
@@ -10002,18 +10003,12 @@ prep=[];
 }
 let tx;
 const mainTx={from:account,to:target,data:cd2,value:toHex(msgValue)};
-if(prep.length&&!batchCalls&&await canBatch(account)){
+if(prep.length&&!batchCalls){
 stat.textContent="Swapping…";
 await cW();
 tx=await sendBatch(account,[...prep.map(({to,data,value})=>({to,data,value})),
 {to:target,data:cd2,value:toHex(msgValue)}]);
 }else{
-for(const c of prep){
-swap.textContent=stat.textContent=c.note+"…";
-const ctx={from:account,to:c.to,data:c.data,value:c.value};
-await rpc(C,[ctx,L]);await cW();
-await settle(await sendTx([ctx]),1);
-}
 swap.textContent=stat.textContent="Swapping…";
 if(batchCalls){
 if(q.source===SRC_SOLVER){const s=await rpc("eth_simulateV1",[{blockStateCalls:[{calls:batchCalls.map(c=>({from:account,...c}))}]},"latest"]).catch(Nl),k=s&&s[0]&&s[0].calls;

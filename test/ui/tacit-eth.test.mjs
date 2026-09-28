@@ -126,6 +126,29 @@ describe('ether in the private panel on Ethereum', () => {
     assert.equal(p.value('pvTo'), BOX, 'a V1 withdrawal to your own private ETH address');
     p.close();
   });
+
+  test('pool ether moves into V1 as a tETH note this key owns, kept before it is sent', async () => {
+    const p = await open();
+    p.chain.answers.set('0x000000000ed1eabd231be41d93b719056f7febfc:7da9874f', '0x' + word(0));
+    p.click('pv');
+    await p.settle();
+    p.click(p.$('pvKey').querySelector('button[data-a="rx"]'));
+    await p.waitFor(() => row(p, 'Move it into V1'), { label: 'the move row' });
+    p.click(row(p, 'Move it into V1'));
+    await answer(p, '0.1');
+    await p.waitFor(() => calls(p).some(c => c[0] === 'toV1'), { label: 'the move' });
+    const [, amt, commit] = calls(p).find(c => c[0] === 'toV1');
+    assert.equal(amt, '100000000000000000');
+    assert.match(commit, /^0x[0-9a-f]{64}$/);
+    const n = JSON.parse(p.window.eval('JSON.stringify(cpNotes.filter(n=>n.v==="10000000"))'));
+    assert.equal(n.length, 1, 'one V1 note for 0.1 ETH');
+    assert.ok(n[0].i >= 0, 'derived from the key, so recover finds it again');
+    assert.equal(n[0].tx, '0x' + 'a1'.repeat(32));
+    assert.equal(p.window.eval(`cpDepId(10000000n,${JSON.stringify(commit)})`), p.window.eval('cpNoteOf(cpNotes.find(n=>n.v==="10000000")).dep'),
+      'the deposit the router makes is the one this note settles');
+    await p.settle();
+    p.close();
+  });
 });
 
 describe('the pool bridges out to an L2', () => {

@@ -4,4 +4,5 @@ receive:{address:"0x52fc37ee7741468a15ce879320a7a41cebaeb232",sweep:async o=>{tw
 send:async(to,v,o)=>{twW.calls.push(["send",to,String(v),o&&o.via||"keeper"]);if(twW.failRelay&&!(o&&o.via))throw Error("keeper down");return "0xsend"},
 withdraw:async(to,v,o)=>{twW.calls.push(["withdraw",to,String(v),o&&o.via||"keeper"]);return "0xwd"},
 bridgeOut:async(ch,v,o)=>{twW.calls.push(["bridgeOut",ch,String(v),o&&o.l2Rpc?"l2rpc":"none"]);return "0xbridge"},
+toV1:async(v,c,o)=>{twW.calls.push(["toV1",String(v),c,o&&o.via||"keeper"]);return "0x"+"a1".repeat(32)},
 quote:async()=>({fee:"1000000000000000"}),terminate(){}};1`;
