@@ -2015,17 +2015,17 @@ fromBalance=v;balUnread=false;showBal(bal,v,f.dec);
 }catch{if(my===bSeq){bal.textContent="Balance unavailable";fromBalance=0n;balUnread=true}}
 render();
 }
-let toBalance=0n,b1Seq=0;
+let toBalance=0n,toBalUnread=false,b1Seq=0;
 async function refreshBalance1(){
 const t=TOKENS[toSel.value];
 Hd(bal1,!lqMode);
-if(!lqMode||!account||!t){bal1.textContent="";toBalance=0n;return}
-const my=++b1Seq;
+if(!lqMode||!account||!t){bal1.textContent="";toBalance=0n;toBalUnread=false;return}
+const my=++b1Seq;toBalUnread=true;
 try{
 const v=await readBal(t);
 if(my!==b1Seq)return;
-toBalance=v;showBal(bal1,v,t.dec);
-}catch{if(my===b1Seq){bal1.textContent="";toBalance=0n}}
+toBalance=v;toBalUnread=false;showBal(bal1,v,t.dec);
+}catch{if(my===b1Seq){bal1.textContent="";toBalance=0n;toBalUnread=true}}
 }
 const optsHtml=()=>{
 let ft="",nft="",imp="";
@@ -5838,6 +5838,7 @@ o.cbps>0n?` — ${(Nm(o.fee)*(10000-Nm(o.cbps))/10000/10000).toFixed(2)}% to LPs
 +`<div class="lqacts">${o.liq>0n?`<button class="lqbtn" data-act="a" ${p}>Add</button>`:""}`
 +(mine?`<select class="pfsp lqwp" aria-label="How much to withdraw">${QP}</select><button class="lqbtn" data-act="w" ${p}>Withdraw</button>`:"")
 +`</div>`
++(mine?`<div class="lqwpv"></div>`:"")
 +`<div class="lqadd hide">`
 +(o.liq>0n
 ?`<label class="lqzap"><input type="checkbox" class="lqz"> One-sided — deposit just ${t0.sym} or just ${t1.sym}</label>`:"")
@@ -6055,6 +6056,22 @@ const [r]=await mc3([{to:PLQLENS,data:"0x"+SEL_PREVIEW_ADD+eA(pool)+eU(a0)+eU(a1
 if(!r)return null;
 return dec1(r,0)===1n?{lp:dec1(r,1),used0:dec1(r,2),used1:dec1(r,3),ref0:dec1(r,4),ref1:dec1(r,5)}:null;
 }
+let lqWpSeq=0;
+async function lqWithdrawPreview(sel){
+const row=lqRows.find(x=>Lc(x.pool)===Lc(sel.closest(".lqrow")?.dataset.pool||""));
+const out=sel.closest(".lqrow")?.querySelector(".lqwpv");
+if(!row||!out)return;
+const p=chPair();
+if(!p){out.textContent="";return}
+const [t0,t1]=p;
+const sh=row.shares*Bi(sel.value||100)/100n;
+if(sh===0n){out.textContent="";return}
+const my=++lqWpSeq;
+out.textContent="Checking…";
+const pv=await previewRemove(row.pool,sh).catch(Nl);
+if(my!==lqWpSeq)return;
+out.textContent=pv?`receives ${tM(pv.a0,t0.dec)} ${t0.sym} + ${tM(pv.a1,t1.dec)} ${t1.sym}`:"This amount would redeem nothing.";
+}
 async function lqTo(){
 const v=vT(rc);
 if(!v)return account;
@@ -6215,6 +6232,13 @@ try{
 a0=ins[0].value.trim()?pU(ins[0].value.trim(),t0.dec):0n;
 a1=ins[1].value.trim()?pU(ins[1].value.trim(),t1.dec):0n;
 }catch{out.textContent="Invalid amount.";go.disabled=true;return}
+if(account){
+const bf=TOKENS[fromSel.value];
+const u0=Lc(t0.addr)===Lc(bf.addr)?balUnread:toBalUnread,u1=Lc(t1.addr)===Lc(bf.addr)?balUnread:toBalUnread;
+const b0=Lc(t0.addr)===Lc(bf.addr)?fromBalance:toBalance,b1v=Lc(t1.addr)===Lc(bf.addr)?fromBalance:toBalance;
+if(!u0&&a0>b0){out.textContent=`Insufficient ${t0.sym} balance.`;go.disabled=true;return}
+if(!u1&&a1>b1v){out.textContent=`Insufficient ${t1.sym} balance.`;go.disabled=true;return}
+}
 if(isZap(box)){
 const z=zapSide(box,t0,t1);
 if(z.err){out.textContent=z.err;go.disabled=true;return}
@@ -6278,6 +6302,7 @@ if(nb)lqPreviewSoon()
 });
 aE(lqList,"change",e=>{
 if(e.target.id==="lqFee"||e.target.id==="lqRange")return lqNewPreview();
+if(cL(e.target).contains("lqwp"))return lqWithdrawPreview(e.target);
 if(!cL(e.target).contains("lqz"))return;
 const box=e.target.closest(".lqadd"),ins=box.querySelectorAll(".lqin");
 const on=e.target.checked;
