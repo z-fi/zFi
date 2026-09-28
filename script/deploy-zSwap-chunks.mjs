@@ -14,7 +14,10 @@
  * corrupt chunk reach the wrapper's constructor, where it would be baked into
  * an immutable address list.
  *
- * Usage: PRIVATE_KEY=0x.. ETH_RPC_URL=https://.. node script/deploy-zSwap-chunks.mjs [--dry-run] [--min-tip-gwei 0.5]
+ * Usage: PRIVATE_KEY=0x.. ETH_RPC_URL=https://.. node script/deploy-zSwap-chunks.mjs [--dry-run] [--min-tip-gwei 0.5] [--max-base-gwei 0.1]
+ *
+ * --max-base-gwei waits, before each chunk, until the base fee is at or under the cap, so a run can be
+ * left going and spends only at the price chosen. Each chunk's gas limit is its own estimate plus 10%.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -31,6 +34,8 @@ const N = Number(ARITY[1]);
 const DRY = process.argv.includes('--dry-run');
 const tipAt = process.argv.indexOf('--min-tip-gwei');
 const FLOOR = BigInt(Math.round(Number(tipAt > -1 ? process.argv[tipAt + 1] : '0.5') * 1e9));
+const capAt = process.argv.indexOf('--max-base-gwei');
+const CAP = capAt > -1 ? BigInt(Math.round(Number(process.argv[capAt + 1]) * 1e9)) : null;
 const REC = path.join(ROOT, 'out', 'zSwap.chunks.deployed.json');
 
 const RPC = process.env.ETH_RPC_URL || 'https://ethereum-rpc.publicnode.com';
@@ -61,6 +66,7 @@ if (fs.existsSync(REC)) rec = JSON.parse(fs.readFileSync(REC, 'utf8'));
 
 const hexOf = buf => '0x' + buf.toString('hex');
 
+let dryGas = 0n;
 async function main() {
   const net = await provider.getNetwork();
   console.log(`network  ${net.name} (${net.chainId})`);
@@ -81,19 +87,35 @@ async function main() {
       console.log(`chunk${n}  ${known} recorded but its code does not match — redeploying`);
     }
 
+    const est = await provider.estimateGas({ data: creations[i], from: wallet ? wallet.address : undefined });
     if (DRY) {
-      const gas = await provider.estimateGas({ data: creations[i], from: wallet ? wallet.address : undefined });
-      console.log(`chunk${n}  ~${gas.toLocaleString('en-US')} gas (dry run)`);
+      dryGas += est;
+      console.log(`chunk${n}  ~${est.toLocaleString('en-US')} gas (dry run)`);
       continue;
+    }
+
+    if (CAP != null) {
+      for (;;) {
+        const base = (await provider.getBlock('latest')).baseFeePerGas;
+        if (base <= CAP) break;
+        console.log(`chunk${n}  waiting: base fee ${(Number(base) / 1e9).toFixed(4)} gwei is above the ${(Number(CAP) / 1e9).toFixed(4)} cap`);
+        await new Promise(r => setTimeout(r, 60000));
+      }
     }
 
     // A real tip and an explicit pending nonce: this key is shared with other senders, and a
     // transaction that idles in the mempool has its nonce taken from under it. Mine promptly, and
     // if the nonce is taken anyway, stop with a clear message - the run is resumable.
+    for (let w = 0; ; w++) {
+      const [lat, pen] = await Promise.all([provider.getTransactionCount(wallet.address, 'latest'), provider.getTransactionCount(wallet.address, 'pending')]);
+      if (lat === pen) break;
+      if (w % 4 === 0) console.log(`chunk${n}  waiting: another sender from this key has a transaction in flight (nonce ${lat} -> ${pen})`);
+      await new Promise(r => setTimeout(r, 15000));
+    }
     const fd = await provider.getFeeData();
     const tip = (fd.maxPriorityFeePerGas || 0n) > FLOOR ? fd.maxPriorityFeePerGas : FLOOR;
     const nonce = await provider.getTransactionCount(wallet.address, 'pending');
-    const tx = await wallet.sendTransaction({ data: creations[i], nonce, gasLimit: 5300000n, maxPriorityFeePerGas: tip, maxFeePerGas: ((fd.maxFeePerGas || 0n) - (fd.maxPriorityFeePerGas || 0n)) + tip });
+    const tx = await wallet.sendTransaction({ data: creations[i], nonce, gasLimit: est * 110n / 100n, maxPriorityFeePerGas: tip, maxFeePerGas: ((fd.maxFeePerGas || 0n) - (fd.maxPriorityFeePerGas || 0n)) + tip });
     let rc;
     try { rc = await tx.wait(1, 10 * 60 * 1000); }
     catch (e) {
@@ -111,7 +133,12 @@ async function main() {
     console.log(`chunk${n}  ${addr}  ${slices[i].length.toLocaleString('en-US')} B verified  (gas ${rc.gasUsed.toLocaleString('en-US')})`);
   }
 
-  if (DRY) return;
+  if (DRY) {
+    const base = (await provider.getBlock('latest')).baseFeePerGas;
+    const at = g => `${(Number(dryGas) * g / 1e9).toFixed(4)} ETH at ${g} gwei`;
+    console.log(`\ntotal ~${dryGas.toLocaleString('en-US')} gas: ${at(+(Number(base) / 1e9 + Number(FLOOR) / 1e9).toFixed(3))} now, ${at(0.1)}, ${at(0.06)}`);
+    return;
+  }
   const all = Array.from({ length: N }, (_, i) => rec[`chunk${i + 1}`]);
   if (all.every(Boolean)) {
     // Distinctness is a constructor precondition (InvalidData otherwise), and
