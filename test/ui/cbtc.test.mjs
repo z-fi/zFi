@@ -369,6 +369,7 @@ describe('borrowing cUSD against the cBTC note', () => {
     assert.match(job.memos[0], /^0x0[23][0-9a-f]{336}$/, 'ephemeral key (33 B) + ciphertext (136 B)');
     const pos = JSON.parse(p.window.localStorage['zswap:cpc:' + fp])[0];
     assert.equal(pos.leaf, D.positionLeaf, 'the position leaf Tacit computes');
+    assert.equal(pos.c, undefined, 'the collateral note\'s blinding, its spend secret, is never stored in the loan record');
     const notes = openStore(p.window.localStorage['zswap:cpn:' + fp], F.seed);
     assert.ok(notes.some(n => n.s === D.debtNk && n.v === D.debtValue), 'the cUSD note is kept with its key-derived nk');
     await p.settle();
