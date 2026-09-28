@@ -1827,6 +1827,7 @@ describe('the points a wallet has been credited', () => {
     });
     p.chain.answer(DIST, '2f52ebb7', '0x');
     p.chain.answer(DIST, '787eef2e', '0x' + BigInt(body.unclaimedWei || 0).toString(16).padStart(64, '0'));
+    p.chain.answer(DIST, '8be0861e', '0x' + '1'.padStart(64, '0'));
   };
 
   test('offers the TAC the points earned, and claims it with its proof', async () => {
@@ -1888,6 +1889,19 @@ describe('the points a wallet has been credited', () => {
     await p.waitFor(() => !!p.$('pvKey').querySelector('button[data-a="ptsclaim"]'), { label: 'the claim button', ...SLOW });
     assert.match(p.text('pvKey'), /claim 5(?![\d.])/);
     assert.doesNotMatch(p.text('pvKey'), /926/);
+    p.close();
+  });
+
+  test('a proof the distributor does not accept offers no button', async () => {
+    const p = await open();
+    serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 5, deposit_count: 1 });
+    claiming(p, RELAY, { address: A.ACCOUNT.toLowerCase(), distributor: DIST,
+      cumulativeAmount: '5000000000000000000', claimedWei: '0', unclaimedWei: '5000000000000000000', proof: PROOF });
+    p.chain.answer(DIST, '8be0861e', '0x' + '0'.padStart(64, '0'));
+    await unlock(p);
+    await p.waitFor(() => /counted/.test(p.text('pvKey')), { label: 'the points row', ...SLOW });
+    await p.settle();
+    assert.equal(p.$('pvKey').querySelector('button[data-a="ptsclaim"]'), null, 'a stale or wrong proof is never offered');
     p.close();
   });
 

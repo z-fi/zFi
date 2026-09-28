@@ -7625,7 +7625,7 @@ try{const j=await relayFetch("/claim/"+who,null,b);
 if(!j||St(j.address||"").toLowerCase()!==who||!isAddr(j.distributor||"")||!Ia(j.proof))return void(cpClm=cpClmBad=null);
 if(St(j.distributor).toLowerCase()!==Lc(CP_DIST))return void(cpClm=null,cpClmBad=1,pvMode&&cpPaint());
 if(!/^\d{1,40}$/.test(St(j.unclaimedWei||""))||!/^\d{1,40}$/.test(St(j.cumulativeAmount||"")))return void(cpClm=null);
-const c=Bi(j.cumulativeAmount),ow=await cfgRead(C,[{to:CP_DIST,data:"0x787eef2e"+eA(who)+eU(c)},L]).catch(Nl),u=/^0x[0-9a-fA-F]{1,64}$/.test(ow||"")?Bi(ow):0n;if(u<=0n||!j.proof.every(x=>/^0x[0-9a-fA-F]{64}$/.test(x)))return void(cpClm=null);
+if(j.proof.length>64||!j.proof.every(x=>/^0x[0-9a-fA-F]{64}$/.test(x)))return void(cpClm=null);const c=Bi(j.cumulativeAmount),q=d=>cfgRead(C,[{to:CP_DIST,data:d},L]).catch(Nl),[ow,vf]=await Pa([q("0x787eef2e"+eA(who)+eU(c)),q("0x8be0861e"+eA(who)+eU(c)+eU(96)+eU(j.proof.length)+j.proof.map(x=>Sx(x)).join(""))]),u=/^0x[0-9a-fA-F]{1,64}$/.test(ow||"")?Bi(ow):0n;if(u<=0n||!/^0x0*1$/.test(vf||""))return void(cpClm=null);
 if(St(account||"").toLowerCase()!==who)return;cpClm={d:CP_DIST,u,c,p:j.proof,b};cpClmBad=null;if(pvMode)cpPaint()}catch{}};
 const cpPtsRead=async()=>{if(cpPtsRead.f)return;cpPtsRead.f=1;try{await cpPtsRead0()}finally{cpPtsRead.f=0}},cpPtsRead0=async()=>{if(!account)return;const who=Lc(account);
 if(cpPtsFor===who&&Dn()-cpPtsAt<12e4)return;cpPtsAt=Dn();
