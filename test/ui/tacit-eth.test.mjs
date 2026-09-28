@@ -128,6 +128,43 @@ describe('ether in the private panel on Ethereum', () => {
   });
 });
 
+describe('the pool bridges out to an L2', () => {
+  test('picking Base or Robinhood hides the recipient, updates the hint, and bridges instead of withdrawing', async () => {
+    const p = await open();
+    p.click('pv');
+    await p.settle();
+    p.select('pvAct', 'out');
+    assert.ok(!p.$('pvTo').parentElement.classList.contains('hide'), 'same-chain withdraw still asks for a recipient');
+    p.select('pvChain', '8453');
+    await p.settle();
+    assert.ok(p.$('pvTo').parentElement.classList.contains('hide'), 'a bridge has no recipient to choose');
+    assert.match(p.text('pvHint'), /Bridges to your private ETH address on Base.*which note paid is not/);
+    p.type('pvAmt', '0.1');
+    p.click('pvGo');
+    await p.waitFor(() => /Sent: 0xbridge/.test(p.text('stat')), { label: 'the Base bridge' });
+    p.select('pvChain', '4663');
+    await p.settle();
+    assert.match(p.text('pvHint'), /Robinhood/);
+    p.type('pvAmt', '0.05');
+    p.click('pvGo');
+    await p.waitFor(() => /Sent: 0xbridge/.test(p.text('stat')), { label: 'the Robinhood bridge' });
+    p.select('pvChain', '1');
+    await p.settle();
+    assert.ok(!p.$('pvTo').parentElement.classList.contains('hide'), 'back on Ethereum, the recipient returns');
+    assert.match(p.text('pvHint'), /Withdraw to any 0x on Ethereum/);
+    p.type('pvAmt', '0.1');
+    p.type('pvTo', A.OTHER);
+    p.click('pvGo');
+    await p.waitFor(() => /Sent: 0xwd/.test(p.text('stat')), { label: 'an ordinary same-chain withdrawal' });
+    assert.deepEqual(calls(p), [
+      ['bridgeOut', 8453, '100000000000000000', 'none'],
+      ['bridgeOut', 4663, '50000000000000000', 'l2rpc'],
+      ['withdraw', A.OTHER, '100000000000000000', 'keeper'],
+    ], 'Base gets no l2Rpc, Robinhood does, Ethereum stays a plain withdraw');
+    p.close();
+  });
+});
+
 describe('the pool\'s guards', () => {
   test('a withdrawal to this wallet asks first, and one to something that is not an address is refused', async () => {
     const p = await open();
