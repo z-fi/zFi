@@ -191,9 +191,48 @@ describe('the endpoint roster', () => {
     const p = await loadPage({ walletless: true, chain });
     await p.settle();
     assert.equal(ev(p, 'cpRelayBase()'), 'https://api.tacit.finance');
-    assert.deepEqual([...ev(p, 'B_API')], ['https://mempool.space/api', 'https://blockstream.info/api']);
+    assert.deepEqual([...ev(p, 'B_API')], ['https://mempool.space/api', 'https://blockstream.info/api', 'https://mempool.emzy.de/api']);
     assert.deepEqual([...ev(p, 'WC_RELAY')], ['wss://relay.walletconnect.org']);
     assert.deepEqual(p.consoleErrors, []);
+    p.close();
+  });
+});
+
+describe('Bitcoin APIs', () => {
+  const load = async lanes => {
+    const chain = serve(new MockChain(), null, { each: () => new Error('execution reverted') });
+    chain.lanes = lanes;
+    const p = await loadPage({ walletless: true, chain });
+    await p.settle();
+    return p;
+  };
+
+  test('a node that answers with something unusable is passed over, and the one that answered leads next time', async () => {
+    const p = await load({ 'mempool.space/api/': {}, 'blockstream.info/api/address/': [{ txid: 'ab'.repeat(32), vout: 0, value: 1000 }] });
+    const got = await p.window.eval('bGet("/address/bc1q/utxo")');
+    assert.equal(got.length, 1, 'the second node\'s answer, not the first node\'s empty object');
+    assert.equal(ev(p, 'B_API[0]'), 'https://blockstream.info/api');
+    p.close();
+  });
+
+  test('an empty list is a real answer', async () => {
+    const p = await load({ 'mempool.space/api/address/': [] });
+    assert.deepEqual([...await p.window.eval('bGet("/address/bc1q/utxo")')], []);
+    assert.equal(ev(p, 'B_API[0]'), 'https://mempool.space/api');
+    p.close();
+  });
+
+  test('when no node answers, the read says so', async () => {
+    const p = await load({});
+    await assert.rejects(p.window.eval('bGet("/tx/" + "ab".repeat(32))'), /No Bitcoin node answered/);
+    p.close();
+  });
+
+  test('a transaction goes to every node, and one taking it is enough', async () => {
+    const p = await load({ 'mempool.space/api/tx': 503, 'blockstream.info/api/tx': 503, 'mempool.emzy.de/api/tx': 'cd'.repeat(32) });
+    assert.match(await p.window.eval('bPost("00")'), /(cd){32}/);
+    const posts = p.chain.httpLog.filter(x => /\/api\/tx$/.test(x.url)).map(x => new URL(x.url).host);
+    assert.deepEqual(posts.sort(), ['blockstream.info', 'mempool.emzy.de', 'mempool.space']);
     p.close();
   });
 });

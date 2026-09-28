@@ -570,7 +570,7 @@ background:var(--e);margin:.5em auto .1em}
 </div>
 <footer id="foot"><span id="footV"></span><span id="footAddr"></span><span id="footBurn"></span><span>&middot; <a id="footDoc" href="#">how it works</a></span><span>&middot; <a id="footGov" href="#">governance</a></span><span>&middot; <a id="footList" target="_blank" rel="noopener" title="Token order here comes from zList, ranked by on-chain conviction staking. Stake to move a token up the list — or to get one listed at all.">token list</a></span><span id="footTag">the 100% onchain DEX</span></footer>
 </div>
-<script>const Nm=Number;const Dn=()=>Date.now();const Bi=BigInt;const cE=t=>document.createElement(t),Er=(...a)=>Error(...a),AX="aria-expanded",GB="eth_getBalance",GC="eth_getCode",BN="eth_blockNumber",AP="aria-pressed",Oa=Object.assign,Ns=Number.isSafeInteger,Ok=Object.keys,h16=x=>x.toString(16),vT=e=>e.value.trim(),cL=e=>e.classList,dSt=e=>e.dataset,Np=()=>{},Nl=()=>null,Lc=x=>x.toLowerCase(),sAt=(e,k,v)=>e.setAttribute(k,v),qS=(e,q)=>e.querySelector(q),aE=(e,...a)=>e.addEventListener(...a),aC=(e,c)=>e.appendChild(c),Js=JSON.stringify,Jp=JSON.parse,Pa=a=>Promise.all(a),Mf=Math.floor,Mx=Math.max,Mn=Math.min,U8=(...a)=>new Uint8Array(...a),Ia=Array.isArray,Ni=Number.isInteger,gE=i=>document.getElementById(i),Bx=h=>Bi("0x"+h),Hd=(e,v)=>cL(e).toggle("hide",v),IC0='<svg width="14" height="14" viewBox="0 0 24 24" class="ik" aria-hidden="true">',
+<script>const Nm=Number;const Dn=()=>Date.now();const Bi=BigInt,Zz=m=>new Promise(r=>setTimeout(r,m));const cE=t=>document.createElement(t),Er=(...a)=>Error(...a),AX="aria-expanded",GB="eth_getBalance",GC="eth_getCode",BN="eth_blockNumber",AP="aria-pressed",Oa=Object.assign,Ns=Number.isSafeInteger,Ok=Object.keys,h16=x=>x.toString(16),vT=e=>e.value.trim(),cL=e=>e.classList,dSt=e=>e.dataset,Np=()=>{},Nl=()=>null,Lc=x=>x.toLowerCase(),sAt=(e,k,v)=>e.setAttribute(k,v),qS=(e,q)=>e.querySelector(q),aE=(e,...a)=>e.addEventListener(...a),aC=(e,c)=>e.appendChild(c),Js=JSON.stringify,Jp=JSON.parse,Pa=a=>Promise.all(a),Mf=Math.floor,Mx=Math.max,Mn=Math.min,U8=(...a)=>new Uint8Array(...a),Ia=Array.isArray,Ni=Number.isInteger,gE=i=>document.getElementById(i),Bx=h=>Bi("0x"+h),Hd=(e,v)=>cL(e).toggle("hide",v),IC0='<svg width="14" height="14" viewBox="0 0 24 24" class="ik" aria-hidden="true">',
 ICMOON=IC0+'<path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z"/></svg>',
 ICSUN=IC0+'<circle cx="12" cy="12" r="4.2"/><path d="M12 2v2m0 16v2M4.2 4.2l1.5 1.5m12.6 12.6 1.5 1.5M2 12h2m16 0h2M4.2 19.8l1.5-1.5M18.3 5.7l1.5-1.5"/></svg>';
 const ic=()=>{const d=H.className=='d';th.innerHTML=d?ICSUN:ICMOON;tc.content=d?'#0a0a0a':'#fff'};ic();
@@ -953,7 +953,7 @@ const q=[{to:c.to,data},tag||L];
 let r=await agreeRead(q).catch(()=>tag&&tag!==L?agreeRead([q[0],L]):null);
 r=await hexOk(r);ph.forEach((x,i)=>{r=r.split(x).join(real[i])});return r};
 const qOne=async(c,tag,k=0)=>{const q=[{to:c.to,data:c.data},tag||L],bl=()=>blindRead(c,tag);try{const r=await mc3Gate(()=>prov()&&prov().sw?bl():rpc(C,q));mcOk++;return r}catch(e){const d=e&&e.data&&typeof e.data==="object"?e.data:{},m=String(e&&e.message||"")+" "+String(d.message||""),cd=[e&&e.code,d.code],rl=cd.some(x=>x===-32005||x===429)||/rate.?limit|too many|\b429\b/i.test(m);
-if(rl&&k<3){await new Promise(r=>setTimeout(r,700*(k+1)+Math.random()*500));return qOne(c,tag,k+1)}
+if(rl&&k<3){await Zz(700*(k+1)+Math.random()*500);return qOne(c,tag,k+1)}
 const gone=rl||e&&e.offChain||cd.includes(-32003)||/out of gas|gas required|failed to fetch|network/i.test(m);
 if(gone&&prov()){const b=await bl().catch(Nl);if(b){mcOk++;return b}}
 if(gone||e&&e.noWallet)mcGaveUp++;else if(!Sx(String((d.message?d.data:e&&e.data)||"")).length)mcFailed++;return null}};
@@ -1511,7 +1511,7 @@ const rpcRead=async(method,params,tries=4)=>{
 let last;
 for(let i=0;i<tries;i++){
 try{return await rpc(method,params)}
-catch(e){last=e;if(i+1<tries)await new Promise(r=>setTimeout(r,300*(i+1)))}
+catch(e){last=e;if(i+1<tries)await Zz(300*(i+1))}
 }
 throw last;
 };
@@ -1531,7 +1531,7 @@ const waitTx0=async hash=>{
 const end=Dn()+600000;
 let misses=0,wait=1500,nc,rp=0,off=0;
 while(Dn()<end){
-if(offChain()){off=off||Dn();if(Dn()-off>30000)throw Er("tx left unwatched — your wallet moved to another network");await new Promise(r=>setTimeout(r,1000));continue}off=0;
+if(offChain()){off=off||Dn();if(Dn()-off>30000)throw Er("tx left unwatched — your wallet moved to another network");await Zz(1000);continue}off=0;
 try{
 const r=await rpc("eth_getTransactionReceipt",[hash]);
 misses=0;
@@ -1798,7 +1798,7 @@ if(x)return x;
 if(q==="400"||q==="500"||q==="600"||/fail|revert|reject/i.test(q))throw Er("batch failed");
 if(done)throw Er("batch confirmed on chain, but the wallet returned no receipt — check your wallet's activity before retrying");
 }catch(e){if(/^batch /.test(e.message))throw e;if(++bad>9)throw Er("batch sent, but the wallet cannot report its status — check your wallet's activity before retrying")}
-await new Promise(r=>setTimeout(r,1000))}
+await Zz(1000)}
 throw Er("batch timed out")};
 const apSeq=async(tok,sp,need)=>{
 const a=tok===ZERO||!need?need:Bi(await rpc(C,[{to:tok,data:alwOf(account,sp)},L]));
@@ -1884,11 +1884,11 @@ return r;
 }
 catch(e){
 mc3Won=0;
-if(depth<3&&e&&(e.code===-32005||e.code===429||/rate.?limit|too many|\b429\b/i.test(e.message||""))){await new Promise(r=>setTimeout(r,700*(depth+1)+Math.random()*500));return mD(cs,tag,depth+1)}
+if(depth<3&&e&&(e.code===-32005||e.code===429||/rate.?limit|too many|\b429\b/i.test(e.message||""))){await Zz(700*(depth+1)+Math.random()*500);return mD(cs,tag,depth+1)}
 if(cs.length<2||depth>=8||e&&e.offChain){mcGaveUp+=cs.length;return cs.map(()=>null)}
 const h=cs.length>>1;
 if(h<mc3Cap){mc3Cap=Mx(2,h);mc3Save()}
-await new Promise(r=>setTimeout(r,150*(depth+1)));
+await Zz(150*(depth+1));
 return fan(h);
 }
 };
@@ -2613,7 +2613,7 @@ let tries=0;
 async function lost(pid){
 if(gone)return;alive=false;
 if(tries>2||!Ok(subs).length)return drop("The relay connection dropped — reload the page to reconnect your wallet.");
-await new Promise(r=>setTimeout(r,1000*3**tries++));
+await Zz(1000*3**tries++);
 if(gone)return;
 try{await open(pid);await Pa(Ok(subs).map(topic=>relayCall("irn_subscribe",{topic})));tries=0}catch{lost(pid)}}
 async function open(projectId){
@@ -2951,7 +2951,7 @@ const WK="zswap:wk";
 const wkRestore=async()=>{
 const id=LS[WK];
 if(PROV||!id)return;
-if(id==="wc"){if(!SS.getItem("dc"))try{PROV=await Promise.race([wcResume(),new Promise(r=>setTimeout(r,8000))])||null}catch{}return}
+if(id==="wc"){if(!SS.getItem("dc"))try{PROV=await Promise.race([wcResume(),Zz(8000)])||null}catch{}return}
 wkScan();
 for(let i=0;i<8;i++){
 const m=W6963.filter(x=>x.info.rdns===id),d=m.length===1?m[0]:null;
@@ -2960,7 +2960,7 @@ try{const a=await Promise.race([d.provider.request({method:"eth_accounts"}),
 new Promise(r=>setTimeout(()=>r(null),1500))]);
 if(a&&a[0])PROV=d.provider}catch{}
 return}
-await new Promise(r=>setTimeout(r,50));
+await Zz(50);
 }};
 const dlg=(m,d,inp)=>new Promise(res=>{wkList.textContent="";wkHdr.textContent="zSwap";
 const t=cE("p");t.className="wcn dlgm";t.textContent=m;wkList.append(t);
@@ -3878,7 +3878,7 @@ sAt(addr,"role","button");addr.tabIndex=0;
 const n=await nameRev(a).catch(()=>"");if(n&&a===account)addr.textContent=n};
 async function disconnect(){
 SS.setItem("dc","1");
-wcSave(null);if(PROV?.end)await Promise.race([PROV.end().catch(Np),new Promise(r=>setTimeout(r,1500))]);
+wcSave(null);if(PROV?.end)await Promise.race([PROV.end().catch(Np),Zz(1500)]);
 try{delete LS[WK]}catch{}
 location.reload();
 }
@@ -7673,7 +7673,7 @@ for(const rb of ls){try{const j=await relayFetch(CSUB,body,rb);if(j&&j.jobId)ret
 if(last)return last;throw e};
 let cpBtcSat=null,cpBtcAt=0;
 const cpBtcRead=async()=>{if(!cpBtc||Dn()-cpBtcAt<6e4)return;cpBtcAt=Dn();const a=cpBtc;
-for(const u of B_API){try{const j=await relayFetch("/address/"+a,null,u),n=x=>Ns(x)&&x>=0?x:NaN,c=j.chain_stats,m=j.mempool_stats,s=n(c.funded_txo_sum)-n(c.spent_txo_sum)+n(m.funded_txo_sum)-n(m.spent_txo_sum);
+for(const u of[...B_API]){try{const j=await relayFetch("/address/"+a,null,u),n=x=>Ns(x)&&x>=0?x:NaN,c=j.chain_stats,m=j.mempool_stats,s=n(c.funded_txo_sum)-n(c.spent_txo_sum)+n(m.funded_txo_sum)-n(m.spent_txo_sum);
 if(Number.isFinite(s)&&s>=0&&a===cpBtc){cpBtcSat=s;if(pvMode)cpPaint();return}}catch{}}};
 let cpMore=false,cpVer=0,cpDk="",cpSeed="",cpFp="",cpPub="",cpBtc="",cpNotes=[],cpLocks=[],cpPool=null,cpSyncAt=0,cpBusy=0,pvMode=false,pvTimer=0,pvTick=0;
 const cpK={},cpNoteOf=n=>{const a=n.a||CP_ETH,h=cpFp+(n.z?n.b:n.s?n.s+n.b:n.i)+":"+n.v+":"+a;if(cpK[h])return cpK[h];const{secret,blinding}=n.s?{secret:n.s,blinding:Bi(n.b)}:cpDerive(cpSeed,n.i,a),owner=n.z?"0x"+"00".repeat(32):cpOwner(secret),{cx,cy}=cpXY(cpCommit(n.v,blinding)),leaf=cpLeaf(cx,cy,owner,a);
@@ -7762,7 +7762,7 @@ const ct={ins:pick.map(u=>({txid:u.txid,vout:u.vout,seq:0xfffffffd,wit:[]})),out
 const rt={ins:[{txid:bTxid(ct),vout:0,seq:0xfffffffd,wit:[]}],outs:[{v:546,s:K.wpkh},{v:vSats,s:K.lock}]};
 rt.ins[0].wit=[bSchnorr(bSig341(rt,[{v:cv,s:p2tr}],lf),K.d,aux),scr,cpCat([192|tw.par],TAP_NUMS)];
 return{commit:cpHex(bSer(ct,1)),reveal:cpHex(bSer(rt,1)),lockTxid:bTxid(rt),blinding:r,cx,cy,anchor:{txid:f.txid,vout:f.vout},vBtc:vSats,fee:(outs[1]?cfee+cv:tot)-vSats-546}};
-const CP_CE="0x000000003f608BDdF0ca45934003ffb9DbDF70DB",CP_WSTETH="0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",CP_LOCKS="zswap:cpl:",B_API=["https://mempool.space/api","https://blockstream.info/api"];
+const CP_CE="0x000000003f608BDdF0ca45934003ffb9DbDF70DB",CP_WSTETH="0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",CP_LOCKS="zswap:cpl:",B_API=["https://mempool.space/api","https://blockstream.info/api","https://mempool.emzy.de/api"];
 const EPS="0x00000051F365d898132f4ebF345Cd3968e02F288",SEL_EPS="c03c2d74",EP_KEY="zswap:ep3",TB_K={1:["https://tacit-evm-pool-keeper.onrender.com/evm-pool/keeper"],8453:["https://tacit-evm-pool-keeper-base.onrender.com/evm-pool/keeper"],4663:["https://tacit-evm-pool-keeper-robinhood.onrender.com/evm-pool/keeper"]},EP_H=/^https:\/\/\S+$/,EP_Q=[["rpc",8453],["rpc",4663],["logs",1],["tacit",1],["btc",0],["wc",0],["wcpid",0],["tacad",1],["evk",1],["evk",8453],["evk",4663]];
 const epM=(a,u,re)=>{u=(u||[]).map(s=>String(s).trim()).filter(s=>re.test(s));if(u.length){const m=[...new Set(u.concat(a))];a.length=0;a.push(...m)}};
 const epApply=v=>{if(!Ia(v))return;epM(CHAINS[8453].rpcs,v[0],EP_H);epM(CHAINS[4663].rpcs,v[1],EP_H);epM(CP_LOGS,v[2],EP_H);epM(B_API,v[4],EP_H);epM(WC_RELAY,v[5],/^wss:\/\/[\w.-]+(:\d+)?$/);epM(AD_API,v[7],/^https:\/\/[\w.-]+(:\d+)?\/[\w.\/@-]*\/$/);epM(L1_RPCS,v[11],EP_H);[1,8453,4663].map((c,i)=>epM(TB_K[c],v[8+i],/^https:\/\/\S*[^/\s]$/));
@@ -7786,7 +7786,7 @@ if(c!==CHAIN_ID){tbScan.k=c+account;setChain(c);showNet()}
 const b=x.b=retAddr(await tbR(C,[{to:TB_R,data:"0x34a44915"+tbA(i)},L]).catch(()=>""));if(!b)throw Er("Could not read the Tacit pool on "+n+". Try again.");
 const w=await tbW(b);if(w||Sx(await tbR(GC,[b,L]))){tbPut(b,x);if(w&&nowS()>i.deadline)return tbScan(1);throw Er("That box is already paid.")}
 if(i.deadline<nowS()+3600)throw Er("That box expires within the hour.");
-await Promise.race([epP,new Promise(r=>setTimeout(r,9e3))]);let e="No keeper serves "+n+" yet.";for(const k of tbKs(c))try{await relayFetch("/deposit",{intent:i,hint:j.hint},k);e="";break}catch(E){e=E.message}
+await Promise.race([epP,Zz(9e3)]);let e="No keeper serves "+n+" yet.";for(const k of tbKs(c))try{await relayFetch("/deposit",{intent:i,hint:j.hint},k);e="";break}catch(E){e=E.message}
 if(e)throw Er(e);tbPut(b,x);
 if(await sure("Shield "+tbE(a)+" into the Tacit pool on "+n+" for the wallet that made this link? It goes to box "+b+", less a keeper fee of "+tbE(a-j.hint.outputs.reduce((s,o)=>s+Bi(o?.v||0),0n))+"; if unfinished after "+new Date(i.deadline*1e3).toLocaleString()+" it returns to "+i.refund+". A swap with exact ETH out"+(c<2?", or a private withdrawal,":"")+" can pay it too."))location.hash="chain="+c+"&token="+ZERO+"&amount="+fU(a,18)+"&to="+b}catch(E){stat.textContent=E.message}};
 const rxP=21888242871839275222246405745257275088548364400416034343698204186575808495617n,rxL=2736030358979909402780800718157159386076813972158567259200215660948447373041n,rxM=a=>(a%rxP+rxP)%rxP,rxW=(b,e)=>{let r=1n;for(b=rxM(b);e;e>>=1n,b=b*b%rxP)if(e&1n)r=r*b%rxP;return r},rxC={},
@@ -7814,8 +7814,8 @@ if(!a)throw Er("Could not read the Tacit pool on "+n+". Try again.");rxPost();co
 twLoad().then(W=>W.sync()).catch(Np);const g=await wkPick([{name:"Your private ETH address",sub:a.slice(0,8)+"…"+a.slice(-6)+(w?" · "+tbE(w)+" waiting":"")+(/^\d{1,30}$/.test(m)?" · send at least "+tbE(m):""),k:1},{name:"Shield ETH into it",sub:"a send from this wallet",k:2},{name:"Your pool address",sub:P?P.address.slice(0,12)+"… · "+tbE(P.balance())+" held privately":"bp1 address and balance",k:9},{name:"Sweep it in yourself",sub:"proved on this device · no keeper, no fee",k:4},{name:"Send privately",sub:"to a Tacit address, proved on this device",k:5},{name:"Withdraw",sub:"to any address, proved on this device",k:6},{name:"tacit.finance ↗",sub:"the same balance, same key",k:7},...c===1?[{name:"Move V1 ETH into it",sub:"a V1 withdrawal to this address",k:8}]:[],{name:"Keeper",sub:(tbPin(c)?"yours · ":"")+tbKs(c)[0].split("/")[2],k:3}],"Private ETH · "+n);
 if(!g)return;if(g.k===1)return cpCopy("Your private ETH address. ETH sent to it on Ethereum, Base or Robinhood is shielded into your Tacit balance there, less at most 0.25% to whoever sweeps it in; any other token is lost.",a);if(g.k===2)return void(location.hash="chain="+c+"&token="+ZERO+"&to="+a);if(g.k===3){const u=await dlg("Keeper for "+n+": it sweeps your private ETH address into the pool, for at most 0.25%. Anyone can run one. Enter its URL, or leave blank for the listed keepers.",tbPin(c),1);if(u===null)return;const v=u.trim().replace(/\/$/,""),j=v&&await relayFetch("/info",null,v).catch(()=>({}));if(v&&(!/^https:\/\/\S*[^/\s]$/.test(v)||j.chainId!=c||String(j.router).toLowerCase()!==Lc(TB_R)||j.minReceiveFeeBps>25))throw Er("That is not a Tacit pool keeper for "+n+".");try{v?LS["zswap:evk:"+c]=v:delete LS["zswap:evk:"+c]}catch{}rxPost();return void(stat.textContent="Keeper for "+n+": "+tbKs(c)[0].split("/")[2]+".")}if(g.k===7)return void window.open("https://tacit.finance/sats/#eth="+c,"_blank","noopener");if(g.k===8){pvSet(true);pvIn.value="v";pvAct.value="out";pvChain.value="1";pvTo.value=a;pvActSync();cpPaint();return void(stat.textContent="Enter the V1 ETH to move, then Withdraw: it lands in the pool.")}
 if(g.k===9)return cpCopy("Your Tacit pool address on "+n+". Anyone in the pool can pay it privately.",(P||await twLoad()).address);if(g.k===4)return void await twDo("sweep");const W=await twLoad(),f=g.k===5?"send":"withdraw",to=await dlg(g.k===5?"Pay which Tacit address (bp1…)?":"Withdraw to which address? It is public on chain.",g.k===6?account:"",1);if(!to)return;const v=await dlg("How much ETH? You hold "+tbE((await W.sync()).balance)+" privately on "+n+".","",1);if(v)await twDo(f,to.trim(),pU(v.trim(),18))}catch(E){stat.textContent=E.message}};
-const bGet=async p=>{let e;for(const u of B_API){try{const j=await relayFetch(p,null,u);if(j&&j.status!=="unknown")return j}catch(x){e=x}}throw e||Er("No Bitcoin node answered.")};
-const bPost=async h=>{let e;for(const u of B_API){try{return(await relayFetch("/tx",h,u)).text}catch(x){if(/already/i.test(x.message))return"";e=x}}throw e||Er("No Bitcoin node took the transaction.")};
+const bGet=async p=>{let e;for(const u of[...B_API]){try{const j=await relayFetch(p,null,u);if(Ia(j)||j&&Ok(j).length&&j.status!=="unknown"){if(u!==B_API[0])B_API.splice(B_API.indexOf(u),1),B_API.unshift(u);return j}}catch(x){e=x}}throw e||Er("No Bitcoin node answered.")};
+const bPost=h=>Promise.any(B_API.map(u=>relayFetch("/tx",h,u).then(r=>r.text))).catch(a=>{const e=a.errors||[];if(e.some(x=>/already/i.test(x?.message)))return"";throw e[0]||Er("No Bitcoin node took the transaction.")});
 const bOp=l=>keccak(cpCat(bRev(l.t),bLE(1,4)));
 const cpLockOk=l=>!!l&&/^[0-9a-f]{64}$/.test(l.t||"")&&/^\d+$/.test(l.v||"")&&/^0x[0-9a-f]{64}$/.test(l.cx||"")&&/^0x[0-9a-f]{64}$/.test(l.cy||"")&&/^0x[0-9a-f]{64}$/.test(l.b||"");
 const cpLoadLocks=()=>{try{const a=cpOpenS(LS[CP_LOCKS+cpFp]);return Ia(a)?a.filter(cpLockOk):[]}catch{return[]}};
