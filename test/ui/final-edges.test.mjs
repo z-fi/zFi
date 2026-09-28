@@ -63,3 +63,34 @@ describe('deadlines follow the chain clock', () => {
     p.close();
   });
 });
+
+describe('swap and send links on every chain', () => {
+  const open = async hash => {
+    const p = await loadPage({ chain: new MockChain({ autoConnected: true }), hash });
+    await p.settle();
+    await new Promise(r => setTimeout(r, 1200));
+    await p.settle();
+    return p;
+  };
+  const snap = p => JSON.parse(p.window.eval('JSON.stringify({chain:CHAIN_ID,tab,from:TOKENS[fromSel.value]?.sym,to:TOKENS[toSel.value]?.sym,amt:amt.value,out:outAmt.value,rc:rc.value,dly:dly.value})'));
+  for (const [chain, stable] of [[1, 'USDC'], [8453, 'USDC'], [4663, 'USDG']]) {
+    test(`a swap link lands on chain ${chain}`, async () => {
+      const p = await open(`chain=${chain}&token=ETH&out=${stable}&amount=0.5`);
+      const s = snap(p);
+      assert.deepEqual([s.chain, s.tab, s.from, s.to, s.amt], [chain, 'swap', 'ETH', stable, '0.5']);
+      p.close();
+    });
+    test(`an exact-out swap link lands on chain ${chain}`, async () => {
+      const p = await open(`chain=${chain}&token=ETH&out=${stable}&amount=100&exactOut=1`);
+      const s = snap(p);
+      assert.deepEqual([s.chain, s.from, s.to, s.out, s.amt], [chain, 'ETH', stable, '100', '']);
+      p.close();
+    });
+    test(`a send link lands on chain ${chain}`, async () => {
+      const p = await open(`chain=${chain}&tab=send&token=${stable}&to=${A.OTHER}&amount=5&lock=1d`);
+      const s = snap(p);
+      assert.deepEqual([s.chain, s.tab, s.from, s.amt, s.rc.toLowerCase(), s.dly], [chain, 'send', stable, '5', A.OTHER.toLowerCase(), '86400']);
+      p.close();
+    });
+  }
+});
