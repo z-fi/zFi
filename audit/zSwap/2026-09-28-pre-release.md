@@ -6,22 +6,22 @@ An external pre-release audit (GPT Astra) reviewed `zSwap.html` at `66f3067` on 
 
 | | |
 |---|---|
-| Commit | `a040769` |
-| Page | `zSwap.html`, 675,354 bytes, 28 chunks |
-| keccak256(zSwap.html) | `0x225ffe7fa1d5424f541c209a255a8137a880ee0aaa4fab27f946b8abf02eddc2` |
-| Resolver relay gas | 29,515,382 of the 30,000,000 eth_call budget |
-| Tests | UI 97 files and the browser suite: 1,702 tests, 0 failures; Foundry zSwap 83/83; check-zSwap all pass |
+| Commit | `9a3f23e` |
+| Page | `zSwap.html`, 675,532 bytes, 28 chunks |
+| keccak256(zSwap.html) | `0x09a32ba0baec8cd435c3e12b1e909c7d8d1a2649cd11e2f20b63b00db6a1310c` |
+| Resolver relay gas | 29,529,953 of the 30,000,000 eth_call budget |
+| Tests | UI 97 files and the browser suite: 1,703 tests, 0 failures; Foundry zSwap 83/83; check-zSwap all pass |
 
-The audit's two fixes first shipped in `3b051c0` (680,829 B, keccak `0x055e22c2…ae32`). The lock moved to `2f0254a` after the final review below, then to `a040769` for cUSD loan parity with tacit.finance; everything in `3b051c0` is carried forward unchanged in behaviour.
+The audit's two fixes first shipped in `3b051c0` (680,829 B, keccak `0x055e22c2…ae32`). The lock moved to `2f0254a` after the final review below, then to `a040769` for cUSD loan parity with tacit.finance, then to `9a3f23e`, where a points claim is offered only when the distributor's own `verify` accepts its proof; everything in `3b051c0` is carried forward unchanged in behaviour.
 
-The hash and length are pinned in `test/zSwap.t.sol`, the registry calldata and `deploy/zSwap-v0.3-LAUNCH.md`. `node script/sync-zSwap-artifacts.mjs --committed` confirms that every pinned copy agrees with the committed page. Any change to `zSwap.html` after `a040769` voids this lock and needs the full pin sequence and test sweep again.
+The hash and length are pinned in `test/zSwap.t.sol`, the registry calldata and `deploy/zSwap-v0.3-LAUNCH.md`. `node script/sync-zSwap-artifacts.mjs --committed` confirms that every pinned copy agrees with the committed page. Any change to `zSwap.html` after `9a3f23e` voids this lock and needs the full pin sequence and test sweep again.
 
 ## Findings at a glance
 
 | Item | Audit | Verdict | Outcome |
 |---|---|---|---|
-| P1: an ambiguous batch failure replays transactions | Hold release | Confirmed at HEAD | Fixed in `3b051c0`, carried into `a040769` |
-| P2: quote expiry is not rechecked before submission | Hold release | Confirmed at HEAD | Fixed in `3b051c0`, carried into `a040769` |
+| P1: an ambiguous batch failure replays transactions | Hold release | Confirmed at HEAD | Fixed in `3b051c0`, carried into `9a3f23e` |
+| P2: quote expiry is not rechecked before submission | Hold release | Confirmed at HEAD | Fixed in `3b051c0`, carried into `9a3f23e` |
 | Browser: the picker gap is −0.25 px | Low, unresolved gate | Not reproduced | No change |
 | UI harness: 26 failed, 4 cancelled | Environmental, passed alone | Agreed | Clean full run |
 
@@ -109,13 +109,14 @@ New tests: `test/ui/final-edges.test.mjs` (the comma and clock cases) and an ass
 
 - `23bdb00`: Bitcoin reads skip unusable node answers and promote the node that answered. A Bitcoin transaction is broadcast to every node at once.
 - `c88ce01`: pool ether moves into V1 as a tETH note from the Private ETH menu. The note is saved before the move is sent, and recover finds it from the key alone.
+- `9a3f23e`: a Tacit points claim is shown only when the distributor's `owed` and `verify` both accept it; the 1M TAC airdrop's 8,652 proofs were each checked against the on-chain root.
 - `a040769`: cUSD loan keys and position index match tacit.finance.
 - `2f0254a`, `df9a51c`: the final-review fixes above.
 - `d0abc1f`: Precision-pool deposits check the balance before quoting, and a partial withdrawal previews what it returns.
 
 Deferred by decision: an in-page cBTC CDP repay. It needs several KB of new proving logic, and the page links to tacit.finance for it instead.
 
-Next step: deploy the 28 chunks for `a040769`, run the DAO's `deployNext`, then repoint `zswap.wei`.
+Next step: deploy the 28 chunks for `9a3f23e`, run the DAO's `deployNext`, then repoint `zswap.wei`.
 
 ---
 
