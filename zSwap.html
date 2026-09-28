@@ -6678,7 +6678,7 @@ function pfDraw(){const S=pfS,g=S?[S.rate,S.fin,S.tot,S.sup,S.r0,S.r1,S.sp,S.st,
 if(g!==pfSig){pfSig=g;pfLine();pfPaint()}else pfShow();
 try{fmPf()}catch{}}
 function pfLine(){pfEl.textContent="";if(pfS&&(pfOn()||pfMine())){const on=pfOn(),b=cE("b");pfIcon(pfEl);
-b.textContent=on?pfHead()[0]:"ended";pfEl.append("TAC/ETH farm · ",b,on?pfApr()&&" · "+pfApr():pfS.st>0n?" · your stake is still here":"");
+const h=on?pfHead():[];b.textContent=on?h[0]:"ended";pfEl.append("TAC/ETH farm · ",b,on?h.slice(1).map(x=>" · "+x).join(""):pfS.st>0n?" · your stake is still here":"");
 if(pfS.ea>0n){const e=cE("b");e.textContent=tM(pfS.ea,18)+" TAC";pfEl.append(" · earned ",e)}
 pfEl.append(pfBtn("go",on&&!pfMine()?"Farm":"Open"));if(on&&pfS.lp>0n)pfEl.append(pfBtn("st","Stake "+tM(pfS.lp,18)+" LP"));if(pfS.ea>0n)pfEl.append(pfBtn("cl","Claim"));
 pfEl.title=on?pfHead().join(" · ")+". Stake liquidity in the TAC/ETH Precision pool to earn TAC by the second. The rate is shared by everyone staked, so it falls as more joins.":"This farm has stopped paying. Your stake and anything earned can be taken out at any time."}

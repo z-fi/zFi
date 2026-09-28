@@ -83,9 +83,11 @@ describe('the TAC/ETH farm line', () => {
     assert.match(t, /TAC\/ETH farm · 554 TAC\/day/);
     // Nothing staked yet: 553.8888 x 365 x (ETH per TAC) on a 1 ETH entry.
     const apr = Math.round(553.8888 * 365 * (1 / (119510621510568635147 / 1e18) ** 2) * 100).toLocaleString();
-    // A percentage means nothing without the entry it assumes, and a phone has no
-    // tooltip to reveal it, so the basis rides on the line itself.
+    // A percentage means nothing without the entry it assumes, and neither means
+    // anything without an end date — a phone has no tooltip to reveal either, so
+    // both ride on the line itself.
     assert.ok(t.includes(`~${apr}% APR on 1 ETH`), t);
+    assert.match(t, /until \w+ \d+/, t);
     const tip = p.$('pfEl').title;
     assert.ok(tip.includes(`~${apr}% APR on 1 ETH`) && /until \w+/.test(tip), tip);
     assert.equal(p.$('pfEl').querySelector('[data-pf="go"]').textContent, 'Farm');
