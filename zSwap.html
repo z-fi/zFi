@@ -7883,7 +7883,7 @@ const CP_CUSD="0x8f4490dd3728b0ee904d7a67c11b37ffd463a5c7f08b79810006995ee8a9679
 const cdpSecrets=(i,sd=cpSeed)=>{const ce=hB(Sx(CP_CE).toLowerCase()),t=g=>bHmac(b32(sd),cpCat(cpU8(g),ce,bLE(i,4).reverse())),pos=fmod(big(t("tacit-cdp-position-v1")),FN)||1n,nk="0x"+cpHex(t("tacit-cdp-debt-nk-v1"));
 return{pos,owner:"0x"+pcomp(pmul(GP,pos)).slice(2),nk,dOwner:cpOwner(nk),blind:fmod(big(t("tacit-cdp-debt-blinding-v1")),FN)||1n,nonce:"0x"+"00".repeat(32)}};
 const cdpLeaf=(debt,rate,owner,nonce,legs)=>keccak(cpCat(cpU8("tacit-cdp-position-v1"),hB(Sx(CP_CE)),b32(CP_CUSD),b32((cpK["r:"+legs]||=cpTree(legs.map(([a,v])=>keccak(cpCat(b32(a),beN(v,32)))),0)).root),beN(debt,32),b32(rate),b32(owner),b32(nonce)));
-const cdpBuildOp=(k,li,root,path,debt,rate,i,sd)=>{const S=cdpSecrets(i,sd),cb=cpBinding(),ce="0x"+Sx(CP_CE).toLowerCase(),cw="0x"+"00".repeat(12)+ce.slice(2),d=cpXY(cpCommit(debt,S.blind));
+const cdpBuildOp=(k,li,root,path,debt,rate,i,sd)=>{const O=cpOutKeys(k.nu,"cdpDebt",0,sd||cpSeed),S=Oa(cdpSecrets(i,sd),{nk:O.nk,blind:O.b,dOwner:cpOwner(O.nk)}),cb=cpBinding(),ce="0x"+Sx(CP_CE).toLowerCase(),cw="0x"+"00".repeat(12)+ce.slice(2),d=cpXY(cpCommit(debt,S.blind));
 const lc=cpCtx("tacit-cdp-mint-collateral-v1",cb,k.asset,S.nonce,[[k.cx,k.cy,S.owner],[cw,S.nonce,S.owner],[rate,S.nonce,S.owner],[d.cx,d.cy,S.dOwner]],[k.value,debt,Bi(li),0n,1n]),ls=cpSigma(k.value,k.blinding,lc,cpNonce(k.blinding,lc,"cdp-mint-collateral"));
 const dc=cpCtx("tacit-cdp-mint-debt-v1",cb,CP_CUSD,S.nonce,[[d.cx,d.cy,S.dOwner],[cw,S.nonce,S.owner],[rate,S.nonce,S.owner]],[debt,0n]),ds=cpSigma(debt,S.blind,dc,cpNonce(S.blind,dc,"cdp-mint-debt"));
 return{S,op:{chainBinding:cb,spendRoot:root,controller:ce,owner:S.owner,debtOwner:S.dOwner,debtValue:St(debt),nonce:S.nonce,rateSnapshot:rate,
@@ -7896,7 +7896,7 @@ const w=h=>Bx((Sx(h||"").slice(0,64)||"0")),[u,rt,rb]=await cfgBatch([{to:CP_CE,
 const usd=w(u),ratio=w(rb),max=w(rt)&&ratio&&usd*9900n/ratio;if(!max)throw Er("The engine could not price this cBTC — try again.");
 const s=(await ask("Borrow how many cUSD against "+tM(k.value,8)+" cBTC (worth $"+tM(usd,8)+")? At most "+tM(max,8)+"; the engine liquidates a position that falls below its liquidation ratio.",tM(max/2n,8))||"").trim();if(!s)return;
 const debt=pU(s,8);if(debt<=0n||debt>max)throw Er("Borrow more than zero and at most "+tM(max,8)+" cUSD.");
-await cpScanCdps();const cdps=cpLoadCdps(),i=cdps.reduce((m,p)=>Mx(m,p.i+1),0),{root,path}=cpTree(c.leaves,li),rate="0x"+w(rt).toString(16).padStart(64,"0"),X=cdpBuildOp(k,li,root,path,debt,rate,i),self=true;
+await cpScanCdps();if(cpScanCdps.n<0)throw Er("No node served the loan history.");const cdps=cpLoadCdps(),i=cdps.reduce((m,p)=>Mx(m,p.i+1),cpScanCdps.n||0),{root,path}=cpTree(c.leaves,li),rate="0x"+w(rt).toString(16).padStart(64,"0"),X=cdpBuildOp(k,li,root,path,debt,rate,i),self=true;
 const memo=cpSeal(cpPub,{value:debt,blinding:X.S.blind,secret:X.S.nk,owner:X.S.dOwner,asset:CP_CUSD},cpRandom());
 const p={i,v:St(debt),cv:St(k.value),rate,leaf:cdpLeaf(debt,rate,X.S.owner,X.S.nonce,[[k.asset,k.value]]),memo,at:Mf(Dn()/1000)};cdps.push(p);cpSaveCdps(cdps);
 const nn=cpNotes.some(x=>x.s===X.S.nk)?null:{i:-1,v:St(debt),a:CP_CUSD,s:X.S.nk,b:"0x"+h16(X.S.blind).padStart(64,"0"),at:p.at};if(nn){cpNotes.push(nn);cpSaveNotes()}
@@ -7909,7 +7909,8 @@ const cpCdpSettle=async p=>{if(!(p.pv&&p.pr))throw Er(PNR);const req=await cpSet
 await rpc(C,[req,L]);p.stx=await sendTx([req]);const a=cpLoadCdps(),m=a.find(x=>x.leaf===p.leaf);if(m)Oa(m,p);cpSaveCdps(a);await settle(p.stx);p.js="settled";if(m)m.js="settled";cpSaveCdps(a);Sm("Position opened.")};
 const cpScanCdps=async()=>{const z=cpNotes.filter(n=>n.z);if(!z.length)return 0;const f={address:CP_CE,fromBlock:toHex(CP_BLOCK),toBlock:"latest",topics:[CDP_MINTED]};let lg=null;
 try{lg=await cfgRead("eth_getLogs",[f])}catch{}if(!cpLogsOk(lg))for(const u of CP_LOGS){try{lg=await httpRead(u,"eth_getLogs",[f]);if(cpLogsOk(lg))break}catch{}}if(!cpLogsOk(lg))throw Er("No node served the loan history.");
-const a=cpLoadCdps(),hx=x=>"0x"+h16(x).padStart(64,"0"),rw=v=>Bx((Sx(v||"").slice(0,64)||"0")),rs=new Set([hx(10n**27n)]),SS=[];let found=0;
+const tq=cpScanCdps.t||=new Map(),SS=[];let nx=0;try{for(const l of lg){const h=l.transactionHash;if(!tq.has(h))tq.set(h,Lc((await cfgRead("eth_getTransactionByHash",[h])).input));for(let i=nx;i<nx+8;i++)if(tq.get(h).includes(Sx((SS[i]||=cdpSecrets(i)).owner)))nx=i+1}}catch{nx=-1}cpScanCdps.n=nx;
+const a=cpLoadCdps(),hx=x=>"0x"+h16(x).padStart(64,"0"),rw=v=>Bx((Sx(v||"").slice(0,64)||"0")),rs=new Set([hx(10n**27n)]);let found=0;
 try{const r=rw(await cfgRead(C,[{to:CP_CE,data:"0x2c4e722e"},L]));if(r)rs.add(hx(r))}catch{}
 for(const l of lg){const leaf=St(l.topics[1]||"").toLowerCase(),debt=Bx((Sx(l.data).slice(0,64)||"0"));if(!/^0x[0-9a-f]{64}$/.test(leaf)||a.some(p=>p.leaf===leaf))continue;
 const R=new Set(rs),rc=cpScanCdps.r||=new Map();if(!rc.has(l.blockNumber))try{rc.set(l.blockNumber,rw(await cfgRead(C,[{to:CP_CE,data:"0x2c4e722e"},l.blockNumber])))}catch{}if(rc.get(l.blockNumber))R.add(hx(rc.get(l.blockNumber)))

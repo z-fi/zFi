@@ -401,7 +401,7 @@ const HELPERS = [
   'cpBinding', 'cpCtx', 'cpNonce', 'cpSigma', 'cpSeal', 'cpTree', 'cpNu', 'cpLadder', 'cpRecipe', 'cpEscrow',
   'cpEncRecipe', 'cpActData', 'cpReclData', 'cpExitData', 'cpRescue', 'cpUse', 'cpVerifySigma', 'cpSettleData',
   'cpEhTipData',
-  'cpScalar', 'cpBtcOf', 'cpWif', 'cpOpen', 'cpSeg', 'bLock', 'bKeys', 'bOp', 'cdpSecrets', 'cdpBuildOp', 'cdpLeaf',
+  'cpScalar', 'cpBtcOf', 'cpWif', 'cpOpen', 'cpSeg', 'bLock', 'bKeys', 'bOp', 'cdpSecrets', 'cdpBuildOp', 'cdpLeaf', 'cpOutKeys',
   'bAnchor', 'bEcdhSeed', 'bKs', 'bOpenOut',
   'cpXferOp', 'cpWtOp', 'cpLockOp', 'cpClaimOp', 'cpRefundOp', 'cpSOpen', 'cpTacAddr', 'cpRecip', 'cpWtData', 'cpCalls', 'cpSTail', 'cpSuOp', 'bNoteLeaf',
 ];
@@ -913,13 +913,17 @@ if (exported) {
     eq(msig.R, C.mintOp.sigR, 'cBTC mint sigma R'); eq(msig.z, C.mintOp.sigZ, 'cBTC mint sigma z');
     eq(X.cpSeg('bc', Uint8Array.from(Buffer.from('79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798', 'hex')), 1),
       'bc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqzk5jj0', 'bech32m (BIP-350 vector)');
-    // cUSD: a position against that cBTC note. Its secrets are HMACs of the key (so the key alone re-derives
-    // them), and the op and position leaf must be the ones Tacit's own buildCdpMintOp / positionLeaf produce.
-    const D = F.cdp, S0 = X.cdpSecrets(0, F.seed), Z32 = '0x' + '00'.repeat(32), CB = '0x62a20d98fc1cd20289621d1315294cb8772f934d822e404b71e1f471cf0679c8';
-    eq(S0.owner, D.posOwner, 'CDP position key'); eq(S0.nk, D.debtNk, 'CDP debt nk');
-    eq('0x' + S0.blind.toString(16).padStart(64, '0'), D.debtBlinding, 'CDP debt blinding');
+    // cUSD: a position against that cBTC note. The position key is an HMAC of the key and the position index;
+    // the debt note's nk and blinding are Tacit's deriveOutputKeys(key, anchor, 'cdpDebt', 0), anchored on the
+    // cBTC note's nullifier, so tacit.finance re-derives them from the key alone. The op and position leaf must
+    // be the ones Tacit's own buildCdpMintOp / positionLeaf produce.
+    const D = F.cdp, S0 = X.cdpSecrets(0, F.seed), O = X.cpOutKeys(D.anchor, 'cdpDebt', 0, F.seed), Z32 = '0x' + '00'.repeat(32), CB = '0x62a20d98fc1cd20289621d1315294cb8772f934d822e404b71e1f471cf0679c8';
+    eq(S0.owner, D.posOwner, 'CDP position key');
+    eq(X.keccak(Uint8Array.from([...Buffer.from(D.cbtcLeaf.slice(2), 'hex'), ...Buffer.from('spent')])), D.anchor, 'CDP debt anchor (the cBTC note nullifier)');
+    eq(O.nk, D.debtNk, 'CDP debt nk');
+    eq('0x' + O.b.toString(16).padStart(64, '0'), D.debtBlinding, 'CDP debt blinding');
     const canon = o => JSON.stringify(o, (k, v) => (v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map(x => [x, v[x]])) : v));
-    const built = X.cdpBuildOp({ asset: CB, cx: C.cx, cy: C.cy, owner: Z32, value: BigInt(C.amountSats), blinding: BigInt(C.blinding) },
+    const built = X.cdpBuildOp({ asset: CB, cx: C.cx, cy: C.cy, owner: Z32, value: BigInt(C.amountSats), blinding: BigInt(C.blinding), nu: D.anchor },
       0, D.root, D.path, BigInt(D.debtValue), D.rateSnapshot, 0, F.seed).op;
     eq(canon(built), canon(D.op), 'CDP mint op');
     eq(X.cdpLeaf(BigInt(D.debtValue), D.rateSnapshot, D.posOwner, Z32, [[CB, BigInt(C.amountSats)]]), D.positionLeaf, 'CDP position leaf');

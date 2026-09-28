@@ -420,6 +420,51 @@ describe('borrowing cUSD against the cBTC note', () => {
     p.close();
   });
 
+  const borrowNext = async (prep) => {
+    const chain = cbtcChain();
+    engine(chain);
+    chain.logs.push({ address: POOL, blockNumber: '0x' + (B0 + 0x5).toString(16), logIndex: '0x0', topics: [T_LEAVES, '0x' + u256(0)],
+      data: coder.encode(['bytes32[]', 'bytes[]'], [[D.cbtcLeaf, F.otherLeaf], ['0x', '0x']]) });
+    chain.answer(POOL, SEL.NEXT, '0x' + u256(2));
+    prep(chain);
+    const p = await loadPage({ chain, storage: withNote() });
+    const inner = p.window.fetch;
+    p.window.__posts = [];
+    p.window.fetch = async (url, init) => { if (init && init.body) p.window.__posts.push({ url: String(url), body: init.body }); return inner(url, init); };
+    await p.connect();
+    p.click('pv');
+    await p.settle();
+    p.click('pvGo');
+    await p.waitFor(() => /Key unlocked/.test(p.text('pvKey')), { label: 'the key to unlock' });
+    await p.waitFor(() => p.$('pvList').querySelector('button[data-a="borrow"]'), { label: 'the borrow action', ...SLOW });
+    p.queuePrompt('30');
+    p.click(p.$('pvList').querySelector('button[data-a="borrow"]'));
+    return p;
+  };
+  const elsewhere = (chain, tx) => {
+    const h = '0x' + 'cd'.repeat(32);
+    chain.logs.push({ address: ENGINE, blockNumber: '0x' + (B0 + 0x6).toString(16), logIndex: '0x0', transactionHash: h,
+      topics: ['0x232c7d098ca44092999087e6ee530a2171f95f9ecb1caa363f6dcf448fb7dd57', '0x' + 'ee'.repeat(32)], data: '0x' + u256(5n) + u256(1n) });
+    if (tx) chain.txs = new Map([[h, tx]]);
+  };
+
+  test('a position already opened with this key elsewhere moves the next loan to a fresh position key', async () => {
+    const p = await borrowNext(c => elsewhere(c, { hash: '0x' + 'cd'.repeat(32), input: '0xdeadbeef' + '00'.repeat(64) + D.posOwner.slice(2) + '00'.repeat(32) }));
+    await p.waitFor(() => p.window.__posts.some(x => x.url.includes('/confidential/submit')), { label: 'the loan to reach the relay', ...SLOW });
+    const job = JSON.parse(p.window.__posts.find(x => x.url.includes('/confidential/submit')).body);
+    assert.notEqual(job.op.owner, D.posOwner, 'key 0 is taken on chain, so it is not reused');
+    assert.equal(job.op.owner, p.window.eval('cdpSecrets(1).owner'), 'the next position key, as tacit.finance would pick');
+    await p.settle();
+    p.close();
+  });
+
+  test('a loan is refused when the positions opened so far cannot be read', async () => {
+    const p = await borrowNext(c => elsewhere(c, null));
+    await p.waitFor(() => /No node served the loan history/.test(p.text('stat')), { label: 'the refusal', ...SLOW });
+    assert.ok(!p.window.__posts.some(x => x.url.includes('/confidential/submit')), 'nothing went to the relay');
+    p.close();
+  });
+
   test('a wiped browser finds the position again from the engine\'s CdpMinted event', async () => {
     const chain = cbtcChain();
     chain.logs.push({ address: ENGINE, blockNumber: '0x' + (B0 + 0x6).toString(16), logIndex: '0x0',
