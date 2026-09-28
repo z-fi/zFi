@@ -6,19 +6,22 @@ An external pre-release audit (GPT Astra) reviewed `zSwap.html` at `66f3067` on 
 
 | | |
 |---|---|
-| Commit | `3b051c0` |
-| Page | `zSwap.html`, 680,829 bytes, 28 chunks |
-| keccak256(zSwap.html) | `0x055e22c2ee895f3e9572280b07e68d0dbb12de5525e25d17b4ffe1f75fe2ae32` |
-| Resolver relay gas | 29,987,917 of the 30,000,000 eth_call budget |
+| Commit | `2f0254a` |
+| Page | `zSwap.html`, 674,899 bytes, 28 chunks |
+| keccak256(zSwap.html) | `0xaba7143b2d7afc7b0599492bee4cc2906c5d3e019a19437aa83831de987c18d6` |
+| Resolver relay gas | 29,476,818 of the 30,000,000 eth_call budget |
+| Tests | UI 97 files and the browser suite: 1,691 tests, 0 failures; Foundry zSwap 83/83; check-zSwap all pass |
 
-The hash and length are pinned in `test/zSwap.t.sol`, the registry calldata and `deploy/zSwap-v0.3-LAUNCH.md`. `node script/sync-zSwap-artifacts.mjs --committed` confirms that every pinned copy agrees with the committed page. Any change to `zSwap.html` after `3b051c0` voids this lock and needs the full pin sequence and test sweep again.
+The audit's two fixes first shipped in `3b051c0` (680,829 B, keccak `0x055e22c2…ae32`). The lock moved to `2f0254a` after the final review below; everything in `3b051c0` is carried forward unchanged in behaviour.
+
+The hash and length are pinned in `test/zSwap.t.sol`, the registry calldata and `deploy/zSwap-v0.3-LAUNCH.md`. `node script/sync-zSwap-artifacts.mjs --committed` confirms that every pinned copy agrees with the committed page. Any change to `zSwap.html` after `2f0254a` voids this lock and needs the full pin sequence and test sweep again.
 
 ## Findings at a glance
 
 | Item | Audit | Verdict | Outcome |
 |---|---|---|---|
-| P1: an ambiguous batch failure replays transactions | Hold release | Confirmed at HEAD | Fixed in `3b051c0` |
-| P2: quote expiry is not rechecked before submission | Hold release | Confirmed at HEAD | Fixed in `3b051c0` |
+| P1: an ambiguous batch failure replays transactions | Hold release | Confirmed at HEAD | Fixed in `3b051c0`, carried into `2f0254a` |
+| P2: quote expiry is not rechecked before submission | Hold release | Confirmed at HEAD | Fixed in `3b051c0`, carried into `2f0254a` |
 | Browser: the picker gap is −0.25 px | Low, unresolved gate | Not reproduced | No change |
 | UI harness: 26 failed, 4 cancelled | Environmental, passed alone | Agreed | Clean full run |
 
@@ -74,15 +77,42 @@ The solver cap needs no separate path, because a solver quote's `exp` already ca
 | check-zSwap and the Foundry pins | All checks pass on the locked page. The Foundry zSwap suites pass 83/83, including the HTML round-trip, ERC-5219, and the 30M-gas resolver budget. |
 | Out of scope: live wallets, production addresses and code hashes, external endpoints, integrated contracts | Covered elsewhere. Every zFi contract under `deploy/` is explorer-verified. The endpoint roster lives on chain in zEndpoints, and was health-checked and reordered on 2026-09-28 (tx `0xce6ae4a88334136c400b27bc75793224cd30a4a43f8ccc63d522e584e929ba81`). The real-wallet smoke list in `deploy/zSwap-v0.3-LAUNCH.md` stays a step before announcing. |
 
+## Final review after the audit
+
+After the audit fixes, the final page was read by hand and then reviewed again by seven independent reviewers, each on one cross-cutting theme: wallet and chain lifecycle, numbers and units, Tacit state machines, untrusted data, the non-swap action flows checked against their compiled contracts, long-session robustness, and byte savings. Every finding below was confirmed by tracing before it was fixed.
+
+| Severity | Finding | Fix |
+|---|---|---|
+| High | A cBTC loan record stored the collateral note's blinding, its spend secret, in unsealed browser storage | The field is no longer stored; nothing read it |
+| Medium | After a laptop sleep or a suspended mobile tab, a mined swap could be reported as unconfirmed, inviting a second swap | The receipt wait counts only time the page is awake |
+| Medium | Flip turned an amount typed as "1,5" into 15 | Flip carries the text as typed; the parser refuses the ambiguous comma |
+| Medium | A cause's goal and days read "1,5" as 15, written into an immutable DAO | Both go through the same parser as a swap amount |
+| Medium | A device clock more than 10 minutes slow made every swap revert `Expired()` | The page reads chain time once per visit and offsets its clock when it is more than 90 s off |
+| Medium | A taken-back private send was labelled "claimed" | It reads "refunded" once the refund output is in the pool |
+| Medium–low | A paid request could stay on "settle" forever | A request already settled on chain reads as settled |
+| Medium | A pool→V1 move that failed before sending left a phantom pending note | The saved note is dropped when the move throws (`df9a51c`) |
+| Low | A governance payload with malformed calldata could display misleadingly against a proposal | Only clean-hex calldata is matched |
+| Low | A wallet injected after load was never bound to chain and account events | It is bound on connect |
+| Low | The chart toggle stopped working with full browser storage; solver lanes failed on iOS before 15.4 | Storage is written after the UI update; `hasOwnProperty` replaces `Object.hasOwn` |
+
+Checked and found clean: every order-book, SLOW, Precision, Markets, names, launch and governance selector, argument order, value and approval spender against the compiled ABIs; all 69 HTML sinks traced to validated data, with no eval, postMessage or unpinned code; every wallet and chain switch path.
+
+Deferred as rare or bounded: a key import racing a background refresh, two open tabs saving notes at the same moment, a Private ETH proof interrupted by a network switch (costs gas at most), and cosmetic bidi characters in token-list names.
+
+Byte savings paid for all of it: three aliases (`St`, `Tx`, `Sm`) over 757 sites, chosen by parsing the script, cut 6,003 B and took the resolver headroom from about 4.5K gas to about 523K.
+
+New tests: `test/ui/final-edges.test.mjs` (the comma and clock cases) and an assertion in `test/ui/cbtc.test.mjs` that a loan record carries no blinding. Each fails on the page before its fix.
+
 ## Also in this release since the audit baseline
 
 - `23bdb00`: Bitcoin reads skip unusable node answers and promote the node that answered. A Bitcoin transaction is broadcast to every node at once.
 - `c88ce01`: pool ether moves into V1 as a tETH note from the Private ETH menu. The note is saved before the move is sent, and recover finds it from the key alone.
+- `2f0254a`, `df9a51c`: the final-review fixes above.
 - `d0abc1f`: Precision-pool deposits check the balance before quoting, and a partial withdrawal previews what it returns.
 
 Deferred by decision: an in-page cBTC CDP repay. It needs several KB of new proving logic, and the page links to tacit.finance for it instead.
 
-Next step: deploy the 28 chunks for `3b051c0`, run the DAO's `deployNext`, then repoint `zswap.wei`.
+Next step: deploy the 28 chunks for `2f0254a`, run the DAO's `deployNext`, then repoint `zswap.wei`.
 
 ---
 
