@@ -1771,7 +1771,7 @@ const sPew=()=>play([[720,0,.04,.03]]);
 const sHit=()=>play([[440,0,.07,.05],[330,.04,.09,.04]]);
 let clickChain=0;addEventListener("click",()=>{clickChain=CHAIN_ID},true);
 const chainHeld=()=>clickChain&&clickChain!==CHAIN_ID?Promise.reject(Oa(Er("The network changed after you pressed — check the details and press again."),{offChain:true})):cW();
-const sendTx=req=>live(chainHeld().then(()=>rpc(S,req))).then(r=>{sSend();return r});
+const sendTx=req=>live(chainHeld().then(async()=>{const q=()=>rpc("eth_getTransactionCount",[req[0].from,"pending"]).catch(Nl),n0=await Promise.race([q(),Zz(3e3)]);try{return await rpc(S,req)}catch(e){if(isRejection(e))throw e;await Zz(4e3);const n1=await q();try{e.sn=n0&&n1?Bi(n1)>Bi(n0)?2:1:3}catch{}throw e}})).then(r=>{sSend();return r});
 const sendBatch=(owner,calls)=>live(sendBatch0(owner,calls)).catch(e=>{if(/^batch (reverted|failed)/.test(e&&e.message))sFail();throw e}).finally(()=>{brM.clear();brSelfCode=null});
 const CWA=" — check your wallet's activity before retrying",sendBatch0=async(owner,calls)=>{
 await chainHeld();let res,bad=0;
@@ -3163,6 +3163,7 @@ const REVERTS={
 };
 const explain=e=>{
 if(e?.noWallet)return NO_WALLET;
+if(e?.sn===2)return"Your wallet reported an error, but a transaction from this wallet is now pending — check its activity before sending again.";
 if(e?.offChain)return e.message;
 if(e?.code===-32002)return"Your wallet already has a request open — finish or dismiss it there, then try again.";
 if(e?.code===4900||e?.code===4901)return"The wallet lost its connection to the network — reconnect it, then try again.";
@@ -3178,6 +3179,7 @@ const t=[e?.data?.message,e?.message,s].find(x=>typeof x==="string"&&x&&!/^0x[0-
 if(/^tx reverted/.test(t))return"It reverted on chain — nothing changed hands; only gas was spent.";
 if(/^tx not mined/.test(t))return"Not confirmed after 10 minutes — follow it on the explorer.";
 if(/^execution reverted:?\s*$/i.test(t))return"This would fail right now — the price or the order may have changed. Refresh and try again.";
+if(!/^batch/.test(t)&&/internal (json-rpc )?error|failed to fetch|bad gateway|gateway time|timed? ?out|\b50[234]\b|too many requests|rate.?limit|service unavailable/i.test(t))return"Your wallet's network connection (its RPC) failed"+(e?.sn===1?", so nothing was sent. Try again in a moment; if it keeps failing, add another Ethereum RPC in your wallet's network settings.":e?.sn===3?" — check your wallet's activity before trying again.":" — try again in a moment.");
 if(t)return t.slice(0,220);
 return s?"The contract refused this call ("+s.slice(0,10)+").":"The wallet returned an error with no message"+(e&&e.code!==undefined?" (code "+e.code+")":"")+".";
 };

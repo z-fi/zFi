@@ -198,6 +198,43 @@ describe('plain transfers', () => {
   });
 });
 
+describe('when the wallet\'s own RPC fails', () => {
+  const failing = (p, { lands }) => {
+    const d = p.chain.dispatch.bind(p.chain);
+    p.chain.dispatch = async (m, a) => {
+      if (m === 'eth_getTransactionCount') return '0x' + p.chain.sent.length.toString(16);
+      if (m === 'eth_sendTransaction') {
+        if (lands) await d(m, a);
+        throw Object.assign(new Error('RPC 0x1 Infura eth_sendRawTransaction: Internal error'), { code: -32603 });
+      }
+      return d(m, a);
+    };
+  };
+
+  test('an internal error that sent nothing says so, plainly', async () => {
+    const p = await setup();
+    failing(p, { lands: false });
+    await p.typeAmount('amt', '1.5');
+    await recipient(p, A.OTHER);
+    p.click('swap');
+    await p.waitFor(() => /nothing was sent/.test(p.text('stat')), { label: 'the explanation', timeout: 15000 });
+    assert.doesNotMatch(p.text('stat'), /Infura|0x1/, 'the raw wallet text is not shown');
+    assert.equal(p.chain.sent.length, 0);
+    p.close();
+  });
+
+  test('an internal error after the wallet did send warns against sending again', async () => {
+    const p = await setup();
+    failing(p, { lands: true });
+    await p.typeAmount('amt', '1.5');
+    await recipient(p, A.OTHER);
+    p.click('swap');
+    await p.waitFor(() => /now pending — check its activity before sending again/.test(p.text('stat')), { label: 'the warning', timeout: 15000 });
+    assert.equal(p.chain.sent.length, 1);
+    p.close();
+  });
+});
+
 describe('time-locked sends', () => {
   test('an ETH lock deposits into SLOW with the delay and the value', async () => {
     const p = await setup();
