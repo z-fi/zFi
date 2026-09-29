@@ -2132,7 +2132,7 @@ describe('the points a wallet has been credited', () => {
     p.close();
   });
 
-  test('an activity the page does not recognise reads as the original wrap program', async () => {
+  test('an activity the page does not recognise is listed as other, with no amount it cannot read', async () => {
     const p = await open();
     serve(p, RELAY, { address: A.ACCOUNT.toLowerCase(), points: 2, deposit_count: 2, deposits: [
       { tx_hash: '0x' + '44'.repeat(32), block_time: 1790166371, amount_wei: '1000000000000000', points: 1 },
@@ -2140,12 +2140,14 @@ describe('the points a wallet has been credited', () => {
     ] });
     await unlock(p);
     await p.waitFor(() => /counted/.test(p.text('pvKey')), { label: 'the points row', ...SLOW });
-    assert.doesNotMatch(p.text('pvKey'), /wrap|cBTC lock|cUSD loan/, 'both fall back to the one known category');
+    assert.match(p.text('pvKey'), /1 wrap and 1 other/, 'a new category is counted without being named');
     p.click(p.$('pvKey').querySelector('button[data-a="ptshist"]'));
     await p.waitFor(() => !!p.$('pvKey').querySelector('.pvkh'), { label: 'the list', ...SLOW });
     const rows = [...p.$('pvKey').querySelectorAll('.pvkd')];
-    assert.ok(rows.every(r => /ETH/.test(r.textContent)), 'rendered as an ETH deposit, not guessed at');
-    assert.ok(rows.every(r => !/cBTC lock|cUSD loan/.test(r.textContent)), 'and carries no activity tag of its own');
+    const old = rows.find(r => r.textContent.includes('0x444444')), neu = rows.find(r => r.textContent.includes('0x555555'));
+    assert.match(old.textContent, /0\.001 ETH/, 'a row with no activity is the original ETH wrap');
+    assert.doesNotMatch(neu.textContent, /ETH/, 'an unknown activity is not given a unit it may not have');
+    assert.match(neu.textContent, /other/);
     p.close();
   });
 
