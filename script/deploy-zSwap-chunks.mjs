@@ -116,13 +116,20 @@ async function main() {
     const tip = (fd.maxPriorityFeePerGas || 0n) > FLOOR ? fd.maxPriorityFeePerGas : FLOOR;
     const nonce = await provider.getTransactionCount(wallet.address, 'pending');
     const tx = await wallet.sendTransaction({ data: creations[i], nonce, gasLimit: est * 110n / 100n, maxPriorityFeePerGas: tip, maxFeePerGas: ((fd.maxFeePerGas || 0n) - (fd.maxPriorityFeePerGas || 0n)) + tip });
-    let rc;
-    try { rc = await tx.wait(1, 10 * 60 * 1000); }
-    catch (e) {
-      const now = await provider.getTransactionCount(wallet.address, 'latest');
-      if (now > nonce) throw new Error(`chunk${n}: tx ${tx.hash} was never mined - nonce ${nonce} was used by another sender from this key; re-run to resume`);
-      throw e;
+    // Another sender on this key may submit privately, so the public pending nonce cannot see it and
+    // it can take this nonce first. Poll for the receipt, and stop as soon as the nonce is spent by
+    // someone else, instead of waiting on a hash that can never land.
+    let rc = null;
+    for (const end = Date.now() + 10 * 60 * 1000; !rc && Date.now() < end;) {
+      await new Promise(r => setTimeout(r, 15000));
+      rc = await provider.getTransactionReceipt(tx.hash);
+      if (!rc && (await provider.getTransactionCount(wallet.address, 'latest')) > nonce) {
+        rc = await provider.getTransactionReceipt(tx.hash);
+        if (!rc) throw new Error(`chunk${n}: nonce ${nonce} was used by another sender from this key before ${tx.hash} landed; re-run to resume`);
+      }
     }
+    if (!rc) throw new Error(`chunk${n}: tx ${tx.hash} not mined within 10 minutes; re-run to resume`);
+    if (rc.status !== 1) throw new Error(`chunk${n}: tx ${tx.hash} reverted; re-run to resume`);
     const addr = rc.contractAddress;
     const code = await provider.getCode(addr);
     if (code.toLowerCase() !== want.toLowerCase()) {
