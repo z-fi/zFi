@@ -47,7 +47,7 @@ function chainOf({ claimed = false, deadline = Math.floor(Date.now() / 1e3) + 86
       if (sel === '42f81580') return coder.encode(['uint256'], [deadline]);
       if (sel === '5c975abb') return coder.encode(['bool'], [paused]);
       if (sel === '9e34070f') return coder.encode(['bool'], [claimed]);
-      if (sel === '2e7ba6ef' || sel === '4f54d47c') return '0x';
+      if (sel === '2e7ba6ef' || sel === '4f54d47c' || sel === 'ad8b9781') return '0x';
     }
     return ethCall(tx, block);
   };
@@ -72,6 +72,29 @@ describe('the TAC airdrop card', () => {
     const [i, a, v, pr] = coder.decode(['uint256', 'address', 'uint256', 'bytes32[]'], '0x' + tx.data.slice(10));
     assert.equal(i, 7n); assert.equal(a.toLowerCase(), ME); assert.equal(v, AMT);
     assert.deepEqual([...pr], T.proof(1));
+    p.close();
+  });
+
+  test('claim privately deposits the whole allocation into a TAC note this key derives', async () => {
+    const p = await open();
+    await p.waitFor(() => /TAC airdrop · until/.test(card(p)), { label: 'the card' });
+    const TAC_AS = '0xf0bbe868af10c6c67652a99709bf32048d1aa7194efe3e9a1ef1bde43f94762b';
+    p.chain.answer('0x000000000ed1eabd231be41d93b719056f7febfc', '7da9874f', '0x' + '0'.repeat(64));
+    p.window.eval(`cpUse(${JSON.stringify('0x' + '11'.repeat(32))});cpAssets=[{id:"${TAC_AS}",tok:"${TAC}",sym:"cTAC",pub:"TAC",dec:18,scale:10n**10n,icon:""}]`);
+    p.click(p.$('adEl').querySelector('button[data-ad="sh"]'));
+    await p.waitFor(() => p.chain.sent.some(t => (t.to || '').toLowerCase() === TACAD), { label: 'the shielded claim', timeout: 15000 });
+    const tx = p.chain.sent.find(t => (t.to || '').toLowerCase() === TACAD);
+    assert.equal(tx.data.slice(2, 10), 'ad8b9781', 'claimAndShield(uint256,uint256,bytes32[],bytes32)');
+    const [index, amount, proof, commit] = coder.decode(['uint256', 'uint256', 'bytes32[]', 'bytes32'], '0x' + tx.data.slice(10));
+    assert.equal(index, 7n);
+    assert.equal(amount, AMT);
+    assert.deepEqual([...proof], T.proof(1));
+    const n = JSON.parse(p.window.eval(`JSON.stringify(cpNotes.filter(n=>n.a==="${TAC_AS}").map(n=>({i:n.i,v:n.v})))`));
+    assert.equal(n.length, 1, 'one TAC note, kept before the claim was sent');
+    assert.equal(n[0].v, (AMT / 10n ** 10n).toString());
+    assert.ok(n[0].i >= 0, 'derived from the key, so recover finds it again');
+    assert.equal(p.window.eval(`(()=>{const x=cpNotes.find(n=>n.a==="${TAC_AS}"),k=cpNoteOf(x);return cpDepCommit(k.cx,k.cy,k.owner)})()`), commit, 'the deposit the airdrop makes is this note');
+    await p.settle();
     p.close();
   });
 

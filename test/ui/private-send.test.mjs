@@ -206,6 +206,21 @@ describe('private sends', () => {
     p.close();
   });
 
+  test('a send so small that claiming it would cost the recipient most of it asks first', async () => {
+    const p = await open(withNote(poolChain()));
+    await ready(p);
+    p.select('pvAct', 'send');
+    await p.settle();
+    p.type('pvAmt', '0.0001');
+    p.type('pvRc', S.lock.recipient);
+    p.click('pvGo');
+    await p.waitFor(() => p.asked.confirm.some(m => /more than half of it/.test(m)), { label: 'the warning', ...SLOW });
+    await p.settle();
+    assert.ok(!posts(p).some(x => /stealth|xfer|wrap/.test(x.type || '')), 'declining sends nothing');
+    assert.match(p.text('stat'), /Send cancelled/);
+    p.close();
+  });
+
   test('the sending key alone finds an unclaimed send again, and takes it back after the deadline', async () => {
     const chain = withNote(poolChain());
     settleOn(chain, { nullifiers: [F.nullifier], lockLeaves: [S.lock.op.lockLeaf], lockMemos: [S.lock.memoFull] });
