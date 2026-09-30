@@ -6,24 +6,24 @@ An external pre-release audit (GPT Astra) reviewed `zSwap.html` at `66f3067` on 
 
 | | |
 |---|---|
-| Commit | `1c0607a` |
-| Page | `zSwap.html`, 677,273 bytes, 28 chunks |
-| keccak256(zSwap.html) | `0x14b6ba872ac923c38a5169ab260eb0a7eedff224ae39e1985eb7f592826b5661` |
-| Resolver relay gas | 29,679,781 of the 30,000,000 eth_call budget |
-| Tests | UI 106 files and the browser suite: 1,718 tests, 0 failures; Foundry zSwap 83/83; check-zSwap all pass |
+| Commit | `e1bda9d` |
+| Page | `zSwap.html`, 677,497 bytes, 28 chunks |
+| keccak256(zSwap.html) | `0x4b1468c924e4b7139b054c5c10d3fb4cecd2aae74572d2c51b791c919911a89b` |
+| Resolver relay gas | 29,701,336 of the 30,000,000 eth_call budget |
+| Tests | UI 1,689 and browser 30 tests on these exact bytes, 0 failures; Foundry zSwap 83/83; check-zSwap all pass |
 
 Also verified end to end on an anvil mainnet fork in real Chromium: an ETH send landed as a 21,000-gas transfer and a 0.05 ETH→USDC swap received exactly the quoted 133.732996 USDC; the page sets no gas or fee fields, so the wallet estimates both. A real unclaimed airdrop allocation's `claimAndShield` simulates successfully on mainnet with the page's calldata.
 
-The audit's two fixes first shipped in `3b051c0` (680,829 B, keccak `0x055e22c2…ae32`). The lock moved to `2f0254a` after the final review below, then to `a040769` for cUSD loan parity with tacit.finance, then to `9a3f23e`, where a points claim is offered only when the distributor's own `verify` accepts its proof, then to `7ad72ac`, where a lone decimal comma reads as a decimal (so iOS comma keypads can type amounts) and .wei reveals wait on chain time, then to `82958f2`, which adds a private airdrop claim, a small-send warning and two edge guards, then to `6597c2f`, where a send the wallet's RPC fails says whether anything went out, then to `984b9e0`, where a points activity the page does not know is listed as other rather than as an ETH amount, then to `3a462ac` after the last review below, then to `1c0607a`, which reads Tacit's unified tacit1 addresses; everything in `3b051c0` is carried forward unchanged in behaviour.
+The audit's two fixes first shipped in `3b051c0` (680,829 B, keccak `0x055e22c2…ae32`). The lock moved to `2f0254a` after the final review below, then to `a040769` for cUSD loan parity with tacit.finance, then to `9a3f23e`, where a points claim is offered only when the distributor's own `verify` accepts its proof, then to `7ad72ac`, where a lone decimal comma reads as a decimal (so iOS comma keypads can type amounts) and .wei reveals wait on chain time, then to `82958f2`, which adds a private airdrop claim, a small-send warning and two edge guards, then to `6597c2f`, where a send the wallet's RPC fails says whether anything went out, then to `984b9e0`, where a points activity the page does not know is listed as other rather than as an ETH amount, then to `3a462ac` after the last review below, then to `1c0607a`, which reads Tacit's unified tacit1 addresses, then to `e1bda9d`, where quotes, wallets, relay sockets and private rows keep to the current state; everything in `3b051c0` is carried forward unchanged in behaviour.
 
-The hash and length are pinned in `test/zSwap.t.sol`, the registry calldata and `deploy/zSwap-v0.3-LAUNCH.md`. `node script/sync-zSwap-artifacts.mjs --committed` confirms that every pinned copy agrees with the committed page. Any change to `zSwap.html` after `1c0607a` voids this lock and needs the full pin sequence and test sweep again.
+The hash and length are pinned in `test/zSwap.t.sol`, the registry calldata and `deploy/zSwap-v0.3-LAUNCH.md`. `node script/sync-zSwap-artifacts.mjs --committed` confirms that every pinned copy agrees with the committed page. Any change to `zSwap.html` after `e1bda9d` voids this lock and needs the full pin sequence and test sweep again.
 
 ## Findings at a glance
 
 | Item | Audit | Verdict | Outcome |
 |---|---|---|---|
-| P1: an ambiguous batch failure replays transactions | Hold release | Confirmed at HEAD | Fixed in `3b051c0`, carried into `1c0607a` |
-| P2: quote expiry is not rechecked before submission | Hold release | Confirmed at HEAD | Fixed in `3b051c0`, carried into `1c0607a` |
+| P1: an ambiguous batch failure replays transactions | Hold release | Confirmed at HEAD | Fixed in `3b051c0`, carried into `e1bda9d` |
+| P2: quote expiry is not rechecked before submission | Hold release | Confirmed at HEAD | Fixed in `3b051c0`, carried into `e1bda9d` |
 | Browser: the picker gap is −0.25 px | Low, unresolved gate | Not reproduced | No change |
 | UI harness: 26 failed, 4 cancelled | Environmental, passed alone | Agreed | Clean full run |
 
@@ -129,6 +129,7 @@ Live checks found every address the page calls has code on its chain, every RPC 
 
 ## Also in this release since the audit baseline
 
+- `e1bda9d`: late answers from a quote, a solver roster, a name roll, a points read or a private-send preview are dropped once the view has moved on; a rejected wallet connection is forgotten; a stale WalletConnect socket is closed; a node answer that is not hex is retried; SLOW relay deadlines use chain time; a deep link resolves both tokens at once; text-box dialogs have side margins.
 - `1c0607a`: a tacit1 address may carry Tacit's pool lane (flag 0x04, up to 329 characters). The page reads it by lane as Tacit's `tacit-address.js` does: a V1 send takes the Ethereum-side key from any such address or .wei record, and a pool send takes one that carries the pool as its bp1 address. Checked against Tacit's pinned vectors; Tacit shows these addresses only once this build is live.
 - `3a462ac`: the last review above.
 
@@ -145,7 +146,7 @@ Live checks found every address the page calls has code on its chain, every RPC 
 
 Deferred by decision: an in-page cBTC CDP repay. It needs several KB of new proving logic, and the page links to tacit.finance for it instead.
 
-Next step: deploy the 28 chunks for `1c0607a`, run the DAO's `deployNext`, then repoint `zswap.wei`.
+Next step: deploy the 28 chunks for `e1bda9d`, run the DAO's `deployNext`, then repoint `zswap.wei`.
 
 ---
 
