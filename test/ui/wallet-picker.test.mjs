@@ -67,6 +67,31 @@ describe('choosing among several wallets', () => {
     p.close();
   });
 
+  test('declining a picked wallet offers the chooser again', async () => {
+    // A picked wallet used to stay bound after its prompt was declined, so every
+    // later Connect went straight back to it and the other wallets (and
+    // WalletConnect) were unreachable until a reload.
+    const chain = new MockChain();
+    const p = await loadPage({ chain });
+    announce(p.window, chain, [
+      { uuid: 'a1', name: 'Alpha Wallet' },
+      { uuid: 'b2', name: 'Beta Wallet' },
+    ]);
+    chain.rejectNext = Object.assign(Error('User rejected the request'), { code: 4001 });
+    p.click('swap');
+    await p.settle();
+    [...p.$('wkList').querySelectorAll('.tkr')][0].click();
+    await p.settle();
+    assert.ok(!/0x/.test(p.text('addr')), 'a declined prompt still connected');
+    p.click('swap');
+    await p.settle();
+    assert.ok(open(p), 'the declined wallet was reused without a choice');
+    [...p.$('wkList').querySelectorAll('.tkr')][1].click();
+    await p.settle();
+    assert.match(p.text('addr'), /0x/, 'the other wallet did not connect');
+    p.close();
+  });
+
   test('a lone injected wallet stays one click, with no chooser', async () => {
     const p = await loadPage({ chain: new MockChain() });
     p.click('swap');
