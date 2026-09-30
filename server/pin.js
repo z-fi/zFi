@@ -83,6 +83,23 @@ async function resolvesPublic(host) {
   } catch { return false; }
 }
 
+// The check above and the connection resolve separately, so a name can answer
+// public to one and private to the other. The metadata fetch therefore connects
+// through this lookup, which hands the socket only addresses it has vetted.
+function publicLookup(host, opts, cb) {
+  import('node:dns').then(dns => dns.lookup(host, { all: true, verbatim: true }, (e, as) => {
+    if (e) return cb(e);
+    if (!as.length || as.some(a => privateIp(a.address))) return cb(Object.assign(new Error('private address'), { code: 'EPRIVATE' }));
+    opts && opts.all ? cb(null, as) : cb(null, as[0].address, as[0].family);
+  }), cb);
+}
+async function getPublic(target, ms) {
+  const https = await import('node:https');
+  return new Promise((res, rej) => {
+    https.get(target, { lookup: publicLookup, signal: AbortSignal.timeout(ms), headers: { 'user-agent': 'zfi-api', accept: 'application/json, */*' } }, res).on('error', rej);
+  });
+}
+
 // Reads a request body without holding more than `max` bytes: a declared
 // Content-Length over the cap is refused before reading, and a streamed body
 // is cut off at the cap. Returns null when the body is too large.
@@ -183,6 +200,7 @@ async function filebasePut(env, key, body, contentType) {
       Authorization: `AWS4-HMAC-SHA256 Credential=${env.FILEBASE_KEY}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`,
     },
     body,
+    signal: AbortSignal.timeout(30_000),
   });
   if (!res.ok) throw new Error(`filebase ${res.status}: ${(await res.text()).slice(0, 200)}`);
 
@@ -357,29 +375,30 @@ export default {
         let upstream;
         for (let hop = 0; ; hop++) {
           if (!publicHttps(target) || !(await resolvesPublic(new URL(target).hostname))) return json(request, { error: 'https to a public host only' }, 400);
-          upstream = await fetch(target, { redirect: 'manual', signal: AbortSignal.timeout(2 * UP_TIMEOUT), cf: { cacheTtl: 300, cacheEverything: true } });
-          const loc = upstream.status >= 300 && upstream.status < 400 && upstream.headers.get('location');
+          upstream = await getPublic(target, 2 * UP_TIMEOUT);
+          const loc = upstream.statusCode >= 300 && upstream.statusCode < 400 && upstream.headers.location;
           if (!loc) break;
+          upstream.resume();
           if (hop === MAX_HOPS) return json(request, { error: 'too many redirects' }, 502);
           target = new URL(loc, target).href;
         }
         const MAX_META = 256 * 1024;
-        const cl = parseInt(upstream.headers.get('content-length') || '0', 10);
-        if (cl > MAX_META) return json(request, { error: 'too large' }, 413);
-        const parts = [], rd = upstream.body && upstream.body.getReader();
+        const cl = parseInt(upstream.headers['content-length'] || '0', 10);
+        if (cl > MAX_META) { upstream.destroy(); return json(request, { error: 'too large' }, 413); }
+        const parts = [];
         let size = 0;
-        for (let c; rd && !(c = await rd.read()).done;) {
-          if ((size += c.value.byteLength) > MAX_META) {
-            rd.cancel().catch(() => {});
+        for await (const c of upstream) {
+          if ((size += c.byteLength) > MAX_META) {
+            upstream.destroy();
             return json(request, { error: 'too large' }, 413);
           }
-          parts.push(c.value);
+          parts.push(c);
         }
         return new Response(new Blob(parts), {
-          status: upstream.status,
+          status: upstream.statusCode,
           headers: {
             ...cors(request),
-            'Content-Type': upstream.headers.get('content-type') || 'application/json',
+            'Content-Type': upstream.headers['content-type'] || 'application/json',
             'Cache-Control': 'public, max-age=300',
           },
         });

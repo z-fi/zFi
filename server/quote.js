@@ -18,9 +18,18 @@ import { readCapped } from './pin.js';
 // fix; `quoteCurve` below is only read for the per-venue comparison.
 const ZQUOTER = '0x000000bd2db80567c23e353ca95a251c573cbf9b';
 const ZROUTER = '0x000000000000FB114709235f1ccBFfb925F600e4';
+// The L2 quoters carry no build3HopMulticall; the 3-hop builder there is this companion.
+const Z3H = '0x000000f584434f81fc115b1a59243a4287db08be';
 const MC3 = '0xcA11bde05977b3631167028862bE2a173976CA11';
 const ZERO = '0x0000000000000000000000000000000000000000';
 const WETH = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2';
+// Mainnet routing hubs. A multi-leg zRouter route reads a hub's whole router
+// balance on legs quoted with swapAmount = 0, so those routes sweep the hubs first.
+const HUBS = [
+  WETH, '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', '0xdac17f958d2ee523a2206206994597c13d831ec7',
+  '0x6b175474e89094c44da98b954eedeac495271d0f', '0x2260fac5e5542a773aa44fbcfedf7c193bc2c599',
+  '0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0',
+];
 
 const NATIVE = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE'; // common native ETH sentinel
 
@@ -249,6 +258,20 @@ function encHybridSplit(to, tokenIn, tokenOut, amount, slippage, deadline) {
 function enc3Hop(to, exactOut, tokenIn, tokenOut, amount, slippage, deadline) {
   return SEL_3HOP + encAddr(to) + encBool(exactOut) + encAddr(tokenIn) + encAddr(tokenOut) +
     encUint(amount) + encUint(slippage) + encUint(deadline);
+}
+
+// --- Encode zRouter multicall(bytes[]) ---
+
+const SEL_SWEEP = 'cb019b84'; // sweep(address,uint256,uint256,address)
+function encMulticall(calls) {
+  let head = '', tail = '', off = calls.length * 32;
+  for (const c of calls) {
+    head += encUint(off);
+    const b = encBytes(c);
+    tail += b;
+    off += b.length / 2;
+  }
+  return 'ac9650d8' + pad32('20') + encUint(calls.length) + head + tail;
 }
 
 // --- Encode Multicall3 aggregate3 ---
@@ -608,8 +631,8 @@ async function fetchOkxQuote(tokenIn, tokenOut, amount, taker, env, laneChain) {
 
   const userAddr = taker || '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045';
   const qs = new URLSearchParams({
-    chainId: String(laneChain), fromTokenAddress: fromToken, toTokenAddress: toToken,
-    amount: amount.toString(), userWalletAddress: userAddr, slippage: '0.005',
+    chainIndex: String(laneChain), fromTokenAddress: fromToken, toTokenAddress: toToken,
+    amount: amount.toString(), userWalletAddress: userAddr, slippagePercent: '0.5', swapMode: 'exactIn',
   }).toString();
 
   const requestPath = '/api/v6/dex/aggregator/swap';
@@ -636,7 +659,7 @@ async function fetchOkxQuote(tokenIn, tokenOut, amount, taker, env, laneChain) {
     });
     if (!res.ok) return null;
     const data = await res.json();
-    const route = data?.data?.[0];
+    const route = data?.code === '0' && data.data?.[0];
     if (!route?.routerResult?.toTokenAmount || !route?.tx) return null;
 
     return {
@@ -864,7 +887,7 @@ async function getQuote(params, env) {
     { target: ZQUOTER, data: '0x' + encBuildBest(receiver, refundTo, !!exactOut, tokenIn, tokenOut, amount, slippageBps, deadline) },
     { target: ZQUOTER, data: '0x' + encSplitSwap(receiver, tokenIn, tokenOut, amount, splitSlip, deadline) },
     { target: ZQUOTER, data: '0x' + encHybridSplit(receiver, tokenIn, tokenOut, amount, splitSlip, deadline) },
-    { target: ZQUOTER, data: '0x' + enc3Hop(receiver, !!exactOut, tokenIn, tokenOut, amount, splitSlip, deadline) },
+    { target: chainId === 1 ? ZQUOTER : Z3H, data: '0x' + enc3Hop(receiver, !!exactOut, tokenIn, tokenOut, amount, splitSlip, deadline) },
   ];
 
   // Each heavy builder goes out as its OWN eth_call rather than one aggregate3
@@ -884,6 +907,8 @@ async function getQuote(params, env) {
   // No lane quotes exact-out, and a lane the chain's table does not list is not
   // asked at all - `lanes.x` being undefined is the whole gate.
   const none = Promise.resolve(null);
+  // Base's venue 5 is Aerodrome CL; only Ethereum and Robinhood number Curve 5.
+  const CURVE = chainId === 8453 ? -1 : 5;
   const lane = (key, run) => (exactOut || lanes[key] === undefined ? none : run(lanes[key]));
 
   // ParaSwap needs both sides' decimals. It resolves alongside everything else
@@ -894,7 +919,8 @@ async function getQuote(params, env) {
 
   const [lightRaw, ...rest] = await Promise.all([
     rpcCall(MC3, encAggregate3(lightCalls), env, undefined, chainId).catch(() => null),
-    ...heavyCalls.map(heavyOne),
+    // The split, hybrid and 3-hop builders only quote exact-in, so exact-out asks buildBest alone.
+    ...heavyCalls.map((c, i) => (exactOut && i ? Promise.resolve({ success: false, returnData: '' }) : heavyOne(c))),
     lane('bebop', slug => fetchBebopQuote(tokenIn, tokenOut, amount, to, slug, chainId)),
     lane('enso', c => fetchEnsoQuote(tokenIn, tokenOut, amount, to, env, c)),
     lane('ox', c => fetchOxQuote(tokenIn, tokenOut, amount, to, env, c)),
@@ -944,7 +970,7 @@ async function getQuote(params, env) {
       const splitTotal = s.legs[0].amountOut + s.legs[1].amountOut;
       const bothActive = s.legs[0].amountOut > 0n && s.legs[1].amountOut > 0n;
       // Skip if Curve leg with native ETH input (known issue with swapCurve calldata)
-      const hasCurve = tokenIn.toLowerCase() === ZERO.toLowerCase() && (s.legs[0].source === 5 || s.legs[1].source === 5);
+      const hasCurve = tokenIn.toLowerCase() === ZERO.toLowerCase() && (s.legs[0].source === CURVE || s.legs[1].source === CURVE);
       if (splitTotal > bestOutput && bothActive && !hasCurve) {
         bestOutput = splitTotal;
         bestMulticall = s.multicall;
@@ -961,7 +987,7 @@ async function getQuote(params, env) {
     try {
       const hs = decSplit(heavyMc3[2].returnData);
       const hsTotal = hs.legs[0].amountOut + hs.legs[1].amountOut;
-      const hasCurve = tokenIn.toLowerCase() === ZERO.toLowerCase() && (hs.legs[0].source === 5 || hs.legs[1].source === 5);
+      const hasCurve = tokenIn.toLowerCase() === ZERO.toLowerCase() && (hs.legs[0].source === CURVE || hs.legs[1].source === CURVE);
       if (hsTotal > bestOutput && hsTotal > 0n && !hasCurve) {
         bestOutput = hsTotal;
         bestMulticall = hs.multicall;
@@ -984,7 +1010,7 @@ async function getQuote(params, env) {
     try {
       const h3 = dec3Hop(heavyMc3[3].returnData);
       const h3Output = h3.c.amountOut;
-      const hasCurve = tokenIn.toLowerCase() === ZERO.toLowerCase() && (h3.a.source === 5 || h3.b.source === 5 || h3.c.source === 5);
+      const hasCurve = tokenIn.toLowerCase() === ZERO.toLowerCase() && (h3.a.source === CURVE || h3.b.source === CURVE || h3.c.source === CURVE);
       if (h3Output > bestOutput && h3Output > 0n && !hasCurve) {
         bestOutput = h3Output;
         bestMulticall = h3.multicall;
@@ -1072,9 +1098,13 @@ async function getQuote(params, env) {
       value: String(bestExternal.tx.value || '0'),
     };
   } else {
+    const keep = [tokenIn, tokenOut].map(a => a.toLowerCase());
+    const sweeps = chainId === 1 && to && (bestIsTwoHop || bestIsSplit)
+      ? HUBS.filter(h => !keep.includes(h.toLowerCase())).map(h => SEL_SWEEP + encAddr(h) + encUint(0) + encUint(0) + encAddr(to))
+      : [];
     tx = {
       to: ZROUTER,
-      data: bestMulticall,
+      data: sweeps.length ? '0x' + encMulticall([...sweeps, bestMulticall.slice(2)]) : bestMulticall,
       value: isETHInput ? bestMsgValue.toString() : '0',
     };
   }
@@ -1156,7 +1186,7 @@ export default {
 
       let amountBn;
       try { amountBn = BigInt(amount); } catch { return jsonResponse({ error: 'Invalid amount (must be integer)' }, 400); }
-      if (amountBn <= 0n) return jsonResponse({ error: 'Amount must be positive' }, 400);
+      if (amountBn <= 0n || amountBn >> 256n) return jsonResponse({ error: 'Amount must be positive and fit uint256' }, 400);
 
       const to = url.searchParams.get('to') || undefined;
       if (to && !isAddress(to)) return jsonResponse({ error: 'Invalid to address' }, 400);
