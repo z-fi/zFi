@@ -8298,7 +8298,7 @@ const cpPm=v=>{let c=1;for(const x of v){const t=c>>>25;c=(c&0x1ffffff)<<5^x;for
 const cpHrp=h=>{const a=[...h].map(c=>c.charCodeAt(0));return a.map(x=>x>>5).concat(0,a.map(x=>x&31))},CP_B32="qpzry9x8gf2tvdw0s3jn54khce6mua7l";
 const cpTacEnc=(h,b)=>cpSeg(h,b,1,[]);
 const cpTacDec=s=>{s=St(s).toLowerCase();const k=s.lastIndexOf("1"),h=s.slice(0,k),d=[...s.slice(k+1)].map(c=>CP_B32.indexOf(c));if(k<1||d.length<7||d.some(x=>x<0)||cpPm(cpHrp(h).concat(d))!==0x2bc830a3)return null;const o=[];let acc=0,bits=0;for(const x of d.slice(0,-6)){acc=(acc<<5|x)&4095;bits+=5;if(bits>=8){bits-=8;o.push(acc>>bits&255)}}return{h,b:Uint8Array.from(o)}};
-const cpLn=s=>{const r=cpTacDec(s),b=r&&r.h==="tacit"&&r.b,f=b&&b[1],n=68+(f&2?33:0)+(f&4?97:0);return b&&!b[0]&&f&1&&(f&~7?b.length>=n:b.length===n)?b:null},
+const cpLn=s=>{const r=cpTacDec(s),b=r&&r.h==="tacit"&&r.b,f=b&&b[1],n=68+(f&2?33:0)+(f&4?97:0);return b&&!b[0]&&f&1&&(f&130)<130&&(f&120?b.length>=n:b.length===n)?b:null},
 cpBp=s=>{const b=/^tacit1/i.test(s)&&cpLn(s),o=b&&b[1]&2?101:68;return b&&b[1]&4?cpTacEnc("bp",b.slice(o,o+97)):s};
 const cpTacAddr=sd=>{const p=hB(pcomp(pmul(GP,Bi(sd))));return cpTacEnc("tacit",cpCat([0,3],p,hB(pcomp(pmul(GP,cpN(big(bTag("BIP0352/ScanKey",b32(sd))))))),p))};
 const cpToPublic=async(to,label)=>{
@@ -8319,7 +8319,7 @@ return cpRecip(s)};
 const cpGasOk=async q=>{const [b,gp]=await Pa([rpc(GB,[account,L]).then(BigInt),gasNow()]),need=Bi(q.value||"0x0")+Bi(q.gas||"0x0")*gp*2n;
 if(b<need)throw Oa(Er("This wallet holds too little ETH to submit this itself (about "+tM(need,18)+" ETH with gas). Settle it through the relay instead, which takes its fee from the note."),{offChain:true})};
 const cpRecip=s=>{s=St(s||"").trim();let h;
-if(/^tacit1/i.test(s)){const b=cpLn(s);if(!(b&&b[1]&2))throw Er("That Tacit address does not carry an Ethereum lane.");h=cpHex(b.slice(68,101))}
+if(/^tacit1/i.test(s)){const b=cpLn(s);if(!(b&&b[1]&130))throw Er("That Tacit address does not carry an Ethereum lane.");h=cpHex(b[1]&2?b.slice(68,101):b.slice(2,35))}
 else if(/^(0x)?0[23][0-9a-f]{64}$/i.test(s))h=Sx(s).toLowerCase();else throw Er("Send to a Tacit address (tacit1…), a name, a 0x or a 33-byte Tacit key.");cpPt(h);return h};
 const cpWtData=(w,cm,pv,pr,ms,to)=>{const a=encBytes(pv),b=encBytes(pr),t=ms.map(encBytes);let off=ms.length*32,hd=eU(ms.length);for(const x of t){hd+=eU(off);off+=x.length/2}
 return"0x"+SEL_CPWT+eU(w)+pad32(cm)+eU(192)+eU(192+a.length/2)+eU(192+(a.length+b.length)/2)+(to?eA(to):pad32("0"))+a+b+hd+t.join("")};
