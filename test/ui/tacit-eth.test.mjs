@@ -68,7 +68,7 @@ describe('ether in the private panel on Ethereum', () => {
     p.select('pvAct', 'send');
     p.type('pvRc', 'tacit1qqqq');
     p.click('pvGo');
-    await p.waitFor(() => /goes to a bp1… Tacit address/.test(p.text('stat')), { label: 'a V1 address refused for a pool payment' });
+    await p.waitFor(() => /goes to a bp1… address, or a tacit1… address that carries one/.test(p.text('stat')), { label: 'a V1 address refused for a pool payment' });
     p.type('pvRc', 'bp1qfriend');
     p.click('pvGo');
     await p.waitFor(() => /Sent: 0xsend/.test(p.text('stat')), { label: 'the pool payment' });
