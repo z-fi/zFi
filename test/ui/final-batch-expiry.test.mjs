@@ -1,0 +1,30 @@
+import { test, after } from 'node:test';
+import assert from 'node:assert/strict';
+import { A, SEL, MockChain, loadPage, fixedRateQuoter, selectorOf, closeAllPages } from './harness.mjs';
+after(closeAllPages);
+const ETH = 10n ** 18n, USDC = 10n ** 6n;
+const isApprove = t => selectorOf(t.data || '0x') === SEL.APPROVE;
+test('a quote that expires during the steps of a refused batch is not sent after them', async () => {
+  const chain = new MockChain();
+  chain.setNative(A.ACCOUNT, ETH);
+  chain.setErc20(A.USDC, A.ACCOUNT, 50_000n * USDC);
+  chain.quoteHandler = fixedRateQuoter({ rate: ETH / 3000n, decIn: 6, decOut: 18 });
+  chain.capabilities = { '0x1': { atomic: { status: 'supported' } } };
+  let page;
+  const d = chain.dispatch.bind(chain);
+  chain.dispatch = async (m, a) => {
+    if (m === 'wallet_sendCalls') throw Object.assign(Error('Unsupported non-optional capability'), { code: 5700 });
+    if (m === 'eth_sendTransaction' && isApprove(a[0])) page.window.eval('last&&(last.exp=0)');
+    return d(m, a);
+  };
+  const p = await loadPage({ chain }); page = p;
+  await p.connect();
+  p.click('flip'); await p.settle();
+  await p.typeAmount('amt', '3000');
+  p.click('swap');
+  await p.waitFor(() => /Done|expired/.test(p.text('stat')), { label: 'end', timeout: 20000 });
+  console.log('stat', p.text('stat'), 'sent', p.chain.sent.map(t => t.to).join(','));
+  assert.ok(p.chain.sent.some(isApprove));
+  assert.ok(!p.chain.sent.some(t => (t.to || '').toLowerCase() === A.ZROUTER.toLowerCase()), 'the stale swap must not go');
+  p.close();
+});

@@ -1,0 +1,22 @@
+import { test, after } from 'node:test';
+import assert from 'node:assert/strict';
+import { A, MockChain, loadPage, fixedRateQuoter, closeAllPages } from './harness.mjs';
+after(closeAllPages);
+const ETH = 10n ** 18n;
+test('a half-typed decimal comma is not called an error', async () => {
+  const chain = new MockChain();
+  chain.setNative(A.ACCOUNT, 10n * ETH);
+  chain.quoteHandler = fixedRateQuoter({ rate: 3000n * ETH });
+  const p = await loadPage({ chain });
+  await p.connect();
+  await p.typeAmount('amt', '0,');
+  await new Promise(r => p.window.setTimeout(r, 400)); await p.settle();
+  const swapStat = p.text('stat');
+  p.click('tabSend'); await p.settle();
+  p.type('rc', A.OTHER); await new Promise(r => p.window.setTimeout(r, 320)); await p.settle();
+  await p.typeAmount('amt', '0,');
+  await new Promise(r => p.window.setTimeout(r, 400)); await p.settle();
+  console.log('swap:', JSON.stringify(swapStat), 'send:', JSON.stringify(p.text('stat')));
+  assert.doesNotMatch(swapStat + p.text('stat'), /use \. for decimals/);
+  p.close();
+});
