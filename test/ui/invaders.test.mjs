@@ -459,7 +459,7 @@ describe('the game in the page', () => {
 
     test('the reported message cannot inject markup', () => {
       // It lands in innerHTML, and explain() can carry a node's own error text.
-      assert.ok(/mintMsg=String\([^;]*replace\(\/\[<>&/.test(body),
+      assert.ok(/mintMsg=(?:String|St)\([^;]*replace\(\/\[<>&/.test(body),
         'the message must be sanitised where it is assigned');
     });
   });

@@ -153,6 +153,16 @@ describe('the TAC airdrop card', () => {
     p.close();
   });
 
+  test('claim to… refuses a routing contract anyone could sweep', async () => {
+    const p = await open();
+    await p.waitFor(() => /TAC airdrop · until/.test(card(p)), { label: 'the card' });
+    p.queuePrompt(A.ZROUTER);
+    p.click(p.$('adEl').querySelector('button[data-ad="to"]'));
+    await p.waitFor(() => /routing contract/.test(p.text('stat')), { label: 'the refusal' });
+    assert.equal(p.chain.sentTo(TACAD).length, 0);
+    p.close();
+  });
+
   test('a name that resolves to nothing is refused', async () => {
     const p = await open();
     await p.waitFor(() => /TAC airdrop · until/.test(card(p)), { label: 'the card' });

@@ -338,6 +338,25 @@ describe('navigating between links', () => {
     p.close();
   });
 
+  test('a link amount is filled only against the token the link names', async () => {
+    const p = await open('token=ETH&out=USDC');
+    p.pickToken('fromSel', 'WBTC');
+    await p.settle();
+    p.window.location.hash = 'to=' + A.OTHER + '&amount=1&token=ETH';
+    await p.waitFor(() => p.value('rc') !== '', { label: 'pushed link applied' });
+    await p.settle();
+    assert.equal(symOf(p, 'fromSel'), 'WBTC', 'the hand-picked token holds');
+    assert.equal(p.value('amt'), '', 'one ETH is not offered as one WBTC');
+    p.close();
+  });
+
+  test('a link naming a token the page cannot find fills no amount', async () => {
+    const p = await open('token=NOTATOKEN&amount=1');
+    assert.equal(symOf(p, 'fromSel'), 'ETH');
+    assert.equal(p.value('amt'), '');
+    p.close();
+  });
+
   test('a later link never swaps the pair under an amount the user typed', async () => {
     const p = await open('token=ETH&out=USDC&amount=1');
     p.type('amt', '5');

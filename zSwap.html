@@ -29,7 +29,7 @@ body{background:var(--b);color:var(--f);font-family:Helvetica,Arial,sans-serif;m
 #logo{display:block;width:100%;height:100%;pointer-events:none}
 #logo rect{fill:var(--f)}
 #logo path{fill:var(--b)}
-@media(max-width:32em){body{padding-top:max(3.4em,calc(3.4em + env(safe-area-inset-top,0px)))}}
+@media(max-width:32em){body{padding-top:calc(3.4em + env(safe-area-inset-top,0px))}}
 #fish{position:fixed;z-index:1;pointer-events:none;color:var(--m);opacity:.12;
 left:calc(.9em + env(safe-area-inset-left,0px));
 bottom:calc(.9em + env(safe-area-inset-bottom,0px));
@@ -54,7 +54,6 @@ letter-spacing:.04em;white-space:nowrap;margin-right:.15em}
 .panel input{font-size:1.65em;font-weight:400;letter-spacing:-.015em;border:0;background:transparent;color:var(--f);outline:none;padding:0;flex:1;min-width:0;width:100%;font-variant-numeric:tabular-nums;transition:font-size .1s}
 ::placeholder{color:var(--ph);opacity:1}
 .pill{display:inline-flex;align-items:center;gap:.4em;min-width:0;max-width:100%;cursor:pointer}
-.pill:hover,.pill:focus-within{color:var(--f)}
 .panel select,.dly select,#pvAssetB,#mkAssetB,#mkPayB{appearance:none;-webkit-appearance:none;border:0;background:transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5'%3E%3Cpath d='M0 0h8L4 5z' fill='%23999'/%3E%3C/svg%3E") no-repeat right 0 center;padding:0 .85em 0 0;min-width:0;max-width:min(8em,100%);font-size:.9em;font-weight:600;color:var(--f);letter-spacing:.02em;cursor:pointer;text-overflow:ellipsis}
 .panel select:focus{outline:0}
 option,optgroup{background-color:var(--b);color:var(--f)}
@@ -66,7 +65,7 @@ svg{vertical-align:middle;flex-shrink:0}
 .primary:disabled{border-color:var(--e);color:var(--dm);cursor:not-allowed}
 .rcpt{width:100%;box-sizing:border-box;margin-top:-1px;padding:.66em .85em;border:1px solid var(--e);background:transparent;transition:border-color .15s;color:var(--f);font-size:.75em;outline:0;font-family:inherit}
 .mb.on{background:var(--k);color:var(--kf);opacity:1}
-.cpr{display:flex;justify-content:space-between;align-items:center;gap:.5em;font-size:.75em;color:var(--m);padding:.6em .8em;border:1px solid var(--e);margin-top:-1px}.cpr b{font-weight:600;color:var(--f)}.cpr a{color:var(--m)}#pvList{margin-top:.75em}.cps{background:var(--fh)}.cpr .fclink{margin-left:.65em}#pvKey{display:block;font-size:.75em;line-height:1.5;margin-top:.95em;padding-top:.9em;border-top:1px solid var(--e);color:var(--m)}.pvks{display:flex;flex-wrap:wrap;gap:0 .7em;align-items:baseline}.pvks>.fclink{margin-left:auto}.pvkr{display:flex;gap:.55em;align-items:baseline;margin-top:.45em}.pvkr>.fclink{margin-left:auto}.pvkr>i{flex:0 0 auto;min-width:5.8em;white-space:nowrap;font-style:normal;color:var(--m);text-transform:uppercase;letter-spacing:.08em;font-size:.92em}.pvka{display:flex;flex-wrap:wrap;gap:.1em .9em;min-width:0}.pvka .fclink{margin-left:0}.pvka .pri{color:var(--f)}
+.cpr{display:flex;justify-content:space-between;align-items:center;gap:.5em;font-size:.75em;color:var(--m);padding:.6em .8em;border:1px solid var(--e);margin-top:-1px}.cpr b{font-weight:600;color:var(--f)}.cpr a{color:var(--m)}#pvList{margin-top:.75em}.cps{background:var(--fh)}.cpr .fclink{margin-left:.65em}#pvKey{display:block;font-size:.75em;line-height:1.5;margin-top:.95em;padding-top:.9em;border-top:1px solid var(--e);color:var(--m)}.pvks{display:flex;flex-wrap:wrap;gap:0 .7em;align-items:baseline}.pvks>.fclink{margin-left:auto}.pvkr{display:flex;gap:.55em;align-items:baseline;margin-top:.45em}.pvkr>.fclink{margin-left:auto}.pvkr>i{flex:0 0 auto;min-width:5.8em;white-space:nowrap;font-style:normal;color:var(--m);text-transform:uppercase;letter-spacing:.08em;font-size:.92em}.pvka{display:flex;flex-wrap:wrap;gap:.1em .9em;min-width:0}.pvka .fclink{margin-left:0}
 .lqrow{padding:.62em .7em;border:1px solid var(--e);margin:-1px 0 0}
 .lqrow.out,.pq{opacity:.55}
 .lqband{display:flex;flex-wrap:wrap;align-items:center;gap:.3em .4em;font-size:.82em}
@@ -84,7 +83,6 @@ svg{vertical-align:middle;flex-shrink:0}
 .lqnew .dly .r{display:flex;gap:.4em;align-items:center}
 .lqnew .dly .r input{width:6.5em}
 .lqout{font-size:.72em;color:var(--m);line-height:1.5;min-height:1.1em}
-.lqout:empty{display:none}
 .lqbar{position:relative;height:9px;border:1px solid var(--e);margin:.5em 0 .35em}
 .lqbar>i{position:absolute;top:-4px;width:2px;height:15px;background:var(--f);
 left:var(--at,50%);transform:translateX(-1.5px)}
@@ -111,7 +109,6 @@ border:1px solid var(--e);border-top-color:var(--m);border-radius:50%;animation:
 .lqadd .lqbtn{margin-left:0;align-self:stretch;font-size:.75em;padding:.5em .8em}
 .rcpt.bad{border-color:var(--w)}
 #rcvEl{display:block;font-size:.7em;color:var(--m);margin:.35em 0 .6em;word-break:break-all;text-align:center}
-#rcvEl:empty{display:none}
 #stat{font-size:.8em;color:var(--m);overflow-wrap:anywhere;margin-top:.75em;text-align:center}
 #stat:not(:empty){margin-bottom:.5em}#stat:empty{margin-top:0}
 #stat a{color:var(--f);text-decoration:underline}
@@ -126,7 +123,6 @@ border:1px solid var(--e);border-top-color:var(--m);border-radius:50%;animation:
 #book{margin-top:.4em;max-height:min(28em,58dvh);overflow-y:auto;overscroll-behavior:contain}
 .px{color:var(--f);font-variant-numeric:tabular-nums}
 .bkh{position:sticky;top:0;z-index:1;background:var(--b);padding-top:.5em}
-#book:empty{display:none}
 #book h6{font-size:.7em;text-transform:uppercase;letter-spacing:.14em;color:var(--m);margin:.75em 0 .35em;font-weight:400;display:flex;justify-content:space-between}
 .o{display:flex;justify-content:space-between;align-items:center;flex-wrap:nowrap;gap:.5em;padding:.6em .75em;border:1px solid var(--e);margin-bottom:-1px;font-size:.75em}
 .o .l{display:flex;align-items:center;gap:.45em;min-width:0;flex:1 1 auto}
@@ -137,11 +133,9 @@ border:1px solid var(--e);border-top-color:var(--m);border-radius:50%;animation:
 .o i a{word-break:break-all}
 .o a{color:var(--m)}
 #foot{display:flex;justify-content:center;align-items:baseline;gap:.6em;flex-wrap:wrap;margin-top:1.3em;padding-top:.9em;border-top:1px solid var(--e);font-size:.6em;color:var(--m);letter-spacing:.1em;text-transform:uppercase}
-#foot span:empty{display:none}
 #footTag{flex-basis:100%;text-align:center;color:var(--dm);text-transform:none;letter-spacing:.05em}
 #foot a{color:var(--m);text-decoration:none}
 #gvX{float:right;margin-left:.6em}#gvList b{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}#gvList b small{color:var(--m);font-weight:400;font-size:1em}#gvList .gvx{cursor:pointer}#gvList .dlgm{margin-top:.4em}#gvList code{display:block;max-height:14em;overflow:auto;margin-top:.4em;color:var(--f);word-break:break-all}
-#foot a:hover{color:var(--f)}
 .o button:disabled,.p button:disabled{border-color:transparent;color:var(--m);cursor:default}
 .bkf{display:flex;flex-wrap:wrap;gap:.3em;margin:.35em 0 .45em}
 .bkc{font-size:.68em;padding:.35em .6em;border:1px solid var(--e);letter-spacing:.1em;text-transform:uppercase;
@@ -153,7 +147,6 @@ white-space:nowrap;transition:background .15s,color .15s,border-color .15s}
 .ow .o{margin-bottom:0}
 .o.ins{cursor:pointer}
 .o.ins:hover{background:var(--fh)}
-.ic:empty{display:none}
 .ic{padding:.5em .75em;border:1px solid var(--e);border-top:0;margin-bottom:-1px;font-size:.72em;color:var(--m)}
 .ic img{display:block;width:100%;max-width:15em;margin:.5em auto 0}
 .ic dl{display:grid;grid-template-columns:auto 1fr;gap:.15em .6em;margin:0}
@@ -172,7 +165,6 @@ vertical-align:.1em;line-height:1;text-decoration:none;margin-left:.5em}
 #mkPayB:disabled{cursor:default;background-image:none;padding-right:0}
 #pvTo{flex:1 1 11em;width:auto}
 #lnArtNote{color:var(--m);font-variant-numeric:tabular-nums}
-#lnArtNote.set{color:var(--f)}
 .wnbtn{display:block;width:100%;box-sizing:border-box;font-size:.75em;padding:.65em .8em;margin-top:.5em;white-space:normal}.wnbtn.mut{color:var(--m);cursor:default;border-color:transparent}
 #adEl,#pfEl,#ptEl{display:block;text-align:center;color:var(--dm);font-size:.66em;letter-spacing:.03em;margin-top:.75em}
 #adEl .adic,#pfEl .adic,#ptEl .adic,.pfh .adic{vertical-align:middle;margin:-2px .4em 0 0;border-radius:50%;opacity:.8}
@@ -186,7 +178,6 @@ vertical-align:.1em;line-height:1;text-decoration:none;margin-left:.5em}
 .pvkh{max-height:10.5em;overflow-y:auto;overscroll-behavior:contain;margin:.35em 0 0 5.8em;padding-left:.75em;border-left:1px solid var(--e);display:flex;flex-direction:column;gap:.32em}
 .pvkd{display:flex;flex-wrap:wrap;gap:.1em .75em;align-items:baseline;font-size:.92em}
 .pvkd b{font-weight:inherit;color:var(--f)}.pvkd s,.rank u{text-decoration:none;color:var(--m)}
-@media (max-width:30em){.pvkh{margin-left:0}}
 #lnArtRow{gap:.6em}
 #lnArtRow>span{display:flex;align-items:center;gap:.6em}
 #lnPrev{width:1.6em;height:1.6em;object-fit:cover;display:none}
@@ -229,14 +220,12 @@ margin-top:.55em;padding-top:.55em;border-top:1px solid var(--e);color:var(--f)}
 .lnhdr>small+small{color:var(--dm);text-transform:none;letter-spacing:.01em;font-size:.65em;font-weight:400;text-align:right;text-wrap:balance}
 #wnRollEl{display:block;font-size:.72em;line-height:1.5;color:var(--m)}
 #lnNote,#floorNote,#wnNote,#mkNote{display:block;font-size:.7em;line-height:1.45;color:var(--m);text-align:center;text-wrap:balance;margin:.55em .2em 0}
-#lnNote:empty,#floorNote:empty,#wnNote:empty,#mkNote:empty{display:none}
 .mkbar{height:4px;background:var(--w);margin:.45em 0 .2em}
 .mkbar i{display:block;height:100%;background:var(--g)}#mkActs [data-a*=y],.mkhd>.y{color:var(--g)}#mkActs [data-a*=n],.mkhd>.n{color:var(--w)}.lqtag.mkt{color:var(--f);border-color:var(--f)}
 .mkr{cursor:pointer}
 .mkr.on{border-color:var(--f);position:relative}
 #mkList{max-height:22em;overflow:auto;margin:.2em 0 .5em;padding-top:1px}
-.mkd{display:block;font-size:.72em;line-height:1.5;color:var(--m);margin:.3em 0}.mkhd{display:flex;flex-wrap:wrap;justify-content:space-between;gap:.15em .8em;font-size:1.15em;color:var(--f);margin-bottom:.45em}.mkhd>b{font-weight:600}.mkfp{display:block}.mkyou{display:block;margin-top:.4em;color:var(--f)}#mkQ{color:var(--f)}#mkDet{border-top:1px solid var(--e);margin-top:.2em;padding-top:.15em}#mkActs>.lqbtn,.pfb .lqbtn{flex:1 1 8em;white-space:normal;line-height:1.25}.mkr .lqmeta>span:first-child{color:var(--f)}.mkr .lqmeta>span+span:not(.lqtag)::before{content:"\00b7";margin-right:.32em;color:var(--dm)}.mkr .lqtag{margin-left:auto}
-.mkd:empty{display:none}
+.mkd{display:block;font-size:.72em;line-height:1.5;color:var(--m);margin:.3em 0}.mkhd{display:flex;flex-wrap:wrap;justify-content:space-between;gap:.15em .8em;font-size:1.15em;color:var(--f);margin-bottom:.45em}.mkhd>b{font-weight:600}.mkfp{display:block}.mkyou{display:block;margin-top:.4em;color:var(--f)}#mkDet{border-top:1px solid var(--e);margin-top:.2em;padding-top:.15em}#mkActs>.lqbtn,.pfb .lqbtn{flex:1 1 8em;white-space:normal;line-height:1.25}.mkr .lqmeta>span+span:not(.lqtag)::before{content:"\00b7";margin-right:.32em;color:var(--dm)}.mkr .lqtag{margin-left:auto}
 #mkT{text-transform:none;letter-spacing:0;font-size:.82em;color:var(--f)}
 #mkChips{align-items:center}
 #mkSort{margin-left:auto;appearance:none;-webkit-appearance:none;border:0;background:transparent;color:var(--m);font:inherit;font-size:.68em;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;padding:.35em 0;text-align:right;outline:0}
@@ -247,7 +236,6 @@ margin-top:.55em;padding-top:.55em;border-top:1px solid var(--e);color:var(--f)}
 #mkAdv>summary{display:flex;align-items:center;gap:.6em;list-style:none;cursor:pointer;font-size:.75em;color:var(--m);padding:.7em .8em}
 #mkAdv>summary::-webkit-details-marker{display:none}
 #mkAdv>summary::after{content:"+";margin-left:.2em}
-#mkAdv>summary:hover{color:var(--f)}
 #mkAdvS{font-style:normal;margin-left:auto;color:var(--f);text-align:right}
 #mkAdv .dly{border-left:0;border-right:0;margin-top:0}.mkadn{margin:0;padding:0 .8em .7em;color:var(--dm)}
 #mkAdv .dly:last-child{border-bottom:0}
@@ -261,7 +249,6 @@ margin-top:.55em;padding-top:.55em;border-top:1px solid var(--e);color:var(--f)}
 .dly input[type=checkbox]{width:auto;border:0;cursor:pointer;accent-color:var(--f)}
 .dly input:focus{border-bottom-color:var(--f)}
 #pos{margin-top:.4em}
-#pos:empty{display:none}
 .p{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5em;padding:.6em .75em;border:1px solid var(--e);margin-bottom:-1px;font-size:.75em}
 .p span{flex:1;min-width:8em}
 .p b{display:block;font-weight:600;font-variant-numeric:tabular-nums;word-break:break-word}
@@ -269,25 +256,23 @@ margin-top:.55em;padding-top:.55em;border-top:1px solid var(--e);color:var(--f)}
 .p button{margin-left:auto}
 #rate{text-wrap:balance}
 #bal,#bal1,#rate{display:block;font-size:.75em;line-height:1.35;margin-top:.5em;text-align:right}
-#bal:empty,#bal1:empty,#rate:empty{display:none}
+.lqout:empty,#rcvEl:empty,#book:empty,#foot span:empty,.ic:empty,#lnNote:empty,#floorNote:empty,#wnNote:empty,#mkNote:empty,.mkd:empty,#pos:empty,#bal:empty,#bal1:empty,#rate:empty{display:none}
 #bal a,#bal1 a{color:var(--f);cursor:pointer;text-decoration:underline;font-weight:600}
 .meta input.warn{color:var(--w);border-bottom-color:var(--w)}
 .mb:not(.on):focus-visible{background:var(--b);color:var(--f)}
 .chtog{width:100%;margin-top:.5em;padding:.75em .1em;border:0;border-top:1px solid var(--e);background:transparent;color:var(--m);cursor:pointer;font:inherit;font-size:.7em;font-weight:400;text-transform:uppercase;letter-spacing:.08em;transition:color .15s,background .15s}
-.chtog:hover{color:var(--f)}
 .chtog span{display:inline-block;transition:transform .2s}
 .chtog[aria-expanded=true] span{transform:rotate(180deg)}
 .rank{display:block;margin-top:.45em;color:var(--m);font-size:.92em;line-height:1.5}
 .rank i{font-style:normal;display:flex;justify-content:space-between;gap:1em;cursor:pointer}
 #rate .rk{cursor:pointer;padding:0 .25em}
-#rate .rk:hover{opacity:1}
 #chBox{margin-top:.4em}
 .chtf{display:flex;flex-wrap:wrap;gap:.4em 1.1em;margin-bottom:.55em}
 .chtf button{flex:0 0 auto;padding:.2em 0;font:inherit;font-size:.65em;font-weight:400;text-transform:uppercase;letter-spacing:.1em;border:0;background:transparent;color:var(--m);cursor:pointer}
 .chtf button.on{color:var(--f);font-weight:700}
 .chtf button:disabled{opacity:.35;cursor:default}
 .chtf .chk{flex:0 0 auto;padding:.2em 0;margin-left:auto}
-.chtf .chk:hover{color:var(--f)}
+.pill:hover,.pill:focus-within,.pvka .pri,#foot a:hover,#lnArtNote.set,#mkQ,.mkr .lqmeta>span:first-child,#mkAdv>summary:hover,.chtog:hover,.chtf .chk:hover{color:var(--f)}
 #chArt{touch-action:pan-y;position:relative;border:1px solid var(--e);overflow:hidden}
 #chArt svg{display:block;width:100%;height:auto}
 #chArt .hd{position:absolute;top:.4em;left:.55em;font-size:.7em;color:var(--m);font-variant-numeric:tabular-nums;pointer-events:none}
@@ -340,10 +325,10 @@ display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hi
 .tkempty{padding:1.4em .8em;text-align:center;font-size:.72em;color:var(--m)}
 .sc{margin-top:.7em;padding:.7em .8em;border:1px solid var(--e);font-size:.72em;color:var(--m);line-height:1.5}
 .sc b{display:block;color:var(--f);font-size:1.15em;word-break:break-all}
-.sc .scw{color:var(--w)}
+.sc .scw,#rate.warn{color:var(--w)}
 .sc button{margin-top:.5em;padding:.4em .8em;font-size:1em}
 body:has(.tkp:not(.hide))::before{content:"";position:fixed;inset:0;z-index:39;pointer-events:none;background:#0006}
-@media(max-width:30em){#slipL span{display:none}}
+@media(max-width:30em){#slipL span{display:none}.pvkh{margin-left:0}}
 @media(pointer:coarse){
 .mb{width:36px;height:36px}
 #sd{width:44px;height:44px;top:calc(.35em + env(safe-area-inset-top,0px));right:calc(.35em + env(safe-area-inset-right,0px))}
@@ -370,7 +355,7 @@ background:var(--e);margin:.5em auto .1em}
 #mkList{max-height:60dvh}
 .mkr{padding:.8em .8em}
 #slipL{padding:1em 0;margin:-1em .15em -1em 0}
-#foot a,.docsmore a,.o i a{padding:1.15em .35em;margin:0 -.35em}
+#foot{row-gap:1.2em}#foot a,.docsmore a,.o i a{padding:1.15em .35em;margin:0 -.35em}
 #bal a,#bal1 a{padding:1.15em .1em}
 .rank i{padding:.35em 0}
 #rate .rk{padding:.55em .45em;margin:-.55em 0}
@@ -385,14 +370,14 @@ background:var(--e);margin:.5em auto .1em}
 <script>const H=document.documentElement;let LS,SS;try{LS=localStorage||{}}catch{LS={}}try{(SS=sessionStorage).key}catch{SS={getItem(){},setItem(){},removeItem(){}}}if(LS.t?LS.t=='d':matchMedia('(prefers-color-scheme:dark)').matches)H.className='d'</script>
 <button id="sd" title="Sound" aria-label="Toggle sound"><svg width="14" height="14" viewBox="0 0 24 24" class="ik" aria-hidden="true"><path d="M4 9.5v5h3.5L12 18V6L7.5 9.5H4z"/><path id="sdw" d="M15.5 9a4 4 0 0 1 0 6"/><path id="sdx" d="M16 9.5l4 4m0-4l-4 4"/></svg></button>
 <span id="net" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false" title="Network"></span>
-<button id="logoLink" type="button" aria-haspopup="dialog" aria-expanded="false" aria-label="Menu" title="Menu"><svg id="logo" viewBox="0 0 400 400" aria-hidden="true"><clipPath id="lgf"><rect width="400" height="400"/></clipPath><g clip-path="url(#lgf)"><rect width="400" height="400"/><path d="M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z"/></g></svg></button>
+<button id="logoLink" aria-haspopup="dialog" aria-expanded="false" aria-label="Menu" title="Menu"><svg id="logo" viewBox="0 0 400 400" aria-hidden="true"><clipPath id="lgf"><rect width="400" height="400"/></clipPath><g clip-path="url(#lgf)"><rect width="400" height="400"/><path d="M-60-20L460-20L460 90L80 310L460 310L460 420L-60 420L-60 310L320 90L-60 90Z"/></g></svg></button>
 <svg id="fish" viewBox="0 0 24 14" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" aria-hidden="true"><path d="M2 12.2C7 .8 18 1.8 22 7"/><path d="M2 1.8C7 13.2 18 12.2 22 7"/></svg>
 <div class="card">
 <div class="meta"><span id="addr" role="button" tabindex="0" title="Connect a wallet">Connect</span><span class="mtl"><label id="slipL" title="Slippage"><span>Slippage </span><input id="slip" aria-label="Slippage" type="number" value="0.5" min="0" max="10" step="0.1">%</label><button id="lq" class="mb" title="Liquidity for this pair" aria-label="Toggle liquidity mode" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 24 24" class="ik" aria-hidden="true"><path d="M12 3.2c3.6 4 6 7.2 6 10.1a6 6 0 0 1-12 0c0-2.9 2.4-6.1 6-10.1z"/></svg></button><button id="ln" class="mb" title="Launch a coin" aria-label="Toggle launch mode" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 24 24" class="ik" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/></svg></button><button id="wn" class="mb" title="Claim a .wei name" aria-label="Toggle names mode" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" fill-rule="evenodd" shape-rendering="crispEdges" aria-hidden="true"><path d="M3 1h1v1H3zM5 2h1v1H5zM10 2h1v1h-1zM12 1h1v1h-1zM4 4h8v1H4zM3 5h10v1H3zM2 6h12v3H2zM3 9h10v1H3zM4 10h8v1H4zM5 11h2v1H5zM9 11h2v1H9zM2 12h3v1H2zM7 12h2v1H7zM11 12h3v1h-3zM1 13h2v1H1zM13 13h2v1h-2zM3 6h3v2H3zM10 6h3v2h-3z"/></svg></button><button id="pv" class="mb" title="Tacit private bridge: shield, send, withdraw or bridge" aria-label="Toggle private bridge mode" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 24 24" class="ik" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6l7-3z"/><path d="M13 7.4L10.75 15.15Q10.75 16.4 13.25 15.9M9.25 9.4h5.5" stroke="#f7931a" stroke-width="1.9"/></svg></button><button id="mk" class="mb" title="Prediction markets" aria-label="Toggle markets mode" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 24 24" class="ik" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></svg></button><button id="lk" class="mb" title="Copy shareable link" aria-label="Copy shareable link"><svg width="14" height="14" viewBox="0 0 24 24" class="ik" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5.5 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v.5"/></svg></button><button id="th" class="mb" title="Toggle theme" aria-label="Toggle theme"></button></span></div>
 <div class="tabs" role="tablist"><button id="tabSwap" class="on" role="tab" aria-selected="true">Swap</button><button id="tabSend" role="tab" aria-selected="false">Send</button><button id="tabBook" role="tab" aria-selected="false">Orders</button></div>
-<div class="panel"><div class="hdr"><small id="payL">You pay</small><span class="pill"><span id="fromIcon"></span><select id="fromSel" aria-labelledby="payL" tabindex=-1></select><button type="button" class="tkb" id="fromPick" aria-haspopup="listbox" aria-expanded="false"><span class="tkbs"></span><span class="tkbc">▾</span></button></span></div><div class="row" id="amtRow"><input id="amt" type="text" inputmode="decimal" placeholder="0.0" aria-labelledby="payL" autocomplete="off" spellcheck="false"></div><small id="bal"></small><button type="button" class="fclink hide" id="shieldGo" title="Shield it privately with Tacit">shield</button></div>
+<div class="panel"><div class="hdr"><small id="payL">You pay</small><span class="pill"><span id="fromIcon"></span><select id="fromSel" aria-labelledby="payL" tabindex=-1></select><button class="tkb" id="fromPick" aria-haspopup="listbox" aria-expanded="false"><span class="tkbs"></span><span class="tkbc">▾</span></button></span></div><div class="row" id="amtRow"><input id="amt" inputmode="decimal" placeholder="0.0" aria-labelledby="payL" autocomplete="off" spellcheck="false"></div><small id="bal"></small><button class="fclink hide" id="shieldGo" title="Shield it privately with Tacit">shield</button></div>
 <button id="flip" class="flip" title="Flip tokens" aria-label="Flip tokens"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14m-5-5 5 5 5-5"/></svg></button>
-<div class="panel" id="rcvPanel"><div class="hdr"><small id="rcvHdr">You receive</small><span class="pill"><span id="toIcon"></span><select id="toSel" aria-labelledby="rcvHdr" tabindex=-1></select><button type="button" class="tkb" id="toPick" aria-haspopup="listbox" aria-expanded="false"><span class="tkbs"></span><span class="tkbc">▾</span></button></span></div><div class="row" id="outRow"><input id="outAmt" type="text" inputmode="decimal" placeholder="0.0" aria-labelledby="rcvHdr" autocomplete="off" spellcheck="false"></div><small id="bal1" class="hide"></small><small id="rate"></small><small id="rankBox" class="rank hide"></small></div>
+<div class="panel" id="rcvPanel"><div class="hdr"><small id="rcvHdr">You receive</small><span class="pill"><span id="toIcon"></span><select id="toSel" aria-labelledby="rcvHdr" tabindex=-1></select><button class="tkb" id="toPick" aria-haspopup="listbox" aria-expanded="false"><span class="tkbs"></span><span class="tkbc">▾</span></button></span></div><div class="row" id="outRow"><input id="outAmt" inputmode="decimal" placeholder="0.0" aria-labelledby="rcvHdr" autocomplete="off" spellcheck="false"></div><small id="bal1" class="hide"></small><small id="rate"></small><small id="rankBox" class="rank hide"></small></div>
 <div id="lqPanel" class="hide"><div class="hdr"><small>Liquidity</small><small id="lqSub"></small></div><div id="lqList"></div></div>
 <div id="lnPanel" class="hide">
 <div class="hdr lnhdr"><small id="lnTitle">Launch a coin</small><small id="lnSub">0.4% of each trade goes to the creator</small></div>
@@ -407,7 +392,7 @@ background:var(--e);margin:.5em auto .1em}
 <label class="dly hide" id="lnDaysL" title="How long backing stays open. After this, the sale closes and nobody else can buy in.">Runs for<span class="lnu"><input id="lnDays" inputmode="decimal" value="30" autocomplete="off" spellcheck="false"><i>days</i></span></label>
 <label class="dly hide" id="lnVestL" title="How slowly the ether reaches you. The clock starts the moment you launch and runs whether or not anyone has backed you yet, so this wants to be well longer than the raise — what has not been released is exactly what a backer can still burn their token back for, and a release that finishes when backing closes leaves them nothing. The rate is your GOAL divided by this window, so a raise that falls short of the goal is emptied proportionally sooner — a tenth of the goal, a tenth of the window.">Released over<select id="lnVest"><option value="7889238">3 months</option><option value="15778476">6 months</option><option value="31556952" selected>12 months</option><option value="63113904">2 years</option></select></label>
 <div class="lngap">Optional</div>
-<label class="dly" id="lnArtRow" title="Held on-chain as contract code, not as a link. Nothing to pin and no gateway to go dark. Editable later, so a rough mark now costs nothing.">Logo<span><img id="lnPrev" alt=""><small id="lnArtNote">none</small><button type="button" id="lnPick" class="lnbtn">Choose</button></span></label>
+<label class="dly" id="lnArtRow" title="Held on-chain as contract code, not as a link. Nothing to pin and no gateway to go dark. Editable later, so a rough mark now costs nothing.">Logo<span><img id="lnPrev" alt=""><small id="lnArtNote">none</small><button id="lnPick" class="lnbtn">Choose</button></span></label>
 <input id="lnArt" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" class="hide">
 </div>
 <div id="wnPanel" class="hide">
@@ -418,10 +403,10 @@ background:var(--e);margin:.5em auto .1em}
 </div>
 <div id="pvPanel" class="hide">
 <div class="hdr lnhdr"><small class="pvt"><svg viewBox="0 0 32 32" width="18" height="18" aria-hidden="true"><circle cx="16" cy="16" r="16" fill="#0a0a0a"/><circle cx="16" cy="16" r="13" fill="none" stroke="#f4efe6" stroke-width="2.5"/><path d="M17.5 7L13 22.5Q13 25 18 24M10 11h11" fill="none" stroke="#f7931a" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Tacit private bridge</small><small id="pvHint"></small></div>
-<label class="dly hide" id="pvAssetL" title="The shielded assets the token list names and the pool backs. Ether can exit to Base or Robinhood; the others withdraw on Ethereum as their public token.">Asset<select id="pvAsset" class="hide"></select><button type="button" id="pvAssetB" aria-haspopup="dialog" aria-label="Shielded asset"></button></label>
+<label class="dly hide" id="pvAssetL" title="The shielded assets the token list names and the pool backs. Ether can exit to Base or Robinhood; the others withdraw on Ethereum as their public token.">Asset<select id="pvAsset" class="hide"></select><button id="pvAssetB" aria-haspopup="dialog" aria-label="Shielded asset"></button></label>
 <label class="dly hide" id="pvInL" title="The pool: Tacit’s lighter ETH-only extension for payments, proved on this device, the same balance on Base and Robinhood. V1: Tacit’s main pool, tETH for Bitcoin and DeFi, proved by its relay.">In<select id="pvIn"><option value="p">the pool · payments</option><option value="v">V1 · tETH</option></select></label>
 <label class="dly" title="Deposit shields public funds into the pool. Send moves shielded funds to another Tacit address: they are locked to a one-time key only the recipient can derive, and the recipient claims them into notes of their own; the amount and the recipient stay hidden on chain. Withdraw takes any amount of the shielded balance out to an address on Ethereum, Base or Robinhood; whatever is left stays shielded as change.">Action<select id="pvAct"><option value="dep">Deposit</option><option value="send">Send privately</option><option value="out" title="Pay out to any 0x, yourself included, on Ethereum or an L2. You stay hidden as the sender; the amount and recipient are public.">Withdraw / pay out</option></select></label>
-<label class="dly" title="Deposited into the confidential pool on Ethereum as a shielded note. Exit it later to an L2 address that nothing on-chain ties to this wallet, as long as neither the recipient nor the wallet that activates the exit is this one. The amount, the L2 recipient and the timing of the exit are public; what is hidden ON CHAIN is which deposit it came from, so the privacy is only as good as the number of other deposits in the pool. The relay that builds the proof sees that link in either settle mode.">Amount<span class="lnu"><input id="pvAmt" inputmode="decimal" placeholder="0.01" autocomplete="off" spellcheck="false"><i id="pvUnit">ETH</i><button type="button" class="fclink" id="pvMax">max</button></span></label>
+<label class="dly" title="Deposited into the confidential pool on Ethereum as a shielded note. Exit it later to an L2 address that nothing on-chain ties to this wallet, as long as neither the recipient nor the wallet that activates the exit is this one. The amount, the L2 recipient and the timing of the exit are public; what is hidden ON CHAIN is which deposit it came from, so the privacy is only as good as the number of other deposits in the pool. The relay that builds the proof sees that link in either settle mode.">Amount<span class="lnu"><input id="pvAmt" inputmode="decimal" placeholder="0.01" autocomplete="off" spellcheck="false"><i id="pvUnit">ETH</i><button class="fclink" id="pvMax">max</button></span></label>
 <label class="dly">Arrives on<select id="pvChain"><option value="1">Ethereum (withdraw)</option><option value="8453">Base</option><option value="4663">Robinhood</option></select></label>
 <label class="dly" title="The address credited on the chain chosen above. Leave blank for this wallet, which links the exit to the deposit. On Robinhood the unused gas budget refunds here too, so a contract wallet gets its refund at an aliased address.">Recipient<input id="pvTo" placeholder="0x… on that chain, defaults to you" autocomplete="off" spellcheck="false"></label>
 <label class="dly hide" id="pvRcL" title="The recipient's Tacit address (tacit1…; zSwap shows it beside “your address”, tacit.finance under Wallet) or their 33-byte Tacit key. A 0x with no Tacit address becomes a public payout.">To<input id="pvRc" placeholder="tacit1…, name or 0x" autocomplete="off" spellcheck="false"></label>
@@ -435,12 +420,12 @@ background:var(--e);margin:.5em auto .1em}
 <div id="mkPanel" class="hide">
 <div class="hdr lnhdr"><small>Markets</small><small id="mkSub"></small></div>
 <input id="mkFind" class="rcpt" aria-label="Search markets" placeholder="Search markets" autocomplete="off" spellcheck="false">
-<div class="bkf" id="mkChips"><button type="button" class="bkc on" data-f="open">Open</button><button type="button" class="bkc" data-f="done">Settled</button><button type="button" class="bkc" data-f="mine">Mine</button><select id="mkSort" aria-label="Sort markets"><option value="pot">Most liquid ▾</option><option value="new">Newest ▾</option><option value="end">Ending soon ▾</option></select></div>
+<div class="bkf" id="mkChips"><button class="bkc on" data-f="open">Open</button><button class="bkc" data-f="done">Settled</button><button class="bkc" data-f="mine">Mine</button><select id="mkSort" aria-label="Sort markets"><option value="pot">Most liquid ▾</option><option value="new">Newest ▾</option><option value="end">Ending soon ▾</option></select></div>
 <div id="mkList"></div>
 <div id="mkDet" class="hide">
 <div class="lngap" id="mkT"></div>
 <small id="mkInfo" class="mkd"></small>
-<label class="dly" id="mkAmtL">Amount<input id="mkAmt" inputmode="decimal" placeholder="0.0" autocomplete="off"><select id="mkPay" class="hide" aria-label="Pay with"></select><button type="button" id="mkPayB" aria-haspopup="dialog" aria-label="Pay with"></button></label>
+<label class="dly" id="mkAmtL">Amount<input id="mkAmt" inputmode="decimal" placeholder="0.0" autocomplete="off"><select id="mkPay" class="hide" aria-label="Pay with"></select><button id="mkPayB" aria-haspopup="dialog" aria-label="Pay with"></button></label>
 <small id="mkQ" class="mkd"></small>
 <div class="lqacts" id="mkActs"></div>
 </div>
@@ -449,7 +434,7 @@ background:var(--e);margin:.5em auto .1em}
 <textarea id="mkDesc" class="mkq" maxlength="1024" rows="2" aria-label="Question" placeholder="A yes / no question, e.g. Will ETH close above $5k on Dec 31?"></textarea>
 <label class="dly" title="Settles the market. An address, or a .eth / .wei / .gwei name.">Resolver<input id="mkRes" placeholder="you, 0x or name" autocomplete="off" spellcheck="false"></label>
 <small id="mkResEl" class="mkd"></small>
-<label class="dly" title="The token the pot and every bet on this market are denominated in.">Pot in<select id="mkAsset" class="hide" aria-label="Pot asset"></select><button type="button" id="mkAssetB" aria-haspopup="dialog" aria-label="Pot asset"></button></label>
+<label class="dly" title="The token the pot and every bet on this market are denominated in.">Pot in<select id="mkAsset" class="hide" aria-label="Pot asset"></select><button id="mkAssetB" aria-haspopup="dialog" aria-label="Pot asset"></button></label>
 <label class="dly">Closes<select id="mkClose"><option value="86400">in a day</option><option value="604800" selected>in a week</option><option value="2592000">in a month</option><option value="7776000">in 3 months</option><option value="0">at…</option></select></label>
 <input id="mkAt" type="datetime-local" class="rcpt hide" aria-label="Close at">
 <details id="mkAdv"><summary>Advanced<em id="mkAdvS"></em></summary>
@@ -475,7 +460,7 @@ background:var(--e);margin:.5em auto .1em}
 <label class="dly hide" id="kindL">Order type<select id="kind"><option value="fixed">Fixed limit</option><option value="dutch">Dutch decay</option><option value="floor">Climbing bid</option></select></label>
 <label class="dly hide" id="dlyL">SLOW<select id="dly"><option value="0">Instant</option><option value="600">10 minutes</option><option value="3600">1 hour</option><option value="86400">1 day</option><option value="259200">3 days</option><option value="604800">7 days</option></select></label>
 <label class="dly hide" id="sdChainL" title="Where the ether lands. From Ethereum this is that chain's own bridge — the same deposit those chains make for themselves, with nobody holding the money in between. It arrives in a few minutes. A time-locked send crosses through SlowArrival, which keeps the reverse yours on the far side; without it the bridge would be the sender there and nobody could take the transfer back.">Arrives on<span class="tipr"><small id="brNote"></small><select id="sdChain"><option value="0">This chain</option><option value="8453">Base</option><option value="4663">Robinhood</option></select></span></label>
-<div class="dly hide" id="rlOptL" title="Leaving an L2 has no bridge that is not about a week, so this escrows your ether here and pays a relayer to deliver it there. Nobody is obliged to take it. Until someone is running a relayer, opening one is a way to lock up your own money for eight days and six hours, and that is the whole of the risk — it cannot be spent, and it comes back.">Another chain<button type="button" id="rlOpt" class="lnbtn">Enable</button></div>
+<div class="dly hide" id="rlOptL" title="Leaving an L2 has no bridge that is not about a week, so this escrows your ether here and pays a relayer to deliver it there. Nobody is obliged to take it. Until someone is running a relayer, opening one is a way to lock up your own money for eight days and six hours, and that is the whole of the risk — it cannot be spent, and it comes back.">Another chain<button id="rlOpt" class="lnbtn">Enable</button></div>
 <label class="dly hide" id="tipL" title="A time-locked transfer does not move on its own: once the lock expires somebody has to send the claim transaction. Tick this and the page posts a small ETH tip alongside the deposit, which pays a keeper to claim it for the recipient the moment it matures. The tip is refundable — if you reverse the transfer, the ether comes back to you.">Auto-claim<span class="tipr"><small id="tipNote"></small><input id="tipCk" type="checkbox" aria-describedby="tipNote"></span></label>
 <div class="dly hide" id="slowMoreL" title="SLOW's own page, served from its own bytes on this chain — guardians, per-token balances, and every transfer in and out, which this panel does not show. It opens with what you have typed here already filled in.">Guardians, history<a id="slowMore" target="_blank" rel="noopener">Open SLOW ↗</a></div>
 <label class="dly hide" id="fillL">Fill<select id="fill"><option value="1">Any amount</option><option value="0">All or nothing</option></select></label>
@@ -488,7 +473,7 @@ background:var(--e);margin:.5em auto .1em}
 <div id="listNote" class="hide" role="status" aria-live="polite"></div>
 <div id="scEl" class="sc hide" role="status" aria-live="polite"></div>
 <div id="wkWrap" class="hide"><div id="wkPanel" role="dialog" aria-modal="true" aria-labelledby="wkHdr"><div id="wkHdr">Choose a wallet</div><div id="wkList"></div></div></div>
-<div id="tkPanel" class="tkp hide"><input id="tkFind" type="text" placeholder="Search name, symbol or address" autocomplete="off" spellcheck="false" aria-label="Filter tokens" role="combobox" aria-expanded="false" aria-controls="tkList" aria-autocomplete="list"><div id="tkList" role="listbox"></div></div>
+<div id="tkPanel" class="tkp hide"><input id="tkFind" placeholder="Search name, symbol or address" autocomplete="off" spellcheck="false" aria-label="Filter tokens" role="combobox" aria-expanded="false" aria-controls="tkList" aria-autocomplete="list"><div id="tkList" role="listbox"></div></div>
 <div id="stat" role="status" aria-live="polite"></div>
 <button id="chTog" class="chtog hide" aria-expanded="false">Chart <span>▾</span></button>
 <div id="chBox" class="hide"><div class="chtf" id="chTf"></div><div id="chArt"></div><small id="chNote"></small></div>
@@ -596,7 +581,7 @@ if(ZSWAP_PREVIOUS)footAddr.innerHTML+=` · <a href="https://etherscan.io/address
 +`target="_blank" rel="noopener" title="The version this one succeeded. It still serves its own page, unchanged.">prev</a>`;
 }
 })();
-th.onclick=()=>{cL(H).toggle('d');ic();try{LS.t=H.className=='d'?'d':'l'}catch{}};
+th.onclick=()=>{cL(H).toggle('d');ic();try{LS.t=H.className||'l'}catch{}};
 try{matchMedia('(prefers-color-scheme:dark)').addEventListener('change',e=>{if(!LS.t){cL(H).toggle('d',e.matches);ic()}})}catch{}
 const ZQUOTER="0x000000bd2db80567c23e353ca95a251c573cbf9b";
 const Z3H="0x000000f584434f81fc115b1a59243a4287db08be";
@@ -610,8 +595,6 @@ const ZROUTER="0x000000000000FB114709235f1ccBFfb925F600e4";
 const PFACTORY="0x000000Eb27B557aB426d9E99cFd54EC455799e81";
 const PLQLENS="0x000000956bf20A41C54BaE4a4b6F5C8A166DAB4E";
 const PPLENS="0x000000Bad3a2fa57ed74fa06000573ccddF6B7fB";
-const PI_WORDS=19,PI_POOL=0,PI_LIQ=9,PI_HOOK=10,PI_SL=3,PI_SH=4,
-PI_FEE=5,PI_R0=6,PI_R1=7,PI_PX=8,PI_CBPS=12;
 let CHAIN_ID=1;
 const CHAIN_ICON_ETH=`<svg viewBox="0 0 32 32" width="20" height="20" aria-hidden="true"><rect width="32" height="32" fill="#627EEA"/><g fill="#fff"><path d="M16 4v8.87l7.5 3.35z" fill-opacity=".6"/><path d="M16 4 8.5 16.22 16 12.87z"/><path d="M16 21.97v6.02l7.5-10.38z" fill-opacity=".6"/><path d="M16 27.99v-6.02l-7.5-4.36z"/><path d="m16 20.57 7.5-4.35-7.5-3.35z" fill-opacity=".2"/><path d="M8.5 16.22 16 20.57v-7.7z" fill-opacity=".6"/></g></svg>`;
 const CHAIN_ICON_BASE=`<svg viewBox="0 0 32 32" width="20" height="20" aria-hidden="true"><rect width="32" height="32" fill="#0052FF"/><path d="M16 5.4A10.6 10.6 0 0 0 5.5 14.7h13.9v2.6H5.5A10.6 10.6 0 1 0 16 5.4Z" fill="#fff" transform="rotate(180 16 16)"/></svg>`;
@@ -649,31 +632,24 @@ const ZERO="0x0000000000000000000000000000000000000000";
 let WETH="0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2";
 const TOKENLIST="0x0000006013dF75A31678B786061C2B54bf531524";
 const ZLISTLENS="0x000000cEa3AB048d59473F3fb116A8D7F1abd247";
-const SEL_RANKEDIDS="df7ca268",SEL_SUMS="9ca6a2bc",LIST_SCAN=256;
+const SEL_RANKEDIDS="df7ca268";
 const SEL_JSON="74e18e96";
-const SEL_RES="4f896d4f",SEL_REV="9af8b7aa";
-const SCOREM="0x57Fae63f7c63732fc4B77247F0255b11b9458AE1",SEL_SCLAIM="5cc2f461";
-const SEL_WAVAIL="8f8dc386",SEL_WFEE="fcee45f4",SEL_WPREM="1bf1fffb",SEL_WCOMMIT="f14fcbc8",SEL_WCOMMITS="839df945",SEL_WREVEAL="ea9384fa",SEL_WSUB="a00fd3c8";
-const SEL_RSTATE="c19d93fb",SEL_RWEIGHT="0767d178",SEL_RTICKET="673b4784",SEL_RENTER="23972aef",SEL_WOWNER="6352211e";
+const SEL_REV="9af8b7aa";
+const SEL_SCLAIM="5cc2f461";
+const SEL_RSTATE="c19d93fb",SEL_RWEIGHT="0767d178",SEL_RTICKET="673b4784",SEL_WOWNER="6352211e";
 const WN_KEY="zswap:wns",WN_MIN=60,WN_MAX=86400;
 let wnOpen=true,wnPhase=1n;
 const SEL_RSLV="0178b8bf",SEL_EADDR="3b3b57de",SEL_ENAME="691f3431";
 const SEL_ERESOLVE="9061b923";
 const NAME_OFFCHAIN="That name keeps its records off chain, and this page reads only on-chain state.";
-const SEL_ALLOWANCE="dd62ed3e";
 const SEL_LATEST="52bfe789",SEL_PREV="247dfaa8",SEL_SUCCAT="451aae60";
 const MATURITY=259200;
-const SEL_DS="3644e515",SEL_NONCES="7ecebe00",SEL_NAME="06fdde03",SEL_PERMIT_TH="30adf81f";
 const TH_2612="6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9";
-const SEL_RPERMIT="7ac2ff7b",SEL_MULTICALL="ac9650d8",SEL_SWEEP="cb019b84";
+const SEL_MULTICALL="ac9650d8";
 const PERMIT2="0x000000000022D473030F116dDEE9F6B43aC78BA3";
-const SEL_P2TF="09d31579";
 const EIP712DOM="EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)";
-const SEL_APPROVE="095ea7b3";
-const SEL_BALANCEOF="70a08231";
 let V4PORT=CHAINS[1].v4port;
 const V4LENS="0x00000000Dc6f467A7AA88e216a904Cf758453EbC";
-const SEL_V4QUOTE="d500463c",SEL_V4SWAP="48e6f730";
 const V4POOL_KEY="0x95a932c205571d4d1ca72715c642a2eca21dde79ffc28ff11509681f9383385f";
 let tSk=0;const nowS=()=>Mf(Dn()/1e3)+tSk;
 const C="eth_call",S="eth_sendTransaction",L="latest",I="eth_chainId",QP='<option value="100">all</option><option value="75">75%</option><option value="50">50%</option><option value="25">25%</option>';
@@ -736,7 +712,7 @@ SOURCES=c.sources;SRC_CURVE=c.curve;
 if(c.tokens){TOKENS=c.tokens.slice();BUILTIN=TOKENS.slice();restoreCustom();seedList()}
 try{if(c.rpcs&&c.rpcs.length){rpcPool=[...new Set(c.rpcs)];rpcPi=0;curated=0;curatedTry=0}}catch{}
 try{chainWipe()}catch{}try{rebuild();seatPair()||rankedDefaults();syncDisabled();syncIcons()}catch{}
-try{localStorage[CHAIN_STORE]=St(id)}catch{}
+try{LS[CHAIN_STORE]=St(id)}catch{}
 try{chainUi()}catch{}
 return true;
 }
@@ -791,23 +767,20 @@ return out;
 const encPoolKey=p=>eA(p.c0)+eA(p.c1)+eU(p.fee)+eU(p.ts)+eA(p.hooks);
 const SEL_QUOTE_BEST="2adaa389",SEL_EFFFEE="ef66de32";
 let PROUTE=MB.pr;
-const SEL_PROUTE="5d6498e1",SEL_PCHECKPOINT="0b7c6c6c";
-const GUARD="0x00000057B53fB5feEdedaf7066e1f1C7002b1961",SEL_GDL="10c2e3cd";
-const gLegs=async dl=>GUARD!==ZERO&&await hasCode(GUARD).catch(()=>true)?[encSnwap(ZERO,0n,account||ZERO,ZERO,0n,GUARD,"0x"+SEL_GDL+eU(dl)+eA(ZROUTER))]:[];
-const SEL_PROUTEWETH="78fd78b0";
+const SEL_PCHECKPOINT="0b7c6c6c";
+const GUARD="0x00000057B53fB5feEdedaf7066e1f1C7002b1961";
+const gLegs=async dl=>GUARD!==ZERO&&await hasCode(GUARD).catch(()=>true)?[encSnwap(ZERO,0n,account||ZERO,ZERO,0n,GUARD,"0x10c2e3cd"+eU(dl)+eA(ZROUTER))]:[];
 const SEL_ZAPIN="c98c2c0b";
 const SEL_PREVIEW_ZAP="e7cddab0";
 const encPRouteWeth=(pools,tokenOut,amountIn,minOut,to)=>
-"0x"+SEL_PROUTEWETH+eU(160)+eA(tokenOut)+eU(amountIn)
+"0x78fd78b0"+eU(160)+eA(tokenOut)+eU(amountIn)
 +eU(minOut)+eA(to)+eU(pools.length)+pools.map(eA).join("");
 const encPRoute=(pools,tokenIn,tokenOut,amountIn,minOut,to)=>
-"0x"+SEL_PROUTE+eU(192)+eA(tokenIn)+eA(tokenOut)+eU(amountIn)
-+eU(minOut)+eA(to)+eU(Bi(pools.length))+pools.map(eA).join("");
+"0x5d6498e1"+eU(192)+eA(tokenIn)+eA(tokenOut)+eU(amountIn)
++eU(minOut)+eA(to)+eU(pools.length)+pools.map(eA).join("");
 const SEL_PAIR_COUNT="355da246";
 const PPOLICY="0x00000045fc7b570Be4d71F67219508ebD295EC6D";
-const SEL_ROUTABLE="9662c498",SEL_QUOTE_ALL="89941805";
 const LQ_SCAN=128;
-const LQ_SHOW=24;
 const isEthLike=a=>a===ZERO||Lc(a)===Lc(WETH);
 async function quotePrecision(f,t,amountIn,sender,block){
 if(PROUTE===ZERO||amountIn<=0n)return null;
@@ -826,7 +799,7 @@ addVar(a,b);
 const reqs=[];
 for(const v of vars)reqs.push(
 {to:PPLENS,data:"0x"+SEL_QUOTE_BEST+eA(v.c0)+eA(v.c1)
-+eA(sender)+eA(v.tokenIn)+eU(amountIn)+eU(0n)+eU(Bi(LQ_SCAN))},
++eA(sender)+eA(v.tokenIn)+eU(amountIn)+eU(0n)+eU(LQ_SCAN)},
 {to:PFACTORY,data:"0x"+SEL_PAIR_COUNT+eA(v.c0)+eA(v.c1)});
 const res=await mD(reqs,block);
 let pool="",out=0n,n=0,fA=f.addr,won=null;
@@ -857,7 +830,7 @@ wrap:fA!==ZERO&&f.addr===ZERO?amountIn:0n,
 outDiffers:(tA===ZERO)!==(t.addr===ZERO)};
 }
 const routableReq=pools=>({to:PPOLICY,
-data:"0x"+SEL_ROUTABLE+eU(32)+eU(Bi(pools.length))+pools.map(eA).join("")});
+data:"0x9662c498"+eU(32)+eU(pools.length)+pools.map(eA).join("")});
 function policyRefuses(raw,n){
 if(!raw)return false;
 const h=Sx(raw);
@@ -868,8 +841,8 @@ for(let i=0;i<n;i++)if(Bx(h.slice(128+i*64,128+(i+1)*64))===0n)return true;
 return false;
 }
 async function bestRoutable(c0,c1,tokenIn,amountIn,sender,block){
-const [raw]=await mD([{to:PPLENS,data:"0x"+SEL_QUOTE_ALL+eA(c0)+eA(c1)
-+eA(sender)+eA(tokenIn)+eU(amountIn)+eU(0n)+eU(Bi(LQ_SCAN))}],block);
+const [raw]=await mD([{to:PPLENS,data:"0x89941805"+eA(c0)+eA(c1)
++eA(sender)+eA(tokenIn)+eU(amountIn)+eU(0n)+eU(LQ_SCAN)}],block);
 const cands=decAll(raw);
 if(!cands.length)return null;
 const [rt]=await mD([routableReq(cands.map(c=>c.pool))],block);
@@ -911,7 +884,7 @@ if(isEthLike(f.addr)||isEthLike(t.addr))return null;
 const enc=(a,b,tokenIn,amt)=>{
 const [c0,c1]=Lc(a)<Lc(b)?[a,b]:[b,a];
 return [{to:PPLENS,data:"0x"+SEL_QUOTE_BEST+eA(c0)+eA(c1)
-+eA(sender)+eA(tokenIn)+eU(amt)+eU(0n)+eU(Bi(LQ_SCAN))},
++eA(sender)+eA(tokenIn)+eU(amt)+eU(0n)+eU(LQ_SCAN)},
 {to:PFACTORY,data:"0x"+SEL_PAIR_COUNT+eA(c0)+eA(c1)}]};
 const count=raw=>{try{return raw?Nm(Bi(raw)):0}catch{return 0}};
 const hubs=[ZERO,WETH];
@@ -984,7 +957,7 @@ async function quoteV4Pools(f,t,amountIn,block){
 const pools=v4PoolsFor(f,t);
 if(!pools.length||amountIn<=0n)return null;
 const rs=(await mD(pools.map(p=>({to:V4LENS,
-data:"0x"+SEL_V4QUOTE+eBo(false)+eA(f.addr)+eA(t.addr)
+data:"0xd500463c"+eBo(false)+eA(f.addr)+eA(t.addr)
 +eU(p.fee)+eU(p.ts)+eA(p.hooks)+eU(amountIn)})),block))
 .map(h=>{try{const x=Sx(h||"");return x.length>=128?Bx(x.slice(64,128)):0n}catch{return 0n}});
 let best=null;
@@ -1025,7 +998,7 @@ out.push({id:Bx(b.slice(t*64,t*64+64)),chain:W(t+2),kind:W(t+4),std:W(t+5),dep:W
 return out}catch{return null}};
 const summaries=async()=>{
 rankFellBack=false;
-const ask=to=>cfgRead(C,[{to,data:"0x"+SEL_SUMS+eU(0)+eU(LIST_SCAN)},L]);
+const ask=to=>cfgRead(C,[{to,data:"0x9ca6a2bc"+eU(0)+eU(256)},L]);
 try{const s=decSums(await ask(ZLISTLENS));if(s)return s}catch{}
 try{const s=decSums(await ask(TOKENLIST));if(s){rankFellBack=true;return s}}catch{}
 return null};
@@ -1060,7 +1033,7 @@ const mine=TOKENS.filter(t=>t.cust&&!at.has(lc(t)));
 const taken=new Set([...next,...anchors,...born].map(t=>Lc(t.sym)));
 for(const t of mine){if(taken.has(Lc(t.sym)))t.sym+=" "+lc(t).slice(0,6)+"…";taken.add(Lc(t.sym))}
 TOKENS.splice(0,TOKENS.length,...next,...anchors,...born,...mine)};
-const LIST_KEEP=()=>CHAIN_ID===1?"zswap:list":"zswap:list:"+CHAIN_ID,LIST_KEEP_MAX=400000;
+const LIST_KEEP=()=>CHAIN_ID===1?"zswap:list":"zswap:list:"+CHAIN_ID;
 let listSeeded=false;
 const seedTokens=cid=>{try{const c=Jp(LS[LIST_KEEP()]||"null");
 if(!c||!Ia(c.r))return null;
@@ -1069,7 +1042,7 @@ return next.some(t=>t.std==="ft")?{next,f:!!c.f}:null}catch{return null}};
 const seedList=()=>{listSeeded=false;const s=seedTokens(CHAIN_ID);if(!s)return;
 rankFellBack=s.f;listMerge(s.next,[]);listSeeded=true};
 const keepList=(next,src)=>{try{const v=Js({f:rankFellBack?1:0,r:next.map(t=>src.get(t.addr)).filter(Boolean)});
-if(v.length<=LIST_KEEP_MAX)LS[LIST_KEEP()]=v;else delete LS[LIST_KEEP()]}catch{}};
+if(v.length<=4e5)LS[LIST_KEEP()]=v;else delete LS[LIST_KEEP()]}catch{}};
 const LIST_STALE="zList as last seen — could not refresh it";
 const loadTokenList=()=>{if(listJob)return listJob;const g=++listGen;
 return listJob=loadTokenListRun().finally(()=>{TOKENS.forEach(t=>t.cause&&cbLook(t.addr));if(!listLive&&g===listGen)listJob=null;shieldSync()})};
@@ -1082,7 +1055,7 @@ cntJob.catch(Np);
 const bornJob=(async()=>{
 const cnt=Nm(Bi(await cntJob||"0x0"));if(cid!==CHAIN_ID)throw 0;
 const take=Mn(cnt,LAUNCH_SCAN);
-const raw=take?await rpc(C,[{to:PFACTORY,data:"0x"+SEL_BYCREATOR+eA(PLAUNCH)+eU(Bi(cnt-take))+eU(Bi(take))},L]):"0x";if(cid!==CHAIN_ID)throw 0;
+const raw=take?await rpc(C,[{to:PFACTORY,data:"0x"+SEL_BYCREATOR+eA(PLAUNCH)+eU(Bi(cnt-take))+eU(take)},L]):"0x";if(cid!==CHAIN_ID)throw 0;
 const h=Sx(raw||""),n=h.length>=128?Nm(Bi("0x"+h.slice(64,128)||"0")):0;
 let pools=[];
 for(let i=0;i<n&&i<take;i++)pools.push("0x"+h.slice(128+i*64+24,128+(i+1)*64));
@@ -1174,9 +1147,9 @@ const eA=a=>{const x=Lc(Sx(a||ZERO));
 if(!/^[0-9a-f]{40}$/.test(x))throw Er("not an address");
 return pad32(x)};
 const isAddr=a=>/^0x[0-9a-fA-F]{40}$/.test(a||"");
-const apEnc=(s,v)=>"0x"+SEL_APPROVE+eA(s)+eU(v);
-const alwOf=(o,s)=>"0x"+SEL_ALLOWANCE+eA(o)+eA(s);
-const balOf=a=>"0x"+SEL_BALANCEOF+eA(a);
+const apEnc=(s,v)=>"0x095ea7b3"+eA(s)+eU(v);
+const alwOf=(o,s)=>"0xdd62ed3e"+eA(o)+eA(s);
+const balOf=a=>"0x70a08231"+eA(a);
 const decStr=hex=>{const h=Sx(hex);const n=parseInt(h.slice(64,128),16);
 return new TextDecoder().decode(hB(h.slice(128,128+n*2)))};
 const decUintArr=hex=>{const h=Sx(hex);const n=parseInt(h.slice(64,128),16);const o=[];
@@ -1234,11 +1207,10 @@ let PROV=null;
 let walletChain=0;
 const prov=()=>PROV||window.ethereum;
 const RPC_STORE=()=>CHAIN_ID===1?"zswap:rpc":"zswap:rpc:"+CHAIN_ID;
-const rpcPin=()=>{try{const v=localStorage.getItem(RPC_STORE());
+const rpcPin=()=>{try{const v=LS.getItem(RPC_STORE());
 if(v&&/^https:\/\/\S+$/i.test(v))return v}catch{}return""};
 let rpcPool=L1_RPCS.slice(),rpcPi=0,curated=0,curating=0,curatedTry=0;
-const GAS_FLOOR=3000000000n;
-const gasFloor=()=>cC().gasFloor||GAS_FLOOR;
+const gasFloor=()=>cC().gasFloor||3000000000n;
 const SEL_LIST="d77e4c79";
 const decStrArr=(h,o)=>{const b=Sx(h||"");if(b.length<128)return[];
 const W=i=>parseInt(b.slice(i*64,i*64+64),16);
@@ -1292,11 +1264,10 @@ finally{curating=0}};
 const OX_ETH="0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 const OKX_APPROVE={1:"0x40aA958dd87FC8305b97f2BA922CDdCa374bcD7f",8453:"0x57df6092665eb6058DE53939612413ff4B09114E",4663:"0x42170295F1173c9e5874ea9d00c6d137E1a4f53d"};
 const bmin=(a,b)=>a<b?a:b,bmax=(a,b)=>a>b?a:b;
-const SEL_SLIST="e3b06401",SEL_EXEC="495c73b0",SEL_FILL="0a1b4c9f";
+const SEL_SLIST="e3b06401",SEL_FILL="0a1b4c9f";
 const SOLVERS_PIN="0x1Dfbb2f41B596F72187370469074C46de60dA2e3";
 const RPCS_PIN="0x8C7348D039f58C4e9cfA936EF410eec759213b12";
 let SOLVER_FILL_PIN="0x7A2f21e476cA2ADde027BC868c5a083338EEfE54";
-const SOLVER_ROW_TAG=SOLVER_FILL_PIN;
 let SOLVER_EXEC_PIN="0x4f6633342045C80Efa6c8CAc41b9bdc6145168C4";
 const SRC_SOLVER=9;
 const SRC_DEEP=10,SRC_TACIT=11;
@@ -1341,14 +1312,14 @@ const list=SOLVERS_PIN;
 solverFill=SOLVER_FILL_PIN;
 const sx=cC().sx,rj=quorum2(L1_RPCS,{to:list,data:"0x"+SEL_SLIST}).then(x=>{if(!x)throw 0;return x});rj.catch(Np);
 const hc=sx?await hasCode(sx).catch(Nl):false;if(id!==CHAIN_ID)return;if(hc==null){solversRetry=Dn()+SOLVER_COOL;solversJob=null;return}if(hc)solverFill=solverExec=sx;else{
-const ex=await nodeRead("eth_call",[{to:solverFill,data:"0x"+SEL_EXEC},L]).catch(Nl);
+const ex=await nodeRead("eth_call",[{to:solverFill,data:"0x495c73b0"},L]).catch(Nl);
 if(id!==CHAIN_ID)return;const exec="0x"+Sx(ex||"0x").slice(24);
 if(!isAddr(exec)){solversRetry=Dn()+SOLVER_COOL;solversJob=null;return}
 if(Lc(exec)!==Lc(SOLVER_EXEC_PIN)){solverLanes=[];return}
 solverExec=SOLVER_EXEC_PIN}
 const raw=await rj;if(id!==CHAIN_ID)return;
 solverLanes=decSolvers(raw).filter(x=>x.enabled
-&&Lc(x.adapter)===Lc(SOLVER_ROW_TAG)
+&&Lc(x.adapter)===Lc(CHAINS[1].fill)
 &&/^https:\/\/\S+$/.test(x.endpoint)
 &&SOLVER_SHAPES.hasOwnProperty(x.name)
 &&x.chains.includes(CHAIN_ID)
@@ -1361,17 +1332,16 @@ try{const r=await fetch(url,{method:"POST",headers:{"content-type":"application/
 body:Js(body),signal:ac.signal});laneSaw(name,r.status);
 if(!r.ok)return null;return await r.json()}
 catch(e){laneThrew(name,e);return null}finally{clearTimeout(k)}};
-const LANE_TTL=15000,LANE_MAX=64;
 const _laneHit=new Map(),_laneWait=new Map();
 const laneCached=(k,go)=>{
 const c=_laneHit.get(k);
-if(c&&Dn()-c.t<LANE_TTL){_laneHit.delete(k);_laneHit.set(k,c);return Promise.resolve(c.v)}
+if(c&&Dn()-c.t<15e3){_laneHit.delete(k);_laneHit.set(k,c);return Promise.resolve(c.v)}
 const w=_laneWait.get(k);
 if(w)return w;
 const pr=go().then(v=>{
 _laneWait.delete(k);
 if(v!==null&&v!==undefined){if(typeof v==="object"&&!v.at)v.at=Dn();_laneHit.set(k,{v,t:Dn()});
-if(_laneHit.size>LANE_MAX)_laneHit.delete(_laneHit.keys().next().value);}
+if(_laneHit.size>64)_laneHit.delete(_laneHit.keys().next().value);}
 return v},e=>{_laneWait.delete(k);throw e});
 _laneWait.set(k,pr);return pr};
 let laneOverride=null,laneOverrideFor="";
@@ -1471,7 +1441,6 @@ const j=await laneGet("1inch",`${ep}/swap/v6.0/${cC().slvId}/swap?${q}`,ms);
 if(!j||!j.tx||!j.dstAmount)return null;
 return{out:Bi(j.dstAmount),target:j.tx.to,spender:j.tx.to,data:j.tx.data}},
 };
-const RPC_TRIES=4;
 let nq=null,nqOff=0;
 const nodeRead=(method,params)=>new Promise((res,rej)=>{if(!nq){nq=[];setTimeout(nqGo,0)}nq.push({method,params,res,rej})});
 const nqOne=x=>nodeRead1(x.method,x.params).then(x.res,x.rej);
@@ -1484,7 +1453,7 @@ e=>{if(e&&e.nb)nqOff=Dn()+6e4;b.forEach(nqOne)})}};
 const nodeRead1=async(method,params)=>{
 let last;
 const pin=rpcPin();
-const tries=Mn(rpcPool.length,RPC_TRIES);
+const tries=Mn(rpcPool.length,4);
 const p=rpcPi;
 for(let i=pin?-1:0;i<tries;i++){
 const j=(p+i)%rpcPool.length;
@@ -1580,7 +1549,7 @@ const a="0x"+Lc(s.slice(24));
 return /^0x0{40}$/.test(a)?"":a};
 const nameOk=n=>/^[a-z0-9.-]+$/.test(n)
 &&n.split(".").every(l=>l&&l.length<256);
-const nsFwd=async(reg,n)=>retAddr(await cfgRead(C,[{to:reg,data:"0x"+SEL_RES+pad32(namehash(n))},L]));
+const nsFwd=async(reg,n)=>retAddr(await cfgRead(C,[{to:reg,data:"0x4f896d4f"+pad32(namehash(n))},L]));
 const dnsEnc=n=>{let h="";
 for(const l of n.split(".")){const b=cpU8(l);
 h+=cpHex([b.length,...b])}
@@ -1622,7 +1591,7 @@ const ensRevName=async(nd,r)=>{
 if(!r)return"";
 try{return dS(await cfgRead(C,[{to:r,data:"0x"+SEL_ENAME+pad32(nd)},L])).trim()}catch{return""}};
 const BNREG="0xB94704422c2a1E396835A571837Aa5AE53285a95";
-const BASE_ID=8453,BN_COIN="80002105";
+const BASE_ID=8453;
 let bsi=0;
 const baseRead=async(method,params)=>{
 if(CHAIN_ID===BASE_ID)return rpc(method,params);
@@ -1636,7 +1605,7 @@ const bnRead=c=>baseRead(C,[c,L]).catch(Nl);
 const bnRes=async nd=>retAddr(await baseRead(C,[{to:BNREG,data:"0x"+SEL_RSLV+pad32(nd)},L]).catch(()=>{throw NS_ERR()}));
 const bnFwd=async n=>{const nd=namehash(n),r=await bnRes(nd);
 return r?retAddr(await baseRead(C,[{to:r,data:"0x"+SEL_EADDR+pad32(nd)},L])):""};
-const bnRev=async a=>{const nd=namehash(Lc(Sx(a))+"."+BN_COIN+".reverse"),r=await bnRes(nd);
+const bnRev=async a=>{const nd=namehash(Lc(Sx(a))+".80002105.reverse"),r=await bnRes(nd);
 if(!r)return"";
 try{return dS(await bnRead({to:r,data:"0x"+SEL_ENAME+pad32(nd)})||"0x").trim()}catch{return""}};
 const bnText=async n=>{const r=await bnRes(namehash(n));if(!r)return"";
@@ -1654,12 +1623,11 @@ const setTextReq=async n=>{const k=strTail(TACIT_KEY),v=strTail(cpTacAddr(cpSeed
 if(/\.g?wei$/i.test(n))return{from:account,to:/\.gwei$/i.test(n)?GNS:WNS,data:"0x3fb24782"+pad32(namehash(n))+tail};
 const f=await ensFind(n);if(!f||!f.exact)throw Er(n+"'s resolver cannot hold records set from here.");
 return{from:account,to:f.r,data:"0x10f13a8c"+pad32(namehash(n))+tail}};
-const FWD_TTL=30000;
 const fwdCache=new Map();
 const nameFwdCached=(n,d=1)=>{const k=n+" "+d,hit=fwdCache.get(k);
 if(hit&&hit.exp>Dn())return hit.p;
 const p=nameFwd(n,d);
-fwdCache.set(k,{p,exp:Dn()+FWD_TTL});
+fwdCache.set(k,{p,exp:Dn()+3e4});
 p.catch(()=>fwdCache.delete(k));
 return p};
 const nameRevRaw=async a=>{
@@ -1676,12 +1644,11 @@ const [w,g,er]=await nsBatch([
 const str=h=>{try{return h?dS(h).trim():""}catch{return""}};
 return await agrees(str(w))||await agrees(str(g))
 ||await agrees(await ensRevName(nd,retAddr(er)))||""};
-const REV_TTL=60000;
 const revCache=new Map();
 const nameRev=a=>{const k=CHAIN_ID+":"+Lc(a),hit=revCache.get(k);
 if(hit&&hit.exp>Dn())return hit.p;
 const p=nameRevRaw(a);
-revCache.set(k,{p,exp:Dn()+REV_TTL});
+revCache.set(k,{p,exp:Dn()+6e4});
 p.catch(()=>revCache.delete(k));
 return p};
 const dS=hex=>{
@@ -1699,8 +1666,8 @@ kecStr(EIP712DOM)+pad32(kecStr(name))+pad32(kecStr(ver))+eU(CHAIN_ID)+eA(tok)));
 const permitInfo=async(tok,owner)=>{
 try{
 const[code,[ds,th,nc,nm]]=await Pa([rpc(GC,[owner,L]).catch(()=>"0x"),mD([
-{to:tok,data:"0x"+SEL_DS},{to:tok,data:"0x"+SEL_PERMIT_TH},
-{to:tok,data:"0x"+SEL_NONCES+eA(owner)},{to:tok,data:"0x"+SEL_NAME}])]);
+{to:tok,data:"0x3644e515"},{to:tok,data:"0x30adf81f"},
+{to:tok,data:"0x7ecebe00"+eA(owner)},{to:tok,data:"0x06fdde03"}])]);
 if(Sx(code)&&!/^0xef0100/i.test(code))return null;
 if(!ds||ds==="0x")return null;
 if(th&&Sx(th).length>=64&&Lc(Sx(th).slice(0,64))!==TH_2612)return null;
@@ -1722,7 +1689,7 @@ const sig=Sx(await rpc("eth_signTypedData_v4",[owner,Js(td)]));
 if(sig.length!==130)throw Er("bad signature");
 let v=parseInt(sig.slice(128,130),16);if(v<27)v+=27;
 return eU(v)+sig.slice(0,64)+sig.slice(64,128)};
-const signPermit=async(tok,info,owner,value,deadline)=>"0x"+SEL_RPERMIT+eA(tok)+eU(value)+eU(deadline)+await pmSig(tok,info,owner,value,deadline,ZROUTER);
+const signPermit=async(tok,info,owner,value,deadline)=>"0x7ac2ff7b"+eA(tok)+eU(value)+eU(deadline)+await pmSig(tok,info,owner,value,deadline,ZROUTER);
 const P2DOM=()=>({name:"Permit2",chainId:CHAIN_ID,verifyingContract:PERMIT2});
 const p2Ready=async(tok,owner)=>{
 try{return Bi(await rpc(C,[{to:tok,data:alwOf(owner,PERMIT2)},L]))}catch{return 0n}};
@@ -1744,7 +1711,7 @@ const norm=n===65&&parseInt(sig.slice(128,130),16)<27
 const tail=eU(n)+norm.padEnd(Math.ceil(norm.length/64)*64,"0");
 return[nonce,tail]};
 const signPermit2=async(tok,owner,amount,deadline)=>{const[nonce,tail]=await p2Sig(tok,owner,amount,deadline,ZROUTER);
-return"0x"+SEL_P2TF+eA(tok)+eU(amount)+eU(nonce)+eU(deadline)+pad32("a0")+tail};
+return"0x09d31579"+eA(tok)+eU(amount)+eU(nonce)+eU(deadline)+pad32("a0")+tail};
 const capsFor=(c,id)=>{
 for(const key of Ok(c)){
 try{if(Bi(key)===id)return c[key]}catch{}
@@ -1842,29 +1809,26 @@ out.push(ok?"0x"+h.slice((lw+1)*64,(lw+1)*64+len*2):null)}
 return out};
 const mc3=async(cs,tag=L)=>cs.length?decAgg3(await rpc(C,[{to:MC3,data:encAgg3(cs)},tag])):[];
 const MC3_MAX=16;
-const MC3_COLD=8;
-const mc3Clamp=n=>Number.isFinite(n)&&n>=2&&n<=MC3_MAX?Mf(n):MC3_COLD;
+const mc3Clamp=n=>n>=2&&n<=MC3_MAX?Mf(n):8;
 const MC3_KEY=()=>CHAIN_ID===1?"zswap:mc3":"zswap:mc3:"+CHAIN_ID;
 let mc3Cap=mc3Clamp(Nm(LS[MC3_KEY()]));
 let mc3Won=0;
 const mc3Save=()=>{try{LS[MC3_KEY()]=St(mc3Cap)}catch{}};
-const CFG_BATCH=16;
 const cfgBatch=async(cs,tag,depth=0)=>{
 if(CHAIN_ID===1)return mD(cs,tag);
 if(!cs.length)return[];
 const fan=async n=>(await Pa(mc3Split(cs,n).map(c=>cfgBatch(c,tag,depth+1)))).flat();
-if(cs.length>CFG_BATCH&&depth<8)return fan(CFG_BATCH);
+if(cs.length>16&&depth<8)return fan(16);
 try{return decAgg3(await l1Read("eth_call",[{to:MC3,data:encAgg3(cs)},tag||L]))}
 catch{
 if(cs.length<2||depth>=8)return cs.map(()=>null);
 return fan(cs.length>>1)}
 };
 const mc3Split=(cs,n)=>{const o=[];for(let i=0;i<cs.length;i+=n)o.push(cs.slice(i,i+n));return o};
-const MC3_LANES=12;
 let mc3Live=0;
 const mc3Waiting=[];
 const mc3Gate=async fn=>{
-while(mc3Live>=MC3_LANES)await new Promise(r=>mc3Waiting.push(r));
+while(mc3Live>=12)await new Promise(r=>mc3Waiting.push(r));
 mc3Live++;
 try{return await Promise.race([fn(),new Promise((_,j)=>setTimeout(j,6e4,Oa(Er("timed out"),{offChain:1})))])}
 finally{mc3Live--;const next=mc3Waiting.shift();if(next)next()}
@@ -1890,7 +1854,6 @@ return fan(h);
 }
 };
 let bnVal="",bnAt=0,bnJob=null;
-const BN_TTL=12000;
 const gpC={};const gasNow=()=>{const k=CHAIN_ID,c=gpC[k];if(c&&Dn()-c.t<12e3)return c.p;
 const p=rpc("eth_gasPrice",[]).then(BigInt);gpC[k]={t:Dn(),p};p.catch(()=>{if(gpC[k]?.p===p)delete gpC[k]});return p};
 const bnFetch=()=>{if(bnJob)return bnJob;const id=CHAIN_ID,p=bnJob=rpc(BN,[])
@@ -1898,16 +1861,15 @@ const bnFetch=()=>{if(bnJob)return bnJob;const id=CHAIN_ID,p=bnJob=rpc(BN,[])
 .finally(()=>{if(bnJob===p)bnJob=null});return p};
 const blockNow=()=>{
 const age=Dn()-bnAt;
-if(!bnVal||age>=BN_TTL)return bnFetch();
-if(age>BN_TTL/2)bnFetch().catch(Np);
+if(!bnVal||age>=12e3)return bnFetch();
+if(age>6e3)bnFetch().catch(Np);
 return Promise.resolve(bnVal);
 };
 const codeSeen={};
-const CODE_MISS_TTL=60000;
 const hasCode=async a=>{
 if(codeSeen[a]===true)return true;
 const miss=codeSeen[a];
-if(miss&&Dn()-miss<CODE_MISS_TTL)return false;
+if(miss&&Dn()-miss<6e4)return false;
 const id=CHAIN_ID,h=await rpc(GC,[a,L]);
 const ok=(h||"").length>4;
 if(id===CHAIN_ID)codeSeen[a]=ok||Dn();
@@ -1929,10 +1891,10 @@ const STORE=()=>CHAIN_ID===1?"zswap:custom":"zswap:custom:"+CHAIN_ID;
 function keepToken(t){
 if(!t||!t.addr)return;
 const a=Lc(t.addr);
-try{const arr=Jp(localStorage.getItem(STORE())||"[]")
+try{const arr=Jp(LS.getItem(STORE())||"[]")
 .filter(x=>Lc(St(x?.addr||""))!==a);
 arr.push({sym:t.sym,addr:a,dec:t.dec,std:t.std,cause:t.cause?1:0,...(t.name?{name:t.name}:{})});
-localStorage.setItem(STORE(),Js(arr))}catch{}
+LS.setItem(STORE(),Js(arr))}catch{}
 }
 const SEL_SUPPORTS="01ffc9a7",IFACE_721="80ac58cd",IFACE_1155="d9b67a26";
 const supports=id=>"0x"+SEL_SUPPORTS+id.padEnd(64,"0");
@@ -1977,7 +1939,7 @@ icon:artIcon(art||logoCache[a],sym)});
 if(keep)keepToken(TOKENS[TOKENS.length-1]);
 return TOKENS.length-1;
 }
-function restoreCustom(){try{for(const t of Jp(localStorage.getItem(STORE())||"[]")){
+function restoreCustom(){try{for(const t of Jp(LS.getItem(STORE())||"[]")){
 const addr=Lc(t?.addr||"");
 const dec=+t?.dec;
 if(/^0x[0-9a-f]{40}$/.test(addr)&&Ni(dec)&&dec>=0&&dec<=36&&!TOKENS.some(x=>Lc(x.addr)===addr)){
@@ -2189,7 +2151,7 @@ for(const{opt,g}of hits){
 const t=TOKENS[opt.value];
 if(g&&g!==group){const h=cE("div");h.className="tkg";Tx(h,g);aC(frag,h);group=g}
 const r=cE("button");
-r.type="button";r.className="tkr";sAt(r,"role","option");
+r.className="tkr";sAt(r,"role","option");
 r.id="tkr"+n;
 dSt(r).value=opt.value;
 sAt(r,"aria-selected",St(opt.value===tkSel.value));
@@ -2217,7 +2179,7 @@ if(a){
 const pr=probeToken(a),pt=pr.t;
 if(!pt&&!pr.e&&!pr.w){pr.w=1;pr.p.catch(Np).finally(()=>{if(tkSel&&Lc(vT(tkFind))===a)tkRows()})}
 const r=cE("button");
-r.type="button";r.className="tkr";sAt(r,"role","option");r.id="tkr0";
+r.className="tkr";sAt(r,"role","option");r.id="tkr0";
 const ic=cE("span");ic.className="tki";
 if(pt)aC(ic,icFrag(artIcon(pt.art,pt.sym)));
 aC(r,ic);
@@ -2249,7 +2211,7 @@ if(top){cL(top).add("cur");tkCur=0;tkAct(top.id)}
 };
 const tkOpen=sel=>{
 if(tkSel&&tkSel!==sel)pickBtn(tkSel)?.setAttribute(AX,"false");
-tkSel=sel;tkFind.value="";sAt(tkFind,AX,"true");tkFind.placeholder="Search "+cC().name+" tokens, or paste an address";tkRows();tkBals();
+tkSel=sel;tkFind.value="";sAt(tkFind,AX,"true");tkFind.placeholder="Search "+cC().name+" tokens, or paste an address";tkBals();tkRows();
 Hd(tkPanel,0);
 if(matchMedia("(pointer:coarse)").matches){
 tkPanel.style.left=tkPanel.style.top=tkPanel.style.maxHeight=tkPanel.style.width="";
@@ -2484,7 +2446,7 @@ a=(a+sk)&((1n<<128n)-1n);
 const o=U8(16);
 for(let i=0;i<16;i++){o[i]=Nm(a&255n);a>>=8n}
 return o}
-const p16=n=>n%16?16-n%16:0;
+const p16=n=>-n&15;
 const le64=n=>{const b=U8(8);for(let i=0;i<8;i++){b[i]=n&255;n=Mf(n/256)}return b};
 function tagOf(ct,key,nonce){
 const otk=chacha(key,nonce,0,U8(32));
@@ -2841,8 +2803,8 @@ const v=await ask("HTTPS "+cC().name+" RPC used for reads — it is pinned to th
 +" Signing always goes to your wallet. Leave blank for the default.",wcNode());
 if(v===null)return false;
 const t=v.trim();
-try{if(!t)localStorage.removeItem(RPC_STORE());
-else if(/^https:\/\/\S+$/i.test(t))localStorage.setItem(RPC_STORE(),t);
+try{if(!t)LS.removeItem(RPC_STORE());
+else if(/^https:\/\/\S+$/i.test(t))LS.setItem(RPC_STORE(),t);
 else return false}catch{}
 rpcPi=0;return true};
 const WC_SIGN=["eth_sendTransaction","eth_signTransaction","personal_sign","eth_sign",
@@ -2862,7 +2824,7 @@ const box=cE("div");
 box.className="wcq";
 box.innerHTML=qrSvg(QR8.build(uri));
 const cp=cE("button");
-cp.type="button";cp.className="fclink";Tx(cp,"copy link");
+cp.className="fclink";Tx(cp,"copy link");
 cp.onclick=()=>{navigator.clipboard?navigator.clipboard.writeText(uri).then(()=>{Tx(cp,"copied")}).catch(()=>{Tx(cp,"copy blocked")}):Tx(cp,"copy blocked")};
 const note=cE("div");
 note.className="wcn";
@@ -2872,7 +2834,7 @@ const nd=cE("div");
 nd.className="wcn wcnode";
 aC(nd,document.createTextNode("Reads via "+wcHost()+" "));
 const ch=cE("button");
-ch.type="button";ch.className="fclink";Tx(ch,"change");
+ch.className="fclink";Tx(ch,"change");
 ch.onclick=async()=>{if(await askReadNode())nd.firstChild.nodeValue="Reads via "+wcHost()+" "};
 aC(nd,ch);
 aC(wkList,box);aC(wkList,note);aC(wkList,nd);
@@ -2902,9 +2864,9 @@ Tx(wkHdr,"Choose a wallet");
 Hd(wkWrap,1)}
 return wcProv(sess)}
 const WCS="zswap:wcs";
-const wcSave=s=>{try{s?localStorage.setItem(WCS,Js({t:s.topic,k:WCU.hex(s.key),a:s.accounts,m:s.methods,c:s.chain,x:s.exp})):localStorage.removeItem(WCS)}catch{}};
+const wcSave=s=>{try{s?LS.setItem(WCS,Js({t:s.topic,k:WCU.hex(s.key),a:s.accounts,m:s.methods,c:s.chain,x:s.exp})):LS.removeItem(WCS)}catch{}};
 async function wcResume(){
-let o;try{o=Jp(localStorage.getItem(WCS))}catch{}
+let o;try{o=Jp(LS.getItem(WCS))}catch{}
 if(!o||!o.t||!(o.x*1e3>Dn()+6e5))return wcSave(null);
 const sess={topic:o.t,key:WCU.unhex(o.k),accounts:o.a||[],methods:o.m||[],chain:o.c,exp:o.x};
 await wcRelay.resume(WC_PID,sess);
@@ -2961,7 +2923,7 @@ const dlg=(m,d,inp)=>new Promise(res=>{Tx(wkList,"");Tx(wkHdr,"zSwap");
 const t=cE("p");t.className="wcn dlgm";Tx(t,m);wkList.append(t);
 let ta=null;if(inp){ta=cE("textarea");ta.className="dlgt";ta.rows=3;ta.value=d??"";sAt(ta,"aria-label",m.split("\n")[0].slice(0,80));wkList.append(ta)}
 const row=cE("div");row.className="dlgr";const back=document.activeElement;
-const mk=(x,f)=>{const b=cE("button");b.type="button";b.className="fclink";Tx(b,x);b.onclick=f;row.append(b);return b};
+const mk=(x,f)=>{const b=cE("button");b.className="fclink";Tx(b,x);b.onclick=f;row.append(b);return b};
 const no=inp?null:false,end=v=>{Hd(wkWrap,1);removeEventListener("keydown",esc);removeEventListener("keydown",wkTrap,true);wkWrap.onclick=null;try{back&&back.focus()}catch{}res(v)};
 const esc=e=>{if(e.key==="Escape")end(no)};
 if(ta&&d){const c=mk("Copy",()=>{navigator.clipboard?.writeText(ta.value).then(()=>{Tx(c,"Copied")},()=>{})})}
@@ -2990,7 +2952,7 @@ res(v)};
 const esc=e=>{if(e.key==="Escape")end(null)};
 cs.forEach(c=>{
 const b=cE("button");
-b.type="button";b.className="tkr";
+b.className="tkr";
 if(c.icon){const im=cE("img");im.src=c.icon;im.alt="";aC(b,im)}
 else if(c.svg){const sp=cE("span");sp.className="wki";sp.innerHTML=c.svg;aC(b,sp)}
 aC(b,document.createTextNode(c.name));
@@ -2998,7 +2960,7 @@ if(c.sub){const s=cE("span");s.className="wks";Tx(s,c.sub);aC(b,s)}
 if(c.on){cL(b).add("cur");sAt(b,"aria-current","true")}
 b.onclick=()=>end(c);
 aC(wkList,b)});
-const cx=cE("button");cx.type="button";cx.className="wnbtn";Tx(cx,"Cancel");cx.onclick=()=>end(null);aC(wkList,cx);
+const cx=cE("button");cx.className="wnbtn";Tx(cx,"Cancel");cx.onclick=()=>end(null);aC(wkList,cx);
 wkWrap.onclick=e=>{if(e.target===wkWrap)end(null)};
 addEventListener("keydown",esc);
 addEventListener("keydown",wkTrap,true);
@@ -3328,7 +3290,7 @@ if(v4q&&v4q.amountOut>0n){
 const v4Min=v4q.amountOut*(10000n-slipBps)/10000n;
 const p=v4q.pool;
 v4c={best:{source:4,amountIn:v4q.amountIn,amountOut:v4q.amountOut,feeBps:p.fee>=8388608n?0n:Bi(p.fee)/100n},
-callData:"0x"+SEL_V4SWAP+encPoolKey(p)+eBo(p.zeroForOne)+eU(v4q.amountIn)
+callData:"0x48e6f730"+encPoolKey(p)+eBo(p.zeroForOne)+eU(v4q.amountIn)
 +eU(v4Min)+eA(rcv||acct||ZERO)+eU(deadline),
 fundedCallData:null,amountLimit:v4Min,msgValue:f.addr===ZERO?swapAmt:0n,
 to:V4PORT,spender:f.addr===ZERO?null:V4PORT};
@@ -3391,7 +3353,7 @@ if(!r&&tc)r=tc;
 const hc=await hopJob;if(my!==seq)return;
 if(!r&&hc)r=hc;
 if(!r&&(curveOnlyOut||!isIn&&(v4PoolsFor(f,t).length||tacitPair(f,t)||CHAIN_ID===4663)))throw Oa(Er(`exact-output is unavailable for this pair — enter an amount to PAY instead`),{exactOut:1});
-if(!r&&isIn){await loadSolvers().catch(Np);if(solverLanes&&solverLanes.length&&solverFill&&solverExec)r={best:{source:SRC_SOLVER,amountIn:swapAmt,amountOut:1n,feeBps:0n},amountLimit:1n,callData:"0x",fundedCallData:null,msgValue:0n,to:null,spender:null}}
+if(!r&&isIn)r={best:{source:0,amountIn:swapAmt,amountOut:1n,feeBps:0n},amountLimit:1n,callData:"0x",fundedCallData:null,msgValue:0n,to:null,spender:null};
 if(!r)throw Er("bad quote");
 if(isEthLike(f.addr)&&isEthLike(t.addr))r.amountLimit=swapAmt;
 if(r.best.amountIn<=0n||r.best.amountOut<=0n||(!isIn&&r.amountLimit<r.best.amountIn))throw Er("bad quote");
@@ -3434,7 +3396,7 @@ if(token===ZERO||Lc(token)===Lc(WETH))return wei;
 const eo=!isIn,ti=isIn?ZERO:token,to=isIn?token:ZERO;
 const z=eBo(eo)+eA(ti)+eA(to)+eU(wei)+eU(0n)+eU(deadline);
 try{
-const raw=await rpc(C,[{to:ZQUOTER,data:"0xe453166e"+a+rf+z},quoteBlock]);
+const raw=await qOne({to:ZQUOTER,data:"0xe453166e"+a+rf+z},quoteBlock);
 const q=decQ(raw,0n,eo,4,9);
 const v=isIn?q.best.amountOut:q.best.amountIn;
 if(v>0n)return v;
@@ -3492,7 +3454,7 @@ const extraWei=gasPrice*(120000n+105000n*Bi(p.fills.length));
 gw=await gasValue(extraWei);
 }
 }
-const wins=saving>0n&&gw>0n&&saving*10n>gw*12n;
+const wins=saving>0n&&(r.callData==="0x"||gw>0n&&saving*10n>gw*12n);
 if(my!==seq)return;
 if(wins){
 const fp=encFillPlanAndSwap(
@@ -3525,9 +3487,9 @@ plannerBounded=plannerBounded||!!p.bounded;
 }
 }
 const sxRoute=async(w,amtIn,floor)=>{const sx=cC().sx;if(!sx||solverFill!==sx)return{};
-const d=Sx(w.data),eth=f.addr===ZERO,to_=rcv||acct||ZERO,
+const eth=f.addr===ZERO,to_=rcv||acct||ZERO,
 fd="0x"+SEL_SXFILL+eA(w.target)+eA(w.spender||w.target)+eA(f.addr)+eA(t.addr)+eA(to_)+eA(acct||to_)
-+eU(224n)+eU(Bi(d.length/2))+d+"0".repeat((64-d.length%64)%64),
++eU(224n)+encBytes(w.data),
 gl=await(glJob||gLegs(deadline)).catch(()=>[]),leg=encSnwap(f.addr,amtIn,to_,t.addr,floor,sx,fd);
 return{callData:gl.length?encCalls([...gl,leg]):leg,
 fundedCallData:eth?null:encCalls([...gl,encSweep(f.addr,amtIn,sx),encSnwap(ZERO,0n,to_,t.addr,floor,sx,fd)]),
@@ -3570,8 +3532,7 @@ r={best:{source:SRC_SOLVER,amountIn:win.inp,amountOut:swapAmt,feeBps:0n,
 lane:win.lane.name,forced:win.forced,at:win.at},
 callData:"0x"+SEL_FILL+eA(win.target)+eA(win.spender)+eA(f.addr)
 +eU(win.ceil)+eA(t.addr)+eU(swapAmt)+eA(rcv||acct||ZERO)
-+eU(256n)+eU(Bi(Sx(win.data).length/2))
-+Sx(win.data)+"0".repeat((64-(Sx(win.data).length%64))%64),
++eU(256n)+encBytes(win.data),
 fundedCallData:null,amountLimit:win.ceil,
 msgValue:ethIn?win.ceil:0n,
 to:solverFill,spender:ethIn?null:solverFill};
@@ -3617,8 +3578,7 @@ const ethIn=f.addr===ZERO;
 r={best:{source:SRC_SOLVER,amountIn:swapAmt,amountOut:win.out,feeBps:0n,lane:win.lane.name,forced:win.forced,at:win.at},
 callData:"0x"+SEL_FILL+eA(win.target)+eA(win.spender)+eA(f.addr)
 +eU(swapAmt)+eA(t.addr)+eU(win.floor)+eA(rcv||acct||ZERO)
-+eU(256n)+eU(Bi(Sx(win.data).length/2))
-+Sx(win.data)+"0".repeat((64-(Sx(win.data).length%64))%64),
++eU(256n)+encBytes(win.data),
 fundedCallData:null,amountLimit:win.floor,
 msgValue:ethIn?swapAmt:0n,
 to:solverFill,spender:ethIn?null:solverFill};
@@ -3664,36 +3624,36 @@ aC(rankBox,row);
 }
 }
 rankBox.title=isIn?"The least each venue guarantees you receive, after slippage":"The most each venue may take, after slippage";Hd(rankBox,!(rankOpen&&rankBox.firstChild));
-const paysSym=r.poolOut===ZERO?"ETH":"WETH";
+const paysSym=r.poolOut===ZERO?"ETH":"WETH",R=s=>rate.textContent+=s;
 Tx(rcvHdr,r.outDiffers?`You receive — as ${paysSym}`:"You receive");
-if(r.outDiffers&&rate.textContent)rate.textContent+=` · pays ${paysSym}`;
+if(r.outDiffers&&rate.textContent)R(` · pays ${paysSym}`);
 rate.title="";
 if(venueLost||mcGaveUp>gaveUp0||(mcFailed>failed0&&mcOk===ok0))
-rate.textContent+=" · some venues unreachable";
-if(isIn&&r.best.source===SRC_DEEP&&finalIn<swapAmt-swapAmt*deepK(slipBps)/10000n)rate.textContent+=` · book fills ${tM(finalIn,f.dec)} ${f.sym}, the rest is returned`;
-if(isIn)rate.textContent+=` · Min ${tM(r.amountLimit,t.dec)} ${t.sym}`;
+R(" · some venues unreachable");
+if(isIn&&r.best.source===SRC_DEEP&&finalIn<swapAmt-swapAmt*deepK(slipBps)/10000n)R(` · book fills ${tM(finalIn,f.dec)} ${f.sym}, the rest is returned`);
+if(isIn)R(` · Min ${tM(r.amountLimit,t.dec)} ${t.sym}`);
 else{
 const exactMax=fU(r.amountLimit,f.dec);
-rate.textContent+=` · Max ${maxAmt(r.amountLimit,f.dec)} ${f.sym}`;
+R(` · Max ${maxAmt(r.amountLimit,f.dec)} ${f.sym}`);
 rate.title=`Exact maximum: ${exactMax} ${f.sym}`;
 }
-if(f.cust||t.cust)rate.textContent+=" · Unlisted token: a transfer fee would come out of what you receive";
-for(const x of[f,t]){const m=uim(x);if(m)rate.textContent+=` · 1 ${x.sym} = ${(Nm(m)/1e18).toFixed(6)} shares`}
-if(r.slipBps>slipBps)rate.textContent+=` · Hybrid — bound widened to ${Nm(r.slipBps)/100}%`;
-if(r.best.source!==SRC_SOLVER){if(bookUnavailable)rate.textContent+=" · AMM only (books offline)";else if(bookIncomplete)rate.textContent+=" · Book scan incomplete";
-if(plannerBounded)rate.textContent+=" · Book split approximate"}
-if(pq&&pq.capped)rate.textContent+=` · Precision scan capped (${LQ_SCAN})`;
+if(f.cust||t.cust)R(" · Unlisted token: a transfer fee would come out of what you receive");
+for(const x of[f,t]){const m=uim(x);if(m)R(` · 1 ${x.sym} = ${(Nm(m)/1e18).toFixed(6)} shares`)}
+if(r.slipBps>slipBps)R(` · Hybrid — bound widened to ${Nm(r.slipBps)/100}%`);
+if(r.best.source!==SRC_SOLVER){if(bookUnavailable)R(" · AMM only (books offline)");else if(bookIncomplete)R(" · Book scan incomplete");
+if(plannerBounded)R(" · Book split approximate")}
+if(pq&&pq.capped)R(` · Precision scan capped (${LQ_SCAN})`);
 let flR=0n;if(isIn&&(f.launched||f.fl)&&(t.addr===ZERO||Lc(t.addr)===Lc(WETH))){
 const floorOut=await flJob;
 if(my!==seq)return;
 if(floorOut>0n){
 if(floorOut>finalOut){
-flR=floorOut;rate.textContent+=` · Floor pays more: ${tM(floorOut,18)} ETH`;
+flR=floorOut;R(` · Floor pays more: ${tM(floorOut,18)} ETH`);
 rate.title=`This coin can be burned back to the launcher for its share of the ether `
 +`locked in its pool — ${tM(floorOut,18)} ETH, against ${tM(finalOut,18)} from selling. `
 +`Redeem takes the larger.`;
 }else{
-rate.textContent+=` · Floor ${tM(floorOut,18)} ETH`;
+R(` · Floor ${tM(floorOut,18)} ETH`);
 rate.title=`The ether backing this amount if it were redeemed instead of sold. `
 +`Selling pays more right now.`;
 }
@@ -3713,9 +3673,9 @@ const mkt=impSrc?(isIn?impSrc.amountOut:impSrc.amountIn)*(isIn&&finalIn?finalIn:
 const lossTok=imp!==null&&mkt?(isIn?(mkt>finalOut?mkt-finalOut:0n):(finalIn>mkt?finalIn-mkt:0n)):0n;
 if(imp!==null&&imp>=IMPACT_HIDE){
 const pctTxt=(Nm(imp)/100).toFixed(2);
-rate.textContent+=` · Impact ${pctTxt}%`;
+R(` · Impact ${pctTxt}%`);
 if(imp>=IMPACT_WARN)Sm(`High price impact: ${pctTxt}% — about ${tM(lossTok,isIn?t.dec:f.dec)} ${isIn?t.sym:f.sym} worse than the market rate.`);
-}else if(imp===null)rate.textContent+=" · Impact unknown";
+}else if(imp===null)R(" · Impact unknown");
 cL(rate).toggle("warn",imp!==null&&imp>=100n);
 if(rankBox.firstChild){
 const car=cE("span");
@@ -3732,7 +3692,7 @@ car.onclick=carToggle;
 car.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();carToggle()}};
 rate.append(" ",car);
 }
-if(flR){const b=cE("button");b.type="button";b.className="fclink";Tx(b,"Redeem");b.onclick=()=>flRedeem(f,swapAmt,flR);rate.append(" ",b)}
+if(flR){const b=cE("button");b.className="fclink";Tx(b,"Redeem");b.onclick=()=>flRedeem(f,swapAmt,flR);rate.append(" ",b)}
 const inApprove=isIn?swapAmt:r.amountLimit;
 const shownPay=amt.value,shownGet=outAmt.value;
 if(acct)last={callData:r.callData,fundedCallData:r.fundedCallData,msgValue:r.msgValue,
@@ -3795,17 +3755,17 @@ walletChain=now;
 setChain(next);showNet();hcs(next);location.reload();
 };
 const DEEPLENS="0x000000d579c1829a4b9bb720f0c26062ae608c45";
-const TACIT_AMM="0x00000000E36C7EC997CC59DCda9E03673B448119",SEL_TQUOTE="3bc1414a",SEL_TSWAP="cfdf9dcc",TACIT_TIERS=[30,5,100,1];
+const TACIT_AMM="0x00000000E36C7EC997CC59DCda9E03673B448119",SEL_TSWAP="cfdf9dcc",TACIT_TIERS=[30,5,100,1];
 const tacitId=x=>!x||CHAIN_ID!==1?"":x.addr===ZERO?CP_ETH:(cpAssets.find(a=>a.tok!==ZERO&&a.tok===Lc(x.addr))||{}).id||"";
 const tacitPair=(f,t)=>{const a=tacitId(f),b=tacitId(t);return!!a&&!!b&&a!==b};
 async function tacitQuote(f,t,amt,blk){const a=tacitId(f),b=tacitId(t),A=cpAs(a);if(!a||!b||a===b||!A||!amt||amt<=0n||amt%A.scale)return null;
-const rs=await cfgBatch(TACIT_TIERS.map(fee=>({to:TACIT_AMM,data:"0x"+SEL_TQUOTE+pad32(a)+pad32(b)+eU(fee)+eU(amt)})),blk);let best=null;
+const rs=await cfgBatch(TACIT_TIERS.map(fee=>({to:TACIT_AMM,data:"0x3bc1414a"+pad32(a)+pad32(b)+eU(fee)+eU(amt)})),blk);let best=null;
 rs.forEach((h,i)=>{const s=Sx(h||""),o=s.length===64?Bx(s):0n;if(o>0n&&(!best||o>best.out))best={fee:TACIT_TIERS[i],out:o,a,b}});return best}
-const SEL_SWAPDEEP="ad33b1d0",SEL_DEEPQ="1a0dc93f";
+const SEL_SWAPDEEP="ad33b1d0";
 const deepQuote=async(fa,ta,amt,blk,k=0n)=>{
 if(CHAIN_ID!==4663||!amt||amt<=0n)return null;
 try{
-const r=await rpc(C,[{to:DEEPLENS,data:"0x"+SEL_DEEPQ+eA(fa)+eA(ta)+eU(amt)},blk||L]);
+const r=await rpc(C,[{to:DEEPLENS,data:"0x1a0dc93f"+eA(fa)+eA(ta)+eU(amt)},blk||L]);
 const b=Sx(r||"");
 if(b.length<320)return null;
 const out=Bx(b.slice(0,64)),inUsed=Bx(b.slice(64,128));
@@ -3815,7 +3775,7 @@ const order="0x"+b.slice(192,256);
 const isBid=Bx(b.slice(256,320))===1n;
 const [t0,t1]=Lc(fa)<Lc(ta)?[fa,ta]:[ta,fa];
 if(isBid&&k>0n){const M=(1n<<160n)-1n,w=Bi(order),q=(w>>64n)&M,o=out-out*k/10000n-1n;if(o<=0n)return null;
-return{inUsed:inUsed-inUsed*k/10000n,out:o,t0,t1,isBid,epoch,order:"0x"+(w&~(M<<64n)|(q-q*k/10000n)<<64n).toString(16).padStart(64,"0")}}
+return{inUsed:inUsed-inUsed*k/10000n,out:o,t0,t1,isBid,epoch,order:"0x"+eU(w&~(M<<64n)|(q-q*k/10000n)<<64n)}}
 return{inUsed,out,t0,t1,isBid,epoch,order};
 }catch{return null}
 };
@@ -4031,7 +3991,6 @@ if(!prov())aE(window,"ethereum#initialized",()=>wireWallet(prov()),{once:true})}
 if(!PROV&&LS[WK])wkRestore().then(wkGo,wkGo);else wkGo();
 setTimeout(burnTotal,0);
 setTimeout(loadEthUsd,0);
-const SEL_TRANSFER="a9059cbb";
 let SB2=MB.sb;
 let SB1=MB.s1;
 const SBVIEW="0x000000E0b25449F32f7D9259aC449bA88E78dFCE";
@@ -4040,31 +3999,24 @@ let DUTCH=MB.du;
 let ORDERBOL=MB.ob;
 let FLOOR=MB.fl;
 const FLOORVIEW="0x0000004E376e9dB5D9EC28E6711E1a64997C6ba7";
-const SEL_SXFILL="e241fd08",SEL_FROZEN="e9ac0440",SEL_NEXTID="2a58b330",SEL_NEXTID2="61b8ce8c",SEL_GETORDERS="03652027",SEL_CANCELORD="514fcac7",SEL_EXPIRED="d6c3de07",
-SEL_WITHDRAW="ef3d3521",SEL_REPLACE="84343d3a";
+const SEL_SXFILL="e241fd08",SEL_FROZEN="e9ac0440",SEL_NEXTID="2a58b330",SEL_NEXTID2="61b8ce8c",SEL_GETORDERS="03652027",SEL_CANCELORD="514fcac7",
+SEL_WITHDRAW="ef3d3521";
 const SEL_FILL2="9d136c7f",SEL_FILL2_UNWRAP="3987baf4",SEL_FILL2_ETH="6f608bab";
-const SEL_RECENT="6a9849c1",SEL_RECENT_DUTCH="98035c9a",SEL_DUTCH_FILL="ae7a8260",SEL_DUTCH_CANCEL="40e58ee5";
+const SEL_RECENT="6a9849c1",SEL_RECENT_DUTCH="98035c9a",SEL_DUTCH_CANCEL="40e58ee5";
 const SEL_CANCEL_UNWRAP="21dd76f9",SEL_DUTCH_CANCEL_UNWRAP="8382de65";
 const SEL_DUTCH_LISTING="de74e57b";
-const SEL_CANDS="5f452988",SEL_DUTCH_CANDS="eb33e466",SEL_FILLPLAN="c277f67c";
-const SEL_FILLPLAN_SWAP="9090c8e5",SEL_SNWAP="5f3bd1c8";
-const SEL_COLL_BIDS="16bb24eb";
-const SEL_FLOOR_CANDS="c587d927",SEL_RECENT_FLOOR="a5edd13d";
-const SEL_ORDER_FLOOR="23e93357";
-const SEL_BOL_FLOOR="b732d224";
+const SEL_CANDS="5f452988",SEL_DUTCH_CANDS="eb33e466";
 let floorReady=null;
 async function floorRoutable(block){
 if(FLOOR===ZERO)return false;
 if(floorReady!==null)return floorReady;
 try{
-const id=CHAIN_ID,h=await rpc(C,[{to:SWAPBOL,data:"0x"+SEL_BOL_FLOOR},block||L]),ok=Lc("0x"+Sx(h).slice(-40))===Lc(FLOOR);
+const id=CHAIN_ID,h=await rpc(C,[{to:SWAPBOL,data:"0xb732d224"},block||L]),ok=Lc("0x"+Sx(h).slice(-40))===Lc(FLOOR);
 if(id!==CHAIN_ID)return false;floorReady=ok;
 }catch{return false}
 return floorReady;
 }
 const SEL_BIDS="4423c5f1";
-const SEL_INITIAL_B="878ea250",SEL_TOKENURI="c87b56dd",SEL_LOGOOF="6ce273ac";
-const SEL_QUOTEFILL="f325beda";
 async function preflightLeg(row,routeIn,routeOut,pay){
 if(!row.floor)return preflightAsk(row,pay);
 if(!await floorRoutable(L))throw Er("this executor cannot route bids yet");
@@ -4146,7 +4098,7 @@ throw Er("order changed — refresh and retry");
 if(pay==null?at(iA+1)!==row.aA:at(iA+1)>row.aA||at(iB+1)>row.aB)throw Er("order changed — refresh and retry");
 if(pay!==undefined&&at(iB+1)<pay)throw Er("order partly taken — refresh and retry");
 }
-const SEL_ORDER_FIXED="bcdb7936",SEL_ORDER_DUTCH="bbd94e1a",SEL_CHECKPOINT="a972985e";
+const SEL_ORDER_FIXED="bcdb7936";
 const BOARDS=()=>[{a:SB2,v2:1},{a:SB1,v2:0}].filter(b=>b.a!==ZERO);
 const WORDS=b=>b?11:6;
 let bookSeq=0,bookRows=[],candCache={},candFly={},bkOpen=LS.bk!=="0",bookTrunc=false;
@@ -4205,7 +4157,7 @@ async function loadLogos(addrs){
 const cid=CHAIN_ID,want=[...new Set(addrs.map(a=>Lc(a)))]
 .filter(a=>a!==ZERO&&!known(a)&&logoCache[a]===undefined);
 if(!want.length)return;
-const raw=CHAIN_ID===1?await cfgBatch(want.map(a=>({to:TOKENLIST,data:"0x"+SEL_LOGOOF+eA(a)}))).catch(()=>[]):[];
+const raw=CHAIN_ID===1?await cfgBatch(want.map(a=>({to:TOKENLIST,data:"0x6ce273ac"+eA(a)}))).catch(()=>[]):[];
 if(cid!==CHAIN_ID)return;
 want.forEach((a,i)=>{let u="";try{if(raw[i])u=safeDataUrl(dS(raw[i]))}catch{}logoCache[a]=u});
 capObj(logoCache,LOGO_MAX);
@@ -4286,7 +4238,7 @@ return out;
 }
 async function collectionFloor(collection,quote=ZERO){
 if(FLOOR===ZERO)return[];
-const data="0x"+SEL_COLL_BIDS+eA(FLOOR)+eA(collection)+eA(quote)
+const data="0x16bb24eb"+eA(FLOOR)+eA(collection)+eA(quote)
 +eU(0)+eU(256)+eU(256);
 const raw=await rpc(C,[{to:FLOORVIEW,data},L]).catch(Nl);
 if(!raw)return[];
@@ -4298,10 +4250,10 @@ async function floorCandidates(tokenIn,tokenOut,block){
 const bin=tokenIn===ZERO?WETH:tokenIn,bout=tokenOut===ZERO?WETH:tokenOut;
 const out=[];let cur=0n,t=0,lost=false;
 do{
-const raw=await rpc(C,[{to:FLOORVIEW,data:"0x"+SEL_FLOOR_CANDS+eA(FLOOR)+eA(bin)+eA(bout)
+const raw=await rpc(C,[{to:FLOORVIEW,data:"0xc587d927"+eA(FLOOR)+eA(bin)+eA(bout)
 +eU(cur)+eU(256)+eU(256)},block]).catch(Nl);
 if(!raw){lost=true;break}
-cur=Bx((Sx(raw).slice(64,128)||0));
+cur=Bx(Sx(raw).slice(64,128)||0);
 for(const b of decBidRows(raw)){
 if(b.isNFT||b.remaining<=0n||b.initial<=0n||b.price<=0n||b.proceeds<=0n)continue;
 if(Lc(b.token)!==Lc(bin))continue;
@@ -4455,7 +4407,7 @@ return best.fills.length?best:null;
 function encFillPlan(fills,tokenIn,tokenOut,recipient,refundTo,deadline){
 let tail=eU(fills.length);
 for(const f of fills)tail+=eU(f.id)+eA(f.board)+eU(f.pay)+eU(f.get)+eBo(f.part);
-return"0x"+SEL_FILLPLAN+eA(tokenIn)+eA(tokenOut)+eA(recipient)+eA(refundTo)
+return"0xc277f67c"+eA(tokenIn)+eA(tokenOut)+eA(recipient)+eA(refundTo)
 +eU(deadline)+eU(192)+tail;
 }
 const BOL_OK=new Set(["6e0a4f98","afeae12b","21c0dad2","ea598cb0","de0e9a3e","8b64ad55","cb924a09","ad33b1d0","dc2c256f","47e7ef24"]);
@@ -4469,21 +4421,21 @@ return walk(cd)};
 function encFillPlanAndSwap(fills,tokenIn,tokenOut,recipient,refundTo,deadline,ammIn,ammData){
 let ft=eU(fills.length);
 for(const f of fills)ft+=eU(f.id)+eA(f.board)+eU(f.pay)+eU(f.get)+eBo(f.part);
-const d=Sx(ammData||"0x"),dt=eU(d.length/2)+d.padEnd(Math.ceil(d.length/64)*64,"0");
-return"0x"+SEL_FILLPLAN_SWAP+eA(tokenIn)+eA(tokenOut)+eA(recipient)+eA(refundTo)
+const dt=encBytes(ammData||"0x");
+return"0x9090c8e5"+eA(tokenIn)+eA(tokenOut)+eA(recipient)+eA(refundTo)
 +eU(deadline)+eU(256)+eU(ammIn)+eU(256+ft.length/2)+ft+dt;
 }
 function encSnwap(tokenIn,amountIn,recipient,tokenOut,minOut,executor,data){
-const d=Sx(data),body=eU(d.length/2)+d.padEnd(Math.ceil(d.length/64)*64,"0");
-return"0x"+SEL_SNWAP+eA(tokenIn)+eU(amountIn)+eA(recipient)+eA(tokenOut)
+const body=encBytes(data);
+return"0x5f3bd1c8"+eA(tokenIn)+eU(amountIn)+eA(recipient)+eA(tokenOut)
 +eU(minOut)+eA(executor)+eU(224)+body;
 }
 const encCheckpoint=(executor,token,recipient)=>encSnwap(
-ZERO,0n,recipient,ZERO,0n,executor,"0x"+SEL_CHECKPOINT+eA(token)
+ZERO,0n,recipient,ZERO,0n,executor,"0xa972985e"+eA(token)
 );
 const SEL_SWEEP3="dc2c256f";
 const encSweep=(token,amount,to)=>cC().sweep4
-?"0x"+SEL_SWEEP+eA(token)+eU(0)+eU(amount)+eA(to)
+?"0xcb019b84"+eA(token)+eU(0)+eU(amount)+eA(to)
 :"0x"+SEL_SWEEP3+eA(token)+eU(amount)+eA(to);
 function encPermit2Hybrid(ammData,fills,tokenIn,tokenOut,recipient,refundTo,deadline,bookIn,bookOut){
 const bookData=encFillPlan(fills,tokenIn,tokenOut,recipient,refundTo,deadline);
@@ -4570,12 +4522,12 @@ return out;
 const exJob=(async()=>{const rows=[];if(account)try{
 const nx=Nm(Bi(await rpc(C,[{to:SB2,data:"0x"+SEL_NEXTID},L]).catch(()=>0)||0));
 for(const r of decViewPage(await rpc(C,[{to:SBVIEW,
-data:"0x"+SEL_EXPIRED+eA(SB2)+eU(Mx(0,nx-256))+eU(80)+eU(256)},L])).rows)
+data:"0xd6c3de07"+eA(SB2)+eU(Mx(0,nx-256))+eU(80)+eU(256)},L])).rows)
 if(r.maker&&Lc(r.maker)===me())rows.push({...r,v2:1,dutch:0});
 }catch{}return rows})();
 const flJob=(async()=>{const rows=[];if(FLOOR!==ZERO){
 const[,raw]=await Pa([floorRoutable(L),rpc(C,[{to:FLOORVIEW,
-data:"0x"+SEL_RECENT_FLOOR+eA(FLOOR)+eU(0)+eU(80)+eU(256)},L]).catch(Nl)]);
+data:"0xa5edd13d"+eA(FLOOR)+eU(0)+eU(80)+eU(256)},L]).catch(Nl)]);
 if(raw)try{
 for(const b of decBidRows(raw)){
 if(b.remaining<=0n)continue;
@@ -4692,7 +4644,7 @@ if(dutchRows.length||bidRows.length||fillRows.length){
 const reqs=[
 ...dutchRows.map(r=>({to:DUTCH,data:"0x"+SEL_DUTCH_LISTING+eU(r.id)})),
 ...bidRows.map(r=>({to:FLOOR,data:"0x"+SEL_BIDS+eU(r.id)})),
-...fillRows.map(r=>({to:r.board,data:"0x"+SEL_INITIAL_B+eU(r.id)})),
+...fillRows.map(r=>({to:r.board,data:"0x878ea250"+eU(r.id)})),
 ];
 const raw=await mD(reqs);
 if(my!==bookSeq)return;
@@ -4806,8 +4758,7 @@ when=now>=end?` · floor reached: ${tM(floor,r.dB)} ${r.sB}`
 }
 if(!expired&&r.floor&&r.duration){
 const end=r.start+r.duration;
-when=now>=end?" · window closed"
-:` · climbs to ${tM(r.initial?r.endPrice*r.aB/r.initial:r.endPrice,r.dA)} ${r.sA} in ${rel(Nm(end-now))}`;
+when=` · climbs to ${tM(r.initial?r.endPrice*r.aB/r.initial:r.endPrice,r.dA)} ${r.sA} in ${rel(Nm(end-now))}`;
 }
 const dset=`data-i="${r.id}" data-b="${r.board}" data-v="${r.v2}" data-d="${r.dutch||0}" data-f="${r.floor||0}"`;
 const takeable=!r.floor||(!r.isNFT&&floorReady);
@@ -4843,7 +4794,7 @@ const cardCache={};
 async function loadCard(board,id){
 const k=Lc(board)+":"+id;
 if(cardCache[k]&&Dn()-cardCache[k].at<6e4)return cardCache[k];
-const raw=await rpc(C,[{to:board,data:"0x"+SEL_TOKENURI+eU(id)},L]);
+const raw=await rpc(C,[{to:board,data:"0xc87b56dd"+eU(id)},L]);
 const uri=dS(raw);
 const i=uri.indexOf("base64,");
 if(i<0)throw Er("card is not inline");
@@ -4886,7 +4837,7 @@ return `No ${Lc(what)}${where} from anyone else.`;
 };
 function bookFilters(hidden){
 const f=TOKENS[fromSel.value]?.sym||"?",t=TOKENS[toSel.value]?.sym||"?";
-const chip=(on,attr,val,label,title)=>`<button type="button" class="bkc${on?" on":""}" `
+const chip=(on,attr,val,label,title)=>`<button class="bkc${on?" on":""}" `
 +`aria-pressed="${on?"true":"false"}" data-${attr}="${val}"${title?` title="${title}"`:""}>${label}</button>`;
 const note=[hidden?hidden+" hidden":"",bookTrunc?"scan capped":""].filter(Boolean).join(" · ");
 return `<div class="bkh"><h6><span>Orderbook</span><span title="${bookTrunc?"More orders exist than this scan returned — the newest are shown first.":""}">${note}</span></h6>`
@@ -4930,7 +4881,7 @@ b.disabled=true;
 ++busy;
 try{
 await cW();
-const cid=CHAIN_ID,ak=async(m,d)=>{const v=await ask(m,d);if(v!==null&&cid!==CHAIN_ID)throw Er("The network changed after you pressed — press again.");return v};
+const cid=CHAIN_ID,ak=async(m,v,d)=>{const a=await ask(m,fU(v,d));if(a===null)return a;if(cid!==CHAIN_ID)throw Er("The network changed after you pressed — press again.");let x;try{x=pU(St(a).trim(),d)}catch{throw Er("that is not an amount")}if(!x)throw Er("enter an amount above zero");return x};
 const id=Bi(dSt(b).i),to=dSt(b).b,dl=Bi(nowS()+1800);
 const row=bookRows.find(x=>St(x.id)===dSt(b).i&&Lc(x.board)===Lc(to));
 if(!row||![SB1,SB2,FLOOR,DUTCH].some(a=>a!==ZERO&&Lc(a)===Lc(to)))throw Er("order changed — refresh and retry");
@@ -4952,11 +4903,8 @@ const refund=row.tA;
 const native=Lc(refund)===Lc(WETH)&&wantsUnwrap();
 const dec=row.dutch?(row.dA??18):(row.dB??18),sym=row.dutch?(row.sA||"tokens"):(row.sB||"tokens");
 const held=row.dutch?row.aA:row.aB;
-const answer=await ak(`Shrink this ${row.dutch?"lot":"bid"}.\n\nIt is escrowed for ${tM(held,dec)} ${sym}.\n\nEnter the amount to stop ${row.dutch?"selling":"bidding for"} — the escrow behind it returns${native?" as ETH":""}. The rest stays live:`,fU(held,dec));
-if(answer===null){b.disabled=false;return}
-let asked;
-try{asked=pU(St(answer).trim(),dec)}catch{throw Er("that is not an amount")}
-if(!asked)throw Er("enter an amount above zero");
+const asked=await ak(`Shrink this ${row.dutch?"lot":"bid"}.\n\nIt is escrowed for ${tM(held,dec)} ${sym}.\n\nEnter the amount to stop ${row.dutch?"selling":"bidding for"} — the escrow behind it returns${native?" as ETH":""}. The rest stays live:`,held,dec);
+if(asked===null){b.disabled=false;return}
 if(asked>=held)throw Er(`that is the whole ${row.dutch?"lot":"bid"} — use Cancel instead`);
 const tx={from:account,to,data:"0x"+SEL_WITHDRAW+eU(id)+eU(asked)+eBo(native),value:"0x0"};
 Sm(`Shrinking — the escrow behind ${tM(asked,dec)} ${sym} returns${native?" as ETH":""}…`);
@@ -4965,14 +4913,11 @@ loadBook();rBal();return;
 }
 if(dSt(b).x==="r"){
 const sym=row.sB||"tokens",dec=row.dB??18;
-const answer=await ak(`Reprice this order without losing its place on the book.\n\nIt sells ${tM(row.aA,row.dA??18)} ${row.sA||"tokens"} for ${tM(row.aB,dec)} ${sym}.\n\nEnter the NEW total ${sym} you want:`,fU(row.aB,dec));
-if(answer===null){b.disabled=false;return}
-let asked;
-try{asked=pU(St(answer).trim(),dec)}catch{throw Er("that is not an amount")}
-if(!asked)throw Er("enter an amount above zero");
+const asked=await ak(`Reprice this order without losing its place on the book.\n\nIt sells ${tM(row.aA,row.dA??18)} ${row.sA||"tokens"} for ${tM(row.aB,dec)} ${sym}.\n\nEnter the NEW total ${sym} you want:`,row.aB,dec);
+if(asked===null){b.disabled=false;return}
 if(asked===row.aB)throw Er("that is the same price");
 await preflightAsk(row);
-const tx={from:account,to,data:"0x"+SEL_REPLACE+eU(id)+eU(row.aA)+eU(asked)+eU(row.exp||0n),value:"0x0"};
+const tx={from:account,to,data:"0x84343d3a"+eU(id)+eU(row.aA)+eU(asked)+eU(row.exp||0n),value:"0x0"};
 Sm("Repricing…");
 await sS(tx);
 loadBook();rBal();return;
@@ -4988,17 +4933,14 @@ have=r.tB===ZERO||Lc(r.tB)===Lc(WETH)
 :Bi(await rpc(C,[{to:r.tB,data:balOf(account)},L]));
 }catch{}
 const suggest=have&&have<r.aB?have:r.aB;
-const answer=await ak(
+const asked=await ak(
 `Fill how much of this order?\n\nIt sells ${tM(r.aA,dA)} ${sA} for ${tM(r.aB,dB)} ${sB} in total, `
 +`and can be filled in part.\n\nEnter the ${sB} you want to spend:`,
-fU(suggest,dB));
-if(answer===null){b.disabled=false;return}
-let asked;
-try{asked=pU(St(answer).trim(),dB)}catch{throw Er("that is not an amount")}
-if(!asked)throw Er("enter an amount above zero");
+suggest,dB);
+if(asked===null){b.disabled=false;return}
 if(asked>r.aB)throw Er(`that is more than the order needs — it costs ${tM(r.aB,dB)} ${sB} in full`);
 if(asked<r.aB){
-const q=await rpc(C,[{to:r.board,data:"0x"+SEL_QUOTEFILL+eU(id)+eU(asked)},L]);
+const q=await rpc(C,[{to:r.board,data:"0xf325beda"+eU(id)+eU(asked)},L]);
 const h=Sx(q);
 if(h.length<128)throw Er("the board would not quote that amount");
 getA=Bx(h.slice(0,64));
@@ -5045,7 +4987,7 @@ await sendRouterFunded(direct,funded,meta,pay,routeIn===ZERO?pay:0n,"Filling ord
 loadBook();rBal();return;
 }
 const data=r.dutch
-?"0x"+SEL_DUTCH_FILL+eU(id)+eU(r.nA?0n:getA)+eA(account)+eU(payB)
+?"0xae7a8260"+eU(id)+eU(r.nA?0n:getA)+eA(account)+eU(payB)
 :"0x"+(nativeIn?SEL_FILL2_ETH:nativeOut?SEL_FILL2_UNWRAP:SEL_FILL2)
 +eU(id)+eU(dl)+(nativeIn?"":eU(payB))+eU(r.nA?0n:getA)+eA(ZERO);
 const payNative=(nativeIn&&!r.dutch&&r.v2)||(r.dutch&&r.tB===ZERO);
@@ -5342,7 +5284,7 @@ slowMore.href=w4(SLOW_PAGE)+"#/pay?"+q;
 const SEL_OUT="d40d4bc6",SEL_IN="e3993ee7",SEL_PENDING="6577b86a",SEL_HELD="5b96484e";
 const idTok=i=>"0x"+(i&((1n<<160n)-1n)).toString(16).padStart(40,"0");
 const idDelay=i=>i>>160n;
-const w=(h,n)=>Bx((Sx(h).slice(n*64,n*64+64)||"0"));
+const w=(h,n)=>Bx(Sx(h).slice(n*64,n*64+64)||"0");
 const metaCache=new Map();
 async function tokMeta(a){
 a=Lc(a);
@@ -5409,7 +5351,7 @@ const k=t.toString();if((dirs.get(k)||"").includes(d))continue;dirs.set(k,(dirs.
 const allKeys=[...dirs.keys()].sort((a,b)=>a.length-b.length||(a<b?1:-1));
 const keys=allKeys.slice(0,posShown);
 const more=allKeys.length-keys.length;
-const ps=await mD(keys.map(k=>({to:SLOW,data:"0x"+SEL_PENDING+eU(Bi(k))}))).catch(()=>keys.map(()=>null));
+const ps=await mD(keys.map(k=>({to:SLOW,data:"0x"+SEL_PENDING+eU(k)}))).catch(()=>keys.map(()=>null));
 if(my!==posSeq||keys.length&&ps.every(x=>x==null)&&dSt(pos).k===CHAIN_ID+account)return;
 const rows=[],settled=[];
 keys.forEach((k,i)=>{const p=ps[i];if(!p)return;
@@ -5429,7 +5371,7 @@ const live=rows.filter(r=>r.dir.includes("out")).map(r=>r.tid.toString());
 const gone=[...new Set([...settled,...tipSeen().filter(k=>!dirs.has(k))])];
 const probe=[...live,...gone];
 if(probe.length){
-const ts=await mD(probe.map(k=>({to:SLOW_GATE,data:"0x"+SEL_TIPS+eU(Bi(k))}))).catch(()=>[]);
+const ts=await mD(probe.map(k=>({to:SLOW_GATE,data:"0x"+SEL_TIPS+eU(k)}))).catch(()=>[]);
 if(my!==posSeq)return;
 const mine=[],dead=new Set();
 ts.forEach((t,j)=>{if(t&&j>=live.length&&w(t,0)<=0n)dead.add(probe[j]);if(!t||w(t,0)<=0n||idTok(w(t,1))!==Lc(account))return;
@@ -5543,9 +5485,9 @@ finally{--busy}
 });
 async function refundTipBestEffort(tid,verb="Reversed",strict){
 try{
-const t=await rpc(C,[{to:SLOW_GATE,data:"0x"+SEL_TIPS+eU(Bi(tid))},L]);
+const t=await rpc(C,[{to:SLOW_GATE,data:"0x"+SEL_TIPS+eU(tid)},L]);
 if(w(t,0)===0n)return false;
-const req={from:account,to:SLOW_GATE,data:"0x"+SEL_REFUNDTIP+eU(Bi(tid)),value:"0x0"};
+const req={from:account,to:SLOW_GATE,data:"0x"+SEL_REFUNDTIP+eU(tid),value:"0x0"};
 await rpc(C,[req,L]);
 Sm(verb+" · reclaiming keeper tip…");
 await settle(await sendTx([req]));
@@ -5989,10 +5931,10 @@ let total=0;try{if(c)total=Nm(Bi(c))}catch{}
 const rows=[];
 if(raw){const h=Sx(raw),n=Nm(Bx(h.slice(64,128))),base=128;
 for(let i=0;i<n&&i<LQ_SCAN;i++){
-const at=k=>Bx(h.slice(base+(i*PI_WORDS+k)*64,base+(i*PI_WORDS+k+1)*64));
-rows.push({pool:"0x"+h.slice(base+(i*PI_WORDS+PI_POOL)*64+24,base+(i*PI_WORDS+PI_POOL+1)*64),
-sl:at(PI_SL),sh:at(PI_SH),fee:at(PI_FEE),r0:at(PI_R0),r1:at(PI_R1),px:at(PI_PX),
-liq:at(PI_LIQ),cbps:at(PI_CBPS)>10000n?0n:at(PI_CBPS),hook:"0x"+h.slice(base+(i*PI_WORDS+PI_HOOK)*64+24,base+(i*PI_WORDS+PI_HOOK+1)*64),
+const at=k=>Bx(h.slice(base+(i*19+k)*64,base+(i*19+k+1)*64));
+rows.push({pool:"0x"+h.slice(base+(i*19)*64+24,base+(i*19+1)*64),
+sl:at(3),sh:at(4),fee:at(5),r0:at(6),r1:at(7),px:at(8),
+liq:at(9),cbps:at(12)>10000n?0n:at(12),hook:"0x"+h.slice(base+(i*19+10)*64+24,base+(i*19+10+1)*64),
 shares:0n,mine0:0n,mine1:0n})}}
 if(account&&rows.length){
 const bs=await mD(rows.map(r=>({to:r.pool,data:balOf(account)})));
@@ -6024,7 +5966,7 @@ lqRows=[];
 lqNewPreview();
 return}
 rows.sort((a,b)=>(b.shares>0n)-(a.shares>0n)||(b.liq>a.liq?1:b.liq<a.liq?-1:0));
-const shown=rows.slice(0,LQ_SHOW);
+const shown=rows.slice(0,24);
 if(total>shown.length)lqSub.textContent+=` · showing ${shown.length} of ${total}`
 +(total>LQ_SCAN?` (first ${LQ_SCAN} scanned)`:"");
 lqRows=shown;
@@ -6394,7 +6336,7 @@ if(my!==lqNewSeq)return;
 if(sup&&Sx(sup).length>=64&&dec1(sup,0)>0n){
 Tx(out,"That exact band already exists — add to it from the list above.");
 return}
-go.disabled=!account;
+if(account&&(!balUnread&&(payIs0?a0:a1)>fromBalance||!toBalUnread&&(payIs0?a1:a0)>toBalance))return void Tx(out,IB+".");go.disabled=!account;
 }catch{
 if(my!==lqNewSeq)return;
 Tx(out,"Could not reach the factory.");
@@ -6402,17 +6344,10 @@ Tx(out,"Could not reach the factory.");
 }
 const LQ_CREATE_GAS=4700000n;
 async function lqGasNote(box){
-const el=qS(box,"#lqGas");
+const el=qS(box,"#lqGas"),s="Creating deploys the pool contract — about 4.7M gas";
 if(!el||el.textContent)return;
-Tx(el,`Creating deploys the pool contract — about `
-+`${(Nm(LQ_CREATE_GAS)/1e6).toFixed(1)}M gas.`);
-try{
-const wei=await gasNow()*LQ_CREATE_GAS;
-Tx(el,`Creating deploys the pool contract — about `
-+`${(Nm(LQ_CREATE_GAS)/1e6).toFixed(1)}M gas, roughly `
-+`${tM(wei,18)} ETH at the moment. Adding to a band that already `
-+`exists costs a fraction of it, so check the fee your wallet offers.`);
-}catch{}
+Tx(el,s+".");
+try{Tx(el,s+`, roughly ${tM(await gasNow()*LQ_CREATE_GAS,18)} ETH at the moment. Adding to a band that already exists costs a fraction of it, so check the fee your wallet offers.`)}catch{}
 }
 async function lqCreate(){
 const box=qS(lqList,".lqnew");
@@ -6574,7 +6509,7 @@ const ETHUSD_STALE=4000;
 let ethUsd=0;
 async function loadEthUsd(){
 try{
-const c=Jp(sessionStorage.getItem("ethusd")||"null");
+const c=Jp(SS.getItem("ethusd")||"null");
 if(c&&Dn()-c.t<300000){ethUsd=c.v;return}
 }catch{}
 try{
@@ -6583,9 +6518,9 @@ const h=Sx(r||"");
 if(h.length<5*64)return;
 const answer=Bx(h.slice(64,128)),updated=Nm(Bx(h.slice(192,256)));
 if(answer<=0n)return;
-if(Mf(Dn()/1000)-updated>ETHUSD_STALE)return;
+if(nowS()-updated>ETHUSD_STALE)return;
 ethUsd=Nm(answer)/1e8;
-try{sessionStorage.setItem("ethusd",Js({t:Dn(),v:ethUsd}))}catch{}
+try{SS.setItem("ethusd",Js({t:Dn(),v:ethUsd}))}catch{}
 }catch{}
 }
 const fmtUsd=v=>{
@@ -6600,14 +6535,14 @@ const TITHE_RECORD="0x5E58BA0e06ED0F5558f83bE732a4b899a674053E";
 const BURN_TTL=600000;
 async function burnTotal(){
 try{
-const c=Jp(sessionStorage.getItem("burn")||"null");
+const c=Jp(SS.getItem("burn")||"null");
 if(c&&Dn()-c.t<BURN_TTL)return void showBurn(Bi(c.v));
 }catch{}
 try{
 const r=await cfgRead(C,[{to:BETH,data:balOf(TITHE_RECORD)},L]);
 const v=Bi(r||"0x0");
 if(v<=0n)return;
-try{sessionStorage.setItem("burn",Js({t:Dn(),v:v.toString()}))}catch{}
+try{SS.setItem("burn",Js({t:Dn(),v:v.toString()}))}catch{}
 showBurn(v);
 }catch{}
 }
@@ -6629,8 +6564,7 @@ const r=await rpc(C,[{to:PLAUNCH,data:"0x"+SEL_FLOORPRICE+eA(tok)},at]);
 fcFloorPx[key]={v:Bi(r||"0x0"),blk:at};
 }catch{delete fcFloorPx[key];return 0n}
 }
-const px=fcFloorPx[key].v;
-return px>0n?px*amount/(10n**18n):0n;
+return fcFloorPx[key].v*amount/CONE;
 }
 const SEL_POOLOF="988b1fa7",SEL_OWED0="56ea33ee",SEL_COLLECT="a480ca79";
 const SEL_COLLECTMANY="c296057e";
@@ -6642,7 +6576,7 @@ const adHide=()=>{adC=null;adHas=false;Tx(adEl,"");adShow()};
 const tkIc=(el,a,n=13,c="adic")=>{const k=known(a);if(k&&/^<(img|svg) /.test(k.icon))el.insertAdjacentHTML("beforeend",k.icon.replace('width="20" height="20"',`width="${n}" height="${n}"`).replace(/^<(img|svg) /,`<$1 class="${c}" `))};
 const adLine=(pre,n,post)=>{Tx(adEl,"");tkIc(adEl,TAC_TOK);
 const s=cE("b");Tx(s,n);adEl.append(pre,s,post)};
-const adRoot=c=>{let h=keccak(hB(keccak(hB(eU(Bi(c.index))+eA(c.a)+eU(Bi(c.amount))))));
+const adRoot=c=>{let h=keccak(hB(keccak(hB(eU(c.index)+eA(c.a)+eU(c.amount)))));
 for(const x of c.proof)h=Bi(h)<Bi(x)?keccak(hB(Sx(h)+Sx(x))):keccak(hB(Sx(x)+Sx(h)));return Lc(h)};
 async function adSync(){const my=++adSeq;
 if(!account||CHAIN_ID!==1)return adHide();
@@ -6652,7 +6586,7 @@ if(!root||!end||end<nowS()||Bi(pz||"0x0")!==0n)return adHide();
 let c=null;for(const u of AD_API){try{const j=await relayFetch(a.slice(2,4)+".json",null,u);if(j&&j.claims){c=j.claims[a]||null;break}}catch{}}
 if(my!==adSeq)return;
 if(!c||!Ns(c.index)||c.index<0||!/^\d{1,40}$/.test(St(c.amount))||!Ia(c.proof)||c.proof.length>64||!c.proof.every(x=>/^0x[0-9a-f]{64}$/i.test(x))||adRoot({...c,a})!=="0x"+Lc(Sx(root).slice(-64)))return adHide();
-const amt=Bi(c.amount),[cl,bal]=await mc3([{to:TACAD,data:"0x9e34070f"+eU(Bi(c.index))},{to:TAC_TOK,data:"0x70a08231"+eA(TACAD)}]);
+const amt=Bi(c.amount),[cl,bal]=await mc3([{to:TACAD,data:"0x9e34070f"+eU(c.index)},{to:TAC_TOK,data:"0x70a08231"+eA(TACAD)}]);
 if(my!==adSeq)return;const f=+fU(amt,18),n=(f>=1000?Math.round(f).toLocaleString("en-US"):tM(amt,18))+" TAC",D=new Date(end*1e3);
 adHas=true;adShow();
 if(Bi(cl||"0x0")!==0n){adC=null;adEl.title="";adLine("Tacit airdrop claimed · ",n,"");return}
@@ -6660,17 +6594,17 @@ if(Bi(bal||"0x0")<amt)return adHide();
 adC={index:Bi(c.index),amt,proof:c.proof};
 adLine("",n," airdrop · until "+D.toLocaleDateString(undefined,D.getFullYear()===new Date().getFullYear()?{month:"short",day:"numeric"}:{year:"numeric",month:"short",day:"numeric"})+" ");
 adEl.title=tM(amt,18)+" TAC set aside for this address in Tacit's airdrop. Claim sends it to this wallet; Claim to… sends it to another address or name. Open until "+D.toLocaleString()+".";
-adEl.append(cE("br"));for(const [k,t] of [["me","Claim"],["to","Claim to…"],...(amt%10n**10n?[]:[["sh","Claim privately"]])]){const x=cE("button");x.type="button";x.className="fclink";dSt(x).ad=k;Tx(x,t);adEl.append(x)}
+adEl.append(cE("br"));for(const [k,t] of [["me","Claim"],["to","Claim to…"],...(amt%10n**10n?[]:[["sh","Claim privately"]])]){const x=cE("button");x.className="fclink";dSt(x).ad=k;Tx(x,t);adEl.append(x)}
 }catch{if(my===adSeq)adHide()}}
 adEl.onclick=async e=>{const b=e.target.closest("button[data-ad]");if(!b||!adC||busy)return;const c=adC;let to=account;if(dSt(b).ad==="sh")return pvRun(()=>adSh(c),"Claiming privately…");
 if(dSt(b).ad==="to"){const v=St(await ask("Send your "+tM(c.amt,18)+" TAC to which address or name?","")||"").trim();if(!v)return;
-to=await rcvOf(v,true).catch(()=>"");if(!to){Sm("That is not an address or a registered name.");return}
+const er=rcErr(v);to=!er&&await rcvOf(v,true).catch(()=>"");if(!to){Sm(er||"That is not an address or a registered name.");return}
 if(!isAddr(v)&&!await sure("Claim "+tM(c.amt,18)+" TAC to "+Lc(v)+"?\n\n"+Lc(v)+" → "+to.slice(0,8)+"…"+to.slice(-6)+"\n\nContinue only if that is the address you mean."))return;if(CHAIN_ID!==1||adC!==c)return}
-const pr=eU(Bi(c.proof.length))+c.proof.map(x=>Sx(x)).join("");
+const pr=eU(c.proof.length)+c.proof.map(Sx).join("");
 const data=to===account?"0x2e7ba6ef"+eU(c.index)+eA(account)+eU(c.amt)+eU(128n)+pr:"0x4f54d47c"+eU(c.index)+eU(c.amt)+eU(128n)+eA(to)+pr;
 ++busy;b.disabled=true;try{await cW();const req={from:account,to:TACAD,data,value:"0x0"};Sm("Claiming "+tM(c.amt,18)+" TAC…");
 await sS(req);rBal()}catch(e){await adSync().catch(Np);if(adC)err(e)}finally{--busy;b.disabled=false;adSync().catch(Np)}};
-const adSh=async c=>{if(!await sure("Private claims are untested on mainnet: an unsettled one waits as a deposit you can settle from the key row. Claim privately?"))throw Er("Not claimed.");if(!cpSeed)await cpUnlock();await cpLoadAssets();const A=cpAs("0xf0bbe868af10c6c67652a99709bf32048d1aa7194efe3e9a1ef1bde43f94762b");if(!A)throw Er("The private pool does not list TAC yet.");const{i,k}=await cpFresh(c.amt/A.scale,A.id),n=cpNote(i,k),req={from:account,to:TACAD,value:"0x0",data:"0xad8b9781"+eU(c.index)+eU(c.amt)+eU(128n)+pad32(cpDepCommit(k.cx,k.cy,k.owner))+eU(Bi(c.proof.length))+c.proof.map(x=>Sx(x)).join("")};cpNotes.push(n);cpSaveNotes();try{await rpc(C,[req,L]);n.tx=await sendTx([req])}catch(e){if(!(e.sn>1)){cpNotes.splice(cpNotes.indexOf(n),1);cpSaveNotes(1)}throw e}cpSaveNotes();await settle(n.tx,1);adSync().catch(Np);await cpSettleWrap(n);Sm("Claimed privately. The relay is settling your TAC note.")};
+const adSh=async c=>{if(!await sure("Private claims are untested on mainnet: an unsettled one waits as a deposit you can settle from the key row. Claim privately?"))throw Er("Not claimed.");if(!cpSeed)await cpUnlock();await cpLoadAssets();const A=cpAs("0xf0bbe868af10c6c67652a99709bf32048d1aa7194efe3e9a1ef1bde43f94762b");if(!A)throw Er("The private pool does not list TAC yet.");const{i,k}=await cpFresh(c.amt/A.scale,A.id),n=cpNote(i,k),req={from:account,to:TACAD,value:"0x0",data:"0xad8b9781"+eU(c.index)+eU(c.amt)+eU(128n)+pad32(cpDepCommit(k.cx,k.cy,k.owner))+eU(c.proof.length)+c.proof.map(Sx).join("")};cpNotes.push(n);cpSaveNotes();try{await rpc(C,[req,L]);n.tx=await sendTx([req])}catch(e){if(!(e.sn>1)){cpNotes.splice(cpNotes.indexOf(n),1);cpSaveNotes(1)}throw e}cpSaveNotes();await settle(n.tx,1);adSync().catch(Np);await cpSettleWrap(n);Sm("Claimed privately. The relay is settling your TAC note.")};
 const PFARM="0x0000003bF4BA0B21f5e0d35119b337F4d4CF82E0",PFPOOL="0x0155358241411dB868BA714aE7c83A27087e3D6E";
 const pfEl=gE("pfEl");let pfS=null,pfSeq=0,pfJob=null,pfAt=0,pfSig="",pfFor="",pfOpen=0;
 const pfSync=f=>{const k=CHAIN_ID+"|"+(account||"");if(k!==pfFor){pfFor=k;f=1}
@@ -6682,7 +6616,7 @@ const pfPx=()=>{const s=Nm(pfS.sp)/1e18;return s>0?1/(s*s):0},pfDay=()=>Nm(pfS.r
 pfVal=sh=>pfS.sup?Nm(sh)/Nm(pfS.sup)*(Nm(pfS.r0)+Nm(pfS.r1)*pfPx())/1e18:0,
 pfApr=()=>{const a=pfDay()*365*pfPx()/(pfVal(pfS.tot)+1)*100;return isFinite(a)&&a>0?"~"+Math.round(a).toLocaleString()+"% APR on 1 ETH":""},
 pfHead=()=>[Math.round(pfDay()).toLocaleString()+" TAC/day",pfApr(),"until "+new Date(pfS.fin*1e3).toLocaleDateString(undefined,{month:"short",day:"numeric"})].filter(Boolean),
-pfBtn=(k,t,c="fclink")=>{const x=cE("button");x.type="button";x.className=c;dSt(x).pf=k;Tx(x,t);return x},
+pfBtn=(k,t,c="fclink")=>{const x=cE("button");x.className=c;dSt(x).pf=k;Tx(x,t);return x},
 pfIcon=(el,n,c)=>{for(const a of[TAC_TOK,ZERO])tkIc(el,a,n,c)};
 async function pfRun(){const my=++pfSeq,a=account;
 if(CHAIN_ID===1)try{const r=await mc3([{to:PFARM,data:"0x7b0a47ee"},{to:PFARM,data:"0xebe2b12b"},{to:PFARM,data:"0x817b1cd2"},{to:PFPOOL,data:"0x18160ddd"},
@@ -6729,18 +6663,18 @@ async function pfTok(tok,amt,plain,withP,val,verb){const dl=Bi(nowS()+1800),aps=
 if(aps.length){const pi=await permitInfo(tok,account);if(pi)try{Sm("Sign approval…");const d=withP(dl,await pmSig(tok,pi,account,amt,dl,PFARM));
 await rpc(C,[{from:account,to:PFARM,data:d,value:toHex(val)},L]);return pfTx(d,val,verb)}catch(e){if(isRejection(e))throw e}}
 return settle(await sendWith(aps,{from:account,to:PFARM,data:plain(dl),value:toHex(val)},verb))}
-const pfSim=async d=>Sx(await rpc(C,[{from:account,to:PFARM,data:d},L])),pfW=(q,i)=>lessSlip(Bx((q.slice(i*64,i*64+64)||"0")));
+const pfSim=async d=>Sx(await rpc(C,[{from:account,to:PFARM,data:d},L])),pfW=(q,i)=>lessSlip(Bx(q.slice(i*64,i*64+64)||"0"));
 async function pfAdd(box,t0,t1){
 await cW();if(isZap(box)){const z=zapSide(box,t0,t1);if(z.err)return void(Sm(z.err));
 const pv=await previewZap(PFPOOL,z.tok.addr,z.amt);if(!pv||!pv.lp)return void(Sm("The pool would refuse this deposit."));const m=lessSlip(pv.lp);
-if(z.tok.addr===ZERO)return pfTx("0x8703a0d8"+eU(0n)+eU(m)+eU(Bi(nowS()+1800)),z.amt,"Zapping into the farm…");
+if(z.tok.addr===ZERO)return pfTx("0x8703a0d8"+eU(0n)+eU(m)+eU(nowS()+1800),z.amt,"Zapping into the farm…");
 return pfTok(TAC_TOK,z.amt,d=>"0x9376f34e"+eU(z.amt)+eU(0n)+eU(m)+eU(d),(d,s)=>"0x51291e77"+eU(z.amt)+eU(0n)+eU(m)+eU(d)+s,0n,"Zapping into the farm…")}
 const ins=box.querySelectorAll(".lqin");let a0,a1;try{a0=pU(ins[0].value.trim()||"0",t0.dec);a1=pU(ins[1].value.trim()||"0",t1.dec)}catch{return void(Sm("Invalid amount"))}
 if(!a0||!a1)return void(Sm("Enter both amounts, or turn one-sided on."));
 const pv=await previewAdd(PFPOOL,a0,a1);if(!pv)return void(Sm("The pool would refuse this deposit."));const m=lessSlip(pv.lp);
 return pfTok(TAC_TOK,a1,d=>"0x6d15c09b"+eU(a1)+eU(m)+eU(d),(d,s)=>"0xddd9f3fb"+eU(a1)+eU(m)+eU(d)+s,a0,"Adding to the farm…")}
 async function pfDo(k,b){if(busy||!pfS)return;if(k==="go")return pfGo();if(!account)return void(Sm("Connect a wallet first."));
-++busy;b.disabled=true;try{await cW();const S=pfS,dl=eU(Bi(nowS()+1800));
+++busy;b.disabled=true;try{await cW();const S=pfS,dl=eU(nowS()+1800);
 if(k==="cl")await pfTx("0x4e71d92d",0n,"Claiming TAC…");
 else if(k==="st"){const sh=S.lp*Bi(qS(b.parentElement,".pfsp")?.value||100)/100n;if(!sh)throw Er("Nothing to stake.");
 await pfTok(PFPOOL,sh,()=>"0xa694fc3a"+eU(sh),(d,s)=>"0xecd9ba82"+eU(sh)+eU(d)+s,0n,"Staking…")}
@@ -6776,10 +6710,10 @@ total+=owed;mine.push(LAUNCHED[i]);
 }
 if(!mine.length)return fcSync();
 fcMineToks=mine.map(x=>x.addr);
-const cut=(+fU(total*8n/10n,18)).toFixed(4);
+const cut=tM(total*8n/10n,18);
 fcEl.innerHTML=(mine.length===1?`${safeSym(mine[0].sym)} · `:`${mine.length} of your coins · `)
 +`${cut} ETH in creator fees `
-+`<button type="button" id="fcGo" class="fclink">${mine.length===1?"Collect":"Collect all"}</button>`;
++`<button id="fcGo" class="fclink">${mine.length===1?"Collect":"Collect all"}</button>`;
 fcEl.title="Trading fees your launched coins have earned and nobody has swept yet. "
 +"The ether comes to you; the token side is burned, which raises the floor for your holders.";
 Hd(fcEl,oM());
@@ -6793,7 +6727,7 @@ const label=b.textContent;
 try{
 b.disabled=true;Tx(b,"Collecting…");
 const req={from:account,to:PLAUNCH,value:"0x0",
-data:"0x"+SEL_COLLECTMANY+eU(32)+eU(Bi(fcMineToks.length))
+data:"0x"+SEL_COLLECTMANY+eU(32)+eU(fcMineToks.length)
 +fcMineToks.map(eA).join("")};
 await rpc(C,[req,L]);
 await waitTx(await sendTx([req]));sGot();
@@ -6830,9 +6764,9 @@ const owed=Bi(o0||"0x0");
 if(owed<FC_DUST){Hd(fcEl,1);return}
 fcTok=cand.addr;
 const mine=account&&fcOwner&&Lc(account)===Lc(fcOwner);
-fcEl.innerHTML=`${(+fU(owed*8n/10n,18)).toFixed(4)} ETH in `
+fcEl.innerHTML=`${tM(owed*8n/10n,18)} ETH in `
 +`${mine?"creator fees":"fees for this coin's creator"} `
-+`<button type="button" id="fcGo" class="fclink">Collect</button>`;
++`<button id="fcGo" class="fclink">Collect</button>`;
 fcEl.title=mine?"Trading fees this coin has earned. Anyone may collect them and the ether comes to you."
 :"Trading fees this coin has earned. Anyone may collect them; the ether goes to the coin's creator "
 +"either way, and the token side is burned, which raises the floor for holders.";
@@ -6900,7 +6834,7 @@ if(h.dao){hit=h,tok=f}}
 if(!hit||!hit.shares||!tok){Hd(cbEl,1);return}
 let eth=0n,sup=0n,price=0n,dl=0n,left=0n,cap=0n;
 let rqOff=false,owed=0n;
-const now2=Bi(Mf(Dn()/1000));
+const now2=Bi(nowS());
 cbReady=0n;
 try{
 const [b,r]=await brQ("cb"+hit.dao+tok.addr,()=>Pa([
@@ -6941,7 +6875,7 @@ return raised>eth?Nm((raised-eth)*100n/raised):0})():0;
 }catch{}
 if(my!==cbSeq)return;
 if(sup<=0n){Hd(cbEl,1);return}
-const now=Bi(Mf(Dn()/1000));
+const now=now2;
 const open=price>0n&&(dl===0n||dl>now);
 const days=dl>now?Nm((dl-now+86399n)/86400n):0;
 cbDao=hit.dao;cbBuy=buy;
@@ -6956,18 +6890,17 @@ const bar=goal>0n
 :"";
 const rel=cbReady>0n
 ?`<span class="cbrow"><span>${tM(cbReady,18)} ETH vested and unreleased</span>`
-+`<button type="button" id="cbRel" class="fclink">Release</button></span>`
++`<button id="cbRel" class="fclink">Release</button></span>`
 :"";
 const top=(head?`<span class="cbrow">${head}</span>${bar}`:"")+rel;
 const act=(text,label)=>`<span class="cbact"><span>${text}</span>`
-+`<button type="button" id="cbGo" class="lqbtn">${label}</button></span>`;
++`<button id="cbGo" class="lqbtn">${label}</button></span>`;
 const msg=t=>`<span class="cbmsg">${t}</span>`;
 const paint=(html,tip)=>{
 cbEl.innerHTML=top+html;
 cbEl.title=tip;
 Hd(cbEl,0);
-const gi=i=>gE(i);
-const g=gi("cbGo"),r=gi("cbRel");
+const g=gE("cbGo"),r=gE("cbRel");
 if(g)g.onclick=cbAct;
 if(r)r.onclick=cbRelease;
 };
@@ -7072,7 +7005,7 @@ rBal();cbSync();
 }catch(e){err(e);b.disabled=false;Tx(b,label)}
 }
 const LN_MIME={"image/png":0,"image/webp":1,"image/svg+xml":2,"image/gif":3,"image/jpeg":4};
-const MIME_NAME=["image/png","image/webp","image/svg+xml","image/gif","image/jpeg","image/avif"];
+const MIME_NAME=["image/png","image/webp","image/svg+xml","image/gif","image/jpeg"];
 const LN_MAX_ART=24575;
 const LN_BUDGET=8192;
 const lnCause=()=>lnKind.value==="cause";
@@ -7116,8 +7049,7 @@ const CLOOT="0x00000000000000000000000000000000000003ef";
 const SEL_DAICO="4e1e3b11",SEL_SETALLOW="da46098c",SEL_CONFIGURE="fca53be5";
 const CUNITS=10000000n,CONE=10n**18n,CMAX=(1n<<256n)-1n;
 const CAU_MAX_ART=4096;
-const cTail=encBytes;
-const cCall=(to,data)=>eA(to)+eU(0)+eU(96)+cTail(data);
+const cCall=(to,data)=>eA(to)+eU(0)+eU(96)+encBytes(data);
 const cCalls=cs=>{let off=cs.length*32,head="",tail="";
 for(const c of cs){head+=eU(off);off+=c.length/2;tail+=c}
 return eU(cs.length)+head+tail};
@@ -7373,14 +7305,14 @@ const wnHash=(l,o,sec)=>keccak(hB(pad32("60")+eA(o)+pad32(sec)+strTail(l))),wnC=
 const wnKey=()=>WN_KEY+":"+Lc(account||"");
 const wnStamp=async()=>{const p=wnPend();
 if(!p||p.at||!account)return;
-try{const r=await rpc(C,[{to:WNS,data:"0x"+SEL_WCOMMITS+pad32(wnC(p))},L]);
+try{const r=await rpc(C,[{to:WNS,data:"0x839df945"+pad32(wnC(p))},L]);
 const t=Nm(dec1(r||"0x0",0));
 if(t)wnSave({...p,at:t})}catch{}};
 const wnPend=()=>{try{const p=Jp(LS[wnKey()]||"null");return p&&p.label&&p.secret&&Number.isFinite(p.at)?p:null}catch{return null}};
 const wnSave=p=>{try{if(p)LS[wnKey()]=Js(p);else delete LS[wnKey()]}catch{}};
 const wnId=n=>namehash(/\.wei$/.test(n)?n:n+".wei");
-const wnCostCall=l=>[{to:WNS,data:"0x"+SEL_WFEE+eU(new TextEncoder().encode(l).length)},
-{to:WNS,data:"0x"+SEL_WPREM+pad32(wnId(l))}];
+const wnCostCall=l=>[{to:WNS,data:"0xfcee45f4"+eU(new TextEncoder().encode(l).length)},
+{to:WNS,data:"0x1bf1fffb"+pad32(wnId(l))}];
 const wnCost=async l=>{const [f,pr]=await mc3(wnCostCall(l));return dec1(f,0)+dec1(pr,0)};
 const wnSync=()=>{
 if(!wnMode||wnGo.k)return;
@@ -7423,7 +7355,7 @@ const free=wnFree();
 const rc=!free&&account?[{to:WNS,data:"0x"+SEL_WOWNER+pad32(wnId(l))},
 {to:WROLL,data:"0x"+SEL_RWEIGHT+pad32(wnId(l))},
 {to:WROLL,data:"0x"+SEL_RSTATE}]:[];
-const r=await mc3([{to:WNS,data:"0x"+SEL_WAVAIL+pad32("40")+pad32(free?IDWEI:"0")+strTail(l)},
+const r=await mc3([{to:WNS,data:"0x8f8dc386"+pad32("40")+pad32(free?IDWEI:"0")+strTail(l)},
 ...(free?[]:wnCostCall(l)),...rc]);
 if(my!==wnSeq)return;
 const av=r[0],f=r[1],pr=r[2];
@@ -7482,13 +7414,7 @@ else if(!wnOpen)line+=` ${nm} can enter once the next round opens.`;
 else{line+=` ${nm} can enter, free.`;wnOffer(`Enter ${nm} in the roll`,pad32(id))}}}
 Tx(wnRollEl,line);
 }catch{Tx(wnRollEl,"Could not read the roll.")}};
-const wnPaint=()=>{const on=wnMode;
-sAt(wn,AP,on?"true":"false");
-cL(wn).toggle("on",on);
-for(const el of [rate,flip,swap])if(el)Hd(el,on);
-for(const el of [qS(document,".panel"),rcvPanel])if(el)Hd(el,on);
-for(const el of [wnPanel,wnGo,wnRollPanel])Hd(el,!on);
-for(const el of [rc,rcvEl])if(el)Hd(el,on);qS(document,".card").classList.toggle("wnon",on)};
+const mdP=(b,on,k,...g)=>{sAt(b,AP,on?"true":"false");cL(b).toggle("on",on);for(const el of[rate,flip,swap,qS(document,".panel"),rcvPanel,rc,rcvEl])if(el)Hd(el,on);for(const el of g)Hd(el,!on);cL(qS(document,".card")).toggle(k,on)},wnPaint=()=>mdP(wn,wnMode,"wnon",wnPanel,wnGo,wnRollPanel);
 function wnSet(on){
 if(on&&CHAIN_ID!==1)return;
 if(on)cbDisarm();
@@ -7670,7 +7596,7 @@ const cpBtcRead=async()=>{if(!cpBtc||Dn()-cpBtcAt<6e4)return;cpBtcAt=Dn();const 
 for(const u of[...B_API]){try{const j=await relayFetch("/address/"+a,null,u),n=x=>Ns(x)&&x>=0?x:NaN,c=j.chain_stats,m=j.mempool_stats,s=n(c.funded_txo_sum)-n(c.spent_txo_sum)+n(m.funded_txo_sum)-n(m.spent_txo_sum);
 if(Number.isFinite(s)&&s>=0&&a===cpBtc){cpBtcSat=s;if(pvMode)cpPaint();return}}catch{}}};
 let cpMore=false,cpVer=0,cpDk="",cpSeed="",cpFp="",cpPub="",cpBtc="",cpNotes=[],cpLocks=[],cpPool=null,cpSyncAt=0,cpBusy=0,pvMode=false,pvTimer=0,pvTick=0;
-const cpK={},cpNoteOf=n=>{const a=n.a||CP_ETH,h=cpFp+(n.z?n.b:n.s?n.s+n.b:n.i)+":"+n.v+":"+a;if(cpK[h])return cpK[h];const{secret,blinding}=n.s?{secret:n.s,blinding:Bi(n.b)}:cpDerive(cpSeed,n.i,a),owner=n.z?"0x"+"00".repeat(32):cpOwner(secret),{cx,cy}=cpXY(cpCommit(n.v,blinding)),leaf=cpLeaf(cx,cy,owner,a);
+const cpK={},cpNoteOf=n=>{const a=n.a||CP_ETH,h=cpFp+(n.z?n.b:n.s?n.s+n.b:n.i)+":"+n.v+":"+a;if(cpK[h])return cpK[h];const{secret,blinding}=n.s?{secret:n.s,blinding:Bi(n.b)}:cpDerive(cpSeed,n.i,a),owner=n.z?Z32:cpOwner(secret),{cx,cy}=cpXY(cpCommit(n.v,blinding)),leaf=cpLeaf(cx,cy,owner,a);
 return cpK[h]={secret,blinding,owner,cx,cy,leaf,asset:a,nu:n.z?keccak(cpCat(b32(leaf),cpU8("spent"))):cpNu(secret,leaf),value:Bi(n.v),dep:cpDepId(n.v,cpDepCommit(cx,cy,owner),a)}};
 const pneg=([x,y,z])=>[x,fmod(-y,FP),z];
 const cpOnCurve=(x,y)=>x<FP&&y<FP&&y*y%FP===(x*x%FP*x+7n)%FP;
@@ -7836,10 +7762,10 @@ const cx="0x"+e.slice(74,138),cy="0x"+e.slice(138,202),a=((await bGet("/tx/"+tx.
 const r=bCbtcBlind(cpSeed,a.txid,a.vout),q=cpXY(cpCommit(o.value,r));if(q.cx!==cx||q.cy!==cy)continue;
 cpLocks.push({t:tx.txid,v:St(o.value),cx,cy,b:"0x"+h16(r).padStart(64,"0"),an:a.txid+":"+a.vout,at:tx.status&&tx.status.block_time||0,sent:1});f++}
 if(f)cpSaveLocks();return f};
-const cpLockSync=async()=>{if(!cpLocks.length)return;const w=h=>Bx((Sx(h||"").slice(0,64)||"0"));
-const rs=await cfgBatch(cpLocks.flatMap(l=>{const o=bOp(l);return[{to:CP_POOL,data:"0x7cea1c1a"+pad32(o)},{to:CP_POOL,data:"0xe2c2a40c"+pad32(o)},{to:CP_CE,data:"0x058e18b0"+pad32(o)+eU(Bi(l.v))},{to:CP_CE,data:"0xe06e89c9"+pad32(o)},{to:CP_CE,data:"0x034448ed"+eU(Bi(l.v))},{to:CP_POOL,data:"0xb5229671"+pad32(o)},{to:CP_EH,data:"0x78808388"+pad32(o)+eA(account||ZERO)},{to:CP_EH0,data:"0x78808388"+pad32(o)+eA(account||ZERO)}]}));
+const cpLockSync=async()=>{if(!cpLocks.length)return;const w=h=>Bx(Sx(h||"").slice(0,64)||"0");
+const rs=await cfgBatch(cpLocks.flatMap(l=>{const o=bOp(l);return[{to:CP_POOL,data:"0x7cea1c1a"+pad32(o)},{to:CP_POOL,data:"0xe2c2a40c"+pad32(o)},{to:CP_CE,data:"0x058e18b0"+pad32(o)+eU(l.v)},{to:CP_CE,data:"0xe06e89c9"+pad32(o)},{to:CP_CE,data:"0x034448ed"+eU(l.v)},{to:CP_POOL,data:"0xb5229671"+pad32(o)},{to:CP_EH,data:"0x78808388"+pad32(o)+eA(account||ZERO)},{to:CP_EH0,data:"0x78808388"+pad32(o)+eA(account||ZERO)}]}));
 cpLocks.forEach((l,i)=>{const b=8*i;if(rs[b]==null)return;l.rv=St(w(rs[b]));l.mi=w(rs[b+1])===1n;l.ok=w(rs[b+2])===1n;l.have=St(w(rs[b+3]));l.want=rs[b+4]&&St(w(rs[b+4]));l.rd=w(rs[b+5])===1n;l.hs=St(w(rs[b+6]));l.ho=St(w(rs[b+7]));
-if(l.mi&&!cpNotes.some(n=>n.z&&n.b===l.b)){cpNotes.push({i:-1,v:l.v,a:CP_CBTC,s:"0x"+"00".repeat(32),b:l.b,z:1,at:l.at||0,rec:1});cpSaveNotes()}});cpSaveLocks()};
+if(l.mi&&!cpNotes.some(n=>n.z&&n.b===l.b)){cpNotes.push({i:-1,v:l.v,a:CP_CBTC,s:Z32,b:l.b,z:1,at:l.at||0,rec:1});cpSaveNotes()}});cpSaveLocks()};
 const CP_EH="0x000000008ecd09f922c9fbbdd9aca5ae8f0bebfa",CP_EH0="0x00000000689c71e690e5842df088af97f9d4f71b";
 const cpEscrowNeed=async l=>{await cpLockSync();if(l.rv!==l.v)throw Er("The lock is not recorded yet — wait for the reflection.");if(!l.want)throw Er("The escrow this lock needs could not be read; the price feed may be stale. Try again later.");const need=Bi(l.want||"0")*105n/100n,have=Bi(l.have||"0");return need>have?need-have:0n};
 const cpEthFor=async w=>{const s=Bi(await rpc(C,[{to:CP_WSTETH,data:"0xbb2952fc"+eU(w)},L])||"0x0");if(!s)throw Er("wstETH did not quote its rate.");return s*1005n/1000n+1n};
@@ -7860,11 +7786,10 @@ else{const eth=await cpEthFor(add);if(!await sure("Post the escrow with "+tM(eth
 req={from:account,to:CP_EH,value:toHex(eth),data:"0xc0e2d9a1"+pad32(bOp(l))}}
 await rpc(C,[req,L]);l.etx=await sendTx([req]);l.eh=1;cpSaveLocks();await settle(l.etx);await cpLockSync();Sm("Escrow posted. Mint it once the lock shows as covered.")};
 const cpMintCbtc=async l=>{await cpLockSync();if(l.mi)return void(Sm("Already minted."));if(!l.ok)throw Er("The escrow does not cover this lock yet.");
-const o=bOp(l),v=Bi(l.v),r=Bi(l.b),cb=cpBinding(),ctx=cpCtx("tacit-cbtc-mint-intent-v1",cb,CP_CBTC,o,[[l.cx,l.cy,"0x"+"00".repeat(32)]],[v,0n]),s=cpSigma(v,r,ctx,cpNonce(r,ctx,"cbtc-mint")),self=pvPath.value==="self";
+const o=bOp(l),v=Bi(l.v),r=Bi(l.b),cb=cpBinding(),ctx=cpCtx("tacit-cbtc-mint-intent-v1",cb,CP_CBTC,o,[[l.cx,l.cy,Z32]],[v,0n]),s=cpSigma(v,r,ctx,cpNonce(r,ctx,"cbtc-mint")),self=pvPath.value==="self";
 const{j,rb}=await relaySub({type:"cbtcmint",op:{chainBinding:cb,outpoint:o,vBtc:St(v),fee:"0",cx:l.cx,cy:l.cy,sigR:s.R,sigZ:s.z},memos:["0x"],mode:self?"prove":"settle"});
 if(!j.jobId)throw Er("The relay did not take the mint.");l.job=j.jobId;l.js=j.status||"pending";l.rb=rb;l.self=self?1:0;delete l.pv;delete l.pr;cpSaveLocks();Sm(self?"Proving the mint. Press settle when it appears.":"The relay is minting cBTC.")};
-const cpLockPoll=async l=>{const st=await relayFetch("/confidential/status?id="+encodeURIComponent(l.job),null,l.rb);l.js=st.status||"unknown";const pr=st.proof||st.proofBytes;
-if(st.status==="proven"&&/^0x[0-9a-fA-F]+$/.test(st.publicValues||"")&&/^0x[0-9a-fA-F]+$/.test(pr||"")&&Lc(st.publicValues).includes(Sx(bOp(l)))){l.pv=st.publicValues;l.pr=pr}cpSaveLocks()};
+const cpLockPoll=async l=>{await cpJobPoll(l,bOp(l));cpSaveLocks()};
 const cpLockSettle=async l=>{if(!(l.pv&&l.pr))throw Er(PNR);const req=await cpSettleReq(l.pv,l.pr,["0x"],700000);
 await rpc(C,[req,L]);l.stx=await sendTx([req]);cpSaveLocks();await settle(l.stx);l.js="settled";cpSaveLocks();await cpLockSync();Sm("cBTC minted.")};
 const cpEscrowBack=async l=>{const req={from:account,to:Bi(l.hs||"0")>0n?CP_EH:CP_EH0,value:"0x0",data:"0xc5211d27"+pad32(bOp(l))};await rpc(C,[req,L]);l.rtx=await sendTx([req]);cpSaveLocks();await settle(l.rtx);await cpLockSync();Sm("Escrow returned to this wallet.")};
@@ -7881,7 +7806,7 @@ const cpCdpOk=p=>!!p&&Ni(p.i)&&p.i>=0&&/^\d+$/.test(p.v||"")&&/^\d+$/.test(p.cv|
 const cpLd=k=>{try{const r=LS[k+cpFp],a=cpOpenS(r);if(r&&r[0]=="[")cpSv(k,a);return Ia(a)?a:[]}catch{return[]}},cpSv=(k,a)=>{try{LS[k+cpFp]=cpSealS(a)}catch{}},cpLoadCdps=()=>cpLd(CP_CDPS).filter(cpCdpOk);
 const cpSaveCdps=a=>cpSv(CP_CDPS,a);
 const cpCdpOpen=async n=>{const k=cpNoteOf(n),c=await cpSync(true,1),li=c.leaves.indexOf(k.leaf);if(li<0)throw Er("The cBTC note is not in the pool yet.");if(c.spent.includes(k.nu))throw Er("That note is already spent.");
-const w=h=>Bx((Sx(h||"").slice(0,64)||"0")),[u,rt,rb]=await cfgBatch([{to:CP_CE,data:"0xd5901347"+eU(k.value)},{to:CP_CE,data:"0x2c4e722e"},{to:CP_CE,data:"0x4827ecb3"}]);
+const w=h=>Bx(Sx(h||"").slice(0,64)||"0"),[u,rt,rb]=await cfgBatch([{to:CP_CE,data:"0xd5901347"+eU(k.value)},{to:CP_CE,data:"0x2c4e722e"},{to:CP_CE,data:"0x4827ecb3"}]);
 const usd=w(u),ratio=w(rb),max=w(rt)&&ratio&&usd*9900n/ratio;if(!max)throw Er("The engine could not price this cBTC — try again.");
 const s=(await ask("Borrow how many cUSD against "+tM(k.value,8)+" cBTC (worth $"+tM(usd,8)+")? At most "+tM(max,8)+"; the engine liquidates a position that falls below its liquidation ratio.",tM(max/2n,8))||"").trim();if(!s)return;
 const debt=pU(s,8);if(debt<=0n||debt>max)throw Er("Borrow more than zero and at most "+tM(max,8)+" cUSD.");
@@ -7892,20 +7817,19 @@ const nn=cpNotes.some(x=>x.s===X.S.nk)?null:{i:-1,v:St(debt),a:CP_CUSD,s:X.S.nk,
 const undo=()=>{const q=cpLoadCdps().filter(x=>x.leaf!==p.leaf);cpSaveCdps(q);const ix=cpNotes.indexOf(nn);if(ix>=0){cpNotes.splice(ix,1);cpSaveNotes(true)}};
 let j,jrb;try{({j,rb:jrb}=await relaySub({type:"cdpmint",op:X.op,memos:[memo],mode:self?"prove":"settle"}))}catch(e){if(e&&e.rej)undo();throw e}if(!j.jobId){undo();throw Er("The relay did not take the loan.")}
 p.job=j.jobId;p.js=j.status||"pending";p.rb=jrb;p.self=self?1:0;cpSaveCdps(cdps);Sm("Proving the loan. Press settle when it appears: a loan is opened from this wallet, and the tip covers the proof.")};
-const cpCdpPoll=async p=>{const st=await relayFetch("/confidential/status?id="+encodeURIComponent(p.job),null,p.rb);p.js=st.status||"unknown";const pr=st.proof||st.proofBytes;
-if(st.status==="proven"&&/^0x[0-9a-fA-F]+$/.test(st.publicValues||"")&&/^0x[0-9a-fA-F]+$/.test(pr||"")&&Lc(st.publicValues).includes(Sx(p.leaf))){p.pv=st.publicValues;p.pr=pr}};
+const cpCdpPoll=p=>cpJobPoll(p,p.leaf);
 const cpCdpSettle=async p=>{if(!(p.pv&&p.pr))throw Er(PNR);const req=await cpSettleReq(p.pv,p.pr,[p.memo],900000);
 await rpc(C,[req,L]);p.stx=await sendTx([req]);const a=cpLoadCdps(),m=a.find(x=>x.leaf===p.leaf);if(m)Oa(m,p);cpSaveCdps(a);await settle(p.stx);p.js="settled";if(m)m.js="settled";cpSaveCdps(a);Sm("Position opened.")};
 const cpScanCdps=async()=>{const z=cpNotes.filter(n=>n.z);if(!z.length)return 0;const f={address:CP_CE,fromBlock:toHex(CP_BLOCK),toBlock:"latest",topics:[CDP_MINTED]};let lg=null;
 try{lg=await cfgRead("eth_getLogs",[f])}catch{}if(!cpLogsOk(lg))for(const u of CP_LOGS){try{lg=await httpRead(u,"eth_getLogs",[f]);if(cpLogsOk(lg))break}catch{}}if(!cpLogsOk(lg))throw Er("No node served the loan history.");
 const tq=cpScanCdps.t||=new Map(),SS=[];let nx=0;try{for(const l of lg){const h=l.transactionHash;if(!tq.has(h))tq.set(h,Lc((await cfgRead("eth_getTransactionByHash",[h])).input));for(let i=nx;i<nx+20;i++)if(tq.get(h).includes(Sx((SS[i]||=cdpSecrets(i)).owner)))nx=i+1}}catch{nx=-1}cpScanCdps.n=nx;
-const a=cpLoadCdps(),hx=x=>"0x"+h16(x).padStart(64,"0"),rw=v=>Bx((Sx(v||"").slice(0,64)||"0")),rs=new Set([hx(10n**27n)]);let found=0;
+const a=cpLoadCdps(),hx=x=>"0x"+h16(x).padStart(64,"0"),rw=v=>Bx(Sx(v||"").slice(0,64)||"0"),rs=new Set([hx(10n**27n)]);let found=0;
 try{const r=rw(await cfgRead(C,[{to:CP_CE,data:"0x2c4e722e"},L]));if(r)rs.add(hx(r))}catch{}
-for(const l of lg){const leaf=Lc(St(l.topics[1]||"")),debt=Bx((Sx(l.data).slice(0,64)||"0"));if(!/^0x[0-9a-f]{64}$/.test(leaf)||a.some(p=>p.leaf===leaf))continue;
+for(const l of lg){const leaf=Lc(St(l.topics[1]||"")),debt=Bx(Sx(l.data).slice(0,64)||"0");if(!/^0x[0-9a-f]{64}$/.test(leaf)||a.some(p=>p.leaf===leaf))continue;
 const R=new Set(rs),rc=cpScanCdps.r||=new Map();if(!rc.has(l.blockNumber))try{rc.set(l.blockNumber,rw(await cfgRead(C,[{to:CP_CE,data:"0x2c4e722e"},l.blockNumber])))}catch{}if(rc.get(l.blockNumber))R.add(hx(rc.get(l.blockNumber)))
 hit:for(let i=0;i<Mx(16,nx);i++){const S=SS[i]||=cdpSecrets(i);for(const n of z)for(const rate of R){const v=Bi(n.v);if(cdpLeaf(debt,rate,S.owner,S.nonce,[[CP_CBTC,v]])===leaf){a.push({i,v:St(debt),cv:St(v),rate,leaf,at:0,js:"settled"});found++;break hit}}}}
 if(found)cpSaveCdps(a);return found};
-const cpCdpRows=()=>cpLoadCdps().map((p,j)=>{const st=p.job&&p.js!=="settled"?(/failed|unknown/.test(p.js)?"loan failed":p.self&&p.pv?`<button type="button" class="fclink" data-a="csettle" data-c="${j}">settle</button>`:"opening…"):p.x?"closed or topped up":'open · <a href="https://tacit.finance/#tab=cdp" target="_blank" rel="noreferrer">repay on tacit.finance</a>';
+const cpCdpRows=()=>cpLoadCdps().map((p,j)=>{const st=p.job&&p.js!=="settled"?(/failed|unknown/.test(p.js)?"loan failed":p.self&&p.pv?`<button class="fclink" data-a="csettle" data-c="${j}">settle</button>`:"opening…"):p.x?"closed or topped up":'open · <a href="https://tacit.finance/#tab=cdp" target="_blank" rel="noreferrer">repay on tacit.finance</a>';
 return`<div class="cpr"><span><b>${tM(Bi(p.v),8)} cUSD</b> against ${tM(Bi(p.cv),8)} cBTC</span><span>${st}</span></div>`}).join("");
 const bEnvOf=h=>{const s=/^[0-9a-f]*$/i.test(h||"")?hB(h):U8(0);if(s.length<36||s[0]!==32||s[33]!==172||s[34]!==0||s[35]!==99)return null;let i=36,end=0;const P=[];
 while(i<s.length){const o=s[i];if(o===104){end=i+1;break}let n,j=i+1;if(o===0)n=0;else if(o<76)n=o;else if(o===76){n=s[j];j++}else if(o===77){n=s[j]|s[j+1]<<8;j+=2}else return null;if(j+n>s.length)return null;P.push(s.slice(j,j+n));i=j+n}
@@ -7921,7 +7845,7 @@ const bOpenOut=(d,tx,vout)=>{const w=((tx.vin||[])[0]||{}).witness;if(!w||w.leng
 const v1=tx.vin[1];if(!v1||!/^[0-9a-f]{64}$/.test(v1.txid||"")||!Ni(v1.vout))return null;const an=bAnchor(v1),o=e.outs[vout],sw=v1.witness,tryK=(k,bd,ad)=>{const r=fmod(big(bKs(k,bd,an,vout)),FN),v=bAmt(o.ct,bKs(k,ad,an,vout));return pcomp(cpCommit(v,r))===o.c?{v,r}:null};
 let hit=null;if(sw&&sw.length===2&&/^[0-9a-f]{66}$/.test(sw[1]||"")){const sd=bEcdhSeed(d,hB(sw[1]));if(sd)hit=tryK(sd,"tacit-blind-v1","tacit-amount-v1")}
 if(!hit)hit=tryK(b32(Bi(d)),"tacit-change-v1","tacit-amount-self-v1");return hit?{a:e.asset,v:St(hit.v),c:o.c,l:bNoteLeaf(e.asset,o.c,((tx.vout||[])[vout]||{}).scriptpubkey,e.op==57&&E.slice(1,33))}:null};
-const bNoteLeaf=(a,c,spk,d)=>{const P=pfromx(Bx(c.slice(2)),c.slice(0,2)==="03");if(!P)return"";const{cx,cy}=cpXY(P),ak=/^5120[0-9a-f]{64}$/i.test(spk||"")?"0x"+Lc(spk.slice(4)):"0x"+"00".repeat(32);
+const bNoteLeaf=(a,c,spk,d)=>{const P=pfromx(Bx(c.slice(2)),c.slice(0,2)==="03");if(!P)return"";const{cx,cy}=cpXY(P),ak=/^5120[0-9a-f]{64}$/i.test(spk||"")?"0x"+Lc(spk.slice(4)):Z32;
 return keccak(cpCat(b32(a),b32(cx),b32(cy),b32(ak),d||[],cpU8("tacit-btc-note-"+(d?"bound":"v1"))))};
 let cpBtcNotes=[],cpBtcSkip=[];
 const cpScanBtc=async()=>{const all=(await bGet("/address/"+cpBtc+"/utxo")).filter(x=>x&&/^[0-9a-f]{64}$/.test(x.txid||"")&&Ni(x.vout)),u=all.slice(0,200),out=[];cpBtcSkip=all.slice(200).map(x=>x.txid+":"+x.vout);
@@ -7933,7 +7857,7 @@ const [lb,tt]=n.w===1?["verified","Tacit's reflection of Bitcoin holds this note
 :n.w===0?["not reflected yet","Tacit's reflection does not hold this note yet: new Bitcoin notes join it 24 blocks deep (about four hours), at the next reflection."]
 :["unverified","A Tacit note held by this key's Bitcoin address. The reflection lookup did not answer, so zSwap has not checked it; spend it on tacit.finance."];
 return`<div class="cpr"><span><b>${A?tM(Bi(n.v)*A.scale,A.dec)+" "+A.sym:n.v+" units"}</b> on Bitcoin</span><span title="${tt}"><a href="https://mempool.space/tx/${n.t}" target="_blank" rel="noreferrer">${lb}</a></span></div>`}).join("");
-const cpLockRows=()=>cpLocks.map((l,j)=>{const B=(a,t)=>`<button type="button" class="fclink" data-a="${a}" data-l="${j}">${t}</button>`;
+const cpLockRows=()=>cpLocks.map((l,j)=>{const B=(a,t)=>`<button class="fclink" data-a="${a}" data-l="${j}">${t}</button>`;
 const st=!l.sent?"not sent"+B("lsend","send"):l.mi?"minted as cBTC":l.job&&!/failed|unknown/.test(l.js)?(l.pv&&l.self?B("lsettle","settle"):l.self?"proving…":"minting…")
 :l.rv===l.v?(l.ok?B("lmint",l.job?"retry mint":"mint"):B("lesc","post escrow")):"awaiting confirmations and reflection";
 const rc=Bi(l.hs||"0")+Bi(l.ho||"0")>0n&&(l.rd||!l.mi&&!(l.job&&!/failed|unknown/.test(l.js)))?B("lrecl","reclaim escrow"):"";
@@ -8018,7 +7942,7 @@ cfgRead(C,[{to:l2.bridge||l2.inbox,data:"0x"+(l2.bridge?SEL_CPOTHER:SEL_CPBRIDGE
 const impl=retAddr(get(ri));
 if(!impl||impl===ZERO)throw Er("The router did not answer.");
 const a=Sx(get(ra)||"");
-if(Bx((cpWord(a,0)||"0"))!==1n||Bx((cpWord(a,1)||"0"))!==0n)throw Er("Native ETH is not registered in the pool.");
+if(Bx(cpWord(a,0)||"0")!==1n||Bx(cpWord(a,1)||"0")!==0n)throw Er("Native ETH is not registered in the pool.");
 const peer=retAddr(get(rp));
 if(peer!==Lc(l2.peer))throw Er("The "+CHAINS[ch].name+" bridge did not answer as expected — refusing to continue.");
 if(ch===4663&&parseInt(get(rc),16)!==4663)throw Er("The Robinhood node answered for another chain.");
@@ -8048,7 +7972,7 @@ return{k,li,s:"pending"}};
 const cpJe=x=>x&&x.je?`<span title="${St(x.je).replace(/[^\w .,:;()%-]/g,"")}">relay failed</span>`:"relay failed";
 const cpRelayPoll=async n=>{const job=n.ex?n.ex.job:n.job;if(!job)return;
 const tgt=n.ex||n,st=await relayFetch("/confidential/status?id="+encodeURIComponent(job),null,tgt.rb);tgt.js=st.status||"unknown";tgt.je=st.status==="failed"&&st.error?(st.broadcastHashes?.length?"still pending ":"")+St(st.error).slice(0,200):"";
-if(st.activation)tgt.ja=St(st.activation);if(st.status==="settled"&&!tgt.jst)tgt.jst=Dn();if(n.ex&&!n.ex.atx&&/^0x[0-9a-fA-F]{64}$/.test(st.activateTx||"")){const rc=await cfgRead("eth_getTransactionReceipt",[st.activateTx]).catch(Nl);if(rc&&rc.status==="0x1"&&(rc.logs||[]).some(l=>Lc(St(l.address||""))===Lc(CP_ROUTER)))n.ex.atx=st.activateTx}
+if(st.activation)tgt.ja=St(st.activation);if(st.status==="settled"&&!tgt.jst)tgt.jst=Dn();if(n.ex&&!n.ex.atx&&/^0x[0-9a-fA-F]{64}$/.test(st.activateTx||"")&&/^0x[0-9a-f]{2}/i.test(await cfgRead(GC,[n.ex.esc,L]).catch(Nl)))n.ex.atx=st.activateTx
 const pr=st.proof||st.proofBytes;if(st.status==="proven"&&/^0x[0-9a-fA-F]+$/.test(st.publicValues||"")&&/^0x[0-9a-fA-F]+$/.test(pr||"")&&Lc(st.publicValues).includes(Lc(Sx(n.p?n.dep:cpNoteOf(n)[n.ex?"nu":"dep"])))){tgt.pv=st.publicValues;tgt.pr=pr;if(cpOpen(st.memos?.[0],cpNoteOf(n).leaf,cpSeed))n.memo=st.memos[0]}
 cpSaveNotes()};
 const cpSettleWrap=async n=>{try{if(Bi(await l1Read(C,[{to:CP_POOL,data:"0x"+SEL_CPDEP+pad32(n.dep||cpNoteOf(n).dep)},L])||"0x0")===2n)return n.js="settled"}catch{}const self=pvPath.value==="self",{j:r,rb}=await relaySub({type:"wrap",op:n.op,memos:[n.memo],mode:self?"prove":"settle",depositTx:n.tx});
@@ -8115,7 +8039,7 @@ if(A.tok!==ZERO&&await cpTokBal(A)<wei)throw Er("Not enough "+A.pub+" in this wa
 const e=await cpDepositOne(v,"Deposited.",A);
 rBal();
 Sm(e?"Deposited, but the relay did not take the settle ("+explain(e)+"). Press settle on the note, or choose Settle: from this wallet.":"Deposited. The relay is settling it into the pool.");sGot()};
-const CP_RET="This Tacit pool is retired: deposits and requests are closed, and what you hold can still be withdrawn.";const TINV="zswap:tinv",cpInvGet=()=>{try{return sessionStorage.getItem(TINV)||window.__tinv||""}catch{return window.__tinv||""}},cpInvSet=v=>{window.__tinv=v;try{v?sessionStorage.setItem(TINV,v):sessionStorage.removeItem(TINV)}catch{}},cpInvGo=()=>{const r=cpInvGet();if(!r)return;if(CHAIN_ID!==1){Sm("A payment request is waiting. Tacit payments are on Ethereum: switch to Ethereum to review it.");return}if(!pvMode)pvSet(true);if(!account||!cpSeed){if(!stat.textContent)Sm("A payment request is waiting. Connect a wallet and unlock your Tacit key to review it.");return}if(cpBusy)return;cpInvSet("");pvRun(()=>cpPay("tacit-invoice="+r),"Checking the payment request…")};
+const CP_RET="This Tacit pool is retired: deposits and requests are closed, and what you hold can still be withdrawn.";const TINV="zswap:tinv",cpInvGet=()=>{try{return SS.getItem(TINV)||window.__tinv||""}catch{return window.__tinv||""}},cpInvSet=v=>{window.__tinv=v;try{v?SS.setItem(TINV,v):SS.removeItem(TINV)}catch{}},cpInvGo=()=>{const r=cpInvGet();if(!r)return;if(CHAIN_ID!==1){Sm("A payment request is waiting. Tacit payments are on Ethereum: switch to Ethereum to review it.");return}if(!pvMode)pvSet(true);if(!account||!cpSeed){if(!stat.textContent)Sm("A payment request is waiting. Connect a wallet and unlock your Tacit key to review it.");return}if(cpBusy)return;cpInvSet("");pvRun(()=>cpPay("tacit-invoice="+r),"Checking the payment request…")};
 const cpRequest=async()=>{if(cpRet)throw Er(CP_RET);const{v,A}=cpAmount(1),{i,k}=await cpFresh(v,A.id),n=cpNote(i,k);n.inv=1;
 cpNotes.push(n);cpSaveNotes();cpPaint();
 pvAmt.value="";Sm("Request built. Send it to whoever is paying; the note settles once they pay.");cpShow(n)};
@@ -8315,7 +8239,7 @@ if(!t){const a=await nameFwd(n).catch(()=>"");if(isAddr(a||""))return cpToPublic
 if(!/^tacit1/i.test(t))throw Er(n+"'s Tacit record is not a tacit1… address.");
 const h=cpRecip(t);if(!await sure("Send to "+n+"?\n\n"+n+" → "+t.slice(0,12)+"…"+t.slice(-8)+"\n\nThis is the Tacit address the name's owner published. Continue only if it is the person you mean to pay."))throw Er("cancelled");return h}
 return cpRecip(s)};
-const cpGasOk=async q=>{const [b,gp]=await Pa([rpc(GB,[account,L]).then(BigInt),gasNow()]),need=Bi(q.value||"0x0")+Bi(q.gas||"0x0")*gp*2n;
+const cpGasOk=async q=>{const [b,gp]=await Pa([rpc(GB,[account,L]).then(Bi),gasNow()]),need=Bi(q.value||"0x0")+Bi(q.gas||"0x0")*gp*2n;
 if(b<need)throw Oa(Er("This wallet holds too little ETH to submit this itself (about "+tM(need,18)+" ETH with gas). Settle it through the relay instead, which takes its fee from the note."),{offChain:true})};
 const cpRecip=s=>{s=St(s||"").trim();let h;
 if(/^tacit1/i.test(s)){const b=cpLn(s);if(!(b&&b[1]&130))throw Er("That Tacit address does not carry an Ethereum lane.");h=cpHex(b[1]&2?b.slice(68,101):b.slice(2,35))}
@@ -8324,7 +8248,7 @@ const cpWtData=(w,cm,pv,pr,ms,to)=>{const a=encBytes(pv),b=encBytes(pr),t=ms.map
 return"0x"+SEL_CPWT+eU(w)+pad32(cm)+eU(192)+eU(192+a.length/2)+eU(192+(a.length+b.length)/2)+(to?eA(to):pad32("0"))+a+b+hd+t.join("")};
 const CP_RELAYER="0x000000009c28617ac88b52eae5efaacdd4ac34c3",CP_LKBAD="This page's copy of the pool's lock set does not match the chain, so anything built on it would fail. Press recover and try again, or use tacit.finance.",
 cpSlot=(k,s)=>keccak(cpCat(b32(k),b32(Bi(s)))),cpStor=(s,t)=>l1Read("eth_getStorageAt",[CP_POOL,typeof s==="string"?s:toHex(s),t||L]);
-const cpCalls=inp=>{const h=Lc(Sx(inp)),sel=h.slice(0,8),d=h.slice(8),W=(s,o)=>{const x=Bx((s.slice(o*2,o*2+64)||"0"));if(x>1n<<24n)throw Er("pv");return Nm(x)},N=x=>{if(x>4096||(N.b=(N.b||0)+x)>16384)throw Er("pv");return x},
+const cpCalls=inp=>{const h=Lc(Sx(inp)),sel=h.slice(0,8),d=h.slice(8),W=(s,o)=>{const x=Bx(s.slice(o*2,o*2+64)||"0");if(x>1n<<24n)throw Er("pv");return Nm(x)},N=x=>{if(x>4096||(N.b=(N.b||0)+x)>16384)throw Er("pv");return x},
 by=o=>"0x"+d.slice((o+32)*2,(o+32+W(d,o))*2),tup=o=>{const mo=o+W(d,o+64);return{pv:by(o+W(d,o)),ms:Array.from({length:N(W(d,mo))},(_,i)=>by(mo+32+W(d,mo+32+i*32)))}},
 arr=h0=>{const a=W(d,h0);return Array.from({length:N(W(d,a))},(_,i)=>tup(a+32+W(d,a+32+i*32)))},cs=sel===SEL_CPSETTLE||sel===SEL_CPSTIP?[tup(0)]:sel==="fcccb833"?arr(0):sel==="e2b28725"?arr(32):[];
 if(!cs.length)for(let i=h.indexOf(SEL_CPSETTLE,8);i>=0;i=h.indexOf(SEL_CPSETTLE,i+1))if(!(i%2))try{cs.push(tup(i/2))}catch{}
@@ -8349,10 +8273,10 @@ const cpCur=()=>{try{const o=Jp(LS[CP_CUR+cpFp]||"{}");return{m:+o.m||0,l:+o.l||
 const cpBusyK=()=>new Set(cpSends.filter(S=>!CP_DONE.test(S.st)).flatMap(S=>[...(S.ins||[]),...(S.n?[S.n]:[])]));
 const cpReady=a=>{const b=cpBusyK();return cpNotes.filter(n=>!n.p&&!n.ex&&(n.a||CP_ETH)===a&&!b.has(cpKeyOf(n))&&cpStatus(n).s==="ready")};
 const cpIn=(n,c)=>{const k=cpNoteOf(n),li=c.leaves.indexOf(k.leaf);if(li<0)throw Er("A note has not settled into the pool yet.");if(c.spent.includes(k.nu))throw Er("A note is already spent.");const t=cpTree(c.leaves,li);
-return{v:n.v,b:k.blinding,s:n.z?"0x"+"00".repeat(32):k.secret,owner:k.owner,cx:k.cx,cy:k.cy,li,path:t.path,root:t.root,nu:k.nu}};
+return{v:n.v,b:k.blinding,s:n.z?Z32:k.secret,owner:k.owner,cx:k.cx,cy:k.cy,li,path:t.path,root:t.root,nu:k.nu}};
 const cpJob=async(t,op,m,self,nd)=>{const{j:r,rb}=await relaySub({type:t,op,memos:m,mode:self?"prove":"settle"});if(!r.jobId)throw Er("The relay did not take it.");return{job:r.jobId,js:r.status||"pending",rb,self:self?1:0,t,op,m,nd,at:Dn()}};
-const cpJobPoll=async j=>{if(!j||!j.job||j.stx||j.pv||j.js==="settled"||j.js==="failed")return;const st=await relayFetch("/confidential/status?id="+encodeURIComponent(j.job),null,j.rb),pr=st.proof||st.proofBytes;j.js=st.status||"unknown";
-if(st.status==="proven"&&/^0x[0-9a-fA-F]+$/.test(st.publicValues||"")&&/^0x[0-9a-fA-F]+$/.test(pr||"")&&Lc(st.publicValues).includes(Lc(Sx(j.nd)))){j.pv=st.publicValues;j.pr=pr}};
+const cpJobPoll=async(j,d=j&&j.nd)=>{if(!j||!j.job||j.stx||j.pv||j.js==="settled"||j.js==="failed")return;const st=await relayFetch("/confidential/status?id="+encodeURIComponent(j.job),null,j.rb),pr=st.proof||st.proofBytes;j.js=st.status||"unknown";
+if(st.status==="proven"&&/^0x[0-9a-fA-F]+$/.test(st.publicValues||"")&&/^0x[0-9a-fA-F]+$/.test(pr||"")&&Lc(st.publicValues).includes(Lc(Sx(d)))){j.pv=st.publicValues;j.pr=pr}};
 const cpJobSend=async(j,gas)=>{if(!(j&&j.pv&&j.pr))throw Er(PNR);let wt=0n;if(j.t==="wraptransfer")try{wt=await cpProveTip()}catch{wt=0n}
 const req=j.t==="wraptransfer"?{from:account,to:CP_ROUTER,value:toHex(Bi(j.w)+wt),data:cpWtData(Bi(j.w),j.cm,j.pv,j.pr,j.m,wt>0n?CP_TIPTO:""),gas:toHex(1400000)}:await cpSettleReq(j.pv,j.pr,j.m,gas||900000,j.op&&j.op.fee);
 await rpc(C,[req,L]);await cpGasOk(req);j.stx=await sendTx([req]);cpSaveS();cpSaveI();cpPaint();try{await settle(j.stx)}catch(e){delete j.stx;cpSaveS();cpSaveI();throw e}j.js="settled";cpSaveS();cpSaveI()};
@@ -8415,18 +8339,18 @@ const S=await cpXferGo(ins,v,fee,A,c,self,cpPub);S.out=q;cpSaveS();Sm("Merging "
 const cpShort=h=>h.slice(0,6)+"…"+h.slice(-4);
 const cpWatch=x=>typeof x==="string"&&/…$/.test(x)?`<span title="Only this browser is following this step. Whatever happens, the result lands on chain and shows up here again — on any device, from your key alone.">${x}</span>`:x;
 const cpDoing=k=>{const S=cpSends.find(S=>S.st!=="done"&&(S.n===k||(S.ins||[]).includes(k)));return!S?"sending…":S.out?"merging…":S.to!==cpPub?"sending…":(S.ins||[]).length>1?"merging…":"splitting…"};
-const cpSendRows=()=>cpSends.map((S,j)=>{if(S.st==="done"||/^(claimed|refunded)$/.test(S.st)&&nowS()-(S.at||0)>864e3)return"";const A=cpAs(S.a)||{sym:"?",scale:CP_SCALE,dec:18},B=(a,l,t)=>`<button type="button" class="fclink" data-a="${a}" data-s="${S.id}"${t?` title="${t}"`:""}>${l}</button>`,J=S.st==="fund"?S.fj:S.st==="lock"?S.lj:S.st==="refund"?S.rj:null,
+const cpSendRows=()=>cpSends.map((S,j)=>{if(S.st==="done"||/^(claimed|refunded)$/.test(S.st)&&nowS()-(S.at||0)>864e3)return"";const A=cpAs(S.a)||{sym:"?",scale:CP_SCALE,dec:18},B=(a,l,t)=>`<button class="fclink" data-a="${a}" data-s="${S.id}"${t?` title="${t}"`:""}>${l}</button>`,J=S.st==="fund"?S.fj:S.st==="lock"?S.lj:S.st==="refund"?S.rj:null,
 w=J&&J.stx?"sent…":J&&J.self?(J.pv?B("sgo",J.t==="wraptransfer"?"wrap & send":S.to===cpPub?"settle":"send",S.to===cpPub?"One transaction from this wallet finishes it; the relay takes no fee, only the tip for proving it":"Send it from this wallet; the relay takes no fee, only the tip for proving it"):"proving…"):"",
 s=S.st==="fund"?((S.pf||0)>=5&&!(S.fj&&S.fj.pv)?`<span title="The relay accepted this job and has stopped answering for it. Your notes are safe on chain and nothing has been spent. Retry asks it again; forget releases the notes for other use, and should the relay ever settle this job afterwards, that later spend simply fails.">relay not answering</span>`+B("spoll","retry")+B("sforget","forget"):w||(S.to===cpPub?"settling…":"funding…")):S.st==="lock"?w||"locking…":S.st==="sent"?(Dn()/1e3>+S.dl?"unclaimed"+B("srefund","take back"):"waiting for the recipient"):S.st==="claimed"?"claimed":S.st==="refund"?w||"taking back…":S.st==="refunded"?"taken back":S.st==="lockfail"?`<span title="${St(S.err||"").replace(/[^\w .,:;()%-]/g,"")}">relay failed</span>`+B("slock","retry")+B("sforget","forget"):S.st==="outfail"?"withdrawal not started"+B("sout","withdraw")+B("sforget","forget"):"failed"+B("sforget","forget");
 return`<div class="cpr"><span><b>${cpFmt(S.v,A)} ${A.sym}</b> ${S.out?"merge for a withdrawal":S.to===cpPub?(S.ins&&S.ins.length>1?"merging "+S.ins.length+" notes into one":"split · the rest stays shielded"):"sent to "+cpShort(S.to)}</span><span>${cpWatch(s)}</span></div>`}).join("");
-const cpInRows=()=>cpInbox.map((L,j)=>{if(L.st==="claimed")return"";const A=cpAs(L.a)||{sym:"?",scale:CP_SCALE,dec:18},B=(a,l)=>`<button type="button" class="fclink" data-a="${a}" data-i="${L.lf}">${l}</button>`,J=L.cj,
+const cpInRows=()=>cpInbox.map((L,j)=>{if(L.st==="claimed")return"";const A=cpAs(L.a)||{sym:"?",scale:CP_SCALE,dec:18},B=(a,l)=>`<button class="fclink" data-a="${a}" data-i="${L.lf}">${l}</button>`,J=L.cj,
 s=J?(J.stx?"sent…":/failed|unknown/.test(J.js)||!J.pv&&Dn()-J.at>36e5?"relay failed"+B("claim","retry"):J.self?(J.pv?B("cgo","claim"):"proving…"):"claiming…"):Dn()/1e3>+L.dl?"expired":B("claim","claim");
 const by=!J&&+L.dl>Dn()/1e3?" · claim by "+new Date(+L.dl*1e3).toLocaleDateString(undefined,{year:"numeric",month:"short",day:"numeric"}):"";
 return`<div class="cpr"><span><b>${cpFmt(L.v,A)} ${A.sym}</b> received privately${by}</span><span>${s}</span></div>`}).join("");
 const cpSum=()=>{if(!cpPool)return`<div class="cpr"><span>Reading the pool… your notes live on chain and appear here once it loads.</span></div>`;const r={},inc={},mov={},cnt={},b=cpBusyK(),own=new Set(cpSends.filter(S=>S.st!=="done"&&!S.out&&S.to===cpPub).map(S=>S.id)),og=new Set(cpSends.filter(S=>S.out||S.to!==cpPub).map(S=>S.n)),F=o=>Object.entries(o).map(([a,v])=>{const A=cpAs(a)||{sym:"?",scale:CP_SCALE,dec:18};return cpFmt(v,A)+" "+A.sym}).join(" · ");
 let o=0;for(const n of cpNotes){if(n.p||n.ex)continue;const s=cpStatus(n).s,a=n.a||CP_ETH;if(!cpAs(a)&&cpAssets.length>1){o+=s==="ready";continue}if(s==="ready"&&!b.has(cpKeyOf(n))){r[a]=(r[a]||0n)+Bi(n.v);cnt[a]=(cnt[a]||0)+1}else if(s==="pending"&&(n.sid||n.job)&&!og.has(cpKeyOf(n))){const t=n.sid&&own.has(n.sid)?mov:inc;t[a]=(t[a]||0n)+Bi(n.v)}}
 for(const L of cpInbox)if(L.st!=="claimed"&&!L.cj&&Dn()/1e3<=+L.dl)inc[L.a]=(inc[L.a]||0n)+Bi(L.v);
-const x=F(r),y=F(inc),z=F(mov),m=Ok(cnt).filter(a=>cnt[a]>1).map(a=>`<button type="button" class="fclink" data-a="merge" data-as="${a}">merge ${(cpAs(a)||{sym:"?"}).sym}</button>`).join("");
+const x=F(r),y=F(inc),z=F(mov),m=Ok(cnt).filter(a=>cnt[a]>1).map(a=>`<button class="fclink" data-a="merge" data-as="${a}">merge ${(cpAs(a)||{sym:"?"}).sym}</button>`).join("");
 return x||y||z||o?`<div class="cpr cps"><span>Shielded <b>${x||"0"}</b>${z?" · settling "+z:""}${y?" · incoming "+y:""}${o?` · ${o} other Tacit note${o>1?"s":""} (LP or farm), on tacit.finance`:""}</span><span>${m}</span></div>`:""};
 let cpFindQ=Promise.resolve();const cpFind=full=>{const p=cpFindQ.then(()=>cpFind0(full));cpFindQ=p.catch(Np);return p};const cpFind0=async full=>{const c=await cpSync(!!full),m={},own=id=>cpNotes.some(n=>!n.p&&cpNoteOf(n).dep===id),z=()=>++q%16?0:new Promise(r=>setTimeout(r)),cu=cpCur(),N=64+cpNotes.concat(cpSends.map(S=>({i:S.di}))).reduce((x,n)=>Ni(n.i)&&n.i>=0?Mx(x,n.i+1):x,0);let f=0,q=0;
 for(const[id,amt,as]of c.wraps){const A=cpAs(as),wei=Bi(amt),h=cpFp+id,dn=cpK[h]||0;if(!A||wei%A.scale||dn>=N||own(id))continue;const v=wei/A.scale,a=A.id,g="t"+cpFp+a,mk=a+v+"/"+dn;
@@ -8454,7 +8378,7 @@ const rows=listSums.filter(x=>x.std===5&&x.kind===2&&!x.chain).slice(0,24);if(!r
 const js=await cfgBatch(rows.map(x=>({to:TOKENLIST,data:"0x"+SEL_JSON+eU(x.id)}))),cand=[];
 for(const h of js){let t;try{t=Jp(decStr(h))}catch{continue}const id=Lc(St(t.a||""));if(t.p==="Tacit"&&/^0x[0-9a-f]{64}$/.test(id)&&!cand.some(c=>c.id===id))cand.push({id,sym:safeSym(t.s,12),icon:safeDataUrl(t.l)})}
 if(!cand.length)return;const rd=await cfgBatch(cand.flatMap(c=>[{to:CP_POOL,data:"0x"+SEL_CPASSET+pad32(c.id)},{to:CP_POOL,data:"0x"+SEL_CPCANON+pad32(c.id)}])),out=[];
-cand.forEach((c,i)=>{const a=Sx(rd[2*i]||""),w=j=>Bx((cpWord(a,j)||"0")),u="0x"+cpWord(a,1).slice(24),eth=c.id===CP_ETH;
+cand.forEach((c,i)=>{const a=Sx(rd[2*i]||""),w=j=>Bx(cpWord(a,j)||"0"),u="0x"+cpWord(a,1).slice(24),eth=c.id===CP_ETH;
 if(a.length<384||w(0)!==1n||!w(2)||w(5)>36n||(eth?u!==ZERO:w(4)!==1n||u===ZERO||retAddr(rd[2*i+1])!==u))return;
 out.push({id:c.id,tok:u,sym:c.sym,pub:eth?"ETH":TOKENS.find(t=>t.addr===u)?.sym||(c.id===CP_CBTC?"tacBTC":c.id===CP_CUSD?"tacUSD":c.sym),dec:Nm(w(5)),scale:w(2),icon:c.icon})});
 const e=out.find(a=>a.id===CP_ETH);cpAssets=[e||CP_ETH_AS,...out.filter(a=>a!==e)];pvAssetPaint();if(pvMode)cpPaint();shieldSync();
@@ -8476,7 +8400,7 @@ const need=q.map((P,i)=>P&&!(cs[i]._p.reserves&&Lc(St(cs[i]._p.poolId))===P)?P:n
 const rs=need.some(Boolean)?await cfgBatch(need.filter(Boolean).map(P=>({to:CP_POOL,data:"0xb5217bb4"+Sx(P)}))):[];if(CHAIN_ID!==1)return;let k=0,px=0;
 const pl=q.map((P,i)=>{if(!P)return null;const R=cs[i]._p.reserves;let a,rA,rB,sh;
 if(!need[i]){a=Lc(St(R.assetA));rA=+R.reserveA;rB=+R.reserveB;sh=+R.lpTotalShares}
-else{const h=Sx(rs[k++]||""),w=n=>Bx((h.slice(n*64,n*64+64)||"0"));if(h.length<448||!w(0))return null;a="0x"+h.slice(64,128);rA=Nm(w(3));rB=Nm(w(4));sh=Nm(w(6))}
+else{const h=Sx(rs[k++]||""),w=n=>Bx(h.slice(n*64,n*64+64)||"0");if(h.length<448||!w(0))return null;a="0x"+h.slice(64,128);rA=Nm(w(3));rB=Nm(w(4));sh=Nm(w(6))}
 const E=a===Lc(CP_ETH),rE=E?rA:rB,rO=E?rB:rA;if(!(rE>0&&rO>0&&sh>0&&isFinite(rE+rO+sh)))return null;if(cs[i]._p.pair==="TAC/cETH")px=rE/rO;return{rE,sh}});
 cs.forEach((c,i)=>{const o=pl[i],p=c._p;if(!o||!px||!o.sh)return;const st=2*o.rE/1e8*Mn(1,+p.totalShares/o.sh),apr=+p.tacPerDayForPool*365*px/(st+1)*100;
 if(!isFinite(apr)||apr<=0)return;const e=cE("i");e.className="fma";Tx(e,"~"+Math.round(apr).toLocaleString()+"% APR on 1 ETH");c.append(e);
@@ -8541,13 +8465,13 @@ const parts=Ok(ptsCatL).filter(k=>c[k]>0).map(k=>c[k]+" "+ptsCatL[k]+(c[k]>1?"s"
 return parts.length>1?", "+parts.slice(0,-1).join(", ")+" and "+parts[parts.length-1]:""};
 const ptsHist=()=>{const a=(cpPts&&cpPts.ds)||[];if(!a.length||!cpPtsH)return"";
 return'<span class="pvkh">'+a.map(x=>`<span class="pvkd"><s>${x.t?new Date(x.t*1000).toLocaleDateString(undefined,{year:"numeric",month:"short",day:"numeric"}):"—"}</s><b>${x.ac==="cbtcmint"?tM(x.w,18)+" wstETH":x.ac==="cusdmint"?tM(x.w,8)+" cUSD":x.ac==="pmcreate"||x.ac==="x"?"":tM(x.w,18)+" ETH"}</b>${x.ac!=="wrap"?`<span>${ptsCatL[x.ac]}${x.ch>1?" on "+CHAINS[x.ch].name:""}</span>`:""}${x.p?`<span>${ptF(x.p)} points</span>`:""}${x.pb?'<span title="A Privacy Pools withdrawal reached this address, so the points on this deposit were paid at 1.2\u00d7.">1.2\u00d7</span>':""}${x.k>1?`<span>${x.k}× TAC</span>`:""}${x.tp>0n?`<span title="What this deposit paid the relay to prove and settle it.">tip ${tM(x.tp,18)} ETH</span>`:""}${x.h?`<a href="${CHAINS[x.ch].explorer}/tx/${x.h}" target="_blank" rel="noreferrer">${x.h.slice(0,8)}…</a>`:""}</span>`).join("")+"</span>"};
-const ptsRow=cpPts||cpClm||cpClmBad?`<span class="pvkr"><i>★ Points</i><span class="pvka">${cpPts?`<span title="Tacit's points program counts ETH swaps through zSwap’s router, paid .wei names, ETH bets, markets you create, ether deposits and shields, cBTC bonds and cUSD loans, each from the block its count started at. The TAC beside it is not a rate per point: each day's pot is split across everyone who earned points that day, so the same points are worth less on a busy day, and what a point can earn is capped.">${ptF(cpPts.n)} from ${cpPts.d} action${cpPts.d===1?"":"s"} counted${ptsCats(cpPts.ds||[])}</span>${cpPts.b>0?`<span title="Tacit pays 1.2× the points on ETH deposited or shielded from an address that has received a Privacy Pools withdrawal, so the two anonymity sets grow together. The multiplier is already inside the total beside this.">, ${cpPts.b===cpPts.d?"all":cpPts.b} at 1.2×</span>`:""}${cpPts.tb>0n?`<span title="Today's pot, up to the day's budget. It is split across everyone who earns points today, in proportion to those points, so what a point is worth depends on who else turns up.">${cpPts.tt>0&&cpPts.tp>0?`, your ${ptF(cpPts.tp)} of today's ${ptF(cpPts.tt)} points — about ${sigAmt(cpPts.tb*Bi(Math.round(cpPts.tp*1e6))/Bi(Math.round(cpPts.tt*1e6)),18)} TAC at the current split`:`, ${cpPts.tp?ptF(cpPts.tp):"none"} today of ${sigAmt(cpPts.tb,18)} TAC shared`}</span>`:""}`:""}${cpPts&&cpPts.ds&&cpPts.ds.length?`<button type="button" class="fclink" data-a="ptshist" aria-expanded="${cpPtsH}" title="Everything counted for this wallet.">${cpPtsH?"hide history":"history"}</button>`:""}${cpClm?`<button type="button" class="fclink pri" data-a="ptsclaim" title="Claim the TAC these points have earned, to this wallet. The amount and its proof come from Tacit's distributor; the claim is one transaction you send.">${(cpAssets.find(x=>x.sym==="TAC")||{}).icon?`<img src="${(cpAssets.find(x=>x.sym==="TAC")||{}).icon}" width="12" height="12" alt=""> `:""}claim ${tM(cpClm.u,18)} TAC</button>`:""}${cpClmBad?`<span title="The page claims only against the distributor it was built with. Something else answered, so nothing is offered here; tacit.finance can still pay it out.">claim at tacit.finance</span>`:""}</span></span>`+ptsHist():"";
+const ptsRow=cpPts||cpClm||cpClmBad?`<span class="pvkr"><i>★ Points</i><span class="pvka">${cpPts?`<span title="Tacit's points program counts ETH swaps through zSwap’s router, paid .wei names, ETH bets, markets you create, ether deposits and shields, cBTC bonds and cUSD loans, each from the block its count started at. The TAC beside it is not a rate per point: each day's pot is split across everyone who earned points that day, so the same points are worth less on a busy day, and what a point can earn is capped.">${ptF(cpPts.n)} from ${cpPts.d} action${cpPts.d===1?"":"s"} counted${ptsCats(cpPts.ds||[])}</span>${cpPts.b>0?`<span title="Tacit pays 1.2× the points on ETH deposited or shielded from an address that has received a Privacy Pools withdrawal, so the two anonymity sets grow together. The multiplier is already inside the total beside this.">, ${cpPts.b===cpPts.d?"all":cpPts.b} at 1.2×</span>`:""}${cpPts.tb>0n?`<span title="Today's pot, up to the day's budget. It is split across everyone who earns points today, in proportion to those points, so what a point is worth depends on who else turns up.">${cpPts.tt>0&&cpPts.tp>0?`, your ${ptF(cpPts.tp)} of today's ${ptF(cpPts.tt)} points — about ${sigAmt(cpPts.tb*Bi(Math.round(cpPts.tp*1e6))/Bi(Math.round(cpPts.tt*1e6)),18)} TAC at the current split`:`, ${cpPts.tp?ptF(cpPts.tp):"none"} today of ${sigAmt(cpPts.tb,18)} TAC shared`}</span>`:""}`:""}${cpPts&&cpPts.ds&&cpPts.ds.length?`<button class="fclink" data-a="ptshist" aria-expanded="${cpPtsH}" title="Everything counted for this wallet.">${cpPtsH?"hide history":"history"}</button>`:""}${cpClm?`<button class="fclink pri" data-a="ptsclaim" title="Claim the TAC these points have earned, to this wallet. The amount and its proof come from Tacit's distributor; the claim is one transaction you send.">${(cpAssets.find(x=>x.sym==="TAC")||{}).icon?`<img src="${(cpAssets.find(x=>x.sym==="TAC")||{}).icon}" width="12" height="12" alt=""> `:""}claim ${tM(cpClm.u,18)} TAC</button>`:""}${cpClmBad?`<span title="The page claims only against the distributor it was built with. Something else answered, so nothing is offered here; tacit.finance can still pay it out.">claim at tacit.finance</span>`:""}</span></span>`+ptsHist():"";
 cpSet(pvKey,!account?"Connect a wallet to begin.":!on?"Sign once to unlock your Tacit key: the same key tacit.finance derives from this wallet, with a Bitcoin address of its own."+ptsRow:
-`<span class="pvks"><span>Key unlocked · this wallet’s private account</span>${cpRelayPin()?`<button type="button" class="fclink" data-a="relay" title="Every proof, status check and points read goes to this relay alone, with no fallback. Press to change it">relay ${cpRelayPin().slice(8)} · pinned</button>`:""}</span><span class="pvkr"><i>↓ Get paid</i><span class="pvka"><button type="button" class="fclink pri" data-a="addr" title="Your tacit1 address: anyone can send to it privately. Press to see it in full and copy it">your address <span class="pvkm">${tacShort()}</span></button><button type="button" class="fclink" data-a="rx" title="A standing address that shields the ETH sent to it">private ETH address</button><button type="button" class="fclink" data-a="request" title="Make a link someone can pay privately">request a payment</button><button type="button" class="fclink" data-a="pub" title="Put your address on your .wei, .gwei or .eth name, so people can pay you by name">${pubName?"published to "+pubName:"publish to name"}</button></span></span><span class="pvkr"><i>↑ Pay</i><span class="pvka"><button type="button" class="fclink" data-a="pay" title="Paste a payment link someone sent you">pay a request</button></span><button type="button" class="fclink" data-a="more" aria-expanded="${cpMore}">${cpMore?"less":"more"}</button></span><span class="${cpMore?"":"hide"}"><span class="pvkr"><i>₿ Bitcoin</i><span class="pvka">${cpVer?`<a href="https://mempool.space/address/${cpBtc}" target="_blank" rel="noreferrer" title="This key's Bitcoin address, used to lock BTC for cBTC">${cpBtc.slice(0,8)}…${cpBtc.slice(-6)}</a>${cpBtcSat!=null?" "+tM(Bi(cpBtcSat),8)+" BTC":""}`:""}<button type="button" class="fclink" data-a="btckey" title="Export this key for a Bitcoin wallet">btc key</button><button type="button" class="fclink" data-a="lockbtc" title="Lock BTC from this key\'s address to mint cBTC">lock btc</button></span></span>${ptsRow}<span class="pvkr"><i>· Key</i><span class="pvka"><button type="button" class="fclink" data-a="backup" title="Save the key">backup</button><button type="button" class="fclink" data-a="export" title="Your note records, to keep with the key">export</button><button type="button" class="fclink" data-a="import" title="Restore a key or note records">import</button><button type="button" class="fclink" data-a="recover" title="Find this key\'s deposits on chain">recover</button><button type="button" class="fclink" data-a="relay" title="Choose the relay that proves and settles">relay</button></span></span></span>`);
+`<span class="pvks"><span>Key unlocked · this wallet’s private account</span>${cpRelayPin()?`<button class="fclink" data-a="relay" title="Every proof, status check and points read goes to this relay alone, with no fallback. Press to change it">relay ${cpRelayPin().slice(8)} · pinned</button>`:""}</span><span class="pvkr"><i>↓ Get paid</i><span class="pvka"><button class="fclink pri" data-a="addr" title="Your tacit1 address: anyone can send to it privately. Press to see it in full and copy it">your address <span class="pvkm">${tacShort()}</span></button><button class="fclink" data-a="rx" title="A standing address that shields the ETH sent to it">private ETH address</button><button class="fclink" data-a="request" title="Make a link someone can pay privately">request a payment</button><button class="fclink" data-a="pub" title="Put your address on your .wei, .gwei or .eth name, so people can pay you by name">${pubName?"published to "+pubName:"publish to name"}</button></span></span><span class="pvkr"><i>↑ Pay</i><span class="pvka"><button class="fclink" data-a="pay" title="Paste a payment link someone sent you">pay a request</button></span><button class="fclink" data-a="more" aria-expanded="${cpMore}">${cpMore?"less":"more"}</button></span><span class="${cpMore?"":"hide"}"><span class="pvkr"><i>₿ Bitcoin</i><span class="pvka">${cpVer?`<a href="https://mempool.space/address/${cpBtc}" target="_blank" rel="noreferrer" title="This key's Bitcoin address, used to lock BTC for cBTC">${cpBtc.slice(0,8)}…${cpBtc.slice(-6)}</a>${cpBtcSat!=null?" "+tM(Bi(cpBtcSat),8)+" BTC":""}`:""}<button class="fclink" data-a="btckey" title="Export this key for a Bitcoin wallet">btc key</button><button class="fclink" data-a="lockbtc" title="Lock BTC from this key\'s address to mint cBTC">lock btc</button></span></span>${ptsRow}<span class="pvkr"><i>· Key</i><span class="pvka"><button class="fclink" data-a="backup" title="Save the key">backup</button><button class="fclink" data-a="export" title="Your note records, to keep with the key">export</button><button class="fclink" data-a="import" title="Restore a key or note records">import</button><button class="fclink" data-a="recover" title="Find this key\'s deposits on chain">recover</button><button class="fclink" data-a="relay" title="Choose the relay that proves and settles">relay</button></span></span></span>`);
 Tx(pvGo,!account?CW:!on?"Unlock key":pvAct.value==="send"?"Send":pvAct.value==="out"?"Withdraw":"Deposit");
 pvGo.disabled=!!cpBusy;
 if(!on)return cpSet(pvList,"");
-const bz=cpBusyK(),live=cpSends.filter(S=>!/^[dsc]|ded/.test(S.st)),rows=cpNotes.map((n,j)=>{const kk=cpKeyOf(n);if(live.some(S=>S.id===n.sid||(S.ins||[]).includes(kk)))return"";const{s,k}=cpStatus(n),x=n.ex,chain=x&&CHAINS[x.ch],ch=chain?.name||"",B=(a,l)=>`<button type="button" class="fclink" data-a="${a}" data-k="${cpKeyOf(n)}">${l}</button>`;
+const bz=cpBusyK(),live=cpSends.filter(S=>!/^[dsc]|ded/.test(S.st)),rows=cpNotes.map((n,j)=>{const kk=cpKeyOf(n);if(live.some(S=>S.id===n.sid||(S.ins||[]).includes(kk)))return"";const{s,k}=cpStatus(n),x=n.ex,chain=x&&CHAINS[x.ch],ch=chain?.name||"",B=(a,l)=>`<button class="fclink" data-a="${a}" data-k="${cpKeyOf(n)}">${l}</button>`;
 const unread=!cpPool,seen=!!k&&!unread&&cpPool.wraps.some(w=>w[0]===k.dep),paid=n.inv&&seen,stale=!unread&&!seen&&Dn()/1000-(n.at||0)>600;
 const act=s==="ready"?(bz.has(cpKeyOf(n))?cpWatch(cpDoing(cpKeyOf(n))):(n.z?B("borrow","borrow cUSD"):"")+B("split","split")+B("exit","exit"))
 :s==="pending"?(unread?"reading…":n.inv&&!paid?"unpaid"+B("show","copy link")+B("forget","cancel"):n.i<0?"settling…":stale?"deposit not seen"+B("forget","forget"):n.job?(/failed|unknown/.test(n.js)||Dn()-n.jt>36e5?cpJe(n)+B("settle","retry"):n.self?(n.stx?"sent…":n.pv?B("wrapsend","settle"):"proving…"):"settling…"):B("settle","settle"))
@@ -8560,13 +8484,7 @@ const act=s==="ready"?(bz.has(cpKeyOf(n))?cpWatch(cpDoing(cpKeyOf(n))):(n.z?B("b
 :s==="paid"?cpExplorerLink(CHAINS[1].explorer,n.tx,"paid","tx"):s;
 const A=cpAs(n.a)||(cpAssets.length>1?0:{sym:"?",scale:CP_SCALE,dec:18,icon:""});if(!A)return"";return`<div class="cpr"><span><b>${A.icon?`<img src="${A.icon}" width="12" height="12" alt=""> `:""}${x&&x.v?cpFmt(x.v,A)+" of ":""}${cpFmt(n.v,A)} ${A.sym}</b> ${n.p?"paid":n.inv?"payment request":n.sid?"":n.s?"found":"#"+n.i}${x&&s!=="bridged"&&s!=="withdrawn"?" → "+ch:""}</span><span>${act}${x&&x.ch!==1&&!x.atx&&!x.rtx?B("keep","save exit"):""}${x&&x.rk?B("rescue","rescue key"):""}</span></div>`}).join("");
 const lr=cpSendRows()+cpInRows()+cpLockRows()+cpCdpRows()+cpBtcRows();cpSet(pvList,(cpSum()+rows+lr)||`<div class="cpr"><span>No deposits yet.</span></div>`)};
-const pvPaint=()=>{const on=pvMode;
-sAt(pv,AP,on?"true":"false");
-cL(pv).toggle("on",on);
-for(const el of [rate,flip,swap])if(el)Hd(el,on);
-for(const el of [qS(document,".panel"),rcvPanel])if(el)Hd(el,on);
-for(const el of [pvPanel,pvGo])Hd(el,!on);
-for(const el of [rc,rcvEl])if(el)Hd(el,on);qS(document,".card").classList.toggle("pvon",on)};
+const pvPaint=()=>mdP(pv,pvMode,"pvon",pvPanel,pvGo);
 function pvSet(on){
 if(on)cbDisarm();
 ++seq;quoting=false;
@@ -8581,15 +8499,15 @@ clearInterval(pvTimer);
 if(on){pvTimer=setInterval(()=>{if(document.hidden||!pvMode)return;pvRefresh()},8000);pvWake()}
 fcSync();shieldSync()}
 const PM="0x0000003b32cDD39bc950e56093df98aF220aB5C5",MK_WST="0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0",MK_AS=[[ZERO,"ETH",18,ETH_ICON,"ether"],[MK_WST,"wstETH",18,WSTETH_ICON,"staked ether, earns yield"],["0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48","USDC",6,USDC_ICON,"dollar"],["0x6440f144b7e50d6a8439336510312d2f54beb01d","BOLD",18,BOLD_ICON,"dollar"],["0x23cacffac2674514a6d4f6cd420b4cc2ac921564","tacUSD",18,"","Tacit dollar"]].map(([addr,sym,dec,icon,sub])=>({addr,sym,dec,icon,sub}));
-let mkMode=false,mkSeq=0,mkQSeq=0,mkRvSeq=0,mkAll=[],mkPos={},mkMeta={},mkSel=null,mkF="open",mkS="pot",mkTimer=0,mkBusy=0,mkQv=null,mkWant="",mkNew="",mkLoading=0,mkAgain=0,mkCount=-1,mkMore=false,mkCl=0,mkFee={},mkTick=0;
+let mkMode=false,mkQSeq=0,mkRvSeq=0,mkAll=[],mkPos={},mkMeta={},mkSel=null,mkF="open",mkS="pot",mkTimer=0,mkBusy=0,mkQv=null,mkWant="",mkNew="",mkLoading=0,mkAgain=0,mkCount=-1,mkMore=false,mkCl=0,mkFee={},mkTick=0;
 const MK_MAX=200;
 const mkTok=a=>MK_AS.find(t=>t.addr===a)||TOKENS.find(t=>Lc(t.addr)===a)||mkMeta[a]||(mkMeta[a]={addr:a,sym:a.slice(0,8),dec:18,u:1},tokMeta(a).then(t=>{if(!metaCache.has(a)){setTimeout(()=>{if(mkMeta[a]&&mkMeta[a].u)delete mkMeta[a]},3e4);return}mkMeta[a]={addr:a,sym:t.sym,dec:+t.dec||0};mkPaintList();mkDetPaint()}).catch(Np),mkMeta[a]);
-const mkEl=(h,e)=>{const n=i=>Bx((h.slice(i,i+64)||"0")),W=k=>n(e+k*64),so=e+Nm(W(14))*2,sl=Mn(Nm(n(so)),1024);
+const mkEl=(h,e)=>{const n=i=>Bx(h.slice(i,i+64)||"0"),W=k=>n(e+k*64),so=e+Nm(W(14))*2,sl=Mn(Nm(n(so)),1024);
 return{id:W(0),r:"0x"+Lc(h.slice(e+88,e+128)),a:"0x"+Lc(h.slice(e+152,e+192)),o:Nm(W(3)),c:Nm(W(4)),f:Nm(W(5)),x:Nm(W(6)),l:Nm(W(7)),cc:W(8)>0n,s:Nm(W(9)),y:W(10),n:W(11),p:W(12),w:W(13),d:new TextDecoder().decode(hB(h.slice(so+64,so+64+sl*2)))}};
-const mkDec=h=>{h=Sx(h);const n=i=>Bx((h.slice(i,i+64)||"0")),o=Nm(n(0))*2,len=Nm(n(o)),r=[];
+const mkDec=h=>{h=Sx(h);const n=i=>Bx(h.slice(i,i+64)||"0"),o=Nm(n(0))*2,len=Nm(n(o)),r=[];
 for(let i=0;i<len&&i<25;i++)r.push(mkEl(h,o+64+Nm(n(o+64+i*64))*2));
 return r};
-const mkDec1=h=>{h=Sx(h);return mkEl(h,Nm(Bx((h.slice(0,64)||"0")))*2)};
+const mkDec1=h=>{h=Sx(h);return mkEl(h,Nm(Bx(h.slice(0,64)||"0"))*2)};
 const mkPosDec=(h,ids,P)=>{h=Sx(h);const A=k=>{const o=Nm(Bx(h.slice(k*64,k*64+64)))*2,c=Nm(Bx(h.slice(o,o+64)));return Array.from({length:c},(_,i)=>Bx(h.slice(o+64+i*64,o+128+i*64)))},Y=A(0),N=A(1),K=A(2);
 Y.forEach((y,i)=>{if(y||N[i]||K[i])P[ids[i]]={y,n:N[i],c:K[i]};else delete P[ids[i]]});return P};
 const mkPosCall=ids=>({to:PM,data:"0xafa8f792"+eA(account)+pad32("40")+eU(ids.length)+ids.map(eU).join("")});
@@ -8611,12 +8529,12 @@ for(const h of await mD([...I].filter(i=>!all.some(m=>m.id===i)).map(i=>({to:PM,
 const mkLoad=async full=>{if(!mkMode)return;if(mkLoading){mkAgain=mkAgain||!!full||!!mkWant;return}
 mkLoading=1;
 try{await mkLoad0(full)}finally{mkLoading=0;if(mkAgain){mkAgain=0;mkLoad(1)}}};
-const mkLoad0=async full=>{const my=++mkSeq;
+const mkLoad0=async full=>{
 try{const n=Nm(Bi(await rpc(C,[{to:PM,data:"0xec979082"},L])));
 if(!full&&!mkWant&&n===mkCount&&mkAll.length){
 if(!mkSel){mkPaintList();return}
 const wasId=mkSel.id,cs=[{to:PM,data:"0xeb44fdd3"+eU(wasId)}];if(account)cs.push(mkPosCall([wasId]));
-const[h,q]=await mD(cs);if(my!==mkSeq||!h)return;
+const[h,q]=await mD(cs);if(!h)return;
 const m=mkDec1(h),i=mkAll.findIndex(x=>x.id===m.id);if(i<0)return;
 mkAll[i]=m;if(q)mkPosDec(q,[m.id],mkPos);
 if(!mkSel||mkSel.id!==wasId){mkPaintList();return}
@@ -8624,13 +8542,13 @@ mkSel=m;Tx(mkNote,"");mkPaintList();mkDetPaint();if(vT(mkAmt))mkQuote();return}
 const cs=[];for(let s=0;s<n&&s<MK_MAX;s+=25)cs.push({to:PM,data:"0x80968d48"+eU(s)+eU(25)});
 const hs=cs.length?await mD(cs):[];
 if(hs.some(h=>!h))throw Er("partial");
-const all=hs.flatMap(mkDec),wq=Lc(mkWant);if(wq&&/^(0x[0-9a-f]{1,64}|\d{1,78})$/.test(wq)&&!all.some(m=>St(m.id)===wq||toHex(m.id)===wq)){const h=await rpc(C,[{to:PM,data:"0xeb44fdd3"+eU(Bi(wq))},L]).catch(Nl),g=h&&mkDec1(h);if(g&&g.r!==ZERO&&g.id===Bi(wq))all.push(g)}if(account&&n>MK_MAX)await mkOld(all).catch(Np);await mkPosLoad(all);if(my!==mkSeq)return;
+const all=hs.flatMap(mkDec),wq=Lc(mkWant);if(wq&&/^(0x[0-9a-f]{1,64}|\d{1,78})$/.test(wq)&&!all.some(m=>St(m.id)===wq||toHex(m.id)===wq)){const h=await rpc(C,[{to:PM,data:"0xeb44fdd3"+eU(Bi(wq)%2n**256n)},L]).catch(Nl),g=h&&mkDec1(h);if(g&&g.r!==ZERO&&g.id===Bi(wq))all.push(g)}if(account&&n>MK_MAX)await mkOld(all).catch(Np);await mkPosLoad(all);
 mkAll=all;mkCount=n;mkMore=n>MK_MAX;mkFee={};
 if(mkNew){const m=all.find(m=>[m.d,m.r,m.a,m.c]+""===mkNew);if(m){mkNew="";mkSel=m}}
 let nf="";if(mkWant){const w=Lc(mkWant),f=all.find(m=>St(m.id)===w||toHex(m.id)===w);mkWant="";if(!f)nf="That market was not found.";mkSel=f||mkSel;if(mkSel){mkF=mkLive(mkSel)?"open":"done";mkChipPaint()}}
 else if(mkSel)mkSel=all.find(m=>m.id===mkSel.id)||(mkMore?mkSel:null);
 Tx(mkNote,nf);mkPaintList();mkDetPaint();if(mkSel&&vT(mkAmt))mkQuote()}
-catch{if(my===mkSeq)Tx(mkNote,mkAll.length?"Could not refresh just now — showing the last read.":"Could not load markets — retrying.")}};
+catch{Tx(mkNote,mkAll.length?"Could not refresh just now — showing the last read.":"Could not load markets — retrying.")}};
 const mkChipPaint=()=>{for(const c of mkChips.querySelectorAll("[data-f]"))cL(c).toggle("on",dSt(c).f===mkF);mkSort.value=mkS};
 const mkRow=m=>{const t=mkTok(m.a),p=mkPct(m),me=mkPos[m.id];
 return`<div class="lqrow mkr${mkSel&&mkSel.id===m.id?" on":""}" data-k="${m.id}" role="button" tabindex="0"><div class="lqband">${m.d.replace(/\p{C}/gu,"").slice(0,140).replace(/[<&]/g,c=>c<"<"?"&amp;":"&lt;")}${m.d.length>140?"…":""}</div><div class="mkbar"><i style="width:${p}%"></i></div><div class="lqmeta"><span>YES ${p}%</span><span>${sigAmt(m.p,t.dec,4)} ${safeSym(t.sym)}</span><span>${mkWhen(m)}</span>${m.s&&me?.c||mkDue(m)?`<span class="lqtag mkt">${me?.c?"claim":"resolve"}</span>`:me?`<span class="lqtag">yours</span>`:""}</div></div>`};
@@ -8647,7 +8565,7 @@ mkInfo.innerHTML=`<span class="mkhd">${m.s?`<b>${m.s===3?"each share returns":"e
 nameRev(m.r).then(n=>{if(n&&mkSel===m)Tx(mkRv,safeSym(n,48))}).catch(Np);
 Hd(mkAmtL,!live);
 if(mkPay._k!==St(m.id)){++mkQSeq;mkPay._k=St(m.id);mkPay.innerHTML=(m.a===ZERO?[ZERO]:m.a===MK_WST?[ZERO,MK_WST]:[m.a]).map(a=>`<option value="${a}">${safeSym(mkTok(a).sym)}</option>`).join("");mkAmt.value="";Tx(mkQ,"");mkQv=null;mkPayB.disabled=mkPay.options.length<2;mkIco(mkPayB,mkTok(mkPay.value))}
-const B=(a,l)=>`<button type="button" class="lqbtn" data-a="${a}" data-m="${m.id}">${l}</button>`;
+const B=(a,l)=>`<button class="lqbtn" data-a="${a}" data-m="${m.id}">${l}</button>`;
 let h=live?B("yes","Buy YES")+B("no","Buy NO"):"";
 if(live&&m.x){const sv=q=>sigAmt(q-q*Bi(mkTax(m))/10000n,t.dec,4)+" "+S;
 if(me.y)h+=B("xy",`Sell YES (${sv(me.y)})`);if(me.n)h+=B("xn",`Sell NO (${sv(me.n)})`)}
@@ -8655,33 +8573,27 @@ if(m.s&&me.c)h+=B("claim",`Claim ${sigAmt(me.c,t.dec,6)} ${S}`);
 if(!m.s&&(isR||!live&&lapsed)){if(isR&&live&&m.cc)h+=B("close","Close now");if(isR&&!live&&!lapsed&&m.y&&m.n)h+=B("ry","Resolve YES")+B("rn","Resolve NO");h+=B("void","Void")}
 cpSet(mkActs,h);
 if(isR){const fk=account+":"+m.a;
-if(mkFee[fk]===undefined){mkFee[fk]=0n;rpc(C,[{to:PM,data:"0xffecc085"+eA(account)+eA(m.a)},L]).then(BigInt).then(f=>{mkFee[fk]=f;if(f&&mkSel===m)mkDetPaint()}).catch(Np)}
+if(mkFee[fk]===undefined){mkFee[fk]=0n;rpc(C,[{to:PM,data:"0xffecc085"+eA(account)+eA(m.a)},L]).then(Bi).then(f=>{mkFee[fk]=f;if(f&&mkSel===m)mkDetPaint()}).catch(Np)}
 else if(mkFee[fk]>0n){mkActs.insertAdjacentHTML("beforeend",B("fees",`Fees ${sigAmt(mkFee[fk],t.dec,6)} ${S}`));mkActs._h=""}}};
 const mkQuote=async()=>{const m=mkSel,my=++mkQSeq;mkQv=null;if(!m||!mkLive(m))return Tx(mkQ,"");
 const t=mkTok(m.a),pay=mkPay.value;if(t.u||mkTok(pay).u)return Tx(mkQ,"Reading the token…");let v;try{v=pU(mkAmt.value||"0",mkTok(pay).dec)}catch(e){return Tx(mkQ,e.message)}
 if(!v)return Tx(mkQ,"");
 try{const a=pay===m.a?v:Bi(await rpc(C,[{to:MK_WST,data:"0xb0e38900"+eU(v)},L])),[hy,hn]=await mD([true,false].map(y=>({to:PM,data:"0x124d6efc"+eU(m.id)+eBo(y)+eU(a)})));if(my!==mkQSeq)return;
-const d=h=>{h=Sx(h||"");return[Bx((h.slice(0,64)||"0")),Bx((h.slice(64,128)||"0"))]},[sy,py]=d(hy),[sn,pn]=d(hn),S=safeSym(t.sym);
+const d=h=>{h=Sx(h||"");return[Bx(h.slice(0,64)||"0"),Bx(h.slice(64,128)||"0")]},[sy,py]=d(hy),[sn,pn]=d(hn),S=safeSym(t.sym);
 mkQv={v,sy,sn};Tx(mkQ,`Wins ${sigAmt(py,t.dec,6)} ${S} betting YES · ${sigAmt(pn,t.dec,6)} ${S} betting NO`)}catch{if(my===mkQSeq)Tx(mkQ,"Could not quote.")}};
-const mkSend=async(req,verb)=>{Sm(verb);await sS(req);mkCount=-1;mkLoad(1)};
+const mkSend=async(req,verb)=>{Sm(verb);await sS(req);mkCount=-1;mkLoad(1)},pmT=d=>({from:account,to:PM,data:d,value:"0x0"});
 const mkBuy=async yes=>{const m=mkSel,pay=mkPay.value;await mkQuote();const q=mkQv;if(!q)throw Er(mkQ.textContent||"Enter an amount.");
-const v=q.v,min=(yes?q.sy:q.sn)*Bi(1e4-Math.round(slipPct()*100))/10000n,H=eU(m.id)+eBo(yes),V="Betting…",T=d=>({from:account,to:PM,data:d,value:"0x0"});
-if(pay===ZERO)return mkSend({from:account,to:PM,data:"0xc2b5b4c8"+H+eA(account)+eU(min)+pad32("a0")+eU(0),value:toHex(v)},V);
+const v=q.v,min=(yes?q.sy:q.sn)*Bi(1e4-Math.round(slipPct()*100))/10000n,H=eU(m.id)+eBo(yes),V="Betting…";
+if(pay===ZERO)return mkSend({...pmT("0xc2b5b4c8"+H+eA(account)+eU(min)+pad32("a0")+eU(0)),value:toHex(v)},V);
 const b=H+eU(v)+eA(account)+eU(min),dl=Bi(nowS()+1800);if(Bi(await rpc(C,[{to:pay,data:balOf(account)},L]))<v)throw Er(IB);const aps=await apSeq(pay,PM,v);
-if(!aps.length)return mkSend(T("0x28ccbb45"+b),V);
-const tryReq=async f=>{try{Sm("Sign approval…");const r=T(await f());await rpc(C,[r,L]);return r}catch(e){if(isRejection(e)||/7dd37f70|e2c865df|cbca5aa2|f170c67f/.test(Js(e?.data??e?.message??"")))throw e;return null}};
+if(!aps.length)return mkSend(pmT("0x28ccbb45"+b),V);
+const tryReq=async f=>{try{Sm("Sign approval…");const r=pmT(await f());await rpc(C,[r,L]);return r}catch(e){if(isRejection(e)||/7dd37f70|e2c865df|cbca5aa2|f170c67f/.test(Js(e?.data??e?.message??"")))throw e;return null}};
 const pi=await permitInfo(pay,account),r1=pi&&await tryReq(async()=>"0x2a304886"+b+eU(dl)+await pmSig(pay,pi,account,v,dl,PM));
 if(r1)return mkSend(r1,V);
 const r2=await p2Ready(pay,account)>=v&&await tryReq(async()=>{const[n,tl]=await p2Sig(pay,account,v,dl,PM);return"0xb390d8b5"+b+eU(n)+eU(dl)+pad32("100")+tl});
 if(r2)return mkSend(r2,V);
-await settle(await sendWith(aps,T("0x28ccbb45"+b),V));mkCount=-1;mkLoad(1)};
-const mkPaint=()=>{const on=mkMode;
-sAt(mk,AP,on?"true":"false");
-cL(mk).toggle("on",on);
-for(const el of [rate,flip,swap])if(el)Hd(el,on);
-for(const el of [qS(document,".panel"),rcvPanel])if(el)Hd(el,on);
-for(const el of [mkPanel,mkGo])Hd(el,!on);
-for(const el of [rc,rcvEl])if(el)Hd(el,on);qS(document,".card").classList.toggle("mkon",on)};
+await settle(await sendWith(aps,pmT("0x28ccbb45"+b),V));mkCount=-1;mkLoad(1)};
+const mkPaint=()=>mdP(mk,mkMode,"mkon",mkPanel,mkGo);
 function mkSet(on){
 if(on&&CHAIN_ID!==1)return;
 if(on)cbDisarm();
@@ -8721,21 +8633,21 @@ mkClose.onchange=()=>{sBlip();Hd(mkAt,mkClose.value!=="0")};
 mkAdv.ontoggle=()=>sBlip();
 const mkResFee=async(a,my,pre)=>{let f=0;try{f=Nm(Bi(await rpc(C,[{to:PM,data:"0x4d5e9db0"+eA(a)},L])||"0x0"))}catch{return}
 if(my!==mkRvSeq)return;Tx(mkResEl,pre+(f?` · takes ${mkPc(f)}% of the pot`:" · takes no fee"));
-if(account&&Lc(a)===Lc(account)){const b=cE("button");b.type="button";b.className="fclink";Tx(b,"set fee");b.onclick=()=>mkFeeSet(f);mkResEl.append(" ",b)}};
+if(account&&Lc(a)===Lc(account)){const b=cE("button");b.className="fclink";Tx(b,"set fee");b.onclick=()=>mkFeeSet(f);mkResEl.append(" ",b)}};
 const mkFeeSet=async f=>{if(mkBusy)return;sBlip();const v=St(await ask("Your fee as a resolver, in % of each pot (0 to 10). It applies only to markets created after you change it.",mkPc(f))??"").trim();if(!v)return;
 if(!/^\d{0,2}(\.\d{0,2})?$/.test(v)||!(+v<=10))return void(Sm("A resolver fee is 0 to 10%, in steps of 0.01."));
-mkBusy=1;try{await mkSend({from:account,to:PM,data:"0xfb105091"+eU(Bi(Math.round(+v*100))),value:"0x0"},"Setting your fee…");mkRes.oninput()}catch(x){err(x)}finally{mkBusy=0}};
+mkBusy=1;try{await mkSend(pmT("0xfb105091"+eU(Math.round(+v*100))),"Setting your fee…");mkRes.oninput()}catch(x){err(x)}finally{mkBusy=0}};
 mkRes.oninput=()=>{clearTimeout(mkRes._t);const v=vT(mkRes),my=++mkRvSeq;
 if(!v){const p0="Defaults to you"+(account?" — "+short(account):"");Tx(mkResEl,p0);
 if(account){mkResFee(account,my,p0);nameRev(account).then(n=>{if(n&&my===mkRvSeq)mkResFee(account,my,"Defaults to you — "+safeSym(n,48))}).catch(Np)}return}
 const e=rcErr(v);if(e)return Tx(mkResEl,e);Tx(mkResEl,"resolving…");
 mkRes._t=setTimeout(()=>rcvOf(v).then(a=>{if(my!==mkRvSeq)return;if(!a)return void(Tx(mkResEl,"Name not registered"));const pre="→ "+short(a);Tx(mkResEl,pre);mkResFee(a,my,pre)},x=>{if(my===mkRvSeq)Tx(mkResEl,x.message)}),250)};
 mkActs.onclick=async e=>{const b=e.target.closest("button[data-a]");if(!b||!mkSel||mkBusy)return;if(!account)return void connect();
-const a=dSt(b).a,m=mkSel,me=mkPos[m.id]||{},I=eU(m.id),T=d=>({from:account,to:PM,data:d,value:"0x0"});
+const a=dSt(b).a,m=mkSel,me=mkPos[m.id]||{},I=eU(m.id);
 if(/^(r[yn]|void|close)$/.test(a)&&!dSt(b).c){sBlip();dSt(b).c=1;Tx(b,"Confirm: "+b.textContent);return}
 sBlip();mkBusy=1;b.disabled=true;
 try{if(a==="yes"||a==="no")await mkBuy(a==="yes");
-else await mkSend(T({xy:"0x0fc95438"+I+eBo(true)+eU(me.y||0)+eA(account),xn:"0x0fc95438"+I+eBo(false)+eU(me.n||0)+eA(account),claim:"0xddd5e1b2"+I+eA(account),close:"0xae418095"+I,ry:"0x52a34b05"+I+eBo(true),rn:"0x52a34b05"+I+eBo(false),void:"0x5ea2145b"+I,fees:"0xf2555278"+eA(m.a)+eA(account)}[a]),{xy:"Selling…",xn:"Selling…",claim:"Claiming…",fees:"Withdrawing…"}[a]||"Settling…")}
+else await mkSend(pmT({xy:"0x0fc95438"+I+eBo(true)+eU(me.y||0)+eA(account),xn:"0x0fc95438"+I+eBo(false)+eU(me.n||0)+eA(account),claim:"0xddd5e1b2"+I+eA(account),close:"0xae418095"+I,ry:"0x52a34b05"+I+eBo(true),rn:"0x52a34b05"+I+eBo(false),void:"0x5ea2145b"+I,fees:"0xf2555278"+eA(m.a)+eA(account)}[a]),{xy:"Selling…",xn:"Selling…",claim:"Claiming…",fees:"Withdrawing…"}[a]||"Settling…")}
 catch(x){err(x)}finally{mkBusy=0;b.disabled=false;mkDetPaint()}};
 mkGo.onclick=async()=>{if(mkGo.disabled)return;sBlip();
 if(cL(mkForm).contains("hide")){mkSel=null;mkPaintList();mkDetPaint();Hd(mkForm,0);Tx(mkGo,"Create market");mkRes.oninput();mkForm.scrollIntoView?.({block:"nearest",behavior:"smooth"});return}
@@ -8745,7 +8657,7 @@ try{const d=vT(mkDesc),db=new TextEncoder().encode(d);if(!d)throw Er("Write the 
 const rv=vT(mkRes);let r=account;if(rv){const e=rcErr(rv);if(e)throw Er(e);r=await rcvOf(rv,true);if(!r)throw Er("Resolver name not registered.")}
 const cl=mkClose.value==="0"?Mf(new Date(mkAt.value).getTime()/1e3):nowS()+ +mkClose.value;if(!(cl>nowS()+300))throw Er("Pick a close time in the future.");
 const bp=v=>{const x=Math.round(+v*100);if(!(x>=0&&x<=5000))throw Er("Taxes run from 0 to 50%.");return x},hx=cpHex(db);
-mkNew=[d,Lc(r),Lc(mkAsset.value),cl]+"";await mkSend({from:account,to:PM,data:"0x6f406fa1"+pad32("e0")+eA(r)+eA(mkAsset.value)+eU(cl)+eBo(mkCan.checked)+eU(bp(mkExit.value))+eU(bp(mkLate.value))+eU(db.length)+hx.padEnd(Math.ceil(hx.length/64)*64,"0"),value:"0x0"},"Creating…");
+mkNew=[d,Lc(r),Lc(mkAsset.value),cl]+"";await mkSend(pmT("0x6f406fa1"+pad32("e0")+eA(r)+eA(mkAsset.value)+eU(cl)+eBo(mkCan.checked)+eU(bp(mkExit.value))+eU(bp(mkLate.value))+eU(db.length)+hx.padEnd(Math.ceil(hx.length/64)*64,"0")),"Creating…");
 Hd(mkForm,1);Tx(mkGo,"New market");mkDesc.value="";mkF="open";mkS="new";mkChipPaint()}
 catch(e){mkNew="";err(e)}finally{mkGo.disabled=false}};
 addEventListener("storage",e=>{if(cpSeed&&e.key===CP_NOTES+cpFp&&!cpBusy){cpMerge();cpPaint()}});
@@ -8946,13 +8858,13 @@ minting=1;hud2();
 try{await cW();
 const lbl=s+"-w"+v+"-"+Math.random().toString(36).slice(2).padEnd(4,"0").slice(0,4);
 const lt=strTail(lbl),st=strTail(St(s));
-const req={from:account,to:SCOREM,value:"0x0",
+const req={from:account,to:"0x57Fae63f7c63732fc4B77247F0255b11b9458AE1",value:"0x0",
 data:"0x"+SEL_SCLAIM+pad32("60")+eU(96+lt.length/2)+eA(account)+lt+st};
 const ret=await rpc(C,[req,L]);
 if(Sx(ret||"").length!==64)throw Er("The minter did not answer — check the wallet is on Ethereum.");
 await settle(await sendTx([req]),1);
 if(r===runId){minted=lbl+ARCADE;sGot()}}catch(e){if(r===runId){
-mintMsg=String(isRejection(e)?"mint cancelled":explain(e)).replace(/[<>&"'`]/g,"").slice(0,60)||"the mint failed";sFail()}}
+mintMsg=St(isRejection(e)?"mint cancelled":explain(e)).replace(/[<>&"'`]/g,"").slice(0,60)||"the mint failed";sFail()}}
 minting=0;hud2()};
 function kd(e){if(!wkWrap.className)return;if(e.key==="Escape"){e.preventDefault();quit();return}
 if(e.key==="ArrowLeft"){lf=1;e.preventDefault()}
@@ -8981,7 +8893,7 @@ if(!dSt(wnEnter).id){Tx(wnRollEl,"Type a paid .wei name you own in the box above
 wnEnter.disabled=true;
 try{
 await cW();
-const req={from:account,to:WROLL,value:"0x0",data:"0x"+SEL_RENTER+pad32(dSt(wnEnter).id)+eU(0)};
+const req={from:account,to:WROLL,value:"0x0",data:"0x23972aef"+pad32(dSt(wnEnter).id)+eU(0)};
 await sS(req);
 await wnRoll();
 }catch(e){err(e)}
@@ -9005,21 +8917,21 @@ if(age<WN_MIN)throw Er(`Wait ${WN_MIN-age} more seconds.`);
 if(age>=WN_MAX){wnSave(null);Sm("That commitment lapsed. Commit again.");wnQuote();return}
 const cost=await wnCost(p.label);
 const req=p.r?{from:account,to:ZROUTER,value:toHex(cost),data:encCalls(["0x2cb9f974"+pad32("60")+pad32(p.secret)+eA(account)+strTail(p.label),encSweep(ZERO,0n,account)])}:{from:account,to:WNS,value:toHex(cost),
-data:"0x"+SEL_WREVEAL+pad32("40")+pad32(p.secret)+strTail(p.label)};
+data:"0xea9384fa"+pad32("40")+pad32(p.secret)+strTail(p.label)};
 await sS(req);
 wnSave(null);
 Sm(`${p.label}.wei is yours.`);
 wnName.value="";
 }else if(wnQ&&wnQ.free){
 const l=wnQ.label,req={from:account,to:WREG,value:"0x0",
-data:"0x"+SEL_WSUB+pad32(IDWEI)+pad32("40")+strTail(l)};
+data:"0xa00fd3c8"+pad32(IDWEI)+pad32("40")+strTail(l)};
 await sS(req);
 Sm(`${l}.id.wei is yours.`);
 wnName.value="";
 }else if(wnQ){
 const sec=wnSecret();
 const req={from:account,to:WNS,value:"0x0",
-data:"0x"+SEL_WCOMMIT+pad32(wnC({label:wnQ.label,secret:sec,r:1}))};
+data:"0xf14fcbc8"+pad32(wnC({label:wnQ.label,secret:sec,r:1}))};
 await rpc(C,[req,L]);
 wnSave({label:wnQ.label,secret:sec,r:1,at:0,since:Mf(Dn()/1000)});
 if(!wnPend())throw Er("This browser will not keep the commitment's secret — free some site storage.");
@@ -9141,13 +9053,11 @@ if(!f||!t||f.addr===t.addr)return null;
 return Lc(f.addr)<Lc(t.addr)?[f,t]:[t,f]};
 let chLoading="",chLoadSeq=0;
 async function loadChart(){
-const p0=chPair();
-const k0=chPairKey(p0);
-if(k0&&chLoading===k0&&chLoadSeq===chSeq)return;
+const p=chPair(),key=chPairKey(p);
+if(key&&chLoading===key&&chLoadSeq===chSeq)return;
 chBars=null;chPools=null;
-const p=p0;
 if(tab!=="swap"||!p){syncChartUI();return}
-const my=++chSeq,key=k0;
+const my=++chSeq;
 const hit=chCache[key];
 if(hit&&Dn()-hit.at<30000){chBars=hit.bars;chPools=hit.pools;syncChartUI();return}
 chLoading=key;chLoadSeq=my;
@@ -9158,9 +9068,9 @@ const [raw]=await mc3([{to:PPLENS,data:"0x"+SEL_MARKETS+eA(pair[0].addr)+eA(pair
 +eA(ZERO)+eU(0)+eU(LQ_SCAN)+eU(0)}]);
 const found=[];
 if(raw){const h=Sx(raw),n=Nm(Bx(h.slice(64,128))),base=128;
-for(let i=0;i<n&&i<LQ_SCAN;i++){const at=k=>Bx(h.slice(base+(i*PI_WORDS+k)*64,base+(i*PI_WORDS+k+1)*64));
-if(at(PI_HOOK)!==0n||at(PI_LIQ)===0n)continue;
-found.push({a:"0x"+h.slice(base+(i*PI_WORDS+PI_POOL)*64+24,base+(i*PI_WORDS+PI_POOL+1)*64),liq:at(PI_LIQ)})}}
+for(let i=0;i<n&&i<LQ_SCAN;i++){const at=k=>Bx(h.slice(base+(i*19+k)*64,base+(i*19+k+1)*64));
+if(at(10)!==0n||at(9)===0n)continue;
+found.push({a:"0x"+h.slice(base+(i*19)*64+24,base+(i*19+1)*64),liq:at(9)})}}
 found.sort((x,y)=>y.liq>x.liq?1:y.liq<x.liq?-1:0);
 return found.slice(0,CH_POOLS).map(x=>x.a);
 };
@@ -9306,7 +9216,7 @@ if(i<0){const b=pts[pts.length-1];
 let note="",flip="";
 if(chInv&&isFinite(ch)&&ch>-100){
 const other=(1/(1+ch/100)-1)*100;
-const pr=chEff&&chEff();
+const pr=chEff();
 const base=pr&&pr[0]?pr[0].sym:"the token";
 note=` title="${safeSym(base)} is ${other>=0?"+":""}${other.toFixed(2)}% over this window. `
 +`This chart prices the pair the other way up, so its line moves the opposite way."`;
@@ -9438,7 +9348,7 @@ hd:qS(chArt,".hd"),svg:qS(chArt,"svg"),cross:null};
 hudFor(-1);
 const took=rel(Mx(per,(slots-1)*per));
 const np=chPoolsAt(ser.step);
-const fine=(chBars&&chBars[chFinest()])||null;
+const fine=chBars[chFinest()];
 const newestBar=fine?fine.find(b=>b&&b.c>0):null;
 const latest=newestBar?newestBar.c:kept[kept.length-1].c;
 const canon=latest>0?1/latest:0;
@@ -9507,7 +9417,7 @@ else line("Not a score name — the label carries no run.");
 line("Held by "+short(owner));
 if(m)line("Anyone can mint a name with any number — this says it was claimed, not earned.").className="scw";
 if(m&&rec&&rec!==m[1])line(`The score record now reads ${rec}, not ${m[1]} — the holder changed it.`).className="scw";
-const go=cE("button");go.type="button";Tx(go,"Play invaders");
+const go=cE("button");Tx(go,"Play invaders");
 go.onclick=()=>{sBlip();invPlay()};
 aC(scEl,go);
 };
@@ -9522,7 +9432,7 @@ el.value=v;lkWrote[el.id]=v;return true;
 async function applyLink(e){if(e&&(busy||txLive))return void idle(()=>applyLink(e));lkEv=!!e;
 const q=new URLSearchParams(location.hash.slice(1));if(q.has("farm")){pfOpen=1;q.set("token","ETH");q.set("out",TAC_TOK);q.set("lq","1")}
 const tx=q.get("tacit-box");if(tx){history.replaceState(null,"",location.href.split("#")[0]);return void tbGo(tx)}
-const ti=q.get("tacit-invoice");if(ti!==null){try{history.replaceState(null,"",location.href.split("#")[0])}catch{}if(/^[A-Za-z0-9_-]{16,8000}$/.test(ti)){window.__tinv=ti;try{sessionStorage.setItem("zswap:tinv",ti)}catch{}setTimeout(()=>cpInvGo(),0)}return}
+const ti=q.get("tacit-invoice");if(ti!==null){try{history.replaceState(null,"",location.href.split("#")[0])}catch{}if(/^[A-Za-z0-9_-]{16,8000}$/.test(ti)){window.__tinv=ti;try{SS.setItem("zswap:tinv",ti)}catch{}setTimeout(()=>cpInvGo(),0)}return}
 const my=++lSeq,pp=Js(pairAddrs());
 if(![...q.keys()].length){
 if(!e)setTimeout(()=>cpInvGo(),0);
@@ -9587,8 +9497,8 @@ if(t==="book")bookD=v;else if(t==="send")sendD=v;
 if(t!=="swap")lkKeep(dly,v)}
 const num=v=>/^\d*\.?\d+$/.test(v)?v:"";
 if(num(n)){
-if(t!=="book"&&q.get("exactOut")==="1"&&q.get("out")){if(lkKeep(outAmt,n)){setMode("out");fitFont(outAmt)}}
-else if(lkKeep(amt,n)){if(t!=="book")setMode("in");fitFont(amt)}
+if(t!=="book"&&q.get("exactOut")==="1"&&q.get("out")){if(toSel.value==oi&&lkKeep(outAmt,n)){setMode("out");fitFont(outAmt)}}
+else if(lkKeep(amt,fromSel.value==fi||!q.get("token")?n:"")){if(t!=="book")setMode("in");fitFont(amt)}
 }
 if(t==="send"){const d=q.get("dest");brLkD=brLanes()?"":d||"";if(brLanes()){lkKeep(sdChain,d!==St(CHAIN_ID)&&[...sdChain.options].some(o=>o.value===d)?d:"0");syncTip()}}
 if(t==="book"){const k=q.get("kind"),r=St(lsecs(q.get("rest"))),id=q.get("id")||"";
@@ -9648,7 +9558,7 @@ e.preventDefault();TABS[j].focus();sBlip();setTab(NAMES[j]);
 syncStops=()=>TABS.forEach(el=>el.tabIndex=cL(el).contains("on")?0:-1);
 syncStops();for(const el of TABS)aE(el,"click",syncStops);
 for(const el of TABS)aE(el,"keyup",syncStops);}
-try{const sc=+localStorage[CHAIN_STORE];if(!prov()&&CHAINS[sc]&&!/(^#|[?&])chain=/.test(location.hash)){setChain(sc);showNet()}}catch{}
+try{const sc=+LS[CHAIN_STORE];if(!prov()&&CHAINS[sc]&&!/(^#|[?&])chain=/.test(location.hash)){setChain(sc);showNet()}}catch{}
 applyLink();
 loadTokenList().then(()=>{
 listReady=true;loadSolvers();
@@ -9705,7 +9615,7 @@ if(aps.length){if(await canBatch(account))batch=[...aps,{to:SLOW,data:dep,value:
 }else{
 txReq=token.addr===ZERO
 ?{from:account,to,value:toHex(amount)}
-:{from:account,to:token.addr,data:"0x"+SEL_TRANSFER+eA(to)+eU(amount),value:"0x0"};
+:{from:account,to:token.addr,data:"0xa9059cbb"+eA(to)+eU(amount),value:"0x0"};
 }
 let tx;
 if(batch){await cW();tx=await sendBatch(account,batch)}
@@ -9744,7 +9654,7 @@ const n=weiName(v);
 return /^[a-z0-9-]+(\.[a-z0-9-]+)*\.wei$/.test(n)?Bi(namehash(n)).toString():v};
 const nftLabel=(sym,addr,v)=>isWns(addr)&&!/^\d+$/.test((v||"").trim())
 ?weiName(v):`${sym} #${(v||"").trim()}`;
-async function pushNftOrder(f,t){
+const rcCp=async()=>{const v=vT(rc),a=v?await rcvOf(v,true):ZERO;if(!a)throw Er("Private recipient not resolved");return a};async function pushNftOrder(f,t){
 const id=nftIdIn(f.addr,nftId.value);
 if(!/^\d+$/.test(id))throw Er(isWns(f.addr)?"name the .wei name, or the token ID, you are selling":"name the token ID you are selling");
 const tokenId=Bi(id);
@@ -9754,9 +9664,7 @@ if(!want)throw Er("name a price");
 const quote=t.addr===ZERO?WETH:t.addr;
 if(Lc(quote)===Lc(f.addr))throw Er("pick different tokens");
 if(!await hasCode(SB2))throw Er("fixed orderbook not deployed yet");
-let cp=ZERO;
-const v=vT(rc);
-if(v){cp=await rcvOf(v,true);if(!cp)throw Er("Private recipient not resolved")}
+const cp=await rcCp();
 let owner=ZERO;
 try{owner="0x"+Sx(await rpc(C,[{to:f.addr,data:"0x"+SEL_OWNEROF+eU(tokenId)},L])).slice(-40)}
 catch{throw Er(`${f.sym} #${id} does not exist`)}
@@ -9804,9 +9712,7 @@ if(kind.value!=="fixed")throw Er("a bid for one token is a fixed offer");
 const price=pU(vT(amt)||"0",f.dec);
 if(!price)throw Er("name what you will pay");
 if(!await hasCode(SB2))throw Er("fixed orderbook not deployed yet");
-let cp=ZERO;
-const v=vT(rc);
-if(v){cp=await rcvOf(v,true);if(!cp)throw Er("Private recipient not resolved")}
+const cp=await rcCp();
 try{await rpc(C,[{to:t.addr,data:"0x"+SEL_OWNEROF+eU(tokenId)},L])}
 catch{throw Er(`${t.sym} #${id} does not exist`)}
 const exp=+dly.value?Bi(nowS()+ +dly.value):0n;
@@ -9857,9 +9763,7 @@ if(!oc)throw Er("routed order adapter not deployed yet");
 if(!bid&&f.addr===ZERO&&t.addr===WETH)throw Er("pick a non-WETH quote token");
 if(!dutch&&!bid&&(f.addr===WETH||f.addr===ZERO)&&quoteToken===WETH)throw Er("pick different tokens");
 if(dutch&&floor>want)throw Er("floor exceeds start price");
-let cp=ZERO;
-const v=vT(rc);
-if(!dutch&&!bid&&v){cp=await rcvOf(v,true);if(!cp)throw Er("Private recipient not resolved")}
+const cp=dutch||bid?ZERO:await rcCp();
 const pf=fill.value==="1"?1n:0n;
 const placementDeadline=Bi(nowS()+1800);
 let orderData;
@@ -9872,7 +9776,7 @@ if(want>(1n<<128n)-1n||sell>(1n<<96n)-1n)throw Er("bid amount too large");
 if(t.addr===ZERO)throw Er("a bid buys a token — pick one to bid for");
 if(Lc(f.addr===ZERO?WETH:f.addr)===Lc(t.addr))
 throw Er("pick different tokens");
-orderData="0x"+SEL_ORDER_FLOOR+eA(FLOOR)+eA(account)+eA(account)
+orderData="0x23e93357"+eA(FLOOR)+eA(account)+eA(account)
 +eA(t.addr)+eA(f.addr)+eU(want)+eU(floor)+eU(sell)
 +eU(0n)+eU(duration)+eU(placementDeadline);
 }else if(dutch){
@@ -9880,7 +9784,7 @@ const duration=Bi(dly.value||0);
 if(!duration)throw Er("choose a decay duration");
 if(sell>(1n<<128n)-1n||want>(1n<<96n)-1n||floor>(1n<<96n)-1n)throw Er("Dutch amount too large");
 const dutchExpiry=dutchEnds();
-orderData="0x"+SEL_ORDER_DUTCH+eA(DUTCH)+eA(account)+eA(account)
+orderData="0xbbd94e1a"+eA(DUTCH)+eA(account)+eA(account)
 +eA(f.addr)+eA(t.addr)+eU(sell)+eU(want)+eU(floor)
 +eU(0n)+eU(duration)+eU(dutchExpiry)+eU(placementDeadline);
 }else{
@@ -9920,7 +9824,7 @@ if(tab==="send"){if(!account)return connect();return doSend()}
 if(!account) return connect();
 if(!last)return;const q0=last;
 if(Dn()>last.exp){Sm("Quote expired — refreshing…");updateSoon();return}
-if(last.impact!==null&&last.impact!==undefined&&last.impact>=IMPACT_CONFIRM){
+if(last.impact>=IMPACT_CONFIRM){
 const pct=(Nm(last.impact)/100).toFixed(2);
 const worse=`about ${tM(last.lossTok,last.lossDec)} ${last.lossSym} ${last.isIn?"less than":"more than"} the market rate`;
 try{

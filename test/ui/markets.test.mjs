@@ -426,6 +426,12 @@ test('markets mode', async (t) => {
     assert.equal(p.$('mk').getAttribute('aria-pressed'), 'false');
   });
 
+  await t.test('a pm link with an id past uint256 is not found, and the list still loads', async () => {
+    const p = await openMarkets(pmChain(), `pm=${'9'.repeat(78)}`);
+    await p.waitFor(() => p.window.eval('mkWant') === '' && rows(p).length > 0, { label: 'the link dropped and the list loaded' });
+    assert.doesNotMatch(p.$('mkNote').textContent, /Could not load/);
+  });
+
   const tokenBet = async (chain) => {
     chain.setErc20(BOLD, A.ACCOUNT, 1000n * ONE);
     const p = await openMarkets(chain);

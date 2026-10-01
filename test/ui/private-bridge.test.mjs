@@ -628,7 +628,7 @@ describe('exiting to Base through the relay', () => {
     await p.waitFor(() => /bridging…/.test(p.text('pvList')), { label: 'the row to wait on the relay', timeout: 20000 });
     assert.equal(p.$('pvList').querySelector('button[data-a="activate"]'), null, 'no activate button while the relay activates');
     p.chain.relay.status = { ...p.chain.relay.status, activation: 'done', activateTx: '0x' + 'cc'.repeat(32) };
-    p.chain.lastLogs = [{ address: ROUTER, topics: [], data: '0x' }];
+    p.chain.setCode(p.chain.escrow, '0x6000');
     advance(p);
     poke(p);
     await p.waitFor(() => /on Base/.test(p.text('pvList')), { label: 'the row to report the bridge', timeout: 20000 });
@@ -639,11 +639,10 @@ describe('exiting to Base through the relay', () => {
   test('an activation the chain does not show is not taken as the bridge', async () => {
     const { p, net } = await relayedBaseExit();
     p.chain.relay.status = { status: 'settled', txHash: '0x' + 'bb'.repeat(32), activation: 'done', activateTx: '0x' + 'dd'.repeat(32) };
-    p.chain.lastLogs = [];
     settledOnChain(p, net);
     await p.waitFor(() => p.window.eval('cpNotes[0].js') === 'settled', { label: 'the settle to be read', timeout: 20000 });
     await p.settle();
-    assert.equal(p.window.eval('cpNotes[0].ex.atx'), undefined, 'a receipt with no router log proves nothing');
+    assert.equal(p.window.eval('cpNotes[0].ex.atx'), undefined, 'an escrow with no code proves nothing');
     assert.doesNotMatch(p.text('pvList'), /on Base/);
     p.close();
   });

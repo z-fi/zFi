@@ -493,6 +493,14 @@ describe('creating a band', () => {
     p.close();
   });
 
+  test('refuses a deposit larger than the wallet holds', async () => {
+    const p = await setup();
+    await fill(p, { a0: '1', a1: '200000' });
+    assert.match(p.$('lqPv').textContent, /Insufficient balance/);
+    assert.equal(form(p).querySelector('#lqCreate').disabled, true);
+    p.close();
+  });
+
   test('reads the two deposits by token, not by which field they sit in', async () => {
     /**
      * The tile's fields are in PICKER order; `chPair()` sorts the pair by
