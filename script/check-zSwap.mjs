@@ -402,7 +402,7 @@ const HELPERS = [
   'cpEncRecipe', 'cpActData', 'cpReclData', 'cpExitData', 'cpRescue', 'cpUse', 'cpVerifySigma', 'cpSettleData',
   'cpScalar', 'cpBtcOf', 'cpWif', 'cpOpen', 'cpSeg', 'bLock', 'bKeys', 'bOp', 'cdpSecrets', 'cdpBuildOp', 'cdpLeaf', 'cpOutKeys',
   'bAnchor', 'bEcdhSeed', 'bKs', 'bOpenOut',
-  'cpXferOp', 'cpWtOp', 'cpLockOp', 'cpClaimOp', 'cpRefundOp', 'cpSOpen', 'cpTacAddr', 'cpRecip', 'cpWtData', 'cpCalls', 'cpSTail', 'cpSuOp', 'bNoteLeaf',
+  'cpXferOp', 'cpWtOp', 'cpLockOp', 'cpClaimOp', 'cpRefundOp', 'cpSOpen', 'cpTacAddr', 'cpRecip', 'cpBp', 'cpWtData', 'cpCalls', 'cpSTail', 'cpSuOp', 'bNoteLeaf',
 ];
 // Exported for the same reason as HELPERS, but they are namespaces rather than
 // functions: the hand-rolled WalletConnect crypto and the QR encoder. These
@@ -969,7 +969,12 @@ if (exported) {
     const ps = X.cpSuOp(sIn, BigInt(SV.su.amount), BigInt(SV.fee), SV.su.recipient, BigInt(SV.su.deadline), F.ethAssetId, cb, F.seed, stream(SV.su.tag).R);
     same(ps.op, SV.su.op, 'send-and-unwrap op'); eq(JSON.stringify(ps.memos), JSON.stringify(SV.su.memos), 'send-and-unwrap change memo');
     eq(X.cpExitData('0x1234', '0xabcdef', br, SV.xfer.memos.slice(0, 1)), SV.exitWithMemo, 'Base exitAndExecute carrying a change memo');
-    eq(X.cpTacAddr(F.seed), SV.address, 'tacit1 address'); eq(X.cpRecip(SV.address), F.pub.slice(2), 'tacit1 address, Ethereum lane');
+    // The address Tacit's apps show and publish for this key: flags 0x85, the pool lane carried and the Ethereum-side
+    // key marked as the spend key (tacit dapp/tacit-unified.js unifiedAddress at 27757de0). The 0x03 form it replaced
+    // still pays the same Ethereum-side key.
+    const UNI = 'tacit1qzzs86ymc78aa5v4q03hjlz70hrmq3a2xa4g8zg9exreekzye4h6yw4eqdvy85q973gqj85aa84d25wpex67fpal72yznlej9q85eez9ax0jsq3cp7kr5mrynj8uzdl7cjlmlc6amv96383t2v9xvd63tv3mkxd4m78f8lxj69w467patd4lzcev3dgrastf6tg3csarvrzl0wzts6mc08hvgnrtwn0cad4yp2rt9np3s7v2aunvmcjqpgy50kdh0e6p37s9kvw6tp';
+    eq(X.cpTacAddr(F.seed), UNI, 'tacit1 address with the pool lane'); eq(X.cpBp(UNI), 'bp1qguqltp6d3jfer7pxllvf0aludwakzagnc44xznxxag4kgamrx6alr5nlnfdzh2a0q74k6l3vvkgk5p7c95a95gugw3kp30hhp9cddu8nmkyf34hfhuwk6jq4p4jescc0x9w7fkdufqq5z28mxmhuaqclgzs74h7yj', 'its pool lane as bp1');
+    eq(X.cpRecip(UNI), F.pub.slice(2), 'tacit1 address, Ethereum lane'); eq(X.cpRecip(SV.address), F.pub.slice(2), 'the 0x03 form, Ethereum lane');
     // The lock set exists only in settle() calldata: the page's decoder, over the mainnet stealth lock and claim
     // Tacit's doc cites, has to find what Tacit's own decoder found there.
     const dl = X.cpCalls(SV.scan.lockInput)[0];

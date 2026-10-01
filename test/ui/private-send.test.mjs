@@ -174,7 +174,11 @@ describe('private sends', () => {
     p.click(p.$('pvKey').querySelector('button[data-a="addr"]'));
     // Long values come up in a box that can be copied, not a one-line prompt.
     await p.waitFor(() => p.$('wkList').querySelector('textarea'), { label: 'the address box' });
-    assert.equal(p.$('wkList').querySelector('textarea').value, S.address, 'the address is the key\'s tacit1 address, with its Ethereum lane');
+    // Tacit's unified form for this key (flags 0x85: the pool lane, the Ethereum-side key marked as the spend key),
+    // as tacit dapp/tacit-unified.js derives it; it pays the same Ethereum-side key as the 0x03 form in the fixture.
+    const shown = p.$('wkList').querySelector('textarea').value;
+    assert.equal(shown, 'tacit1qzzs86ymc78aa5v4q03hjlz70hrmq3a2xa4g8zg9exreekzye4h6yw4eqdvy85q973gqj85aa84d25wpex67fpal72yznlej9q85eez9ax0jsq3cp7kr5mrynj8uzdl7cjlmlc6amv96383t2v9xvd63tv3mkxd4m78f8lxj69w467patd4lzcev3dgrastf6tg3csarvrzl0wzts6mc08hvgnrtwn0cad4yp2rt9np3s7v2aunvmcjqpgy50kdh0e6p37s9kvw6tp', 'the address is the key\'s tacit1 address, with the pool lane');
+    assert.equal(p.window.eval(`cpRecip(${JSON.stringify(shown)})`), p.window.eval(`cpRecip(${JSON.stringify(S.address)})`), 'and its Ethereum lane');
     p.close();
   });
 
@@ -673,7 +677,7 @@ describe('paying a name', () => {
     const [id, key, value] = coder.decode(['uint256', 'string', 'string'], '0x' + tx.data.slice(10));
     assert.equal('0x' + id.toString(16).padStart(64, '0'), ensNamehash('alice.wei'), 'the name\'s own token id');
     assert.equal(key, 'finance.tacit');
-    assert.equal(value, S.address, 'this key\'s own tacit1 address');
+    assert.equal(value, 'tacit1qzzs86ymc78aa5v4q03hjlz70hrmq3a2xa4g8zg9exreekzye4h6yw4eqdvy85q973gqj85aa84d25wpex67fpal72yznlej9q85eez9ax0jsq3cp7kr5mrynj8uzdl7cjlmlc6amv96383t2v9xvd63tv3mkxd4m78f8lxj69w467patd4lzcev3dgrastf6tg3csarvrzl0wzts6mc08hvgnrtwn0cad4yp2rt9np3s7v2aunvmcjqpgy50kdh0e6p37s9kvw6tp', 'this key\'s own tacit1 address, in the 0x85 form Tacit\'s apps publish');
     p.close();
   });
 });

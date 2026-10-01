@@ -54,6 +54,24 @@ test('0x80 names the spend key as the Ethereum-side key, once', async () => {
   assert.equal(await bp(withFlags(U85, 0x8d, Array(9).fill(3))), BP, 'an unknown lane past the known ones is skipped');
 });
 
+test('the page shows and publishes the 0x85 address Tacit apps do, and knows its own record in any form', async () => {
+  const pg = await page(), K = '0x' + '07'.repeat(32);
+  assert.equal(pg.window.eval(`cpTacAddr(${JSON.stringify(K)})`), U85, 'the key 0x07…07 gives Tacit\'s pinned unified address');
+  pg.window.eval(`cpSeed=${JSON.stringify(K)}`);
+  const me = a => pg.window.eval(`cpIsMe(${JSON.stringify(a)})`);
+  assert.equal(me(U85), true);
+  assert.equal(me(V0), true, 'a record published before the pool lane still counts as this key\'s');
+  assert.equal(me(UNIFIED), true, 'and so does the explicit form');
+  assert.equal(me(REAL_RECORD), false, 'another key\'s record does not');
+  pg.window.eval('cpSeed=""');
+});
+
+test('a mixed-case address is refused, an all-capitals one reads as the same', async () => {
+  const i = V0.search(/[a-z](?=[^1]*$)/);
+  assert.match(await recip(V0.slice(0, i) + V0[i].toUpperCase() + V0.slice(i + 1)), /^ERR /);
+  assert.equal(await recip(V0.toUpperCase()), await recip(V0));
+});
+
 test('lanes the page does not know are skipped, and a short known lane is refused', async () => {
   const later = withFlags(UNIFIED, 0x0f, Array(40).fill(9));
   assert.equal(await bp(later), BP);

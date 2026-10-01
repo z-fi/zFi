@@ -8297,10 +8297,12 @@ return{op:{chainBinding:cb,lockSetRoot:lr,asset:S.a,lCx:S.lx,lCy:S.ly,ownerPub:S
 const cpPm=v=>{let c=1;for(const x of v){const t=c>>>25;c=(c&0x1ffffff)<<5^x;for(let i=0;i<5;i++)if(t>>i&1)c^=[0x3b6a57b2,0x26508e6d,0x1ea119fa,0x3d4233dd,0x2a1462b3][i]}return c};
 const cpHrp=h=>{const a=[...h].map(c=>c.charCodeAt(0));return a.map(x=>x>>5).concat(0,a.map(x=>x&31))},CP_B32="qpzry9x8gf2tvdw0s3jn54khce6mua7l";
 const cpTacEnc=(h,b)=>cpSeg(h,b,1,[]);
-const cpTacDec=s=>{s=St(s).toLowerCase();const k=s.lastIndexOf("1"),h=s.slice(0,k),d=[...s.slice(k+1)].map(c=>CP_B32.indexOf(c));if(k<1||d.length<7||d.some(x=>x<0)||cpPm(cpHrp(h).concat(d))!==0x2bc830a3)return null;const o=[];let acc=0,bits=0;for(const x of d.slice(0,-6)){acc=(acc<<5|x)&4095;bits+=5;if(bits>=8){bits-=8;o.push(acc>>bits&255)}}return{h,b:Uint8Array.from(o)}};
+const cpTacDec=s=>{s=St(s);if(s!==s.toLowerCase()&&s!==s.toUpperCase())return null;s=s.toLowerCase();const k=s.lastIndexOf("1"),h=s.slice(0,k),d=[...s.slice(k+1)].map(c=>CP_B32.indexOf(c));if(k<1||d.length<7||d.some(x=>x<0)||cpPm(cpHrp(h).concat(d))!==0x2bc830a3)return null;const o=[];let acc=0,bits=0;for(const x of d.slice(0,-6)){acc=(acc<<5|x)&4095;bits+=5;if(bits>=8){bits-=8;o.push(acc>>bits&255)}}return{h,b:Uint8Array.from(o)}};
 const cpLn=s=>{const r=cpTacDec(s),b=r&&r.h==="tacit"&&r.b,f=b&&b[1],n=68+(f&2?33:0)+(f&4?97:0);return b&&!b[0]&&f&1&&(f&130)<130&&(f&120?b.length>=n:b.length===n)?b:null},
 cpBp=s=>{const b=/^tacit1/i.test(s)&&cpLn(s),o=b&&b[1]&2?101:68;return b&&b[1]&4?cpTacEnc("bp",b.slice(o,o+97)):s};
-const cpTacAddr=sd=>{const p=hB(pcomp(pmul(GP,Bi(sd))));return cpTacEnc("tacit",cpCat([0,3],p,hB(pcomp(pmul(GP,cpN(big(bTag("BIP0352/ScanKey",b32(sd))))))),p))};
+const cpTA={},cpTacAddr=sd=>cpTA[sd]||=(()=>{const p=hB(pcomp(pmul(GP,Bi(sd)))),d=bHmac(b32(Bi(sd)),cpU8("tacit-btc-pool-seed-v1")),M=cpU8("mainnet"),k=t=>{const[x,y]=rxB(rxS(t,M,d)),b=U8(32);let v=y;for(let i=0;i<32;i++,v>>=8n)b[i]=Nm(v&255n);if(x>rxP/2n)b[31]|=128;return b};
+return cpTacEnc("tacit",cpCat([0,133],p,hB(pcomp(pmul(GP,cpN(big(bTag("BIP0352/ScanKey",b32(sd))))))),hB(pcomp(pmul(GP,big(hB(keccak(cpCat(cpU8("tacit-btc-pool-wallet-view-v1"),M,d))))))),k("wallet-spend-v1"),k("wallet-nk-v1")))})(),
+cpIsMe=t=>{try{const b=cpLn(t),m=cpLn(cpTacAddr(cpSeed));return!!b&&cpHex(b.slice(2,68))===cpHex(m.slice(2,68))&&cpRecip(t)===cpHex(m.slice(2,35))}catch{return!1}};
 const cpToPublic=async(to,label)=>{
 if(!await sure(label+" has no Tacit address, so it cannot be paid privately.\n\nPay it as a public payout instead? You stay hidden as the sender, but the amount and "+label+" are visible on chain. Through the relay, its fee comes out of the amount paid.\n\nFor more privacy, send an amount that is not one you deposited, and wait a while after depositing."))throw Er("cancelled");
 pvAct.value="out";pvChain.value="1";pvTo.value=to;pvAct.dispatchEvent(new Event("change",{bubbles:true}));
@@ -8534,7 +8536,7 @@ const tacShort=()=>{if(tacFor!==cpSeed){tacFor=cpSeed;tacAddr=cpSeed?cpTacAddr(c
 const pubSync=()=>{const k=account+"|"+cpSeed;if(!account||!cpSeed||pubFor===k)return;pubFor=k;pubName="";
 (async()=>{const n=await nameRev(account).catch(()=>"");if(!pubOk(n)||pubFor!==k)return;
 const t=St(await nameText(n).catch(()=>"")||"").trim();
-if(pubFor===k&&t&&t===cpTacAddr(cpSeed)){pubName=n;cpPaint()}})()};
+if(pubFor===k&&cpIsMe(t)){pubName=n;cpPaint()}})()};
 const cpSet=(e,h)=>{if(e._h!==h)e.innerHTML=e._h=h},cpPaint=()=>{if(!pvMode)return;
 const on=!!cpSeed;pvHintSync();pvPrevSoon();cpInvGo();pubSync();
 const ptsCats=ds=>{const c={};for(const x of ds)c[x.ac]=(c[x.ac]||0)+1;
