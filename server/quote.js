@@ -65,15 +65,18 @@ const APPROVAL_TARGETS = {
 
 // Ordered by measured eth_call gas capacity, NOT latency. The heavy zQuoter
 // builders need >100M gas in a single eth_call (6 hubs x the full venue grid);
-// low-cap nodes reject them with "out of gas". Measured 2026-07-29 on
-// buildBestSwapViaETHMulticall(ETH->USDC, 1e18):
-//   publicnode  OK      1rpc  out of gas      drpc  out of gas
-// eth.llamarpc.com is omitted: it was returning HTTP 521.
-// Set QUOTE_RPCS (comma-separated) to prepend your own high-cap endpoints —
-// an Alchemy/Infura key removes the single-provider dependency entirely.
+// low-cap nodes reject them with "out of gas". Measured 2026-10-01 on
+// buildBestSwapViaETHMulticall (exact-out ETH->DAI 1000e18):
+//   publicnode, blastapi, mevblocker, tenderly  OK
+//   drpc  out of gas (50M cap)      1rpc  usage limit reached
+// Exact-out quotes have no lane but buildBest, so they need a high-cap node.
+// drpc stays last for the light calls. Set QUOTE_RPCS (comma-separated) to
+// prepend your own high-cap endpoints.
 const RPCS = [
-  'https://ethereum.publicnode.com',
-  'https://1rpc.io/eth',
+  'https://ethereum-rpc.publicnode.com',
+  'https://eth-mainnet.public.blastapi.io',
+  'https://rpc.mevblocker.io',
+  'https://mainnet.gateway.tenderly.co',
   'https://eth.drpc.org',
 ];
 
