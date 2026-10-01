@@ -6635,7 +6635,7 @@ return px>0n?px*amount/(10n**18n):0n;
 const SEL_POOLOF="988b1fa7",SEL_OWED0="56ea33ee",SEL_COLLECT="a480ca79";
 const SEL_COLLECTMANY="c296057e";
 const TACAD="0x4b4cb98D0C836c2783Ac46f0078b904dab533AE8",TAC_TOK="0xA1313eb9f3A445606D9583bcAc3ebeB56a858279",
-AD_API=["https://cdn.jsdelivr.net/gh/z0r0z/tacit@1b2eedde8490801c9ef4406020530059162e6d47/dapp/airdrop/v1/proofs/","https://raw.githubusercontent.com/z0r0z/tacit/1b2eedde8490801c9ef4406020530059162e6d47/dapp/airdrop/v1/proofs/"];
+AD_API=["https://cdn.jsdelivr.net/gh/src-company/tacit@1b2eedde8490801c9ef4406020530059162e6d47/dapp/airdrop/v1/proofs/","https://raw.githubusercontent.com/z0r0z/tacit/1b2eedde8490801c9ef4406020530059162e6d47/dapp/airdrop/v1/proofs/"];
 const adEl=gE("adEl"),oM=()=>lnMode||lqMode||wnMode||pvMode||mkMode||tab!=="swap";let adSeq=0,adC=null,adHas=false;
 const adShow=()=>Hd(adEl,!adHas||oM());
 const adHide=()=>{adC=null;adHas=false;Tx(adEl,"");adShow()};
@@ -7790,7 +7790,7 @@ let s=[0n,...x];for(let r=0;r<8+R;r++){s=s.map((v,i)=>{v=rxM(v+C[0][r*t+i]);retu
 rxA=([a,b],[c,d])=>{const k=168696n*a*c%rxP*b*d%rxP;return[rxM((a*d+b*c)*rxW(1n+k,rxP-2n)),rxM((b*d-168700n*a*c)*rxW(1n-k,rxP-2n))]},
 rxB=k=>{let r=[0n,1n],a=[5299619240641551281634865583518297030282874472190772894086521144482721001553n,16950150798460657717958625567821834550301663161624707787222815936182638968203n];for(k%=rxL;k;k>>=1n,a=rxA(a,a))if(k&1n)r=rxA(r,a);return r},
 twGet=async(f,h,x)=>{let c;try{c=await caches.open("zswap-tacit")}catch{}const k="/tacit/"+h;
-for(const u of[k,...["https://raw.githubusercontent.com/z0r0z/tacit/7d849d3637df72a7156de065ecf1fecc3a269fdc/dapp/evm-pool/","https://tacit.finance/evm-pool/","https://ipfs.filebase.io/ipfs/bafybeia4yvn2zoggvgpjwg5vpwpt6aivjbcm6tgzxoxsukao2nm5yyypfy/"].map(b=>b+f),...(x||[])])try{const r=u==k?await c.match(k):await fetch(u,{signal:AbortSignal.timeout?.(6e5)});if(!r.ok)continue;const b=U8(await r.arrayBuffer());if(cpHex(U8(await crypto.subtle.digest("SHA-256",b)))!==h)continue;u==k||c&&c.put(k,new Response(b)).catch(Np);return b}catch{}
+for(const u of[k,...["https://raw.githubusercontent.com/src-company/tacit/7d849d3637df72a7156de065ecf1fecc3a269fdc/dapp/evm-pool/","https://raw.githubusercontent.com/z0r0z/tacit/7d849d3637df72a7156de065ecf1fecc3a269fdc/dapp/evm-pool/","https://tacit.finance/evm-pool/","https://ipfs.filebase.io/ipfs/bafybeia4yvn2zoggvgpjwg5vpwpt6aivjbcm6tgzxoxsukao2nm5yyypfy/"].map(b=>b+f),...(x||[])])try{const r=u==k?await c.match(k):await fetch(u,{signal:AbortSignal.timeout?.(6e5)});if(!r.ok)continue;const b=U8(await r.arrayBuffer());if(cpHex(U8(await crypto.subtle.digest("SHA-256",b)))!==h)continue;u==k||c&&c.put(k,new Response(b)).catch(Np);return b}catch{}
 throw Er("Could not load "+f+" from any mirror.")},
 twLoad=()=>{const c=CHAIN_ID,k=cpSeed;if(twW&&twW.c===c&&twW.k===k)return Promise.resolve(twW);if(twJob&&twJob.c===c&&twJob.k===k)return twJob;twW&&twW.terminate();twW=null;const j=twJob=(async()=>{
 const m=await import(URL.createObjectURL(new Blob([await twGet("tacit-evm-pool-wallet.js","94370c7d3c6324af3d69fc24e20e4d9ba72751b527529d1319a28bd6a81776da",["https://ipfs.filebase.io/ipfs/bafybeigj4mx7yfngahio6uqds2ukjbpjc7nns7lndfia7er7pkkxxwqjwi"])],{type:"text/javascript"})));

@@ -131,7 +131,8 @@ describe('the private ETH receive address', () => {
     await p.settle();
     const got = await p.window.eval(`twGet("x.bin","${hash}").then(b=>new TextDecoder().decode(b))`);
     assert.equal(got, 'tacit prover bytes');
-    assert.ok(served[0].includes('githubusercontent') && served[1].includes('tacit.finance/evm-pool/x.bin'), 'a wrong file is skipped for the next mirror');
+    assert.ok(served[0].includes('githubusercontent.com/src-company/') && served[1].includes('githubusercontent.com/z0r0z/'), 'both GitHub owners are tried first');
+    assert.ok(served[2].includes('tacit.finance/evm-pool/x.bin'), 'a wrong file is skipped for the next mirror');
     await assert.rejects(p.window.eval(`twGet("y.bin","${'0'.repeat(64)}")`), /Could not load y\.bin from any mirror/);
     p.close();
   });
