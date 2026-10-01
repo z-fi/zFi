@@ -137,7 +137,7 @@ describe('Tacit farms', () => {
     const chips = [...p.$('pvFarm').querySelectorAll('.fmc')];
     assert.deepEqual(chips.map(c => c.querySelector('.fmn').textContent), ['TAC/tETH 554 TAC/day', 'tETH/cUSD 332 TAC/day', 'tETH/cBTC 222 TAC/day'], 'cETH reads as tETH, as everywhere else on the page');
     assert.equal(chips[0].querySelectorAll('img').length, 2, 'a listed pair shows both logos');
-    assert.equal(p.$('pvFarm').querySelector('a').getAttribute('href'), 'https://tacit.finance');
+    assert.equal(p.$('pvFarm').querySelector('a').getAttribute('href'), 'https://tacit.finance/weld/#farm');
     p.close();
   });
 

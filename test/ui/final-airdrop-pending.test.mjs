@@ -72,6 +72,7 @@ test('a shielded claim the wallet sent but then errored on keeps its note', asyn
     if (m === 'eth_sendTransaction') { await d(m, a); throw Object.assign(new Error('RPC Internal error'), { code: -32603 }); }
     return d(m, a);
   };
+  p.queueConfirm(true);
   p.click(p.$('adEl').querySelector('button[data-ad="sh"]'));
   await p.waitFor(() => /pending/.test(p.text('stat')), { label: 'the warning', timeout: 20000 });
   console.log('STAT:', p.text('stat'), '| sent:', p.chain.sentTo(TACAD).length);

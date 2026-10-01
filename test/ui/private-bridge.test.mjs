@@ -2046,7 +2046,7 @@ describe('the points a wallet has been credited', () => {
     await unlock(p);
     await p.waitFor(() => /counted/.test(p.text('pvKey')), { label: 'the points row', ...SLOW });
     // Three distinct activities, so the summary spells out the breakdown.
-    assert.match(p.text('pvKey'), /3 actions counted, 1 wrap, 1 cBTC lock and 1 cUSD loan/, p.text('pvKey'));
+    assert.match(p.text('pvKey'), /3 actions counted, 1 wrap, 1 cBTC bond and 1 cUSD loan/, p.text('pvKey'));
     p.click(p.$('pvKey').querySelector('button[data-a="ptshist"]'));
     await p.waitFor(() => !!p.$('pvKey').querySelector('.pvkh'), { label: 'the list to open', ...SLOW });
     const rows = [...p.$('pvKey').querySelectorAll('.pvkd')];
@@ -2054,7 +2054,7 @@ describe('the points a wallet has been credited', () => {
     assert.match(rows[0].textContent, /1\.5 cUSD/, 'the CDP loan, at cUSD\'s own 8 decimals');
     assert.match(rows[0].textContent, /cUSD loan/);
     assert.match(rows[1].textContent, /0\.000289 wstETH/, 'the cBTC post, at wstETH\'s 18 decimals, trimmed for display');
-    assert.match(rows[1].textContent, /cBTC lock/);
+    assert.match(rows[1].textContent, /cBTC bond/);
     assert.match(rows[2].textContent, /0\.001 ETH/, 'the original wrap, unlabelled as before');
     assert.doesNotMatch(rows[2].textContent, /wrap</, 'a wrap carries no activity tag of its own');
     p.close();

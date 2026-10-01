@@ -25,6 +25,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { execFileSync } from 'node:child_process';
 import { getAddress, AbiCoder } from 'ethers';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -221,16 +222,19 @@ const cbtc = {
   mintOp: cdp.buildCbtcMintOp({ chainBinding: ux.chainBindingHex(), outpoint: lkOutpoint, vBtc: 100000n, blinding: lkBlind }),
 };
 
-// A cUSD position opened against that cBTC note by Tacit's own buildCdpMintOp. The position key, the debt
-// note's nk and its blinding are HMACs of the Tacit key over (controller, position index), so the key alone
-// re-derives every secret of the position; the bearer cBTC leg carries owner 0, as the guest accepts.
+// A cUSD position opened against that cBTC note by Tacit's own buildCdpMintOp. The position key is an HMAC of the
+// Tacit key over (controller, position index); the debt note's nk and blinding are Tacit's deriveOutputKeys(key,
+// anchor, "cdpDebt", 0), anchored on the cBTC note's nullifier as Tacit's CDP tab anchors them, so the key alone
+// re-derives every secret of the position. The bearer cBTC leg carries owner 0, as the guest accepts.
 const CE = String(cfg.collateralEngine).toLowerCase(), CURVE_N = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n;
 const cdpSecret = (tag, i) => V.hmac(V.sha256, u8(seed), new Uint8Array([...utf8(tag), ...u8(CE), ...u8(i.toString(16).padStart(8, '0'))]));
 const posPriv = BigInt('0x' + Buffer.from(cdpSecret('tacit-cdp-position-v1', 0)).toString('hex')) % CURVE_N || 1n;
 const posOwner = '0x' + Buffer.from(secp.getPublicKey(posPriv.toString(16).padStart(64, '0'), true)).subarray(1).toString('hex');
-const debtNk = '0x' + Buffer.from(cdpSecret('tacit-cdp-debt-nk-v1', 0)).toString('hex');
-const debtBlind = '0x' + (BigInt('0x' + Buffer.from(cdpSecret('tacit-cdp-debt-blinding-v1', 0)).toString('hex')) % CURVE_N || 1n).toString(16).padStart(64, '0');
 const cbtcLeaf = pool.leaf(pool.CBTC_ZK_ASSET_ID, lkXY.cx, lkXY.cy, '0x' + '00'.repeat(32));
+const cdpAnchor = pool.nativeNu('0x' + '00'.repeat(32), '0x' + '00'.repeat(32), cbtcLeaf);
+const { nk: debtNk, blindingHex: debtBlind } = ux.deriveOutput(seed, cdpAnchor, 'cdpDebt', 0);
+let tacitRev = 'unknown';
+try { tacitRev = execFileSync('git', ['-C', TACIT, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(); } catch { /* not a git checkout */ }
 const cdpPath = pool.merklePath([cbtcLeaf, old.otherLeaf], 0), cdpRoot = pool.merkleRootFrom(cbtcLeaf, 0, cdpPath);
 const RAY = '0x' + (10n ** 27n).toString(16).padStart(64, '0'), nonce0 = '0x' + '00'.repeat(32);
 const cdpOp = cdp.buildCdpMintOp({
@@ -243,6 +247,7 @@ const cdpFix = {
   controller: CE, index: 0, debtValue: '3000000000', rateSnapshot: RAY, posOwner, debtNk, debtBlinding: debtBlind, cbtcLeaf, root: cdpRoot, path: cdpPath,
   positionLeaf: cdp.positionLeaf(CE, cdp.debtAssetId(CE), cdp.basketRoot(cdpLeg), 3000000000n, RAY, posOwner, nonce0), op: cdpOp,
   debtMemo: memo.encodeMemo(memo.sealMemo(pub, { value: 3000000000n, blinding: debtBlind, secret: debtNk, asset: cdp.debtAssetId(CE), owner: pool.nkToOwner(debtNk) }, () => BigInt(old.eph))),
+  anchor: cdpAnchor, source: `tacit ${tacitRev} buildCdpMintOp + deriveOutputKeys(anchor, "cdpDebt", 0)`,
 };
 
 // A Tacit note on Bitcoin held by this key: a CXFER framed by Tacit's own envelope encoder, its outputs built

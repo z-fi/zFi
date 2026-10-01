@@ -137,7 +137,7 @@ describe('the private ETH receive address', () => {
     p.close();
   });
 
-  test('a connected wallet on the page\'s chain reads the address itself, and public nodes never see it', async () => {
+  test('the address and what waits at it are read from public nodes, not through the connected wallet', async () => {
     const p = await open(8453);
     unlock(p);
     p.click('pv');
@@ -145,7 +145,7 @@ describe('the private ETH receive address', () => {
     const pub = (p.chain.httpLog || []).filter(x => /eth_getBalance|eth_call|eth_getCode/.test(x.method || ''));
     const calls = p.chain.calls.filter(c => c.selector === '7944b37a');
     assert.equal(calls.length, 1, 'receiveBoxOf read once');
-    assert.ok(!pub.some(x => x.method === 'eth_getBalance'), 'the address balance never goes to a public node');
+    assert.ok(pub.some(x => x.method === 'eth_getBalance'), 'the address balance is read from a public node');
     p.close();
   });
 

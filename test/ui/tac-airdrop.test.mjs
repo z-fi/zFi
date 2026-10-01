@@ -81,8 +81,10 @@ describe('the TAC airdrop card', () => {
     const TAC_AS = '0xf0bbe868af10c6c67652a99709bf32048d1aa7194efe3e9a1ef1bde43f94762b';
     p.chain.answer('0x000000000ed1eabd231be41d93b719056f7febfc', '7da9874f', '0x' + '0'.repeat(64));
     p.window.eval(`cpUse(${JSON.stringify('0x' + '11'.repeat(32))});cpAssets=[{id:"${TAC_AS}",tok:"${TAC}",sym:"cTAC",pub:"TAC",dec:18,scale:10n**10n,icon:""}]`);
+    p.queueConfirm(true);
     p.click(p.$('adEl').querySelector('button[data-ad="sh"]'));
     await p.waitFor(() => p.chain.sent.some(t => (t.to || '').toLowerCase() === TACAD), { label: 'the shielded claim', timeout: 15000 });
+    assert.ok(p.asked.confirm.some(m => /untested on mainnet/.test(m)), 'the claim says the private route is not yet proven on mainnet');
     const tx = p.chain.sent.find(t => (t.to || '').toLowerCase() === TACAD);
     assert.equal(tx.data.slice(2, 10), 'ad8b9781', 'claimAndShield(uint256,uint256,bytes32[],bytes32)');
     const [index, amount, proof, commit] = coder.decode(['uint256', 'uint256', 'bytes32[]', 'bytes32'], '0x' + tx.data.slice(10));

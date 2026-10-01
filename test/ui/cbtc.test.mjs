@@ -310,7 +310,7 @@ describe('borrowing cUSD against the cBTC note', () => {
     assert.deepEqual(job.op, D.op, 'byte-identical to Tacit\'s op for the same note, debt and key');
     assert.equal(job.memos.length, 1, 'one sealed memo, for the cUSD note');
     assert.match(job.memos[0], /^0x0[23][0-9a-f]{336}$/, 'ephemeral key (33 B) + ciphertext (136 B)');
-    const pos = JSON.parse(p.window.localStorage['zswap:cpc:' + fp])[0];
+    const pos = openStore(p.window.localStorage['zswap:cpc:' + fp], F.seed)[0];
     assert.equal(pos.leaf, D.positionLeaf, 'the position leaf Tacit computes');
     assert.equal(pos.c, undefined, 'the collateral note\'s blinding, its spend secret, is never stored in the loan record');
     const notes = openStore(p.window.localStorage['zswap:cpn:' + fp], F.seed);
@@ -340,7 +340,7 @@ describe('borrowing cUSD against the cBTC note', () => {
     p.click(p.$('pvList').querySelector('button[data-a="borrow"]'));
     await p.waitFor(() => asked && !/Building the loan/.test(p.text('stat')), { label: 'the loan attempt to finish', ...SLOW });
     await p.settle();
-    const cdps = JSON.parse(p.window.localStorage['zswap:cpc:' + fp] || '[]');
+    const cdps = openStore(p.window.localStorage['zswap:cpc:' + fp], F.seed);
     const cusd = openStore(p.window.localStorage['zswap:cpn:' + fp], F.seed).filter(n => n.s === D.debtNk);
     return { p, cdps, cusd };
   };
