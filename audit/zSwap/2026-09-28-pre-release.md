@@ -6,24 +6,24 @@ An external pre-release audit (GPT Astra) reviewed `zSwap.html` at `66f3067` on 
 
 | | |
 |---|---|
-| Commit | `0c48677` |
-| Page | `zSwap.html`, 678,629 bytes, 28 chunks |
-| keccak256(zSwap.html) | `0xb6b658369d256d6fe30e71b24c3a55cc2565bec77524f04b18b4b4fed42c2eb9` |
-| Resolver relay gas | 29,798,706 of the 30,000,000 eth_call budget |
+| Commit | `520f537` |
+| Page | `zSwap.html`, 678,876 bytes, 28 chunks |
+| keccak256(zSwap.html) | `0xf10d152bd78d53330e24a89fb4a7b75c4b56d48292cb8397216959c49623e2f8` |
+| Resolver relay gas | 29,815,789 of the 30,000,000 eth_call budget |
 | Tests | UI 1,689 and browser 30 tests on `e1bda9d`, and the address, Tacit, names, send, guard and browser suites (453 tests) on these bytes, 0 failures; Foundry zSwap 83/83; check-zSwap all pass |
 
 Also verified end to end on an anvil mainnet fork in real Chromium: an ETH send landed as a 21,000-gas transfer and a 0.05 ETH→USDC swap received exactly the quoted 133.732996 USDC; the page sets no gas or fee fields, so the wallet estimates both. A real unclaimed airdrop allocation's `claimAndShield` simulates successfully on mainnet with the page's calldata.
 
-The audit's two fixes first shipped in `3b051c0` (680,829 B, keccak `0x055e22c2…ae32`). The lock moved to `2f0254a` after the final review below, then to `a040769` for cUSD loan parity with tacit.finance, then to `9a3f23e`, where a points claim is offered only when the distributor's own `verify` accepts its proof, then to `7ad72ac`, where a lone decimal comma reads as a decimal (so iOS comma keypads can type amounts) and .wei reveals wait on chain time, then to `82958f2`, which adds a private airdrop claim, a small-send warning and two edge guards, then to `6597c2f`, where a send the wallet's RPC fails says whether anything went out, then to `984b9e0`, where a points activity the page does not know is listed as other rather than as an ETH amount, then to `3a462ac` after the last review below, then to `1c0607a`, which reads Tacit's unified tacit1 addresses, then to `e1bda9d`, where quotes, wallets, relay sockets and private rows keep to the current state, then to `c859c08`, which reads Tacit's 0x80 spend-key flag, then to `9d4aab5`, which shows and publishes the 0x85 address, then to `b26bd47` after a read-batching pass, Tacit's current pool wallet module and the capped points copy, then to `0c48677` after a field and private-row bug sweep; everything in `3b051c0` is carried forward unchanged in behaviour.
+The audit's two fixes first shipped in `3b051c0` (680,829 B, keccak `0x055e22c2…ae32`). The lock moved to `2f0254a` after the final review below, then to `a040769` for cUSD loan parity with tacit.finance, then to `9a3f23e`, where a points claim is offered only when the distributor's own `verify` accepts its proof, then to `7ad72ac`, where a lone decimal comma reads as a decimal (so iOS comma keypads can type amounts) and .wei reveals wait on chain time, then to `82958f2`, which adds a private airdrop claim, a small-send warning and two edge guards, then to `6597c2f`, where a send the wallet's RPC fails says whether anything went out, then to `984b9e0`, where a points activity the page does not know is listed as other rather than as an ETH amount, then to `3a462ac` after the last review below, then to `1c0607a`, which reads Tacit's unified tacit1 addresses, then to `e1bda9d`, where quotes, wallets, relay sockets and private rows keep to the current state, then to `c859c08`, which reads Tacit's 0x80 spend-key flag, then to `9d4aab5`, which shows and publishes the 0x85 address, then to `b26bd47` after a read-batching pass, Tacit's current pool wallet module and the capped points copy, then to `0c48677` after a field and private-row bug sweep, then to `520f537` after a second sanity pass; everything in `3b051c0` is carried forward unchanged in behaviour.
 
-The hash and length are pinned in `test/zSwap.t.sol`, the registry calldata and `deploy/zSwap-v0.3-LAUNCH.md`. `node script/sync-zSwap-artifacts.mjs --committed` confirms that every pinned copy agrees with the committed page. Any change to `zSwap.html` after `0c48677` voids this lock and needs the full pin sequence and test sweep again.
+The hash and length are pinned in `test/zSwap.t.sol`, the registry calldata and `deploy/zSwap-v0.3-LAUNCH.md`. `node script/sync-zSwap-artifacts.mjs --committed` confirms that every pinned copy agrees with the committed page. Any change to `zSwap.html` after `520f537` voids this lock and needs the full pin sequence and test sweep again.
 
 ## Findings at a glance
 
 | Item | Audit | Verdict | Outcome |
 |---|---|---|---|
-| P1: an ambiguous batch failure replays transactions | Hold release | Confirmed at HEAD | Fixed in `3b051c0`, carried into `0c48677` |
-| P2: quote expiry is not rechecked before submission | Hold release | Confirmed at HEAD | Fixed in `3b051c0`, carried into `0c48677` |
+| P1: an ambiguous batch failure replays transactions | Hold release | Confirmed at HEAD | Fixed in `3b051c0`, carried into `520f537` |
+| P2: quote expiry is not rechecked before submission | Hold release | Confirmed at HEAD | Fixed in `3b051c0`, carried into `520f537` |
 | Browser: the picker gap is −0.25 px | Low, unresolved gate | Not reproduced | No change |
 | UI harness: 26 failed, 4 cancelled | Environmental, passed alone | Agreed | Clean full run |
 
@@ -129,6 +129,7 @@ Live checks found every address the page calls has code on its chain, every RPC 
 
 ## Also in this release since the audit baseline
 
+- `520f537`: a second pass, with tests in `test/ui/sweep-fixes-2.test.mjs`: an exit whose relay status is unknown, or still pending, is retried on its own terms (same escrow and fee) inside its window, and only a refused one is re-quoted; a loan the relay reports unknown reads as failed; the network cannot be switched during a private or Markets action; a cause burn no longer falls back to the whole balance when the amount cannot be read; a link that changes the pair or chain is armed; a NFT Dutch order with no initial shows its end price; a bridged private exit reads as bridged once its note is spent; importing notes attaches their exit to notes already held; and the .wei claim, governance and backing buttons hold against a second press.
 - `0c48677`: a bug sweep with nine tests in `test/ui/sweep-fixes.test.mjs`: an NFT token id accepts a .wei name; a launch market cap reads a decimal comma; the slippage field steps from 0 (the page still floors it at 0.01%); a finished private send shows its change note; cancelling the relay prompt keeps the pin; the farm line redraws when the farm turns on or off; a hole in the pool's leaves triggers a resync; and an exit whose relay status is unknown can be rebuilt.
 - `b26bd47`: the day's Tacit points pot is described as capped (up to a set budget, with what a point can earn capped), worded with Tacit and naming no figure or date.
 - `000073a`: the private ETH pool loads Tacit's current wallet module (sha256 `575e5946…a671`), mirrored on GitHub at the commit that holds it (`76ffebb3`), on IPFS (`bafybeiapmcp…`) and at tacit.finance; all four pinned files hash-match there.
@@ -152,7 +153,7 @@ Live checks found every address the page calls has code on its chain, every RPC 
 
 Deferred by decision: an in-page cBTC CDP repay. It needs several KB of new proving logic, and the page links to tacit.finance for it instead.
 
-Next step: deploy the 28 chunks for `0c48677`, run the DAO's `deployNext`, then repoint `zswap.wei`.
+Next step: deploy the 28 chunks for `520f537`, run the DAO's `deployNext`, then repoint `zswap.wei`.
 
 ---
 
