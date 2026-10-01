@@ -705,11 +705,20 @@ describe('exiting to Base through the relay', () => {
     p.close();
   });
 
-  test('an exit whose job the relay no longer knows is offered for retry', async () => {
+  test('an exit whose job the relay no longer knows is offered for retry, and the retry keeps its terms', async () => {
     const { p } = await relayedBaseExit();
     p.chain.relay.status = { status: 'unknown' };
     poke(p);
     await p.waitFor(() => /relay failed/.test(p.text('pvList')) && p.$('pvList').querySelector('button[data-a="exit"]'), { label: 'the retry', timeout: 20000 });
+    p.chain.gasPrice = GAS * 2n;
+    p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
+    await p.waitFor(() => p.window.__relayPosts.length === 3, { label: 'the retry to reach the relay', ...SLOW });
+    const [, first, again] = p.window.__relayPosts;
+    // The first attempt may still land before its deadline, so the retry must
+    // pay the same escrow on the same terms the stored record describes.
+    assert.equal(again.op.recipient, first.op.recipient, 'the same escrow');
+    assert.equal(again.op.fee, first.op.fee, 'the same fee, though gas moved');
+    assert.ok(!p.asked.confirm.some(m => /Build this exit again/.test(m)), 'not rebuilt while the first attempt can land');
     p.close();
   });
 

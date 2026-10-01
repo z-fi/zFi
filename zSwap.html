@@ -1666,7 +1666,7 @@ const nameRevRaw=async a=>{
 const agrees=async n=>{
 if(!n||!nameOk(Lc(n)))return"";
 let f="";try{f=await nameFwdCached(Lc(n))}catch{}
-return f&&Lc(f)===Lc(a)?n:""};
+return f&&Lc(f)===Lc(a)?Lc(n):""};
 if(CHAIN_ID===BASE_ID){const b=await agrees(await bnRev(a));if(b)return b}
 const nd=namehash(Sx(a).toLowerCase()+".addr.reverse");
 const [w,g,er]=await nsBatch([
@@ -3777,7 +3777,7 @@ const switchNet=async next=>{
 if(switchNet.busy||!CHAINS[next]||next===CHAIN_ID&&(!prov()||walletChain===next))return;
 const c=CHAINS[next],was=cC().name,w=prov();
 if(!w){setChain(next);showNet();hcs(next);location.reload();return}
-if(busy||txLive)return Sm("Still on "+was+" — finish the transaction in progress first.");
+if(busy||txLive||cpBusy||mkBusy)return Sm("Still on "+was+" — finish the transaction in progress first.");
 switchNet.busy=true;
 Sm("Switching to "+c.name+"…");
 try{
@@ -4800,7 +4800,7 @@ let when=expired?" · lapsed "+rel(Nm(now-r.exp))+" ago — escrow still held"
 :r.exp?" · "+rel(Nm(r.exp-now))+" left":"";
 if(!expired&&r.dutch&&r.duration){
 const end=r.start+r.duration;
-const floor=r.initial?(r.endPrice*r.remaining+r.initial-1n)/r.initial:0n;
+const floor=r.initial?(r.endPrice*r.remaining+r.initial-1n)/r.initial:r.endPrice;
 when=now>=end?` · floor reached: ${tM(floor,r.dB)} ${r.sB}`
 :` · floor ${tM(floor,r.dB)} ${r.sB} in ${rel(Nm(end-now))}`;
 }
@@ -5640,7 +5640,7 @@ if(t!=="swap"&&wnMode)wnSet(false);
 if(t!=="swap"&&pvMode)pvSet(false);
 if(t!=="swap"&&mkMode)mkSet(false);
 if(t!==tab){rc.value="";cL(rc).remove("bad");Tx(rcvEl,"")}
-tab=t;modeBtns();last=null;sendReady=null;Sm("");posShown=POSPAGE;
+tab=t;modeBtns();last=null;sendReady=null;++sSeq;Sm("");posShown=POSPAGE;
 const send=t==="send",bk=t==="book";
 cL(tabSwap).toggle("on",t==="swap");
 cL(tabSend).toggle("on",send);
@@ -6515,7 +6515,7 @@ gvK=h=>Sx(keccak(hB(h))),
 gvId=(p,cf)=>gw(gvK(eA(TITHE_RECORD)+eU(p.op)+eA(p.to)+eU(p.value)+gvK(p.data)+pad32(p.nonce)+cf)),
 gvE=e=>GV_E[(Js({d:e?.data,m:e?.message}).match(RegExp(Ok(GV_E).join("|")))||[])[0]]||explain(e),
 gvDry=(to,data)=>cfgRead(C,[{from:TITHE_RECORD,to,data},L]).then(r=>"would create "+short(cks("0x"+Sx(r).slice(24))),e=>"would fail: "+gvE(e)),
-gvTx=async(data,b)=>{b.disabled=true;try{if(CHAIN_ID!==1)throw Er("Switch to Ethereum.");
+gvTx=async(data,b)=>{if(b.disabled)return;b.disabled=true;try{if(CHAIN_ID!==1)throw Er("Switch to Ethereum.");
 await cW();const req={from:account,to:TITHE_RECORD,data:"0x"+data,value:"0x0"};
 await rpc(C,[req,L]);const h=await sendTx([req]);gvS.innerHTML=txLink(h,"Sent");
 await waitTx(h);gvLoad();gvS.innerHTML=txLink(h,"Done");return 1}catch(e){Tx(gvS,isRejection(e)?"":gvE(e))}finally{b.disabled=false}};
@@ -6998,8 +6998,8 @@ return paint(act(`Back with ${tM(cbCost,18)} ETH for `
 if(rqOff)
 return paint(msg(`Burn-back has been switched off by this cause — ${safeSym(tok.sym)} cannot be redeemed`),
 RQ_TIP);
-let want=0n;try{want=pU(vT(amt)||"0",tok.dec)}catch{}
-if(want<=0n)want=fromBalance;
+let want=-1n;try{want=pU(vT(amt)||"0",tok.dec)}catch{}
+if(!want)want=fromBalance;
 if(want<=0n){
 return paint(msg(`1 ${safeSym(tok.sym)} redeems for ${tM(eth*CONE/sup,18)} ETH`),CB_TIP);}
 cbAmt=want;
@@ -7034,7 +7034,7 @@ cbSync();
 }
 async function cbAct(){
 if(!cbDao||cbAmt<=0n||CHAIN_ID!==1)return;
-const b=gE("cbGo");if(!b||b.disabled)return;
+const b=gE("cbGo"),B=cbBuy,T=cbTok;if(!b||b.disabled)return;
 const label=b.textContent;
 try{
 if(!account)return connect();
@@ -7062,11 +7062,11 @@ if(lost*100n>cbDue)throw Er(`This burn now pays ${tM(now2,18)} ETH, not ${tM(cbD
 }
 await rpc(C,[req,L]);
 await waitTx(await sendTx([req]));sGot();
-if(cbBuy&&cbTok){
-const kt=TOKENS.find(x=>x.addr&&Lc(x.addr)===Lc(cbTok));
+if(B&&T){
+const kt=TOKENS.find(x=>x.addr&&Lc(x.addr)===Lc(T));
 if(kt){kt.cause=1;if(kt.cust)keepToken(kt)}
 }
-Sm(cbBuy?"Backed · burn it back any time for what is left."
+Sm(B?"Backed · burn it back any time for what is left."
 :"Burned · the ether is in your wallet.");
 rBal();cbSync();
 }catch(e){err(e);b.disabled=false;Tx(b,label)}
@@ -7383,7 +7383,7 @@ const wnCostCall=l=>[{to:WNS,data:"0x"+SEL_WFEE+eU(new TextEncoder().encode(l).l
 {to:WNS,data:"0x"+SEL_WPREM+pad32(wnId(l))}];
 const wnCost=async l=>{const [f,pr]=await mc3(wnCostCall(l));return dec1(f,0)+dec1(pr,0)};
 const wnSync=()=>{
-if(!wnMode)return;
+if(!wnMode||wnGo.k)return;
 const p=wnPend();
 if(p&&!p.at){
 if(!p.since){wnSave({...p,since:Mf(Dn()/1000)});wnGo.disabled=true;Tx(wnGo,"Confirming…");return}
@@ -7905,7 +7905,7 @@ for(const l of lg){const leaf=St(l.topics[1]||"").toLowerCase(),debt=Bx((Sx(l.da
 const R=new Set(rs),rc=cpScanCdps.r||=new Map();if(!rc.has(l.blockNumber))try{rc.set(l.blockNumber,rw(await cfgRead(C,[{to:CP_CE,data:"0x2c4e722e"},l.blockNumber])))}catch{}if(rc.get(l.blockNumber))R.add(hx(rc.get(l.blockNumber)))
 hit:for(let i=0;i<Mx(16,nx);i++){const S=SS[i]||=cdpSecrets(i);for(const n of z)for(const rate of R){const v=Bi(n.v);if(cdpLeaf(debt,rate,S.owner,S.nonce,[[CP_CBTC,v]])===leaf){a.push({i,v:St(debt),cv:St(v),rate,leaf,at:0,js:"settled"});found++;break hit}}}}
 if(found)cpSaveCdps(a);return found};
-const cpCdpRows=()=>cpLoadCdps().map((p,j)=>{const st=p.job&&p.js!=="settled"?(p.js==="failed"?"loan failed":p.self&&p.pv?`<button type="button" class="fclink" data-a="csettle" data-c="${j}">settle</button>`:"opening…"):p.x?"closed or topped up":'open · <a href="https://tacit.finance/#tab=cdp" target="_blank" rel="noreferrer">repay on tacit.finance</a>';
+const cpCdpRows=()=>cpLoadCdps().map((p,j)=>{const st=p.job&&p.js!=="settled"?(/failed|unknown/.test(p.js)?"loan failed":p.self&&p.pv?`<button type="button" class="fclink" data-a="csettle" data-c="${j}">settle</button>`:"opening…"):p.x?"closed or topped up":'open · <a href="https://tacit.finance/#tab=cdp" target="_blank" rel="noreferrer">repay on tacit.finance</a>';
 return`<div class="cpr"><span><b>${tM(Bi(p.v),8)} cUSD</b> against ${tM(Bi(p.cv),8)} cBTC</span><span>${st}</span></div>`}).join("");
 const bEnvOf=h=>{const s=/^[0-9a-f]*$/i.test(h||"")?hB(h):U8(0);if(s.length<36||s[0]!==32||s[33]!==172||s[34]!==0||s[35]!==99)return null;let i=36,end=0;const P=[];
 while(i<s.length){const o=s[i];if(o===104){end=i+1;break}let n,j=i+1;if(o===0)n=0;else if(o<76)n=o;else if(o===76){n=s[j];j++}else if(o===77){n=s[j]|s[j+1]<<8;j+=2}else return null;if(j+n>s.length)return null;P.push(s.slice(j,j+n));i=j+n}
@@ -8039,7 +8039,7 @@ const k=cpNoteOf(n),c=cpPool;
 const li=c?c.leaves.indexOf(k.leaf):-1,spent=!!c&&c.spent.includes(k.nu);
 const x=n.ex,dl=x?Nm(x.dl):0,now=Mf(Dn()/1000);
 if(x&&x.ch===1)return{k,li,s:spent?"withdrawn":"exiting"};
-if(x&&(x.atx||x.ptx||x.rtx))return{k,li,s:x.rtx?"reclaimed":"bridged"};
+if(x&&(x.atx||x.rtx||x.ptx&&(spent||!c)))return{k,li,s:x.rtx?"reclaimed":"bridged"};
 if(x&&spent)return{k,li,s:now>dl?"expired":"funded"};
 if(x)return{k,li,s:"exiting"};
 if(spent)return{k,li,s:"spent"};
@@ -8154,7 +8154,7 @@ await cpSettleWrap(n);rBal();
 Sm("Paid. The relay is settling the recipient's note.");sGot()};
 const cpExit=async(n,amt,q)=>{
 const k=cpNoteOf(n);let A=cpAs(k.asset);if(!A){await cpLoadAssets();A=cpAs(k.asset);if(!A)throw Er("The pool's asset list did not load — try again.")}
-const o=!n.ex?.im&&!/failed|unknown/.test(n.ex?.js||"")&&Dn()/1e3<=+n.ex?.du&&n.ex,d=!o&&!q&&amt==null&&!n.ex?.im&&n.ex,p=o||q||(d?{ch:d.ch,to:d.to,self:!!d.self}:{}),ch=p.ch??(A.tok===ZERO?+pvChain.value:1),to=p.to||(pvAct.value==="out"&&vT(pvTo))||account;let self=p.self??pvPath.value==="self";
+const o=!n.ex?.im&&(n.ex?.js!="failed"||/still pending/.test(n.ex.je))&&Dn()/1e3<=+n.ex?.du&&n.ex,d=!o&&!q&&amt==null&&!n.ex?.im&&n.ex,p=o||q||(d?{ch:d.ch,to:d.to,self:!!d.self}:{}),ch=p.ch??(A.tok===ZERO?+pvChain.value:1),to=p.to||(pvAct.value==="out"&&vT(pvTo))||account;let self=p.self??pvPath.value==="self";
 const v=o&&o.v?Bi(o.v):amt!=null?Bi(amt):d&&d.v?Bi(d.v):k.value,part=v<k.value;if(v<=0n||v>k.value)throw Er("That note holds less than that.");
 if(d&&!await sure("Build this exit again: "+cpFmt(v,A)+" "+A.sym+" to "+to+" on "+(CHAINS[ch]||{}).name+"? The first attempt did not land."))throw Er("Cancelled.");
 if(n.ex&&n.ex.job&&!/failed|unknown/.test(n.ex.js)&&!(Dn()/1e3>+n.ex.du))throw Er("This note is already exiting.");
@@ -8759,7 +8759,7 @@ const pvRefresh=async()=>{cpPtsRead();if(cpSeed)cpBtcRead();if(!cpSeed||cpBusy||
 const d0=cpDone();
 try{await cpSync(cpNotes.some(n=>/pending|exiting/.test(cpStatus(n).s))||cpSends.some(S=>!CP_DONE.test(S.st)&&!/fail$/.test(S.st))||cpInbox.some(x=>x.cj&&x.st!=="claimed"));await cpFind().catch(()=>0);
 if(cpLocks.length){await cpLockSync().catch(Np);for(const l of cpLocks)if(l.job&&!["settled","failed","proven"].includes(l.js||""))await cpLockPoll(l).catch(Np)}
-{const q=cpLoadCdps();let ch=0;for(const p of q)if(p.job&&!["settled","failed","proven"].includes(p.js||"")){await cpCdpPoll(p).catch(Np);if(p.js==="failed")cpDropOut("d"+p.i);ch=1}else if(p.stx&&p.js!=="settled"){const r=await cfgRead("eth_getTransactionReceipt",[p.stx]).catch(Nl);if(r&&r.status==="0x1"){p.js="settled";ch=1}}else if(!p.x&&p.js==="settled")try{if(Bi(await cpStor(cpSlot(keccak(cpCat(cpU8("tacit-cdp-position-v1"),b32(p.leaf),cpU8("spent"))),163)))){p.x=1;ch=1}}catch{}if(ch)cpSaveCdps(q)}
+{const q=cpLoadCdps();let ch=0;for(const p of q)if(p.job&&!["settled","failed","proven"].includes(p.js||"")){await cpCdpPoll(p).catch(Np);if(/failed|unknown/.test(p.js))cpDropOut("d"+p.i);ch=1}else if(p.stx&&p.js!=="settled"){const r=await cfgRead("eth_getTransactionReceipt",[p.stx]).catch(Nl);if(r&&r.status==="0x1"){p.js="settled";ch=1}}else if(!p.x&&p.js==="settled")try{if(Bi(await cpStor(cpSlot(keccak(cpCat(cpU8("tacit-cdp-position-v1"),b32(p.leaf),cpU8("spent"))),163)))){p.x=1;ch=1}}catch{}if(ch)cpSaveCdps(q)}
 for(const n of cpNotes){const t=n.ex||n;if(t.job&&(n.ex||t.js!=="unknown"||cpStatus(n).s!=="ready")&&(!["settled","failed","proven"].includes(t.js||"")||n.ex&&!t.atx&&t.ja==="pending"&&Dn()-(t.jst||0)<6e5))await cpRelayPoll(n).catch(Np);
 if(n.inv&&!n.job&&!n.p&&cpPool&&cpPool.wraps.some(w=>w[0]===cpNoteOf(n).dep))try{await cpSettleWrap(n)}catch{}}
 await cpSendTick();await cpInTick();if(pvMode)cpPaint();if(!cpBusy&&[...cpDone()].some(k=>!d0.has(k)))sGot()}catch(e){try{if(pvMode)Tx(pvNote,explain(e))}catch{}}pvTick=0};
@@ -8779,7 +8779,7 @@ if(a==="btckey"){await ask("The Bitcoin key (WIF) for "+cpBtc+", to import into 
 if(a==="import"){const s=(await ask("Paste a private-bridge key (0x + 64 hex), or an exported note list.")||"").trim();
 if(/^\[/.test(s)){let arr;try{arr=Jp(s)}catch{}
 if(!Ia(arr))return void(Sm("That is not a note list."));
-let add=0;for(const r of arr)if(cpRecOk(r)){const{rb:_r,...q}=r,m=cpNotes.find(n=>cpKeyOf(n)===cpKeyOf(q));if(q.ex){const{rb:_b,pv:_p,pr:_q,job:_j,js:_s,...e}=q.ex;if(+e.ch>1&&(!e.v||/^\d{1,78}$/.test(St(e.v))))q.ex={...e,im:1};else delete q.ex}if(!m){cpNotes.push(q);add++}}
+let add=0;for(const r of arr)if(cpRecOk(r)){const{rb:_r,...q}=r,m=cpNotes.find(n=>cpKeyOf(n)===cpKeyOf(q));if(q.ex){const{rb:_b,pv:_p,pr:_q,job:_j,js:_s,...e}=q.ex;if(+e.ch>1&&(!e.v||/^\d{1,78}$/.test(St(e.v))))q.ex={...e,im:1};else delete q.ex}if(!m||q.ex&&!m.ex){m?m.ex=q.ex:cpNotes.push(q);add++}}
 cpNotes.sort((a,b)=>a.i-b.i);cpSaveNotes();cpPaint();pvRefresh();Sm(add?"Imported "+add+" note"+(add>1?"s":"")+".":"Nothing new in that list.");return}
 if(!/^0x[0-9a-fA-F]{64}$/.test(s))return void(Sm("That is not a key."));if(cpBusy||pvTick)return void Sm("Busy with the previous step…");if(Lc(s)!==cpSeed&&!await sure("Replace this wallet's key? Back up the current one first."))return;
 const k=Lc(s);let kept=1;try{await cpKeep(cpDk,k)}catch{kept=0}cpUse(k);cpVer=1;cpPaint();pvRefresh();if(!kept)Sm("Imported for this visit only: this browser cannot seal a key.");return}
@@ -8989,7 +8989,7 @@ wnEnter.disabled=false};
 wnGo.onclick=async()=>{
 if(wnGo.disabled)return;
 if(!account)return void connect();
-wnGo.disabled=true;
+wnGo.disabled=wnGo.k=true;
 try{
 await cW();
 const p=wnPend();
@@ -9011,10 +9011,10 @@ wnSave(null);
 Sm(`${p.label}.wei is yours.`);
 wnName.value="";
 }else if(wnQ&&wnQ.free){
-const req={from:account,to:WREG,value:"0x0",
-data:"0x"+SEL_WSUB+pad32(IDWEI)+pad32("40")+strTail(wnQ.label)};
+const l=wnQ.label,req={from:account,to:WREG,value:"0x0",
+data:"0x"+SEL_WSUB+pad32(IDWEI)+pad32("40")+strTail(l)};
 await sS(req);
-Sm(`${wnQ.label}.id.wei is yours.`);
+Sm(`${l}.id.wei is yours.`);
 wnName.value="";
 }else if(wnQ){
 const sec=wnSecret();
@@ -9028,13 +9028,13 @@ try{h=await sendTx([req])}
 catch(e){
 if(e&&(e.code===4001||/user (rejected|denied)|rejected the request|denied transaction/i.test(e.message||"")))wnSave(null);
 throw e}
-wnSave({label:wnQ.label,secret:sec,r:1,at:0,since:Mf(Dn()/1000),tx:h});
+wnSave({...wnPend(),since:Mf(Dn()/1000),tx:h});
 try{await settle(h)}catch(e){if(/tx reverted/.test(e&&e.message||""))wnSave(null);throw e}
 await wnStamp();
 Sm("Committed. Register the name in a minute.");
 }
 await wnQuote();await wnRoll();rBal();
-}catch(e){err(e)}
+}catch(e){err(e)}finally{wnGo.k=0}
 wnSync()};
 lnGo.onclick=async()=>{
 Sm("");
@@ -9048,7 +9048,7 @@ if(!name||!sym)throw Er("A name and a symbol, please.");
 const utf8=v=>new TextEncoder().encode(v).length;
 if(utf8(name)>64)throw Er(`That name is ${utf8(name)} bytes and the limit is 64.`);
 if(utf8(sym)>16)throw Er(`That symbol is ${utf8(sym)} bytes and the limit is 16.`);
-if(lnKind.value==="cause")return await cauGo();
+if(lnArtNote.textContent[0]=="r")throw Er("The logo is still loading.");if(lnKind.value==="cause")return await cauGo();
 const supRaw=lnSupply.value.replace(/[, ]/g,"");
 if(!/^\d+(\.\d+)?$/.test(supRaw)||!(Nm(supRaw)>0))throw Er("Supply has to be a positive number.");
 const supply=pU(supRaw,18);
@@ -9523,7 +9523,7 @@ async function applyLink(e){if(e&&(busy||txLive))return void idle(()=>applyLink(
 const q=new URLSearchParams(location.hash.slice(1));if(q.has("farm")){pfOpen=1;q.set("token","ETH");q.set("out",TAC_TOK);q.set("lq","1")}
 const tx=q.get("tacit-box");if(tx){history.replaceState(null,"",location.href.split("#")[0]);return void tbGo(tx)}
 const ti=q.get("tacit-invoice");if(ti!==null){try{history.replaceState(null,"",location.href.split("#")[0])}catch{}if(/^[A-Za-z0-9_-]{16,8000}$/.test(ti)){window.__tinv=ti;try{sessionStorage.setItem("zswap:tinv",ti)}catch{}setTimeout(()=>cpInvGo(),0)}return}
-const my=++lSeq;
+const my=++lSeq,pp=Js(pairAddrs());
 if(![...q.keys()].length){
 if(!e)setTimeout(()=>cpInvGo(),0);
 if(e){
@@ -9572,7 +9572,7 @@ if(fromSel.value===toSel.value){
 const alt=St(TOKENS.findIndex((x,i)=>St(i)!==fromSel.value&&(t==="book"||x.std!=="nft")));
 if(alt!=="-1"){if(oi>=0)fromSel.value=alt;else toSel.value=alt}
 }
-const rcMine=rc.value!==""&&rc.value!==lkWrote.rc;
+if(lkEv&&pp!==Js(pairAddrs()))lkArm=Dn()+2500;const rcMine=rc.value!==""&&rc.value!==lkWrote.rc;
 const wantLq=q.get("lq")==="1";
 const linkWantsCard=fi>=0||oi>=0||to||n||!isNaN(lk)||q.get("token")||q.get("out")||want;
 if(!wantLq&&lqMode&&linkWantsCard)lqSet(false);
@@ -10010,7 +10010,7 @@ tx=await sendTx([mainTx]);
 }
 }
 await settle(tx);
-last=null;bnAt=0;amt.value=outAmt.value=Tx(rate,"");fitFont(amt);fitFont(outAmt);
+bnAt=0;amt.value=Tx(rate,"");fitFont(amt);setMode("in");
 chCache={};loadChart();
 rBal();
 render();

@@ -4,8 +4,8 @@
  * does, a slippage field whose steps land on its own default, private rows that
  * stop hiding change once a send has left this key, a relay prompt that keeps
  * the pin when dismissed, a farm line that notices its own end, a pool history
- * with a gap that is refused, and an exit retry the relay forgot that can be
- * built again. Each case failed on the page before it.
+ * with a gap that is refused, and an exit the relay forgot that is sent again
+ * on its own terms. Each case failed on the page before it.
  */
 import { test, describe, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -216,19 +216,32 @@ describe('the pool history', () => {
 });
 
 describe('an exit the relay forgot', () => {
-  test('can be built again inside its window', async () => {
-    const p = await unlocked();
-    const key = p.window.eval(`(()=>{const n=${NOTE('0b', '0d', 1000000)};
-      n.ex={ch:1,to:"${A.OTHER}",self:0,job:"0xjob1",js:"unknown",du:String(nowS()+3600),dl:String(nowS()+259200),fee:"0",wei:"10000000000000000",nonce:"1"};
+  const forgotten = (p, du) => p.window.eval(`(()=>{const n=${NOTE('0b', '0d', 1000000)};
+      n.ex={ch:1,to:"${A.OTHER}",self:0,job:"0xjob1",js:"unknown",du:String(nowS()${du}),dl:String(nowS()+259200),fee:"0",wei:"10000000000000000",nonce:"1"};
       cpNotes.push(n);cpPaint();return cpKeyOf(n)})()`);
-    const retry = [...p.$('pvList').querySelectorAll('button[data-a="exit"]')].find(b => b.dataset.k === key);
+  const retryOf = (p, key) => [...p.$('pvList').querySelectorAll('button[data-a="exit"]')].find(b => b.dataset.k === key);
+  const finished = p => p.waitFor(() => !/Building the exit/.test(p.text('stat')) && p.text('stat'), { label: 'the retry to finish', ...SLOW });
+
+  test('is sent again on its own terms inside its window', async () => {
+    const p = await unlocked();
+    const retry = retryOf(p, forgotten(p, '+3600'));
     assert.equal(retry?.textContent, 'retry', 'the relay\'s 404 reads as a failure with a retry');
+    p.click(retry);
+    await finished(p);
+    assert.doesNotMatch(p.text('stat'), /already exiting/);
+    assert.ok(!p.asked.confirm.some(m => /Build this exit again/.test(m)), 'the first attempt can still land, so nothing is rebuilt');
+    // Past the guard, the retry reads the pool, which does not hold this note.
+    assert.match(p.text('stat'), /has not settled into the pool yet/);
+    p.close();
+  });
+
+  test('is built again once its window has passed', async () => {
+    const p = await unlocked();
+    const retry = retryOf(p, forgotten(p, '-60'));
     p.queueConfirm(true);
     p.click(retry);
     await p.waitFor(() => p.asked.confirm.some(m => /Build this exit again/.test(m)), { label: 'the rebuild to be offered', ...SLOW });
-    await p.waitFor(() => !/Building the exit/.test(p.text('stat')) && p.text('stat'), { label: 'the retry to finish', ...SLOW });
-    assert.doesNotMatch(p.text('stat'), /already exiting/);
-    // Past the guard, the rebuild reads the pool, which does not hold this note.
+    await finished(p);
     assert.match(p.text('stat'), /has not settled into the pool yet/);
     p.close();
   });
