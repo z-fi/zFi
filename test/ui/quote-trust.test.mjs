@@ -169,7 +169,7 @@ async function connectWc(lieB) {
   p.click(p.$('wkList').querySelector('.wcn .fclink'));
   const uri = await p.waitFor(() => p.copied().find(u => /^wc:/.test(u)), { label: 'the pairing link' });
   await peer.scan(uri);
-  await p.waitFor(() => /1111/.test(p.text('addr')), { label: 'the session to connect' });
+  await p.waitFor(() => new RegExp(A.ACCOUNT.slice(-4)).test(p.text('addr')), { label: 'the session to connect' });
   await p.settle();
   chain.remotes = { blastapi: node(lieB) };
   return { p, chain };

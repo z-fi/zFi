@@ -96,6 +96,26 @@ describe('the points history', () => {
     assert.match(p.text('pvKey'), /3 actions counted, 2 wraps and 1 cBTC bond/, 'and so is the summary');
     p.close();
   });
+
+  test('a day a bond stayed posted reads as a bond day, with no amount and no link', async () => {
+    const chain = poolChain();
+    serve(chain, '/points/', { address: ME, points: 501.5, deposit_count: 2, deposits: [
+      { tx_hash: '0x' + 'ab'.repeat(32), block_time: 1790600000, amount_wei: '0', points: 500, activity: 'cbtchold' },
+      { tx_hash: '0x' + '41'.repeat(32), block_time: 1790500000, amount_wei: '1000000000000000', points: 1.5, activity: 'wrap' },
+    ] });
+    const p = await unlocked(chain);
+    await p.waitFor(() => /counted/.test(p.text('pvKey')), { label: 'the points row', ...SLOW });
+    p.click(p.$('pvKey').querySelector('button[data-a="ptshist"]'));
+    await p.waitFor(() => !!p.$('pvKey').querySelector('.pvkh'), { label: 'the history to open', ...SLOW });
+    const rows = [...p.$('pvKey').querySelectorAll('.pvkd')];
+    assert.equal(rows.length, 2);
+    assert.ok([...rows[0].querySelectorAll('span')].some(s => s.textContent === 'bond day'), 'the daily bond credit is named: ' + rows[0].textContent);
+    assert.match(rows[0].textContent, /500 points/);
+    assert.doesNotMatch(rows[0].textContent, /ETH|wstETH|other/, 'it moved no funds, so it shows no amount');
+    assert.equal(rows[0].querySelector('a'), null, 'its hash is not a transaction, so nothing links to an explorer');
+    assert.ok(rows[1].querySelector('a'), 'a real deposit still links its transaction');
+    p.close();
+  });
 });
 
 describe('links out to tacit.finance', () => {

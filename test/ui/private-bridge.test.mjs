@@ -1535,18 +1535,17 @@ describe('a key the wallet did not derive', () => {
   });
 
   test('a sealed key this wallet\'s signature does not open is left in place', async () => {
-    const p = await planted(withSubtle);
-    p.queueConfirm(true);
-    await unlock(p);
-    const storage = { ...p.window.localStorage };
-    p.close();
-    const q = await open({ storage, ...withSubtle });
-    q.chain.personalSig = '0x' + '44'.repeat(64) + '1b';
+    // Sealed under the key another signature would derive. A signature has to recover to the connected account, so
+    // a record sealed elsewhere stands in for one this wallet's own signature cannot open.
+    const q = await open(withSubtle);
+    await q.window.eval(`cpKeep("0x${'44'.repeat(32)}","${PLANTED}")`);
+    const sealed = q.window.localStorage[K];
+    assert.match(sealed, /"ct":"[0-9a-f]{96}"/);
     q.click('pvGo');
     await q.waitFor(() => /Key unlocked/.test(q.text('pvKey')), { label: 'the key to unlock' });
-    assert.notEqual(q.window.eval('cpSeed'), PLANTED);
+    assert.equal(q.window.eval('cpSeed'), F.seed, 'this wallet\'s own key is in use');
     assert.match(q.text('stat'), /does not open with this wallet/);
-    assert.equal(q.window.localStorage[K], storage[K], 'the sealed record is untouched');
+    assert.equal(q.window.localStorage[K], sealed, 'the sealed record is untouched');
     q.close();
   });
 

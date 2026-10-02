@@ -17,6 +17,9 @@ import assert from 'node:assert/strict';
 import { webcrypto } from 'node:crypto';
 import { A, MockChain, loadPage, closeAllPages, selectorOf } from './harness.mjs';
 
+// The connected account as the address chip shows it.
+const ME = new RegExp(A.ACCOUNT.slice(-4));
+
 after(closeAllPages);
 
 const ETH = 10n ** 18n;
@@ -109,7 +112,7 @@ async function connectWc(opts = {}) {
   p.click(p.$('wkList').querySelector('.wcn .fclink'));
   const uri = await p.waitFor(() => p.copied().find(u => /^wc:/.test(u)), { label: 'the pairing link' });
   await peer.scan(uri);
-  await p.waitFor(() => /1111/.test(p.text('addr')), { label: 'the session to connect' });
+  await p.waitFor(() => ME.test(p.text('addr')), { label: 'the session to connect' });
   await p.settle();
   return { p, peer };
 }
@@ -158,7 +161,7 @@ describe('a WalletConnect session across a reload', () => {
     chain.setNative(A.ACCOUNT, 10n * ETH);
     const q = await loadPage({ chain, walletless: true, hash: null,
       storage: { 'zswap:wcs': saved, 'zswap:wk': 'wc' }, beforeParse: quietRelay(subs) });
-    await q.waitFor(() => /1111/.test(q.text('addr')), { label: 'the resumed session' });
+    await q.waitFor(() => ME.test(q.text('addr')), { label: 'the resumed session' });
     assert.ok(subs.includes(topic), 'the page listens on the kept session topic');
     assert.ok(q.$('wkWrap').classList.contains('hide'), 'no pairing code was needed');
     q.window.eval(`rpc("personal_sign",["0x00","${A.ACCOUNT}"]).catch(()=>{})`);
@@ -200,7 +203,7 @@ describe('a WalletConnect session across a reload', () => {
       { label: 'the relay to come back', timeout: 5000 });
     await p.settle();
     assert.doesNotMatch(p.text('stat'), /dropped/);
-    assert.match(p.text('addr'), /1111/);
+    assert.match(p.text('addr'), ME);
     p.close();
   });
 });
@@ -236,7 +239,7 @@ describe('a WalletConnect network switch', () => {
     await p.waitFor(() => p.window.eval('CHAIN_ID') === 8453 && !p.window.eval('switchNet.busy'), { label: 'the switch' });
     await p.settle();
     assert.equal(p.reloads(), 0, 'a reload would end the WalletConnect session');
-    assert.match(p.text('addr'), /1111/, 'still connected');
+    assert.match(p.text('addr'), ME, 'still connected');
     assert.match(p.text('net'), /Base network/);
     assert.equal(p.window.eval('walletChain'), 8453);
     assert.equal(p.window.eval('offChain()'), false, 'the page does not tell the user to switch the wallet');
@@ -324,7 +327,7 @@ describe('a WalletConnect network switch', () => {
     assert.equal(p.window.eval('CHAIN_ID'), 1, 'the page stays on the chain the session covers');
     assert.equal(p.window.eval('switchNet.busy'), false);
     assert.equal(p.reloads(), 0);
-    assert.match(p.text('addr'), /1111/);
+    assert.match(p.text('addr'), ME);
     assert.equal(peer.requests.length, before, 'nothing is asked of the wallet');
     p.close();
   });
@@ -335,7 +338,7 @@ describe('a WalletConnect network switch', () => {
     await p.waitFor(() => p.window.eval('CHAIN_ID') === 8453 && !p.window.eval('switchNet.busy'), { label: 'the follow' });
     await p.settle();
     assert.equal(p.reloads(), 0, 'the session survives the wallet changing chain');
-    assert.match(p.text('addr'), /1111/);
+    assert.match(p.text('addr'), ME);
 
     peer.event('chainChanged', '0x89');
     await p.settle();
@@ -344,7 +347,7 @@ describe('a WalletConnect network switch', () => {
     assert.equal(p.reloads(), 0);
     assert.equal(p.window.eval('offChain()'), false);
     const before = peer.requests.length;
-    await p.window.eval('rpc("personal_sign",["0x00","0x1111111111111111111111111111111111111111"])');
+    await p.window.eval(`rpc("personal_sign",["0x00","${A.ACCOUNT}"])`);
     assert.equal(peer.requests[before].chainId, 'eip155:8453', 'requests stay aimed at the page\'s chain');
     p.close();
   });

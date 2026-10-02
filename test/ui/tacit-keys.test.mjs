@@ -1,6 +1,12 @@
 /**
  * The private panel's key handling and Tacit crypto, held to Tacit's own rules.
  *
+ * - The identity signature has to come from the connected account: the signer
+ *   recovered from the EIP-191 hash of the identity message must be that
+ *   account, as Tacit's deriveIdentity requires. The harness account is the
+ *   signer of the harness's fixed signature, so it unlocks to Tacit's key for
+ *   it. A contract wallet, which cannot sign as itself, skips that check and
+ *   keeps its own sign-twice path.
  * - The identity signature's v must be 27/28, or 0/1, which stands for the
  *   same recovery id; any other v is refused, as Tacit refuses it. The key a
  *   valid signature derives is unchanged: it is still Tacit's
@@ -24,7 +30,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { verifyMessage, Wallet, Signature, SigningKey, keccak256, concat, toUtf8Bytes } from 'ethers';
-import { MockChain, loadPage, closeAllPages, CP_BLOCK } from './harness.mjs';
+import { A, MockChain, loadPage, closeAllPages, CP_BLOCK } from './harness.mjs';
 import { openStore } from './cp-store.mjs';
 
 after(closeAllPages);
@@ -38,8 +44,9 @@ const B0 = CP_BLOCK + 0x100;
 const RELAY = 'api.tacit.finance';
 const SLOW = { timeout: 20000 };
 const fp = createHash('sha256').update('zswap-cp-v1:' + F.seed).digest('hex').slice(0, 16);
-// The account the harness's fixed signature really comes from: the one Tacit derives F.seed for.
+// The account the harness's fixed signature comes from: the one Tacit derives F.seed for, and the harness account.
 const SIGNER = verifyMessage(F.identityMessage, F.sig);
+const OTHER = A.OTHER;
 
 function keyChain(account = SIGNER) {
   const chain = new MockChain({ accounts: [account] });
@@ -73,6 +80,56 @@ async function attempt(chain, storage = {}, before = () => {}) {
 const unlocked = (p) => /Key unlocked/.test(p.text('pvKey'));
 
 describe('the identity signature', () => {
+  test('recovering to another account than the connected one derives no key', async () => {
+    const p = await attempt(keyChain(OTHER));
+    assert.match(p.text('stat'), /The wallet is on a different account than the one connected here/);
+    assert.ok(!unlocked(p), 'no key unlocks');
+    assert.equal(p.window.eval('cpSeed'), '', 'none is derived');
+    assert.equal(p.window.localStorage['zswap:cpk:' + OTHER.toLowerCase()], undefined, 'and none is kept');
+    p.close();
+
+    // A real wallet's own signature, presented for another account, is refused the same way.
+    const w = new Wallet('0x' + '44'.repeat(32)), c = keyChain(OTHER);
+    c.personalSig = w.signMessageSync(F.identityMessage);
+    const q = await attempt(c);
+    assert.match(q.text('stat'), /different account/);
+    assert.equal(q.window.eval('cpSeed'), '');
+    q.close();
+  });
+
+  test('the harness account signed the fixed signature, and unlocks to the key Tacit derives for it', async () => {
+    assert.equal(SIGNER.toLowerCase(), A.ACCOUNT.toLowerCase(), 'the fixed signature recovers to the harness account');
+    assert.equal(F.account.toLowerCase(), A.ACCOUNT.toLowerCase(), 'which is the account the reference vectors were built for');
+    const own = await attempt(new MockChain());
+    assert.equal(own.window.eval('CP_MSG'), F.identityMessage, 'over the message the page signs');
+    assert.ok(unlocked(own));
+    assert.equal(own.window.eval('cpSeed'), F.seed);
+    own.close();
+
+    // The page's recovery is real curve arithmetic: another key's signature does not pass for the harness account.
+    const w = new Wallet('0x' + '45'.repeat(32)), c = new MockChain();
+    c.personalSig = w.signMessageSync(F.identityMessage);
+    const q = await attempt(c);
+    assert.match(q.text('stat'), /different account/);
+    assert.equal(q.window.eval('cpSeed'), '');
+    q.close();
+  });
+
+  test('a contract wallet skips the signer check that refuses the same signature for an ordinary account', async () => {
+    const cw = keyChain(OTHER);
+    cw.setCode(OTHER, '0x6000');
+    const p = await attempt(cw, {}, x => x.queueConfirm(true));
+    assert.ok(unlocked(p), 'a contract wallet unlocks after the warning');
+    assert.equal(cw.personalSigned.length, 2, 'having signed twice the same way');
+    assert.equal(p.window.eval('cpSeed'), F.seed);
+    p.close();
+
+    const eoa = await attempt(keyChain(OTHER));
+    assert.match(eoa.text('stat'), /different account/, 'the same signature for an ordinary account is refused');
+    assert.equal(eoa.window.eval('cpSeed'), '');
+    eoa.close();
+  });
+
   test('takes v as 27/28 or 0/1 for the same key, and refuses any other v or a high s', async () => {
     const c0 = keyChain(SIGNER);
     c0.personalSig = F.sig.slice(0, 130) + '00';

@@ -160,7 +160,7 @@ describe('a wallet on another chain', () => {
     const chain = new MockChain({ autoConnected: true });
     chain.setNative(A.ACCOUNT, ETH);
     const p = await loadPage({ chain, hash: null });
-    await p.waitFor(() => /1111/.test(p.text('addr')), { label: 'connected' });
+    await p.waitFor(() => new RegExp(A.ACCOUNT.slice(-4)).test(p.text('addr')), { label: 'connected' });
     assert.notEqual(await probe(p), 'off');
     p.close();
   });

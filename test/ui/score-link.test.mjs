@@ -33,7 +33,7 @@ describe('a shared score resolves from chain', () => {
     await p.waitFor(() => /Minted score/.test(card(p)), { label: 'the name to resolve' });
     assert.match(card(p), /4,820/, 'the score comes out of the label');
     assert.match(card(p), /wave 7/, 'and so does the wave');
-    assert.match(card(p), /1111/, 'with whoever holds it');
+    assert.match(card(p), new RegExp(A.ACCOUNT.slice(-4)), 'with whoever holds it');
     p.close();
   });
 

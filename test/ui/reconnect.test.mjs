@@ -2,6 +2,9 @@ import { test, describe, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { A, MockChain, loadPage, fixedRateQuoter, closeAllPages } from './harness.mjs';
 
+// The connected account as the address chip shows it.
+const ME = new RegExp(A.ACCOUNT.slice(-4));
+
 after(closeAllPages);
 
 const ETH = 10n ** 18n;
@@ -26,7 +29,7 @@ describe('the wallet survives a refresh', () => {
   test('the injected wallet reconnects, as it always did', async () => {
     const p = await loadPage({ chain: fixture([A.ACCOUNT]), hash: null });
     await p.settle();
-    assert.match(p.text('addr'), /0x1111|1111/, 'the account should come back on its own');
+    assert.equal(p.text('addr'), A.ACCOUNT.slice(0, 6) + '…' + A.ACCOUNT.slice(-4), 'the account should come back on its own');
     p.close();
   });
 
@@ -41,7 +44,7 @@ describe('the wallet survives a refresh', () => {
     await p.settle();
     assert.match(p.text('addr'), /2222/,
       'the wallet the person actually chose must be the one that comes back');
-    assert.doesNotMatch(p.text('addr'), /1111/, 'not the injected one');
+    assert.doesNotMatch(p.text('addr'), ME, 'not the injected one');
     p.close();
   });
 
@@ -53,7 +56,7 @@ describe('the wallet survives a refresh', () => {
       session: { dc: '1' },
     });
     await q.settle();
-    assert.doesNotMatch(q.text('addr'), /2222|1111/,
+    assert.doesNotMatch(q.text('addr'), new RegExp('2222|' + A.ACCOUNT.slice(-4)),
       'a person who disconnected must stay disconnected across a refresh');
     q.close();
   });
@@ -80,7 +83,7 @@ describe('the wallet survives a refresh', () => {
 
     const p = await loadPage({ chain, hash: null });
     await p.settle();
-    await p.waitFor(() => /1111/.test(p.text('addr')), { label: 'the wallet to come back' });
+    await p.waitFor(() => ME.test(p.text('addr')), { label: 'the wallet to come back' });
 
     p.window.__reloaded = 0;
     p.queueConfirm(true);
@@ -102,7 +105,7 @@ describe('the wallet survives a refresh', () => {
       storage: { [WK]: 'io.locked.wallet' },
     });
     await p.settle();
-    await p.waitFor(() => /1111/.test(p.text('addr')),
+    await p.waitFor(() => ME.test(p.text('addr')),
       { label: 'the injected wallet to answer instead' });
     p.close();
   });
@@ -117,7 +120,7 @@ describe('the wallet survives a refresh', () => {
     await p.settle();
     // The page waits a beat for the remembered wallet to announce itself before
     // giving up on it, so the fallback is late rather than absent.
-    await p.waitFor(() => /1111/.test(p.text('addr')), { label: 'fallback to the injected wallet' });
+    await p.waitFor(() => ME.test(p.text('addr')), { label: 'fallback to the injected wallet' });
     p.close();
   });
 });

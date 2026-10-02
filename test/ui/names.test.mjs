@@ -24,7 +24,7 @@
  *   cast call 0x0000000000696760E15f265e828DB644A0c242EB \
  *     "makeCommitment(string,address,bytes32)(bytes32)" \
  *     "zswaptest" 0x000000000000FB114709235f1ccBFfb925F600e4 \
- *     $(cast keccak $(cast abi-encode "f(bytes32,address)" 0x2222...2222 0x1111...1111))
+ *     $(cast keccak $(cast abi-encode "f(bytes32,address)" 0x2222...2222 0xf111bd389fc4710fe874eff76fa9bcb6612ad7bd))
  *
  * which is why the fixtures use that label, that account and that secret: the
  * page has to reproduce a value the registry itself produced. A commitment made
@@ -49,7 +49,7 @@ const SEL = {
 };
 
 // Read from mainnet, not computed here. See the header.
-const MAINNET_COMMITMENT = '0x4c7eb929e24b139f029892c280a69362fcecfe99a76368e6384e65be660bff13';
+const MAINNET_COMMITMENT = '0x8bdb8da9468306335980aac236dd06cb5025bc2d3815a680f1ef373d1d429681';
 const SECRET = '0x' + '22'.repeat(32);
 
 const ETH = 10n ** 18n;

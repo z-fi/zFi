@@ -90,7 +90,7 @@ describe('connection', () => {
 
   test('connecting shows the account and its balance', async () => {
     const p = await setup();
-    assert.equal(p.text('addr'), '0x1111…1111');
+    assert.equal(p.text('addr'), A.ACCOUNT.slice(0, 6) + '…' + A.ACCOUNT.slice(-4));
     assert.match(p.text('bal'), /Balance: 10\b/);
     p.close();
   });

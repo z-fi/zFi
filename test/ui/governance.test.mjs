@@ -112,9 +112,10 @@ describe('the governance panel', () => {
     assert.ok(!more.classList.contains('hide'));
     assert.equal(title(r), '▾ #1 Pay a contributor');
     const links = [...more.querySelectorAll('a')].map(a => [a.textContent, a.href]);
-    assert.deepEqual(links, [[A.ACCOUNT, `https://etherscan.io/address/${A.ACCOUNT}`], [by, `https://etherscan.io/address/${by}`]]);
+    const to = getAddress(A.ACCOUNT);
+    assert.deepEqual(links, [[to, `https://etherscan.io/address/${to}`], [by, `https://etherscan.io/address/${by}`]]);
     assert.equal(more.querySelector('code').textContent, ['0xa9059cbb', '11'.repeat(32), '22'.repeat(32)].join('\n'), 'the calldata, one ABI word a line');
-    assert.equal(more.textContent, `for the audit\n→ ${A.ACCOUNT} · 1.5 ETH\nproposed by ${by}` + more.querySelector('code').textContent, 'the title is not repeated');
+    assert.equal(more.textContent, `for the audit\n→ ${to} · 1.5 ETH\nproposed by ${by}` + more.querySelector('code').textContent, 'the title is not repeated');
     p.click(r.querySelector('b'));
     assert.ok(more.classList.contains('hide'));
     p.close();
