@@ -161,7 +161,6 @@ vertical-align:.1em;line-height:1;text-decoration:none;margin-left:.5em}
 .dly select{font-size:1em;max-width:min(12em,100%)}
 #pvAssetB,#mkAssetB,#mkPayB{display:inline-flex;align-items:center;gap:.5em;font-size:1em;max-width:none}
 #pvAssetB img,#mkAssetB img,#mkPayB img,#mkAssetB svg,#mkPayB svg{width:16px;height:16px;border-radius:50%;flex:none}
-#mkAssetB,#mkPayB{color:var(--f);cursor:pointer;font-weight:600}
 #mkPayB:disabled{cursor:default;background-image:none;padding-right:0}
 #pvTo{flex:1 1 11em;width:auto}
 #lnArtNote{color:var(--m);font-variant-numeric:tabular-nums}
@@ -240,7 +239,6 @@ margin-top:.55em;padding-top:.55em;border-top:1px solid var(--e);color:var(--f)}
 #mkAdv .dly{border-left:0;border-right:0;margin-top:0}.mkadn{margin:0;padding:0 .8em .7em;color:var(--dm)}
 #mkAdv .dly:last-child{border-bottom:0}
 .lnu{display:flex;align-items:baseline;gap:.3em;color:var(--m);flex:0 1 auto;min-width:0}
-.lnu input{width:7em;flex:0 1 7em;min-width:0}
 .lnu i{font-style:normal;min-width:2.6em}
 .dly a{color:var(--f);font-weight:600;text-decoration:none}.dly a:hover,.rank i.pin u{text-decoration:underline}
 .tipr{display:flex;align-items:center;gap:.5em}
@@ -303,7 +301,6 @@ letter-spacing:.14em;text-transform:uppercase;color:var(--m)}
 .wcq{padding:.9em 1.1em 0}
 .wcn{padding:.6em 1.1em 1em;font-size:.72em;color:var(--m)}
 .wcnode{padding-top:0;opacity:.85}
-#wkList .wki{display:block}
 #wkList .wki svg{width:100%;height:100%;display:block}
 .tkg{border-top:1px solid var(--e);padding:.7em .8em .3em;font-size:.62em;letter-spacing:.14em;text-transform:uppercase;color:var(--m)}
 .tkr{display:flex;align-items:flex-start;gap:.55em;width:100%;box-sizing:border-box;
@@ -345,7 +342,7 @@ body:has(.tkp:not(.hide))::before{content:"";position:fixed;inset:0;z-index:39;p
 background:var(--e);margin:.5em auto .1em}
 .tkd{-webkit-line-clamp:1}
 .tkr{padding:.75em .9em}
-#tkFind{padding:.85em .9em;font-size:16px}.rcpt,.meta input,.dly input,.dly select,.lqin,.mkq{font-size:16px}.p button,.o button,.lqbtn,.lnbtn{padding:.6em .8em;min-height:44px}.fclink::after{content:"";position:absolute;inset:-.55em -.35em}.chtf button{padding:.5em}
+#tkFind{padding:.85em .9em;font-size:16px}.rcpt,.meta input,.dly input,.dly select,.lqin,.mkq,#wkList .dlgt{font-size:16px}.p button,.o button,.lqbtn,.lnbtn{padding:.6em .8em;min-height:44px}.fclink::after{content:"";position:absolute;inset:-.55em -.35em}.chtf button{padding:.5em}
 .tabs button{padding:.95em .5em}
 .dly{padding:.4em .8em}
 .dly select,#pvAssetB,#mkAssetB,#mkPayB,.dly input:not([type=checkbox]),.dly a{padding-top:.7em;padding-bottom:.7em}
@@ -366,7 +363,7 @@ background:var(--e);margin:.5em auto .1em}
 .invq{padding:10px 11px;margin:-10px -6px;opacity:1}
 .invm,.invsh{padding:10px 3px;margin:-10px -1px}}
 @media(pointer:coarse) and (max-width:24em){
-.meta{gap:.3em .12em}.mtl{gap:.12em}.mb{width:32px;height:32px}#slip{width:2em}}.dlgm{white-space:pre-wrap;overflow-wrap:anywhere;text-align:left;max-height:50vh;overflow:auto}.dlgt{width:calc(100% - 2.2em);margin:0 1.1em;box-sizing:border-box;font:inherit;font-size:.8em;word-break:break-all}@media(pointer:coarse){.dlgt{font-size:16px}}.dlgr{display:flex;gap:1.2em;justify-content:flex-end;padding:.6em 1.1em 1em}</style>
+.meta{gap:.3em .12em}.mtl{gap:.12em}.mb{width:32px;height:32px}#slip{width:2em}}.dlgm{white-space:pre-wrap;overflow-wrap:anywhere;text-align:left;max-height:50vh;overflow:auto}.dlgt{width:calc(100% - 2.2em);margin:0 1.1em;box-sizing:border-box;font:inherit;font-size:.8em;word-break:break-all}.dlgr{display:flex;gap:1.2em;justify-content:flex-end;padding:.6em 1.1em 1em}</style>
 <script>const H=document.documentElement;let LS,SS;try{LS=localStorage||{}}catch{LS={}}try{(SS=sessionStorage).key}catch{SS={getItem(){},setItem(){},removeItem(){}}}if(LS.t?LS.t=='d':matchMedia('(prefers-color-scheme:dark)').matches)H.className='d'</script>
 <button id="sd" title="Sound" aria-label="Toggle sound"><svg width="14" height="14" viewBox="0 0 24 24" class="ik" aria-hidden="true"><path d="M4 9.5v5h3.5L12 18V6L7.5 9.5H4z"/><path id="sdw" d="M15.5 9a4 4 0 0 1 0 6"/><path id="sdx" d="M16 9.5l4 4m0-4l-4 4"/></svg></button>
 <span id="net" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false" title="Network"></span>
@@ -558,7 +555,7 @@ background:var(--e);margin:.5em auto .1em}
 <script>const Nm=Number,Dn=()=>Date.now();const Bi=BigInt,St=String,Tx=(e,s)=>e.textContent=s,Sm=s=>stat.textContent=s,Zz=m=>new Promise(r=>setTimeout(r,m));const cE=t=>document.createElement(t),Er=(...a)=>Error(...a),AX="aria-expanded",GB="eth_getBalance",GC="eth_getCode",BN="eth_blockNumber",AP="aria-pressed",Oa=Object.assign,Ns=Number.isSafeInteger,Ok=Object.keys,h16=x=>x.toString(16),vT=e=>e.value.trim(),cL=e=>e.classList,dSt=e=>e.dataset,Np=()=>{},Nl=()=>null,Lc=x=>x.toLowerCase(),sAt=(e,k,v)=>e.setAttribute(k,v),qS=(e,q)=>e.querySelector(q),aE=(e,...a)=>e.addEventListener(...a),aC=(e,c)=>e.appendChild(c),Js=JSON.stringify,Jp=JSON.parse,Pa=a=>Promise.all(a),Mf=Math.floor,Mx=Math.max,Mn=Math.min,U8=(...a)=>new Uint8Array(...a),Ia=Array.isArray,Ni=Number.isInteger,gE=i=>document.getElementById(i),Bx=h=>Bi("0x"+h),Hd=(e,v)=>cL(e).toggle("hide",v),IC0='<svg width="14" height="14" viewBox="0 0 24 24" class="ik" aria-hidden="true">',
 ICMOON=IC0+'<path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z"/></svg>',
 ICSUN=IC0+'<circle cx="12" cy="12" r="4.2"/><path d="M12 2v2m0 16v2M4.2 4.2l1.5 1.5m12.6 12.6 1.5 1.5M2 12h2m16 0h2M4.2 19.8l1.5-1.5M18.3 5.7l1.5-1.5"/></svg>';
-const ic=()=>{const d=H.className=='d';th.innerHTML=d?ICSUN:ICMOON;tc.content=d?'#0a0a0a':'#fff'};ic();
+const ic=(d=cL(H).contains('d'))=>{th.innerHTML=d?ICSUN:ICMOON;tc.content=d?'#0a0a0a':'#fff'};ic();
 const ZSWAP_VERSION="0.3";
 const ZSWAP_SELF="";
 const ZSWAP_PREVIOUS="0xe686952842627A2cf81DF42CCaD54ef98046DB8D";
@@ -581,8 +578,8 @@ if(ZSWAP_PREVIOUS)footAddr.innerHTML+=` · <a href="https://etherscan.io/address
 +`target="_blank" rel="noopener" title="The version this one succeeded. It still serves its own page, unchanged.">prev</a>`;
 }
 })();
-th.onclick=()=>{cL(H).toggle('d');ic();try{LS.t=H.className||'l'}catch{}};
-try{matchMedia('(prefers-color-scheme:dark)').addEventListener('change',e=>{if(!LS.t){cL(H).toggle('d',e.matches);ic()}})}catch{}
+th.onclick=()=>{try{LS.t=cL(H).toggle('d')?'d':'l'}catch{}ic()};
+try{aE(matchMedia('(prefers-color-scheme:dark)'),'change',e=>{if(!LS.t){cL(H).toggle('d',e.matches);ic()}})}catch{}
 const ZQUOTER="0x000000bd2db80567c23e353ca95a251c573cbf9b";
 const Z3H="0x000000f584434f81fc115b1a59243a4287db08be",
 WNS="0x0000000000696760E15f265e828DB644A0c242EB",
@@ -1003,7 +1000,7 @@ const ask=to=>cfgRead(C,[{to,data:"0x9ca6a2bc"+eU(0)+eU(256)},L]);
 try{const s=decSums(await ask(ZLISTLENS));if(s)return s}catch{}
 try{const s=decSums(await ask(TOKENLIST));if(s){rankFellBack=true;return s}}catch{}
 return null},
-KEEP=()=>CHAIN_ID===1?"zswap:deep":"zswap:deep:"+CHAIN_ID,
+cK=k=>"zswap:"+k+(CHAIN_ID===1?"":":"+CHAIN_ID),KEEP=()=>cK("deep"),
 stickyPools=()=>{try{
 return Jp(LS[KEEP()]||"[]").filter(isAddr).slice(0,LAUNCH_SHOW);
 }catch{return[]}};
@@ -1034,7 +1031,7 @@ mine=TOKENS.filter(t=>t.cust&&!at.has(lc(t))),
 taken=new Set([...next,...anchors,...born].map(t=>Lc(t.sym)));
 for(const t of mine){if(taken.has(Lc(t.sym)))t.sym+=" "+lc(t).slice(0,6)+"…";taken.add(Lc(t.sym))}
 TOKENS.splice(0,TOKENS.length,...next,...anchors,...born,...mine)},
-LIST_KEEP=()=>CHAIN_ID===1?"zswap:list":"zswap:list:"+CHAIN_ID;
+LIST_KEEP=()=>cK("list");
 let listSeeded=false;
 const seedTokens=cid=>{try{const c=Jp(LS[LIST_KEEP()]||"null");
 if(!c||!Ia(c.r))return null;
@@ -1057,10 +1054,10 @@ const bornJob=(async()=>{
 const cnt=Nm(Bi(await cntJob||"0x0"));if(cid!==CHAIN_ID)throw 0;
 const take=Mn(cnt,LAUNCH_SCAN);
 const raw=take?await eC(PFACTORY,"0x"+SEL_BYCREATOR+eA(PLAUNCH)+eU(Bi(cnt-take))+eU(take)):"0x";if(cid!==CHAIN_ID)throw 0;
-const h=Sx(raw||""),n=h.length>=128?Nm(Bi("0x"+h.slice(64,128)||"0")):0;
+const h=Sx(raw||""),n=h.length>=128?Nm(Bx(h.slice(64,128))):0;
 let pools=[];
 for(let i=0;i<n&&i<take;i++)pools.push("0x"+h.slice(128+i*64+24,128+(i+1)*64));
-const fresh=new Set(pools.map(x=>Lc(x))),
+const fresh=new Set(pools.map(Lc)),
 carried=stickyPools().filter(x=>!fresh.has(Lc(x)));
 if(carried.length){
 const fr=await mD(carried.map(a=>({to:a,data:"0x"+SEL_FEERECIP})));if(cid!==CHAIN_ID)throw 0;
@@ -1088,7 +1085,7 @@ if(!sums.length)fb="registry is empty";
 else want=sums.filter(s=>s.dep&&s.kind===0&&s.chain===cid&&s.std>=1&&s.std<=3).map(s=>s.id).slice(0,LIST_WIN);
 }else{
 const ids=await rankedIds();
-if(!ids.length)fb="registry is empty";
+if(!ids.length)fb="registry unreachable";
 else{
 const foreign=id=>(id>>255n&1n)===1n,
 sure=ids.filter(id=>cid===1?!foreign(id):foreign(id)).slice(0,LIST_WIN);
@@ -1156,7 +1153,7 @@ return new TextDecoder().decode(hB(h.slice(128,128+n*2)))},
 decUintArr=hex=>{const h=Sx(hex);const n=parseInt(h.slice(64,128),16);const o=[];
 for(let i=0;i<n;i++)o.push(Bx(h.slice(128+i*64,192+i*64)));return o},
 eBo=b=>pad32(b?"1":"0"),
-toHex=v=>"0x"+Bi(v).toString(16);
+toHex=v=>"0x"+h16(Bi(v));
 const pU=(s,dec)=>{
 let r=s.trim();
 if(/^\d*,\d+$/.test(r)){if(/^[1-9]\d{0,2},\d{3}$/.test(r))throw Er(`unclear comma — write ${r.replace(",","")} or ${r.replace(",",".")}`);r=r.replace(",",".")}
@@ -1207,7 +1204,7 @@ CW="Connect Wallet",IB="Insufficient balance",CSUB="/confidential/submit",PNR="T
 let PROV=null;
 let walletChain=0;
 const prov=()=>PROV||window.ethereum,
-RPC_STORE=()=>CHAIN_ID===1?"zswap:rpc":"zswap:rpc:"+CHAIN_ID,
+RPC_STORE=()=>cK("rpc"),
 rpcPin=()=>{try{const v=LS.getItem(RPC_STORE());
 if(v&&/^https:\/\/\S+$/i.test(v))return v}catch{}return""};
 let rpcPool=L1_RPCS.slice(),rpcPi=0,curated=0,curating=0,curatedTry=0;
@@ -1226,7 +1223,7 @@ for(let j=0;j<len;j++)str+=St.fromCharCode(parseInt(b.slice(base+j*2,base+j*2+2)
 out.push(str)}
 return out},
 rpcErr=x=>{const c=x.code;return Oa(Er(x.message||"the read node refused"),{code:c,data:x.data,
-retry:c==null||c===-32005||c===-32603||c===-32004||c===-32002||c===-32001||c===429||c===-32003||/out of gas|gas required exceeds|header not found|unknown block|block not found/i.test(x.message||"")})};
+retry:c==null||[-32005,-32603,-32004,-32002,-32001,429,-32003].includes(c)||/out of gas|gas required exceeds|header not found|unknown block|block not found/i.test(x.message||"")})};
 const httpRead=async(u,method,params)=>{
 const ac=new AbortController(),kill=setTimeout(()=>ac.abort(),15000);
 try{
@@ -1262,7 +1259,7 @@ rpcPool=[...new Set(urls.concat(rpcPool,L1_RPCS))];
 curated=1;
 }catch{}
 finally{curating=0}};
-const OX_ETH="0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
+const OX_ETH="0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",oE=a=>a===ZERO?OX_ETH:a;
 const OKX_APPROVE={1:"0x40aA958dd87FC8305b97f2BA922CDdCa374bcD7f",8453:"0x57df6092665eb6058DE53939612413ff4B09114E",4663:"0x42170295F1173c9e5874ea9d00c6d137E1a4f53d"},
 bmin=(a,b)=>a<b?a:b,bmax=(a,b)=>a>b?a:b,
 SEL_SLIST="e3b06401",SEL_FILL="0a1b4c9f";
@@ -1312,10 +1309,10 @@ const id=CHAIN_ID;try{
 const list=SOLVERS_PIN;
 solverFill=SOLVER_FILL_PIN;
 const sx=cC().sx,rj=quorum2(L1_SEED,{to:list,data:"0x"+SEL_SLIST}).then(x=>{if(!x)throw 0;return x});rj.catch(Np);
-const hc=sx?await hasCode(sx).catch(Nl):false;if(id!==CHAIN_ID)return;if(hc==null){solversRetry=Dn()+SOLVER_COOL;solversJob=null;return}if(hc)solverFill=solverExec=sx;else{
+const hc=sx?await hasCode(sx).catch(Nl):false;if(id!==CHAIN_ID)return;if(hc==null)throw 0;if(hc)solverFill=solverExec=sx;else{
 const ex=await nodeRead("eth_call",[{to:solverFill,data:"0x495c73b0"},L]).catch(Nl);
 if(id!==CHAIN_ID)return;const exec="0x"+Sx(ex||"0x").slice(24);
-if(!isAddr(exec)){solversRetry=Dn()+SOLVER_COOL;solversJob=null;return}
+if(!isAddr(exec))throw 0;
 if(Lc(exec)!==Lc(SOLVER_EXEC_PIN)){solverLanes=[];return}
 solverExec=SOLVER_EXEC_PIN}
 const raw=await rj;if(id!==CHAIN_ID)return;
@@ -1341,7 +1338,7 @@ const w=_laneWait.get(k);
 if(w)return w;
 const pr=go().then(v=>{
 _laneWait.delete(k);
-if(v!==null&&v!==undefined){if(typeof v==="object"&&!v.at)v.at=Dn();_laneHit.set(k,{v,t:Dn()});
+if(v!=null){if(typeof v==="object"&&!v.at)v.at=Dn();_laneHit.set(k,{v,t:Dn()});
 if(_laneHit.size>64)_laneHit.delete(_laneHit.keys().next().value);}
 return v},e=>{_laneWait.delete(k);throw e});
 _laneWait.set(k,pr);return pr};
@@ -1355,21 +1352,21 @@ if(!r.ok)return null;return await r.json()}
 catch(e){laneThrew(name,e);return null}finally{clearTimeout(k)}};
 const SOLVER_SHAPES_OUT={
 "0x":async(ep,f,t,amt,slip,ms)=>{
-const q=new URLSearchParams({chainId:cC().slvId,sellToken:f===ZERO?OX_ETH:f,buyToken:t===ZERO?OX_ETH:t,
-buyAmount:amt.toString(),taker:solverExec,slippageBps:St(slip)});
+const q=new URLSearchParams({chainId:cC().slvId,sellToken:oE(f),buyToken:oE(t),
+buyAmount:amt,taker:solverExec,slippageBps:slip});
 const j=await laneGet("0x",`${ep}/swap/allowance-holder/quote?${q}`,ms);
 if(!j||!j.transaction||!j.estimatedNetSellAmount)return null;
 return{inp:Bi(j.estimatedNetSellAmount),
 cap:j.maxSellAmount?Bi(j.maxSellAmount):0n,
 target:j.transaction.to,spender:j.allowanceTarget||j.transaction.to,data:j.transaction.data}},
 "ParaSwap":async(ep,f,t,amt,slip,ms,fd,td)=>{
-const q=new URLSearchParams({srcToken:f===ZERO?OX_ETH:f,destToken:t===ZERO?OX_ETH:t,
-amount:amt.toString(),srcDecimals:St(fd??18),destDecimals:St(td??18),
+const q=new URLSearchParams({srcToken:oE(f),destToken:oE(t),
+amount:amt,srcDecimals:fd??18,destDecimals:td??18,
 side:"BUY",network:cC().slvId,version:"6.2"});
 const pr=await laneGet("ParaSwap",`${ep}/prices?${q}`,ms);
 const route=pr&&pr.priceRoute;if(!route||!route.srcAmount)return null;
 const j=await lanePost("ParaSwap",`${ep}/transactions/${cC().slvId}?ignoreChecks=true`,{
-srcToken:f===ZERO?OX_ETH:f,destToken:t===ZERO?OX_ETH:t,
+srcToken:oE(f),destToken:oE(t),
 srcDecimals:route.srcDecimals,destDecimals:route.destDecimals,destAmount:route.destAmount,
 priceRoute:route,userAddress:solverExec,slippage:Nm(slip)},ms);
 if(!j||!j.to||!j.data)return null;
@@ -1378,27 +1375,27 @@ target:j.to,spender:route.tokenTransferProxy||j.to,data:j.data}},
 },
 SOLVER_SHAPES={
 "0x":async(ep,f,t,amt,slip,ms)=>{
-const q=new URLSearchParams({chainId:cC().slvId,sellToken:f===ZERO?OX_ETH:f,buyToken:t===ZERO?OX_ETH:t,
-sellAmount:amt.toString(),taker:solverExec,slippageBps:St(slip)});
+const q=new URLSearchParams({chainId:cC().slvId,sellToken:oE(f),buyToken:oE(t),
+sellAmount:amt,taker:solverExec,slippageBps:slip});
 const j=await laneGet("0x",`${ep}/swap/allowance-holder/quote?${q}`,ms);
 if(!j||!j.transaction||!j.buyAmount)return null;
 return{out:Bi(j.buyAmount),target:j.transaction.to,
 spender:j.allowanceTarget||j.transaction.to,data:j.transaction.data}},
 "ParaSwap":async(ep,f,t,amt,slip,ms,fd,td)=>{
-const q=new URLSearchParams({srcToken:f===ZERO?OX_ETH:f,destToken:t===ZERO?OX_ETH:t,
-amount:amt.toString(),srcDecimals:St(fd??18),destDecimals:St(td??18),
+const q=new URLSearchParams({srcToken:oE(f),destToken:oE(t),
+amount:amt,srcDecimals:fd??18,destDecimals:td??18,
 side:"SELL",network:cC().slvId,version:"6.2"});
 const pr=await laneGet("ParaSwap",`${ep}/prices?${q}`,ms);
 const route=pr&&pr.priceRoute;if(!route||!route.destAmount)return null;
 const j=await lanePost("ParaSwap",`${ep}/transactions/${cC().slvId}?ignoreChecks=true`,{
-srcToken:f===ZERO?OX_ETH:f,destToken:t===ZERO?OX_ETH:t,
+srcToken:oE(f),destToken:oE(t),
 srcDecimals:route.srcDecimals,destDecimals:route.destDecimals,srcAmount:route.srcAmount,
 priceRoute:route,userAddress:solverExec,slippage:Nm(slip)},ms);
 if(!j||!j.to||!j.data)return null;
 return{out:bmin(Bi(route.destAmount),Bi(route.destAmountAfterFee||route.destAmount)),
 target:j.to,spender:route.tokenTransferProxy||j.to,data:j.data}},
 "KyberSwap":async(ep,f,t,amt,slip,ms)=>{
-const q=new URLSearchParams({tokenIn:f===ZERO?OX_ETH:f,tokenOut:t===ZERO?OX_ETH:t,amountIn:amt.toString()});
+const q=new URLSearchParams({tokenIn:oE(f),tokenOut:oE(t),amountIn:amt});
 const pr=await laneGet("KyberSwap",`${ep}/${cC().slvSlug}/api/v1/routes?${q}`,ms);
 const rs=pr&&pr.data&&pr.data.routeSummary;if(!rs||!rs.amountOut)return null;
 const j=await lanePost("KyberSwap",`${ep}/${cC().slvSlug}/api/v1/route/build`,
@@ -1407,15 +1404,15 @@ const d=j&&j.data;if(!d||!d.data||!d.routerAddress)return null;
 return{out:Bi(rs.amountOut),target:d.routerAddress,spender:d.routerAddress,data:d.data}},
 "Enso":async(ep,f,t,amt,slip,ms)=>{
 const q=new URLSearchParams({chainId:cC().slvId,fromAddress:solverExec,receiver:solverExec,
-tokenIn:f===ZERO?OX_ETH:f,tokenOut:t===ZERO?OX_ETH:t,amountIn:amt.toString(),
-slippage:St(slip),routingStrategy:"router"});
+tokenIn:oE(f),tokenOut:oE(t),amountIn:amt,
+slippage:slip,routingStrategy:"router"});
 const j=await laneGet("Enso",`${ep}?${q}`,ms);
 if(!j||!j.amountOut||!j.tx||!j.tx.to)return null;
 return{out:Bi(j.amountOut),target:j.tx.to,spender:j.tx.to,data:j.tx.data}},
 "OKX":async(ep,f,t,amt,slip,ms)=>{
-const q=new URLSearchParams({chainIndex:cC().slvId,fromTokenAddress:f===ZERO?OX_ETH:f,
-toTokenAddress:t===ZERO?OX_ETH:t,amount:amt.toString(),
-slippagePercent:(Nm(slip)/100).toString(),userWalletAddress:solverExec,swapMode:"exactIn"});
+const q=new URLSearchParams({chainIndex:cC().slvId,fromTokenAddress:oE(f),
+toTokenAddress:oE(t),amount:amt,
+slippagePercent:Nm(slip)/100,userWalletAddress:solverExec,swapMode:"exactIn"});
 const j=await laneGet("OKX",`${ep}/dex/aggregator/swap?${q}`,ms);
 const d=j&&j.code==="0"&&j.data&&j.data[0];
 if(!d||!d.tx||!d.tx.to||!d.routerResult||!d.routerResult.toTokenAmount)return null;
@@ -1424,7 +1421,7 @@ if(!sp)return null;
 return{out:Bi(d.routerResult.toTokenAmount),target:d.tx.to,spender:sp,data:d.tx.data}},
 "Bebop":async(ep,f,t,amt,slip,ms)=>{
 if(f===ZERO||t===ZERO||!ep.includes("/"+cC().slvSlug+"/"))return null;
-const q=new URLSearchParams({sell_tokens:cks(f),buy_tokens:cks(t),sell_amounts:amt.toString(),
+const q=new URLSearchParams({sell_tokens:cks(f),buy_tokens:cks(t),sell_amounts:amt,
 taker_address:solverExec,gasless:"false",approval_type:"Standard"});
 const j=await laneGet("Bebop",`${ep}/quote?${q}`,ms);
 const rs=j&&j.routes;if(!rs||!rs.length)return null;
@@ -1436,8 +1433,8 @@ const bebSp=qq.approvalTarget||qq.approval_target;
 if(!isAddr(bebSp||""))return null;
 return{out:Bi(info.amount),target:qq.tx.to,spender:bebSp,data:qq.tx.data}},
 "1inch":async(ep,f,t,amt,slip,ms)=>{
-const q=new URLSearchParams({src:f===ZERO?OX_ETH:f,dst:t===ZERO?OX_ETH:t,amount:amt.toString(),
-from:solverExec,origin:solverExec,slippage:St(Nm(slip)/100),disableEstimate:"true"});
+const q=new URLSearchParams({src:oE(f),dst:oE(t),amount:amt,
+from:solverExec,origin:solverExec,slippage:Nm(slip)/100,disableEstimate:"true"});
 const j=await laneGet("1inch",`${ep}/swap/v6.0/${cC().slvId}/swap?${q}`,ms);
 if(!j||!j.tx||!j.dstAmount)return null;
 return{out:Bi(j.dstAmount),target:j.tx.to,spender:j.tx.to,data:j.tx.data}},
@@ -1489,7 +1486,7 @@ const live=p=>(++txLive,p.finally(()=>--txLive));
 const idle=f=>busy||txLive?setTimeout(()=>idle(f),1000):f();
 const waitTx=hash=>live(waitTx0(hash)).catch(e=>{sFail();throw e}).finally(()=>{brM.clear();brSelfCode=null;tkBal.t=0}),
 txRepl=async([from,nonce,,,b0])=>{
-const n=b=>rpc("eth_getTransactionCount",[from,"0x"+h16(b)]).then(Number);
+const n=b=>rpc("eth_getTransactionCount",[from,"0x"+h16(b)]).then(Nm);
 let lo=Mx(0,b0-32),hi=+await rpc(BN,[]);
 if(!(hi>lo)||await n(lo)>nonce)return null;
 while(hi-lo>1){const m=Mf((lo+hi)/2);if(await n(m)>nonce)hi=m;else lo=m}
@@ -1515,11 +1512,11 @@ wait=Mn(wait+500,5000);
 if(/tx (re(verted|placed)|cancelled)/.test(e.message||""))throw e;
 if(++misses>2)wait=Mn(wait*2,15000);
 }
-await new Promise(res=>setTimeout(res,wait));
+await Zz(wait);
 }
 throw Er("tx not mined in time");
 },
-cW=async()=>{if(!account)throw Er("Connect a wallet first.");const[c,a]=await Pa([rpc(I,[]),rpc("eth_accounts",[])]);if(+c!==CHAIN_ID)throw Er("Switch your wallet to "+cC().name);if(a[0]?.toLowerCase()!==Lc(account))throw Er("wallet changed")};
+cW=async()=>{if(!account)throw Er("Connect a wallet first.");const[c,a]=await Pa([rpc(I,[]),rpc("eth_accounts",[])]);if(+c!==CHAIN_ID)throw Er("Switch your wallet to "+cC().name);if(!sameAcct(a[0],account))throw Er("wallet changed")};
 const hB=h=>{const s=Sx(h);const o=U8(s.length/2);for(let i=0;i<o.length;i++)o[i]=parseInt(s.slice(i*2,i*2+2),16);return o};
 const KRC=[1n,0x8082n,0x800000000000808an,0x8000000080008000n,0x808bn,0x80000001n,0x8000000080008081n,0x8000000000008009n,0x8an,0x88n,0x80008009n,0x8000000an,0x8000808bn,0x800000000000008bn,0x8000000000008089n,0x8000000000008003n,0x8000000000008002n,0x8000000000000080n,0x800an,0x800000008000000an,0x8000000080008081n,0x8000000000008080n,0x80000001n,0x8000000080008008n],
 KR=[0,1,62,28,27,36,44,6,55,20,3,10,43,25,39,41,45,15,21,8,18,2,61,56,14],
@@ -1537,10 +1534,10 @@ for(let x=0;x<5;x++){const D=KCc[(x+4)%5]^krol(KCc[(x+1)%5],1);for(let y=0;y<25;
 for(let x=0;x<5;x++)for(let y=0;y<5;y++)KB[y+5*((2*x+3*y)%5)]=krol(A[x+5*y],KR[x+5*y]);
 for(let x=0;x<5;x++)for(let y=0;y<5;y++)A[x+5*y]=KB[x+5*y]^((~KB[(x+1)%5+5*y]&KM)&KB[(x+2)%5+5*y]);
 A[0]^=KRC[r]}}
-let out="";for(let i=0;i<4;i++){let v=A[i];for(let j=0;j<8;j++){out+=Nm(v&0xffn).toString(16).padStart(2,"0");v>>=8n}}
+let out="";for(let i=0;i<4;i++){let v=A[i];for(let j=0;j<8;j++){out+=h16(v&0xffn).padStart(2,"0");v>>=8n}}
 return "0x"+out};
 const namehash=n=>{let nd="0x"+"0".repeat(64);
-if(n)for(const l of n.split(".").reverse())nd=keccak(U8([...hB(nd),...hB(keccak(new TextEncoder().encode(l)))]));
+if(n)for(const l of n.split(".").reverse())nd=keccak(U8([...hB(nd),...hB(keccak(cpU8(l)))]));
 return nd};
 const cpHex=b=>{let s="";for(const x of b)s+=h16(x).padStart(2,"0");return s},cpU8=s=>new TextEncoder().encode(s);
 const strTail=v=>encBytes(cpHex(cpU8(v)));
@@ -1698,7 +1695,7 @@ nonce:nonce.toString(),deadline:deadline.toString()}},
 sig=Sx(await rpc("eth_signTypedData_v4",[owner,Js(td)]));
 const n=sig.length/2;if(!Ni(n)||n===0||n>4096)throw Er("bad signature");
 const norm=n===65&&parseInt(sig.slice(128,130),16)<27
-?sig.slice(0,128)+(parseInt(sig.slice(128,130),16)+27).toString(16).padStart(2,"0")
+?sig.slice(0,128)+h16(parseInt(sig.slice(128,130),16)+27).padStart(2,"0")
 :sig,
 tail=eU(n)+norm.padEnd(Math.ceil(norm.length/64)*64,"0");
 return[nonce,tail]},
@@ -1707,8 +1704,7 @@ return"0x09d31579"+eA(tok)+eU(amount)+eU(nonce)+eU(deadline)+pad32("a0")+tail},
 capsFor=(c,id)=>{
 for(const key of Ok(c)){
 try{if(Bi(key)===id)return c[key]}catch{}
-}
-return undefined};
+}};
 const hasAtomicBatch=c=>{
 if(!c||typeof c!=="object")return false;
 const own=capsFor(c,Bi(CHAIN_ID));
@@ -1716,7 +1712,7 @@ const k=own!==undefined?own:capsFor(c,0n);
 return!!(k&&k.atomic&&(k.atomic.status==="supported"||k.atomic.status==="ready"))};
 let noBatch=0;const capC={},
 canBatch=async owner=>{if(noBatch)return false;
-const c=await(capC[CHAIN_ID+owner]??=Promise.race([rpc("wallet_getCapabilities",[owner]),new Promise(r=>setTimeout(r,4e3,null))]).catch(Nl));if(c==null)delete capC[CHAIN_ID+owner];
+const c=await(capC[CHAIN_ID+owner]??=Promise.race([rpc("wallet_getCapabilities",[owner]),Zz(4e3)]).catch(Nl));if(c==null)delete capC[CHAIN_ID+owner];
 canBatch.up=(capsFor(c||{},Bi(CHAIN_ID))??capsFor(c||{},0n))?.atomic?.status==="ready";
 return hasAtomicBatch(c)};
 let snd=LS.snd!=="0";
@@ -1771,7 +1767,7 @@ const cd=cs.length>1?encCalls(cs):cs[0],aps=await apSeq(tok.addr,ZROUTER,amt);
 if(!aps.length)return{data:cd};
 const dl=()=>Bi(nowS()+1800),
 sim=async pc=>(await rpc(C,[{from:account,to:ZROUTER,data:pc},L]),Sm(""),pc);
-const pj=p2&&Pa([eC(tok.addr,balOf(account)).then(BigInt).catch(()=>0n),p2Ready(tok.addr,account)]),pi=pOk&&await permitInfo(tok.addr,account);
+const pj=p2&&Pa([eC(tok.addr,balOf(account)).then(Bi).catch(()=>0n),p2Ready(tok.addr,account)]),pi=pOk&&await permitInfo(tok.addr,account);
 if(pi)try{Sm("Sign approval…");return{data:encCalls([await sim(await signPermit(tok.addr,pi,account,amt,dl())),...cs])}}catch(e){if(isRejection(e))throw e}
 if(p2&&(await pj).every(x=>x>=amt))
 try{Sm("Sign approval…");return{data:encCalls([await sim(await signPermit2(tok.addr,account,amt,dl())),...p2])}}catch(e){if(isRejection(e))throw e}
@@ -1802,7 +1798,7 @@ return out},
 mc3=async(cs,tag=L)=>cs.length?decAgg3(await rpc(C,[{to:MC3,data:encAgg3(cs)},tag])):[],
 MC3_MAX=16,
 mc3Clamp=n=>n>=2&&n<=MC3_MAX?Mf(n):8,
-MC3_KEY=()=>CHAIN_ID===1?"zswap:mc3":"zswap:mc3:"+CHAIN_ID;
+MC3_KEY=()=>cK("mc3");
 let mc3Cap=mc3Clamp(Nm(LS[MC3_KEY()])),
 mc3Won=0;
 const mc3Save=()=>{try{LS[MC3_KEY()]=St(mc3Cap)}catch{}},
@@ -1847,7 +1843,7 @@ return fan(h);
 };
 let bnVal="",bnAt=0,bnJob=null;
 const gpC={},gasNow=()=>{const k=CHAIN_ID,c=gpC[k];if(c&&Dn()-c.t<12e3)return c.p;
-const p=rpc("eth_gasPrice",[]).then(BigInt);gpC[k]={t:Dn(),p};p.catch(()=>{if(gpC[k]?.p===p)delete gpC[k]});return p},
+const p=rpc("eth_gasPrice",[]).then(Bi);gpC[k]={t:Dn(),p};p.catch(()=>{if(gpC[k]?.p===p)delete gpC[k]});return p},
 bnFetch=()=>{if(bnJob)return bnJob;const id=CHAIN_ID,p=bnJob=rpc(BN,[])
 .then(n=>{if(id!==CHAIN_ID)throw Er("chain changed");bnVal=n;bnAt=Dn();return n})
 .finally(()=>{if(bnJob===p)bnJob=null});return p},
@@ -1879,7 +1875,7 @@ return u.length<=32768&&/^data:image\/[a-z.+-]+;base64,[A-Za-z0-9+/=]+$/i.test(u
 const safeDataUrl=safeUrl;
 const genIcon=sym=>`<svg width="20" height="20" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#999"/><text x="16" y="21" text-anchor="middle" fill="#fff" font-size="13" font-weight="600" font-family="system-ui">${[...safeSym(sym)][0].toUpperCase()}</text></svg>`;
 const artIcon=(a,s)=>a?`<img width="20" height="20" style="border-radius:50%;object-fit:cover" src="${a}" alt="">`:genIcon(s),
-STORE=()=>CHAIN_ID===1?"zswap:custom":"zswap:custom:"+CHAIN_ID;
+STORE=()=>cK("custom");
 function keepToken(t){
 if(!t||!t.addr)return;
 const a=Lc(t.addr);
@@ -2026,7 +2022,7 @@ dSt(fromSel).prev=fromSel.value;dSt(toSel).prev=toSel.value;
 pairAuto=true;
 try{LS[LAST_PAIR()]=Js([TOKENS[fi].addr,TOKENS[ti].addr])}catch{}
 },
-LAST_PAIR=()=>CHAIN_ID===1?"zswap:pair":"zswap:pair:"+CHAIN_ID,
+LAST_PAIR=()=>cK("pair"),
 me=()=>Lc(account||""),
 offChain=()=>!!walletChain&&walletChain!==CHAIN_ID,
 offChainNote=()=>`Your wallet is on ${CHAINS[walletChain]?.name||"another network"} — switch it to ${cC().name} to trade here.`,
@@ -2207,7 +2203,7 @@ tkSel=sel;tkFind.value="";sAt(tkFind,AX,"true");tkFind.placeholder="Search "+cC(
 Hd(tkPanel,0);
 if(matchMedia("(pointer:coarse)").matches){
 tkPanel.style.left=tkPanel.style.top=tkPanel.style.maxHeight=tkPanel.style.width="";
-pickBtn(sel).setAttribute(AX,"true");
+sAt(pickBtn(sel),AX,"true");
 tkFind.focus({preventScroll:true});
 return;
 }
@@ -2225,7 +2221,7 @@ const h=Mn(tkPanel.offsetHeight,room);
 const top=flip?b.top-h-6:b.bottom+6;
 tkPanel.style.left=left+"px";
 tkPanel.style.top=Mx(8,Mn(top,innerHeight-h-8))+"px";
-pickBtn(sel).setAttribute(AX,"true");
+sAt(pickBtn(sel),AX,"true");
 tkFind.focus({preventScroll:true});
 };
 const tkClose=()=>{
@@ -2469,17 +2465,10 @@ b58=b=>{let n=0n;for(const x of b)n=n*256n+Bi(x);
 let s="";while(n>0n){s=B58[Nm(n%58n)]+s;n/=58n}
 for(const x of b){if(x)break;s="1"+s}return s},
 rnd=n=>crypto.getRandomValues(U8(n));
-const sha256=async b=>U8(await crypto.subtle.digest("SHA-256",b));
-const topicOf=async k=>hex(await sha256(k)),
-encode=(symKey,payload,senderPub)=>{
-const iv=rnd(12),pt=utf8(Js(payload)),
-sealed=seal(symKey,iv,pt);
-const t=senderPub?1:0;
-const head=senderPub?1+32:1;
-const out=U8(head+12+sealed.length);
-out[0]=t;
-if(senderPub)out.set(senderPub,1);
-out.set(iv,head);out.set(sealed,head+12);
+const topicOf=async k=>hex(U8(await crypto.subtle.digest("SHA-256",k))),
+encode=(symKey,payload)=>{
+const iv=rnd(12),sealed=seal(symKey,iv,utf8(Js(payload))),out=U8(13+sealed.length);
+out.set(iv,1);out.set(sealed,13);
 return b64(out)},
 decode=(symKey,msg)=>{
 let b;try{b=unb64(msg)}catch{return null}
@@ -2592,7 +2581,7 @@ const ack=(t,l)=>publish(sTopic,U.encode(sKey,{id:s.id,jsonrpc:"2.0",result:true
 K={wc_sessionPing:1115,wc_sessionUpdate:1105,wc_sessionExtend:1107,wc_sessionEvent:1111}[s.method];if(K)ack(K).catch(Np);if(K===1115)return;
 if(s.method==="wc_sessionSettle"){await ack(T_SETTLE_RES,STTL);if(onSettle)onSettle(s.params||{});return}
 if(s.method==="wc_sessionDelete")return drop("The wallet ended the session.",1);
-if(s.method&&onEvent)onEvent({t:"session",m:s});
+if(s.method)return onEvent&&onEvent({t:"session",m:s});
 if(Ni(s.id)&&waiters["s"+s.id]){
 const w=waiters["s"+s.id];delete waiters["s"+s.id];
 if(s.error)w.rej(Oa(Er(s.error.message||"rejected"),{code:s.error.code}));
@@ -2672,7 +2661,7 @@ for(let j=0;j<=n;j++)r[i+j]^=mul(g[n-j],c)}
 return r.subarray(data.length)},
 SZ=49,NBLK=2,DPB=97,ECB=24,ALIGN=[6,24,42],
 bch=(v,g,n)=>{let d=v<<n;
-const bits=x=>{let c=0;while(x){c++;x>>>=1}return c},
+const bits=x=>32-Math.clz32(x),
 gl=bits(g);
 while(bits(d)>=gl)d^=g<<(bits(d)-gl);
 return d},
@@ -2681,7 +2670,7 @@ const v=(1<<3)|mask;
 return ((v<<10)|bch(v,0x537,10))^0x5412},
 verBits=()=>(8<<12)|bch(8,0x1f25,12);
 function encode(str){
-const bytes=new TextEncoder().encode(str);
+const bytes=cpU8(str);
 if(bytes.length>NBLK*DPB-2)throw Er("pairing code too long to draw");
 const bits=[];
 const push=(v,n)=>{for(let i=n-1;i>=0;i--)bits.push((v>>i)&1)};
@@ -2865,7 +2854,7 @@ await wcRelay.resume(WC_PID,sess);
 return wcProv(sess)}
 function wcProv(sess){
 const wcOn=id=>sess.accounts.filter(a=>a.slice(0,7)==="eip155:"&&a.split(":")[1]===St(id)).map(a=>a.split(":").pop());
-let wcChain=[sess.chain,CHAIN_ID,...Object.keys(CHAINS).map(Number)].find(id=>CHAINS[id]&&wcOn(id).length)||0;
+let wcChain=[sess.chain,CHAIN_ID,...Ok(CHAINS).map(Nm)].find(id=>CHAINS[id]&&wcOn(id).length)||0;
 if(!wcChain){wcRelay.close();throw Er("That wallet settled no account on Ethereum, Base or Robinhood — switch it to one of those and reconnect.")}
 const accts=wcOn(wcChain);
 sess.chain=wcChain;wcSave(sess);
@@ -2906,7 +2895,7 @@ for(let i=0;i<8;i++){
 const m=W6963.filter(x=>x.info.rdns===id),d=m.length===1?m[0]:null;
 if(d){
 try{const a=await Promise.race([d.provider.request({method:"eth_accounts"}),
-new Promise(r=>setTimeout(()=>r(null),1500))]);
+Zz(1500)]);
 if(a&&a[0])PROV=d.provider}catch{}
 return}
 await Zz(50);
@@ -2918,7 +2907,7 @@ const row=cE("div");row.className="dlgr";const back=document.activeElement;
 const mk=(x,f)=>{const b=cE("button");b.className="fclink";Tx(b,x);b.onclick=f;row.append(b);return b};
 const no=inp?null:false,end=v=>{Hd(wkWrap,1);removeEventListener("keydown",esc);removeEventListener("keydown",wkTrap,true);wkWrap.onclick=null;try{back&&back.focus()}catch{}res(v)};
 const esc=e=>{if(e.key==="Escape")end(no)};
-if(ta&&d){const c=mk("Copy",()=>{navigator.clipboard?.writeText(ta.value).then(()=>{Tx(c,"Copied")},()=>{})})}
+if(ta&&d){const c=mk("Copy",()=>{navigator.clipboard?.writeText(ta.value).then(()=>{Tx(c,"Copied")},Np)})}
 mk("Cancel",()=>end(no));const ok=mk("OK",()=>end(inp?ta.value:true));wkList.append(row);
 wkWrap.onclick=e=>{if(e.target===wkWrap)end(no)};addEventListener("keydown",esc);addEventListener("keydown",wkTrap,true);
 Hd(wkWrap,0);(ta||ok).focus()});
@@ -2978,9 +2967,7 @@ connecting=true;
 try{
 if(!await wkResolve())return;
 if(!prov()){Sm(NO_WALLET);return}
-Tx(swap,"Connecting…");swap.disabled=true;
-Tx(lnGo,"Connecting…");lnGo.disabled=true;
-Tx(wnGo,"Connecting…");wnGo.disabled=true;
+for(const b of[swap,lnGo,wnGo])Tx(b,"Connecting…"),b.disabled=true;
 const accs=await Promise.race([rpc("eth_requestAccounts",[]),new Promise((_,j)=>setTimeout(()=>j(Oa(Er("The wallet did not answer — open it, unlock it, and try again."),{offChain:true})),6e4))]);
 if(!accs?.[0])throw Er("The wallet shared no account.");
 let chainId=+await rpc(I,[]);
@@ -3210,7 +3197,7 @@ outEl.value="...";fitFont(outEl);quoting=true;render();
 const acct=account;qBlind=[...new Set([rcv,...qBlind].filter(Boolean))].slice(0,8);
 const gaveUp0=mcGaveUp,ok0=mcOk,failed0=mcFailed,
 sDl=loadSolvers().then(()=>{if(my!==seq||!solverLanes||!solverFill||!solverExec)return;const S0=isIn?SOLVER_SHAPES:SOLVER_SHAPES_OUT,ck=(isIn?"":"o|")+`${CHAIN_ID}|${f.addr}|${t.addr}|${swapAmt}|${slipBps}`;
-for(const x of solverLanes)if(!laneDown(x.name)&&S0[x.name])try{laneCached(`${x.name}|${ck}`,()=>S0[x.name](x.endpoint,f.addr,t.addr,swapAmt,Nm(slipBps),SOLVER_DEADLINE,f.dec,t.dec)).catch(Np)}catch{}}).catch(Np).then(()=>new Promise(r=>setTimeout(r,SOLVER_DEADLINE,null)));
+for(const x of solverLanes)if(!laneDown(x.name)&&S0[x.name])try{laneCached(`${x.name}|${ck}`,()=>S0[x.name](x.endpoint,f.addr,t.addr,swapAmt,Nm(slipBps),SOLVER_DEADLINE,f.dec,t.dec)).catch(Np)}catch{}}).catch(Np).then(()=>Zz(SOLVER_DEADLINE));
 try{
 const a=eA(rcv||acct||ZERO),rf=eA(acct||ZERO),tk=(x,s)=>eBo(!isIn)+eA(f.addr)+eA(t.addr)+eU(x)+eU(s)+eU(deadline),tl=tk(swapAmt,slipBps),s2=slipBps/2n||1n,s3=slipBps/3n||1n;
 const _rq=[],
@@ -3255,14 +3242,14 @@ tailJobs.push(Q(x,a+eA(f.addr)+eA(t.addr)+eU(tailAmt)+eU(b)+eU(deadline),4,8,tai
 }
 }
 const refAmt=swapAmt/REF_N,
-iRef1=refAmt>0n?Q("e7798987",a+eBo(!isIn)+eA(f.addr)+eA(t.addr)+eU(refAmt)+eU(0n)+eU(deadline),0,4,0,0,6):-1,
+iRef1=refAmt>0n?Q("e7798987",a+tk(refAmt,0n),0,4,0,0,6):-1,
 iRef=refAmt>0n
-?Q("e453166e",a+rf+eBo(!isIn)+eA(f.addr)+eA(t.addr)+eU(refAmt)+eU(0n)+eU(deadline),4,9)
+?Q("e453166e",a+rf+tk(refAmt,0n),4,9)
 :-1,
 mcRaw=await qWave(_rq.map(q=>({to:q.to,data:q.data})),quoteBlock);
 if(my!==seq)return;
 const dec=_rq.map((q,i)=>{try{return mcRaw[i]?decQ(mcRaw[i],q.sb||slipBps,!isIn,q.u,q.v,q.S,q.mv):null}catch{return null}}),
-hubSafe=y=>{if(!y||CHAIN_ID!==1||!isIn||y.sources.length<2)return y;const x=[f.addr,t.addr].map(s=>Lc(s)),hs=HUBS().filter(h=>!x.includes(Lc(h)));return{...y,callData:encCalls([...hs.map(h=>encSweep(h,0n,acct||ZERO)),y.callData])}};
+hubSafe=y=>{if(!y||CHAIN_ID!==1||!isIn||y.sources.length<2)return y;const x=[f.addr,t.addr].map(Lc),hs=HUBS().filter(h=>!x.includes(Lc(h)));return{...y,callData:encCalls([...hs.map(h=>encSweep(h,0n,acct||ZERO)),y.callData])}};
 for(const g of jobs)pick(hubSafe(g.length>1?merge(dec[g[0]],dec[g[1]],!isIn):dec[g[0]]));
 const zr=r;
 if(isIn&&![...jobs[1],...no3?[]:jobs[2]].some(i=>dec[i])){
@@ -3326,10 +3313,8 @@ if(my!==seq)return;
 if(dq&&dq.out>0n){
 const dMin=deepMin(dq,slipBps),
 dTo=rcv||acct||ZERO;
-const leg="0x"+SEL_SWAPDEEP+eA(dTo)+eA(dq.t0)+eA(dq.t1)+eU(dq.epoch)
-+Sx(dq.order)+eU(dq.isBid?1:0)+eU(swapAmt)+eU(dMin)+eU(deadline);
 dc={best:{source:SRC_DEEP,amountIn:dq.inUsed,amountOut:dq.out,feeBps:0n},
-callData:leg,
+callData:encDeepLeg(dq,dTo,swapAmt,dMin,deadline),
 fundedCallData:null,amountLimit:dMin,msgValue:0n,
 wrap:0n,outDiffers:false,poolOut:t.addr,to:null,spender:ZROUTER};
 }
@@ -3363,12 +3348,11 @@ if(my!==seq)return;
 const quoteRem=async(x,eo)=>{
 const qs=[],groups=[],add=(sel,data,u,v,S,sb,to=ZQUOTER)=>{
 qs.push({to,data:"0x"+sel+data,u,v,S,sb});return qs.length-1},
-zq=s=>eBo(eo)+eA(f.addr)+eA(t.addr)+eU(x)+eU(s)+eU(deadline),z0=zq(0n);
+zq=s=>tk(x,s),z0=zq(0n);
 groups.push([add("e453166e",a+rf+z0,4,9),add("e453166e",a+rf+zq(s2),4,9,0,s2)]);
 if((!eo||!rcv)&&!(CHAIN_ID===1&&(f.addr===ZERO||t.addr===ZERO))){const h=CHAIN_ID===1?ZQUOTER:Z3H;groups.push([add("4c464f59",a+z0,8,13,0,0,h),add("4c464f59",a+zq(s3),8,13,0,s3,h)])}
 if(!eo){
-const w=slipBps*3n,ss=w<150n?150n:w>500n?500n:w;
-for(const sel of["892af013","85f86a90"]){const b=sel==="892af013"?slipBps:ss;groups.push([add(sel,a+eA(f.addr)+eA(t.addr)+eU(x)+eU(b)+eU(deadline),4,8,x,b)])}
+for(const sel of["892af013","85f86a90"]){const b=sel==="892af013"?slipBps:splitSlip;groups.push([add(sel,a+eA(f.addr)+eA(t.addr)+eU(x)+eU(b)+eU(deadline),4,8,x,b)])}
 }
 const raw=await qWave(qs.map(q=>({to:q.to,data:q.data})),quoteBlock);
 const ds=qs.map((q,i)=>{try{return raw[i]?decQ(raw[i],q.sb||slipBps,eo,q.u,q.v,q.S):null}catch{return null}});
@@ -3473,7 +3457,6 @@ pool:null,wrap:0n,outDiffers:false,poolOut:undefined};
 hybrid=isIn
 ?{bookIn:p.bookIn,bookOut:p.bookOut,ammIn:p.ammIn}
 :{bookIn:p.bookIn,bookOut:p.bookOut,ammOut:p.ammOut};
-plannerBounded=plannerBounded||!!p.bounded;
 }
 }
 }
@@ -3534,7 +3517,6 @@ hybrid=null;
 }
 }catch{}
 }
-const pin2=lanePin();
 if(isIn&&r&&r.amountLimit>0n){
 try{
 await loadSolvers();
@@ -3550,8 +3532,8 @@ let win=null;
 for(const c of tried){
 if(!laneOk(c)||!c.out)continue;
 const floor=c.out*(10000n-slipBps)/10000n;
-if(pin2){
-if(c.lane.name!==pin2)continue;
+if(pin){
+if(c.lane.name!==pin)continue;
 win={...c,floor,forced:1};
 break;
 }
@@ -3625,9 +3607,8 @@ R(" · some venues unreachable");
 if(isIn&&r.best.source===SRC_DEEP&&finalIn<swapAmt-swapAmt*deepK(slipBps)/10000n)R(` · book fills ${tM(finalIn,f.dec)} ${f.sym}, the rest is returned`);
 if(isIn)R(` · Min ${tM(r.amountLimit,t.dec)} ${t.sym}`);
 else{
-const exactMax=fU(r.amountLimit,f.dec);
 R(` · Max ${maxAmt(r.amountLimit,f.dec)} ${f.sym}`);
-rate.title=`Exact maximum: ${exactMax} ${f.sym}`;
+rate.title=`Exact maximum: ${fU(r.amountLimit,f.dec)} ${f.sym}`;
 }
 if(f.cust||t.cust)R(" · Unlisted token: a transfer fee would come out of what you receive");
 for(const x of[f,t]){const m=uim(x);if(m)R(` · 1 ${x.sym} = ${(Nm(m)/1e18).toFixed(6)} shares`)}
@@ -3716,7 +3697,7 @@ net.innerHTML=c.icon+"<span>"+c.name+" network</span>";
 net.title="Network: "+c.name+" — click to switch";
 };
 const hcs=id=>{const h=location.hash;if(/[#&?](token|out|to|chain)=/.test(h))try{history.replaceState(null,"",/\bchain=\d+/.test(h)?h.replace(/\bchain=\d+/,"chain="+id):h+"&chain="+id)}catch{}},
-wSwitch=async id=>{const c=CHAINS[id],hex="0x"+h16(id),sw=()=>rpc("wallet_switchEthereumChain",[{chainId:hex}]),at=()=>rpc(I,[]).then(Number,()=>0);
+wSwitch=async id=>{const c=CHAINS[id],hex="0x"+h16(id),sw=()=>rpc("wallet_switchEthereumChain",[{chainId:hex}]),at=()=>rpc(I,[]).then(Nm,()=>0);
 if(prov()?.sw)return prov().sw(id)||at();
 try{await sw()}catch(e){
 if(isRejection(e)||!(e?.code===4902||e?.data?.originalError?.code===4902||/unrecogni[sz]ed|unknown chain|not been added|not added/i.test(e?.message||"")))throw e;
@@ -3823,7 +3804,6 @@ return cand(swapAmt,bk.out,outMin,
 };
 const showAddr=async()=>{const a=account;tbScan();
 Tx(addr,short(a));addr.title=a+" — click to disconnect";cL(addr).add("on");
-sAt(addr,"role","button");addr.tabIndex=0;
 const n=await nameRev(a).catch(()=>"");if(n&&a===account)Tx(addr,n)};
 async function disconnect(){
 SS.setItem("dc","1");
@@ -3835,7 +3815,7 @@ addr.onclick=async()=>{if(!account)return connect();if(await sure("Disconnect "+
 const netPick=async()=>{
 if(switchNet.busy)return;
 sAt(net,AX,"true");
-const c=await wkPick(Ok(CHAINS).map(Number).map(id=>
+const c=await wkPick(Ok(CHAINS).map(Nm).map(id=>
 ({id,name:CHAINS[id].name,svg:CHAINS[id].icon,on:id===CHAIN_ID}))
 .concat([{node:1,name:"Read node",sub:wcHost()}]),"Network");
 sAt(net,AX,"false");
@@ -3845,7 +3825,7 @@ if(c)switchNet(c.id);
 net.onclick=()=>{netPick()}
 const ZNAV=[["Swap","trade any token","tab=swap"],["Send","to a name or address, on any chain","tab=send"],["Orders","limit, Dutch and NFT orders","tab=book"],["Liquidity","add to or leave a pool","m=lq"],["Farm","stake TAC / ETH liquidity","farm"],["Launch","a coin or a cause","m=ln"],["Names",".wei names","m=wn"],["Markets","yes / no prediction markets","m=mk"],["Private","Tacit: shield, send and withdraw","m=pv"],["zFi DAO","governs this page","gov"]],
 zNav=async()=>{sAt(logoLink,AX,"true");const c=await wkPick(ZNAV.map(([name,sub,h])=>({name,sub,h})),"zSwap");sAt(logoLink,AX,"false");
-if(c)c.h==="gov"?footGov.click():/^h/.test(c.h)?window.open(c.h,"_blank","noopener"):location.hash==="#"+c.h?applyLink(1):location.hash=c.h};
+if(c)c.h==="gov"?footGov.click():location.hash==="#"+c.h?applyLink(1):location.hash=c.h};
 logoLink.onclick=zNav;
 net.onkeydown=e=>{if(e.key==="Enter"||e.key===" "||e.key==="ArrowDown"){e.preventDefault();netPick()}}
 showNet();
@@ -4071,7 +4051,7 @@ catch{throw Er("listing could not be read — refresh and retry")}
 const s=Sx(h);
 if(s.length<704)throw Er("listing could not be read — refresh and retry");
 const w=k=>Bx(s.slice(k*64,k*64+64));
-if(!w(0)||w(9)<row.aA||w(10)&&Bi(nowS())>w(10))throw Er("listing changed — refresh and retry");
+if(!w(0)||!w(1)&&w(9)<row.aA||w(10)&&Bi(nowS())>w(10))throw Er("listing changed — refresh and retry");
 return;
 }
 let h;
@@ -4145,7 +4125,7 @@ const capMap=(m,max)=>{while(m.size>max)m.delete(m.keys().next().value)};
 const LOGO_MAX=192,CARD_MAX=64,META_MAX=256,
 logoCache={};
 async function loadLogos(addrs){
-const cid=CHAIN_ID,want=[...new Set(addrs.map(a=>Lc(a)))]
+const cid=CHAIN_ID,want=[...new Set(addrs.map(Lc))]
 .filter(a=>a!==ZERO&&!known(a)&&logoCache[a]===undefined);
 if(!want.length)return;
 const raw=CHAIN_ID===1?await cfgBatch(want.map(a=>({to:TOKENLIST,data:"0x6ce273ac"+eA(a)}))).catch(()=>[]):[];
@@ -4271,16 +4251,14 @@ function rowGet(o,pay){return o.floor?floorGet(o,pay):o.aA*pay/o.aB}
 function decViewPage(hex){
 const h=Sx(hex),bytes=h.length/2;
 const word=b=>{if(b<0||b+32>bytes)throw Er("bad lens page");return Bx(h.slice(b*2,(b+32)*2))};
-const addr=(b)=>"0x"+h.slice((b+12)*2,(b+32)*2);
+const addr=b=>"0x"+h.slice((b+12)*2,(b+32)*2);
 const arr=Nm(word(0)),next=word(32);
 if(!Ns(arr)||arr<64||arr+32>bytes)throw Er("bad lens offset");
 const n=Nm(word(arr)),head=arr+32;
 if(!Ns(n)||n>256||head+n*32>bytes)throw Er("bad lens length");
 const text=(base,k)=>{const off=Nm(word(base+k*32)),p=base+off,len=Nm(word(p));
 if(!Ns(off)||!Ns(len)||p+32+len>bytes)throw Er("bad lens string");
-const cap=Mn(len,1024),a=U8(cap);
-for(let i=0;i<cap;i++)a[i]=parseInt(h.slice((p+32+i)*2,(p+33+i)*2),16);
-return new TextDecoder().decode(a)};
+return new TextDecoder().decode(hB(h.slice((p+32)*2,(p+32+Mn(len,1024))*2)))};
 const rows=[];
 const dec=v=>{const d=Nm(v);return Ni(d)&&d>=0&&d<=36?d:null};
 for(let i=0;i<n;i++){
@@ -4410,11 +4388,8 @@ const len=Nm(Bx(t.slice(off,off+64)))*2;if(!walk(t.slice(off+64,off+64+len)))ret
 return true}catch{return false}};
 return walk(cd)};
 function encFillPlanAndSwap(fills,tokenIn,tokenOut,recipient,refundTo,deadline,ammIn,ammData){
-let ft=eU(fills.length);
-for(const f of fills)ft+=eU(f.id)+eA(f.board)+eU(f.pay)+eU(f.get)+eBo(f.part);
-const dt=encBytes(ammData||"0x");
-return"0x9090c8e5"+eA(tokenIn)+eA(tokenOut)+eA(recipient)+eA(refundTo)
-+eU(deadline)+eU(256)+eU(ammIn)+eU(256+ft.length/2)+ft+dt;
+const p=encFillPlan(fills,tokenIn,tokenOut,recipient,refundTo,deadline),ft=p.slice(394);
+return"0x9090c8e5"+p.slice(10,330)+eU(256)+eU(ammIn)+eU(256+ft.length/2)+ft+encBytes(ammData||"0x");
 }
 function encSnwap(tokenIn,amountIn,recipient,tokenOut,minOut,executor,data){
 const body=encBytes(data);
@@ -4598,7 +4573,7 @@ const hi=total,lo=Mx(0,hi-40);
 if(lo>0)bookTrunc=true;
 const ids=[];for(let i=hi-1;i>=lo;--i)ids.push(i);
 let raw="";
-try{raw=await eC(b.a,"0x"+SEL_GETORDERS+eU(32)+eU(ids.length)+ids.map(i=>eU(i)).join(""))}catch{continue}
+try{raw=await eC(b.a,"0x"+SEL_GETORDERS+eU(32)+eU(ids.length)+ids.map(eU).join(""))}catch{continue}
 if(my!==bookSeq)return;
 const h=Sx(raw);if(h.length<128)continue;
 const w=WORDS(b.v2),words=(h.length-128)/64;
@@ -4788,17 +4763,16 @@ const uri=dS(raw);
 const i=uri.indexOf("base64,");
 if(i<0)throw Er("card is not inline");
 const j=Jp(atob(uri.slice(i+7)));
-const out={at:Dn(),attrs:Ia(j.attributes)?j.attributes:[],img:safeUrl(j.image),
-name:safeSym(j.name).slice(0,40)};
+const out={at:Dn(),attrs:Ia(j.attributes)?j.attributes:[],img:safeUrl(j.image)};
 cardCache[k]=out;capObj(cardCache,CARD_MAX);return out;
 }
 function cardHtml(c){
 const rows=c.attrs.slice(0,10).map(a=>{
-const t=safeSym(a&&a.trait_type).slice(0,20);
+const t=safeSym(a&&a.trait_type);
 let v=a&&a.value;
 if(a&&a.display_type==="date"&&+v)v=new Date(+v*1e3).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
 else if(a&&a.display_type==="number")v=St(v);
-return`<dt>${t}</dt><dd>${safeSym(v).slice(0,28)}</dd>`}).join("");
+return`<dt>${t}</dt><dd>${safeSym(v)}</dd>`}).join("");
 return(rows?`<dl>${rows}</dl>`:"")+(c.img?`<img src="${c.img}" alt="" loading="lazy">`:"");
 }
 let inspectSeq=0;
@@ -5099,7 +5073,7 @@ return rate>flat?rate:flat},
 rlNonce=()=>Bx(cpHex(crypto.getRandomValues(U8(32)))),
 rlIntent=(to,wei,delay,dest,l1gas)=>({s:account,r:to,st:ZERO,dt:ZERO,a:St(wei),f:St(rlFee(wei,dest,l1gas)),
 d:St(delay),sc:St(CHAIN_ID),dc:St(dest),dl:St(nowS()+RL_WINDOW),
-n:rlNonce().toString()}),
+n:St(rlNonce())}),
 rlEnc=i=>eA(i.s)+eA(i.r)+eA(i.st)+eA(i.dt)+eU(i.a)+eU(i.f)
 +eU(i.d)+eU(i.sc)+eU(i.dc)+eU(i.dl)+eU(i.n),
 rlId=i=>keccak(hB(rlEnc(i))),
@@ -5140,9 +5114,9 @@ const d=Sx(l.data),at=n=>"0x"+d.slice(n*64,n*64+64);
 if(d.length<12*64)return null;
 let i;
 try{i={s:retAddr(at(1)),r:retAddr(at(2)),st:retAddr(at(3))||ZERO,dt:retAddr(at(4))||ZERO,
-a:Bi(at(5)).toString(),f:Bi(at(6)).toString(),d:Bi(at(7)).toString(),
-sc:Bi(at(8)).toString(),dc:Bi(at(9)).toString(),dl:Bi(at(10)).toString(),
-n:Bi(at(11)).toString()}}catch{return null}
+a:St(Bi(at(5))),f:St(Bi(at(6))),d:St(Bi(at(7))),
+sc:St(Bi(at(8))),dc:St(Bi(at(9))),dl:St(Bi(at(10))),
+n:St(Bi(at(11)))}}catch{return null}
 if(!rlOk(i)||i.sc!==St(CHAIN_ID))return null;
 return Lc(rlId(i))===Lc(l.topics[1]||"")?i:null};
 let rlScanned={};
@@ -5172,7 +5146,7 @@ const logs=await rlLogs(Mx(TIP_FROM[CHAIN_ID]||0,head-TIP_SPAN[CHAIN_ID]),head,{
 const ids=[];
 for(const l of logs){const t=Ia(l&&l.topics)?l.topics:[];
 if(Lc(St(l.address||""))!==Lc(SLOW_GATE)||Lc(St(t[0]||""))!==TIP_POSTED||Lc(St(t[2]||""))!==me)continue;
-try{ids.push(Bi(t[1]).toString())}catch{}}
+try{ids.push(St(Bi(t[1])))}catch{}}
 const seen=new Set(tipSeen()),add=[...new Set(ids)].filter(i=>!seen.has(i));
 if(k!==CHAIN_ID+":"+(account||""))return false;
 if(add.length)tipMark(add.slice(-64));
@@ -5269,7 +5243,7 @@ q.set("chain",St(CHAIN_ID));
 slowMore.href=w4(SLOW_PAGE)+"#/pay?"+q;
 }
 const SEL_OUT="d40d4bc6",SEL_IN="e3993ee7",SEL_PENDING="6577b86a",SEL_HELD="5b96484e";
-const idTok=i=>"0x"+(i&((1n<<160n)-1n)).toString(16).padStart(40,"0");
+const idTok=i=>"0x"+h16(i&((1n<<160n)-1n)).padStart(40,"0");
 const idDelay=i=>i>>160n;
 const w=(h,n)=>Bx(Sx(h).slice(n*64,n*64+64)||"0");
 const metaCache=new Map();
@@ -5330,11 +5304,11 @@ const need=lists.flatMap(([who,ids])=>ids.filter(t=>!arOrg.has(ok(who,t))).map(t
 if(need.length){const os=await mD(need.map(([who,t])=>({to:who,data:"0x"+SEL_AORIGIN+eU(t)}))).catch(()=>[]);
 if(my!==posSeq)return;
 need.forEach(([who,t],i)=>{const a=os[i]&&retAddr(os[i]);if(a&&a!==ZERO)arOrg.set(ok(who,t),a)});capMap(arOrg,600)}
-for(const[who,ids]of lists)for(const t of ids)if(arOrg.get(ok(who,t))===Lc(account))viaAr.set(t.toString(),who);
+for(const[who,ids]of lists)for(const t of ids)if(arOrg.get(ok(who,t))===Lc(account))viaAr.set(St(t),who);
 const dirs=new Map();
 for(const[t,d]of[...outIds.map(i=>[i,"out"]),...[...viaAr.keys()].map(k=>[Bi(k),"out"]),
 ...inIds.map(i=>[i,"in"])]){
-const k=t.toString();if((dirs.get(k)||"").includes(d))continue;dirs.set(k,(dirs.get(k)||"")+d)}
+const k=St(t);if((dirs.get(k)||"").includes(d))continue;dirs.set(k,(dirs.get(k)||"")+d)}
 const allKeys=[...dirs.keys()].sort((a,b)=>a.length-b.length||(a<b?1:-1)),
 keys=allKeys.slice(0,posShown),
 more=allKeys.length-keys.length,
@@ -5354,7 +5328,7 @@ const stP=its.length?mD(its.flatMap(i=>{const id=rlId(i);
 return[{to:RELAY,data:"0x"+SEL_RSTATUS+Sx(id)},{to:RELAY,data:"0x"+SEL_RPROVEN+Sx(id)}]})).catch(()=>[]):null,
 stale=[];
 if(cC().slowTip){
-const live=rows.filter(r=>r.dir.includes("out")).map(r=>r.tid.toString()),
+const live=rows.filter(r=>r.dir.includes("out")).map(r=>St(r.tid)),
 gone=[...new Set([...settled,...tipSeen().filter(k=>!dirs.has(k))])],
 probe=[...live,...gone];
 if(probe.length){
@@ -5529,7 +5503,7 @@ if(amount>0n)sendReady={to,amount,token:f,label:/^0x/.test(v)?short(to):v};
 syncBr();
 render();
 }
-const syncNftUI=()=>{
+const isWns=a=>Lc(a||"")===Lc(WNS),syncNftUI=()=>{
 const anyNft=tab==="book"&&(isNft(fromSel.value)||isNft(toSel.value));
 Hd(nftIdL,!anyNft);
 if(!anyNft)nftId.value="";
@@ -5722,7 +5696,7 @@ if(on&&pvMode)pvSet(false);
 if(on&&mkMode)mkSet(false);
 sAt(lq,AP,on?"true":"false");
 cL(lq).toggle("on",on);
-qS(document,".card").classList.toggle("lqon",on);
+cL(qS(document,".card")).toggle("lqon",on);
 for(const el of [rate,flip,swap])
 if(el)Hd(el,on);
 rc.value="";cL(rc).remove("bad");Tx(rcvEl,"");
@@ -5968,7 +5942,7 @@ lqList.innerHTML=`<div class="lqempty">Could not read pools.</div>`;lqSyncAmount
 }
 const SEL_REMOVE="e39b0eb5",SEL_ADDEXACT="cc0025e4",SEL_PREVIEW_REMOVE="a2eaee07",
 SEL_PREVIEW_ADD="e03ec807",
-dec1=(h,i)=>Bx(Sx(h).slice(i*64,(i+1)*64));
+dec1=(h,i)=>Bx(Sx(h).slice(i*64,(i+1)*64)),lqRowOf=e=>lqRows.find(x=>Lc(x.pool)===Lc(e.closest(".lqrow")?.dataset.pool||""));
 async function previewRemove(pool,shares){
 const [r]=await mc3([{to:PLQLENS,data:"0x"+SEL_PREVIEW_REMOVE+eA(pool)+eU(shares)}]);
 if(!r)return null;
@@ -5981,7 +5955,7 @@ return dec1(r,0)===1n?{lp:dec1(r,1),used0:dec1(r,2),used1:dec1(r,3),ref0:dec1(r,
 }
 let lqWpSeq=0;
 async function lqWithdrawPreview(sel){
-const row=lqRows.find(x=>Lc(x.pool)===Lc(sel.closest(".lqrow")?.dataset.pool||""));
+const row=lqRowOf(sel);
 const out=sel.closest(".lqrow")?.querySelector(".lqwpv");
 if(!row||!out)return;
 const p=chPair();
@@ -5996,10 +5970,10 @@ if(my!==lqWpSeq)return;
 Tx(out,pv?`receives ${tM(pv.a0,t0.dec)} ${t0.sym} + ${tM(pv.a1,t1.dec)} ${t1.sym}`:pv===0?"Could not check.":"This amount would redeem nothing.");
 }
 async function lqTo(){
-const v=vT(rc);
+if(lkHeld())return;const v=vT(rc);
 if(!v)return account;
 const shown=(rcvEl.textContent||"").trim();
-const to=await rcvOf(v,true).catch(e=>e);
+const e=isAddr(v)&&rcErr(v),to=e?Er(e):await rcvOf(v,true).catch(e=>e);
 if(!isAddr(to)){cL(rc).add("bad");
 Sm(to.message||"Recipient must be an address or a .wei / .gwei / .eth name that resolves.");
 return null}
@@ -6016,7 +5990,7 @@ async function lqShowTo(){
 const my=++lqToSeq,v=vT(rc);
 if(!v){cL(rc).remove("bad");Tx(rcvEl,"");return}
 Tx(rcvEl,"resolving…");
-const to=await rcvOf(v).catch(e=>e);
+const to=isAddr(v)&&rcErr(v)?"":await rcvOf(v).catch(e=>e);
 if(my!==lqToSeq)return;
 const ok=isAddr(to);
 if(!ok||cL(rc).contains("bad"))Sm(ok?"":rcErr(v)||to.message||"Name not registered");
@@ -6144,16 +6118,15 @@ finally{--busy}
 }
 let lqPvT,lqPvSeq=0;
 async function lqPreview(box){++lqPvSeq;
-const pool=box.closest(".lqrow")?.dataset.pool||"";
-const row=lqRows.find(x=>Lc(x.pool)===Lc(pool));
+const row=lqRowOf(box);
 const p=chPair();
 const out=qS(box,".lqpv"),go=qS(box,'[data-act="ac"]');
 if(!row||!p){Tx(out,"");go.disabled=true;return}
 const [t0,t1]=p,ins=box.querySelectorAll(".lqin");
 let a0,a1;
 try{
-a0=ins[0].value.trim()?pU(ins[0].value.trim(),t0.dec):0n;
-a1=ins[1].value.trim()?pU(ins[1].value.trim(),t1.dec):0n;
+a0=pU(vT(ins[0])||"0",t0.dec);
+a1=pU(vT(ins[1])||"0",t1.dec);
 }catch{Tx(out,"Invalid amount.");go.disabled=true;return}
 if(account){
 const bf=TOKENS[fromSel.value];
@@ -6192,7 +6165,7 @@ const isZap=box=>!!qS(box,".lqz")?.checked,zLoss=(w,e,a,lp)=>{const L=Nm(w.liq),
 return L>0&&a>0?1-lp/(L+lp)*(2*Math.sqrt((ri+a+vi*k)*(ro+vo*k)*q)-(vi+vo*q)*k)/a:0};
 function zapSide(box,t0,t1){
 const ins=box.querySelectorAll(".lqin");
-const v0=ins[0].value.trim(),v1=ins[1].value.trim();
+const v0=vT(ins[0]),v1=vT(ins[1]);
 if(v0&&v1)return{err:`One side only — clear the ${t1.sym} field, or turn one-sided off.`};
 if(!v0&&!v1)return{err:`Enter an amount of ${t0.sym} or ${t1.sym}.`};
 const tok=v0?t0:t1;
@@ -6200,8 +6173,7 @@ try{return{tok,amt:pU(v0||v1,tok.dec)}}catch{return{err:"Invalid amount."}}
 }
 function lqMirror(box,src){
 if(isZap(box))return;
-const pool=box.closest(".lqrow")?.dataset.pool||"";
-const row=lqRows.find(x=>Lc(x.pool)===Lc(pool));
+const row=lqRowOf(box);
 const p=chPair();
 if(!row||!p||!row.r0||!row.r1)return;
 const [t0,t1]=p,ins=box.querySelectorAll(".lqin");
@@ -6230,9 +6202,9 @@ if(!cL(e.target).contains("lqz"))return;
 const box=e.target.closest(".lqadd"),ins=box.querySelectorAll(".lqin");
 const on=e.target.checked;
 const mir=dSt(box).mir;
-if(on&&mir&&ins[0].value.trim()&&ins[1].value.trim())ins[+mir].value="";
-if(!on)lqMirror(box,ins[0].value.trim()||!ins[1].value.trim()?ins[0]:ins[1]);
-Tx(qS(box,'[data-act="ac"]'),on?"Zap in":"Add liquidity");
+if(on&&mir&&vT(ins[0])&&vT(ins[1]))ins[+mir].value="";
+if(!on)lqMirror(box,vT(ins[0])||!vT(ins[1])?ins[0]:ins[1]);
+pfAddTxt(box);
 lqPreview(box);
 });
 let lqNewSeq=0,
@@ -6250,7 +6222,7 @@ const pair=chPair();
 if(!pair){Tx(out,"");return}
 const [t0,t1]=pair,
 range=qS(box,"#lqRange").value;
-qS(box,"#lqCustom").classList.toggle("hide",range!=="custom");
+Hd(qS(box,"#lqCustom"),range!=="custom");
 const payTok=TOKENS[fromSel.value],
 payIs0=!!payTok&&Lc(payTok.addr)===Lc(t0.addr),
 el0=payIs0?amt:outAmt,el1=payIs0?outAmt:amt;
@@ -6260,11 +6232,11 @@ const v0=vT(el0),v1=vT(el1);
 a0=v0?pU(v0,t0.dec):0n;a1=v1?pU(v1,t1.dec):0n;
 }catch{Tx(out,"Check the amounts.");return}
 const oneSided=a0&&!a1?0:a1&&!a0?1:-1;
-qS(box,"#lqPxRow").classList.toggle("hide",oneSided<0);
+Hd(qS(box,"#lqPxRow"),oneSided<0);
 if(!a0&&!a1){
 Tx(out,`Enter how much ${t0.sym} and ${t1.sym} to deposit — the ratio sets the opening price.`);
 return}
-const pxIn=qS(box,"#lqPx").value.trim();
+const pxIn=vT(qS(box,"#lqPx"));
 const px=oneSided<0
 ?(Nm(a1)/10**t1.dec)/(Nm(a0)/10**t0.dec)
 :pxIn?+pxIn:NaN;
@@ -6276,7 +6248,7 @@ return}
 const fee=Bi(qS(box,"#lqFee").value);
 let lo,hi;
 if(range==="custom"){
-const n=id=>{const v=qS(box,"#"+id).value.trim();return v?+v:NaN};
+const n=id=>{const v=vT(qS(box,"#"+id));return v?+v:NaN};
 lo=n("lqLo");hi=n("lqHi");
 if(!(lo>0)||!(hi>0)){Tx(out,"Name both prices.");return}
 if(lo>=hi){Tx(out,"The low price must be below the high one.");return}
@@ -6383,7 +6355,7 @@ if(!row)return;
 const act=dSt(b).act;
 if(act!=="a"&&!account)return void Sm("Connect a wallet first.");
 if(act==="a"){
-const box=b.closest(".lqrow").querySelector(".lqadd");
+const box=qS(b.closest(".lqrow"),".lqadd");
 cL(box).toggle("hide");
 Tx(b,cL(box).contains("hide")?"Add":"Cancel");
 if(!cL(box).contains("hide"))qS(box,".lqin").focus();
@@ -6413,7 +6385,7 @@ return;
 }
 let a0,a1;
 try{
-a0=ins[0].value.trim()?pU(ins[0].value.trim(),t0.dec):0n;a1=ins[1].value.trim()?pU(ins[1].value.trim(),t1.dec):0n;
+a0=pU(vT(ins[0])||"0",t0.dec);a1=pU(vT(ins[1])||"0",t1.dec);
 }catch{Sm("Invalid amount");return}
 if((!a0&&row.r0)||(!a1&&row.r1)||!(a0||a1))return;
 ++busy;b.disabled=true;
@@ -6642,7 +6614,7 @@ if(acts.childNodes.length)el.append(acts)}
 function fmPf(){qS(pvFarm,".fmpf")?.remove();if(!pfS||!pfOn()||cL(pvFarm).contains("hide"))return;
 const c=pfBtn("go","","fmc fmpf"),nm=cE("span"),a=pfApr();pfIcon(c,16,"");nm.className="fmn";Tx(nm,"TAC/ETH zSwap "+Math.round(pfDay()).toLocaleString()+" TAC/day");c.append(nm);
 if(a){const e=cE("i");e.className="fma";Tx(e,a);c.append(e)}pvFarm.insertBefore(c,qS(pvFarm,"a"))}
-const pfAddTxt=box=>{const g=qS(box,'[data-act="ac"]');if(g)Tx(g,qS(box,".pfk:checked")?"Add & stake":"Add liquidity")};
+const pfAddTxt=box=>{const g=qS(box,'[data-act="ac"]');if(g)Tx(g,qS(box,".pfk:checked")?"Add & stake":isZap(box)?"Zap in":"Add liquidity")};
 aE(lqList,"change",e=>{const x=e.target.closest(".pfk");if(x)pfAddTxt(x.closest(".lqadd"))});
 function pfGo(){pfOpen=1;pairUser=false;pairFree=1;if(location.hash==="#farm")applyLink(1);else location.hash="farm"}
 const pfTx=async(data,val,verb)=>settle(await sendWith([],{from:account,to:PFARM,data,value:toHex(val)},verb));
@@ -6656,7 +6628,7 @@ await cW();if(isZap(box)){const z=zapSide(box,t0,t1);if(z.err)return void Sm(z.e
 const pv=await previewZap(PFPOOL,z.tok.addr,z.amt);if(!pv||!pv.lp)return void Sm("The pool would refuse this deposit.");const m=lessSlip(pv.lp);
 if(z.tok.addr===ZERO)return pfTx("0x8703a0d8"+eU(0n)+eU(m)+eU(nowS()+1800),z.amt,"Zapping into the farm…");
 return pfTok(TAC_TOK,z.amt,d=>"0x9376f34e"+eU(z.amt)+eU(0n)+eU(m)+eU(d),(d,s)=>"0x51291e77"+eU(z.amt)+eU(0n)+eU(m)+eU(d)+s,0n,"Zapping into the farm…")}
-const ins=box.querySelectorAll(".lqin");let a0,a1;try{a0=pU(ins[0].value.trim()||"0",t0.dec);a1=pU(ins[1].value.trim()||"0",t1.dec)}catch{return void Sm("Invalid amount")}
+const ins=box.querySelectorAll(".lqin");let a0,a1;try{a0=pU(vT(ins[0])||"0",t0.dec);a1=pU(vT(ins[1])||"0",t1.dec)}catch{return void Sm("Invalid amount")}
 if(!a0||!a1)return void Sm("Enter both amounts, or turn one-sided on.");
 const pv=await previewAdd(PFPOOL,a0,a1);if(!pv)return void Sm("The pool would refuse this deposit.");const m=lessSlip(pv.lp);
 return pfTok(TAC_TOK,a1,d=>"0x6d15c09b"+eU(a1)+eU(m)+eU(d),(d,s)=>"0xddd9f3fb"+eU(a1)+eU(m)+eU(d)+s,a0,"Adding to the farm…")}
@@ -6958,13 +6930,13 @@ const b=gE("cbGo"),B=cbBuy,T=cbTok;if(!b||b.disabled)return;
 const label=b.textContent;
 try{
 if(!account)return connect();
-b.disabled=true;Tx(b,cbBuy?"Backing…":"Burning…");
-const req=cbBuy
+b.disabled=true;Tx(b,B?"Backing…":"Burning…");
+const req=B
 ?{from:account,to:COFF,value:"0x"+h16(cbCost),
 data:"0x"+SEL_BUY+eA(cbDao)+eU(cbAmt)}
 :{from:account,to:cbDao,value:"0x0",
 data:"0x"+SEL_RAGEQUIT+eU(96)+eU(0)+eU(cbAmt)+eU(1)+eA(ZERO)};
-if(!cbBuy&&cbShares&&cbTok){
+if(!B&&cbShares&&T){
 let now2=null;
 try{
 const [b2,r2]=await Pa([
@@ -7001,20 +6973,11 @@ lnBud=()=>lnCause()?CAU_MAX_ART:LN_BUDGET,
 LN_MAX_ALLOC=2000,
 LN_MIN_POOLED=2000000000000n,
 LN_MIN_MCAP=1000000000000n,
-lnTail=b=>encBytes(WCU.hex(b)),
 encLaunch=(n,y,u,sup,alloc,mcap,own,art,mime)=>{
-const T=new TextEncoder();
-const dyn=[T.encode(n),T.encode(y),T.encode(u)],
-statics=[eU(sup),eU(alloc),eU(mcap),eA(own)];
-if(art){dyn.push(art);statics.push(eU(mime))}
-const words=statics.length+(art?4:3);
-let off=words*32,head="",tail="";
-const heads=[];
-for(const b of dyn){heads.push(eU(off));off+=lnTail(b).length/2;tail+=lnTail(b)}
-head=heads.slice(0,3).join("")+statics.slice(0,4).join("")
-+(art?heads[3]+statics[4]:"");
-return "0x"+(art?SEL_LAUNCHART:SEL_LAUNCH)+head+tail;
-};
+const d=[strTail(n),strTail(y),strTail(u)];if(art)d.push(encBytes(cpHex(art)));
+let o=art?288:224,q=[],t="";
+for(const b of d){q.push(eU(o));o+=b.length/2;t+=b}
+return"0x"+(art?SEL_LAUNCHART:SEL_LAUNCH)+q[0]+q[1]+q[2]+eU(sup)+eU(alloc)+eU(mcap)+eA(own)+(art?q[3]+eU(mime):"")+t};
 async function lnOwner(){
 const rv=vT(rc);
 if(!rv)return account;
@@ -7053,8 +7016,8 @@ ih=cProxy(CIMPL);
 return "0x"+keccak(hB("ff"+Sx(CMSUM)+ss+ih)).slice(26);
 },
 encCause=(name,sym,uri,salt,owner,ben,dao,goal,rate,price,deadline,cap)=>{
-const T=new TextEncoder(),Z=eU(0);
-const dyn=[lnTail(T.encode(name)),lnTail(T.encode(sym)),lnTail(T.encode(uri)),
+const Z=eU(0);
+const dyn=[strTail(name),strTail(sym),strTail(uri),
 eU(1)+eA(owner),eU(1)+eU(CONE),eU(0),
 cCalls([
 cCall(dao,SEL_SETALLOW+eA(COFF)+eA(CLOOT)+eU(CMAX)),
@@ -7092,7 +7055,7 @@ if(vest<=secs)return{err:`Backing runs for ${trimNum(Nm(secs)/86400)} days but t
 const rate=goal/vest||1n;
 return{goal,secs,price,rate,cap:(CUNITS-1n)*CONE};
 }
-const lnKindQuote=()=>lnKind.value==="cause"?cauQuote():lnQuote();
+const lnKindQuote=()=>lnCause()?cauQuote():lnQuote();
 function cauQuote(){
 Tx(lnGo,account?"Launch":CW);
 const t=cauTerms();
@@ -7112,7 +7075,7 @@ Tx(lnNote,`1 ETH backs ${trimNum(1/per)} units`
 lnNote.style.color=lnArtBytes&&lnArtBytes.length>CAU_MAX_ART?"var(--w)":"";
 }
 function cauKind(){
-const on=lnKind.value==="cause";
+const on=lnCause();
 for(const el of [lnMktL,lnSupplyL,lnMcapL,lnAllocL])Hd(el,on);
 for(const el of [lnGoalL,lnDaysL,lnVestL])Hd(el,!on);
 Tx(lnTitle,on?"Launch a cause":"Launch a coin");
@@ -7171,9 +7134,8 @@ if(on&&pvMode)pvSet(false);
 if(on&&mkMode)mkSet(false);
 sAt(ln,AP,on?"true":"false");
 cL(ln).toggle("on",on);
-for(const el of [rate,flip,swap])if(el)Hd(el,on);
-for(const el of [qS(document,".panel"),rcvPanel])if(el)Hd(el,on);
-qS(document,".card").classList.toggle("lnon",on);
+for(const el of [rate,flip,swap,qS(document,".panel"),rcvPanel])if(el)Hd(el,on);
+cL(qS(document,".card")).toggle("lnon",on);
 for(const el of [lnPanel,lnNote,lnGo])Hd(el,!on);
 rc.value="";cL(rc).remove("bad");Tx(rcvEl,"");
 rc.title="";if(!on)rc.placeholder="Recipient (optional) — 0x or name";
@@ -7211,7 +7173,7 @@ blobBytes=async b=>b.arrayBuffer?U8(await b.arrayBuffer()):await new Promise((re
 const r=new FileReader();r.onload=()=>res(U8(r.result));r.onerror=()=>rej(r.error);r.readAsArrayBuffer(b)});
 async function lnPrepare(file){
 if(/svg/.test(file.type)){
-const b=new TextEncoder().encode((await blobText(file))
+const b=cpU8((await blobText(file))
 .replace(/<\?xml[^>]*\?>/g,"").replace(/<!--[\s\S]*?-->/g,"").replace(/<!DOCTYPE[^>]*>/gi,"")
 .replace(/s\s*c\s*r\s*i\s*p\s*t(?!ion)|<set\b|foreignObject|[\s/"']on[a-z-]+\s*=|=\s*["'][^"'>]*&(?!amp;|lt;|gt;|quot;|apos;)/i,()=>{throw Er("That SVG can run script — export a plain one.")})
 .replace(/>\s+</g,"><").trim());
@@ -7282,7 +7244,7 @@ for(const el of [lnGoal,lnDays])el.oninput=cauQuote;
 lnVest.onchange=cauQuote;
 ln.onclick=()=>{sBlip();lnSet(!lnMode);if(!lnMode)update()};
 let wnMode=false,wnQ=null,wnSeq=0,wnRollSeq=0,wnTimer=0,wnRound=0n,wnStampTry=0,wnRollAt=0;
-const wnOk=l=>/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(l)&&new TextEncoder().encode(l).length<256,
+const wnOk=l=>/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(l)&&cpU8(l).length<256,
 wnFree=()=>wnTld.value==="id";
 const wnOffer=(t,id)=>{Hd(wnEnter,0);Tx(wnEnter,t);
 dSt(wnEnter).id=id||"";cL(wnEnter).toggle("mut",!id&&!!account)};
@@ -7295,10 +7257,10 @@ if(!p||p.at||!account)return;
 try{const r=await eC(WNS,"0x839df945"+pad32(wnC(p)));
 const t=Nm(dec1(r||"0x0",0));
 if(t)wnSave({...p,at:t})}catch{}};
-const wnPend=()=>{try{const p=Jp(LS[wnKey()]||"null");return p&&p.label&&p.secret&&Number.isFinite(p.at)?p:null}catch{return null}};
+const wnPend=()=>{try{const p=Jp(LS[wnKey()]||"null");return p&&p.label&&p.secret&&Nm.isFinite(p.at)?p:null}catch{return null}};
 const wnSave=p=>{try{if(p)LS[wnKey()]=Js(p);else delete LS[wnKey()]}catch{}};
 const wnId=n=>namehash(/\.wei$/.test(n)?n:n+".wei"),
-wnCostCall=l=>[{to:WNS,data:"0xfcee45f4"+eU(new TextEncoder().encode(l).length)},
+wnCostCall=l=>[{to:WNS,data:"0xfcee45f4"+eU(cpU8(l).length)},
 {to:WNS,data:"0x1bf1fffb"+pad32(wnId(l))}],
 wnCost=async l=>{const [f,pr]=await mc3(wnCostCall(l));return dec1(f,0)+dec1(pr,0)};
 const wnSync=()=>{
@@ -7497,7 +7459,7 @@ const cpCtx=(tag,cb,a,b,notes,amts)=>keccak(cpCat(cpU8(tag),b32(cb),b32(a),b32(b
 const cpNonce=(r,ctx,role)=>fmod(big(hB(keccak(cpCat(cpU8("tacit-open-nonce-v1"),b32(fmod(Bi(r),FN)),b32(ctx),cpU8(role))))),FN)||1n;
 const cpSigma=(v,r,ctx,k)=>{const rs=fmod(Bi(r),FN),ks=fmod(Bi(k),FN),Cc=cpCommit(v,rs),R=pmul(GP,ks);
 const e=fmod(big(hB(keccak(cpCat(cpU8("tacit-open-sigma-v1"),beN(v,8),b32(ctx),hB(pcomp(Cc)),hB(pcomp(R)))))),FN);
-return{R:"0x"+pcomp(R),z:"0x"+fmod(ks+e*rs,FN).toString(16).padStart(64,"0")}};
+return{R:"0x"+pcomp(R),z:"0x"+h16(fmod(ks+e*rs,FN)).padStart(64,"0")}};
 const cpSeal=(pub,n,e)=>{const P=pfromx(Bx(pub.slice(2)),pub.slice(0,2)==="03");
 const ss=sha2(hB(pcomp(pmul(P,e)))),plain=cpCat(beN(n.value,8),b32(n.blinding),b32(n.secret),b32(n.asset||CP_ETH),b32(n.owner)),o=U8(plain.length);
 for(let i=0;i<plain.length;i+=32){const k=sha2(cpCat(ss,[i/32]));for(let j=0;j<32&&i+j<plain.length;j++)o[i+j]=plain[i+j]^k[j]}
@@ -7510,17 +7472,15 @@ lv=nx.length?nx:[cpZeros[i+1]||cpZeros[0]]}
 return{root:"0x"+cpHex(lv[0]),path}};
 const cpRandom=()=>{for(let t=0;t<32;t++){const b=U8(32);crypto.getRandomValues(b);const s=big(b);if(s&&s<FN)return s}throw Er("no randomness")},
 cpEncCall=c=>eA(c.target)+eU(c.value)+eA(c.token)+eU(c.amount)+eBo(c.push)+pad32("c0")+encBytes(c.data||"0x");
-const cpEncRecipe=r=>{const calls=r.calls.map(cpEncCall);let off=calls.length*32,head=eU(calls.length);
-for(const c of calls){head+=eU(off);off+=c.length/2}
-const ca=head+calls.join(""),sw=eU(r.sweepTokens.length)+r.sweepTokens.map(eA).join(""),mo=eU(r.minOuts.length)+r.minOuts.map(eU).join("");
+const cpEncRecipe=r=>{const ca=cCalls(r.calls.map(cpEncCall)),sw=eU(r.sweepTokens.length)+r.sweepTokens.map(eA).join(""),mo=eU(r.minOuts.length)+r.minOuts.map(eU).join("");
 return pad32(r.exitedAsset)+eA(r.feeAsset)+eA(r.finalRecipient)+eU(r.deadline)+eU(r.nonce)
 +eU(256)+eU(256+ca.length/2)+eU(256+(ca.length+sw.length)/2)+ca+sw+mo};
 const cpEscrow=(impl,r)=>{const salt=keccak(hB(pad32("20")+cpEncRecipe(r))),
-ih=keccak(hB("602d5f8160095f39f35f5f365f5f37365f73"+Lc(Sx(impl))+"5af43d5f5f3e6029573d5ffd5b3d5ff3"));
-return"0x"+Sx(keccak(hB("ff"+Sx(CP_ROUTER)+Sx(salt)+Sx(ih)))).slice(24)};
+ih=cProxy(Lc(Sx(impl)));
+return"0x"+Sx(keccak(hB("ff"+Sx(CP_ROUTER)+Sx(salt)+ih))).slice(24)};
 const cpActData=r=>"0x"+SEL_CPACT+pad32("20")+cpEncRecipe(r);
 const cpReclData=r=>{const b=cpEncRecipe(r);return"0x"+SEL_CPRECL+pad32("40")+eU(64+b.length/2)+b+pad32("0")};
-const cpExitData=(pv,pr,r,ms=[])=>{const a=encBytes(pv),b=encBytes(pr),t=ms.map(encBytes),d=cpEncRecipe(r);let off=ms.length*32,c=eU(ms.length);for(const x of t){c+=eU(off);off+=x.length/2}c+=t.join("");
+const cpExitData=(pv,pr,r,ms=[])=>{const a=encBytes(pv),b=encBytes(pr),c=cCalls(ms.map(encBytes)),d=cpEncRecipe(r);
 return"0x"+SEL_CPEXIT+pad32("80")+eU(128+a.length/2)+eU(128+(a.length+b.length)/2)+eU(128+(a.length+b.length+c.length)/2)+a+b+c+d};
 const cpRecipe=x=>{const l2=CP_L2[x.ch],r={exitedAsset:CP_ETH,feeAsset:ZERO,finalRecipient:x.fin,deadline:Bi(x.dl),nonce:Bi(x.nonce),
 sweepTokens:[ZERO],minOuts:[0n]};
@@ -7536,7 +7496,7 @@ try{const j=await relayFetch("/claim/"+who,null,b);
 if(!j||Lc(St(j.address||""))!==who||!isAddr(j.distributor||"")||!Ia(j.proof))return void(cpClm=cpClmBad=null);
 if(Lc(St(j.distributor))!==Lc(CP_DIST))return void(cpClm=null,cpClmBad=1,pvMode&&cpPaint());
 if(!/^\d{1,40}$/.test(St(j.unclaimedWei||""))||!/^\d{1,40}$/.test(St(j.cumulativeAmount||"")))return void(cpClm=null);
-if(j.proof.length>64||!j.proof.every(x=>/^0x[0-9a-fA-F]{64}$/.test(x)))return void(cpClm=null);const c=Bi(j.cumulativeAmount),q=d=>cR(CP_DIST,d).catch(Nl),[ow,vf]=await Pa([q("0x787eef2e"+eA(who)+eU(c)),q("0x8be0861e"+eA(who)+eU(c)+eU(96)+eU(j.proof.length)+j.proof.map(x=>Sx(x)).join(""))]),u=/^0x[0-9a-fA-F]{1,64}$/.test(ow||"")?Bi(ow):0n;if(u<=0n||!/^0x0*1$/.test(vf||""))return void(cpClm=null);
+if(j.proof.length>64||!j.proof.every(x=>/^0x[0-9a-fA-F]{64}$/.test(x)))return void(cpClm=null);const c=Bi(j.cumulativeAmount),q=d=>cR(CP_DIST,d).catch(Nl),[ow,vf]=await Pa([q("0x787eef2e"+eA(who)+eU(c)),q("0x8be0861e"+eA(who)+eU(c)+eU(96)+eU(j.proof.length)+j.proof.map(Sx).join(""))]),u=/^0x[0-9a-fA-F]{1,64}$/.test(ow||"")?Bi(ow):0n;if(u<=0n||!/^0x0*1$/.test(vf||""))return void(cpClm=null);
 if(Lc(St(account||""))!==who)return;cpClm={d:CP_DIST,u,c,p:j.proof,b};cpClmBad=null;if(pvMode)cpPaint()}catch{}},
 cpPtsRead=async()=>{if(cpPtsRead.f)return;cpPtsRead.f=1;try{await cpPtsRead0()}finally{cpPtsRead.f=0}},cpPtsRead0=async()=>{if(!account)return;const who=Lc(account);
 if(cpPtsFor===who&&Dn()-cpPtsAt<12e4)return;cpPtsAt=Dn();
@@ -7546,7 +7506,7 @@ const n=Nm(j.points),d=Nm(j.deposit_count);
 const bd=(Ia(j.deposits)?j.deposits:[]).filter(x=>x&&x.pp_boosted===true).length;
 const dl=(Ia(j.deposits)?j.deposits:[]).filter(x=>x&&/^\d{1,30}$/.test(St(x.amount_wei||""))).map(x=>({h:x.activity!=="cbtchold"&&/^0x[0-9a-fA-F]{64}$/.test(x.tx_hash||"")?x.tx_hash:"",t:+x.block_time||0,w:Bi(x.amount_wei),p:Nm(x.points)||0,tp:/^\d{1,30}$/.test(St(x.tip_wei||""))?Bi(x.tip_wei):0n,pb:x.pp_boosted===true,k:+x.tac_boost,ac:/^(cbtcmint|cbtchold|cusdmint|zswapeth|pmbet|pmcreate|evmpooldeposit|weiname)$/.test(x.activity)?x.activity:x.activity&&x.activity!=="wrap"?"x":"wrap",ch:CHAINS[+x.chain_id]?+x.chain_id:1})).sort((a,b)=>b.t-a.t).slice(0,60);
 const T=j.today,tb=T&&/^\d{1,40}$/.test(St(T.dayBudgetWei||""))?Bi(T.dayBudgetWei):0n,tp=T&&Nm(T.points);const tt=T&&Nm(T.totalPoints);
-if(Number.isFinite(n)&&n>=0){if(Lc(St(account||""))!==who)return ptLine();cpPts=n>0||d>0?{n,d:Number.isFinite(d)?d:0,b:bd,ds:dl,tb,tp:tp>0&&tp<1e20?tp:0,tt:tt>=1e-6&&tt<1e20?tt:0,f:T&&T.factor>1&&T.factor<9?Math.round(T.factor*100)/100:0}:null;cpPtsFor=who;await cpClaimRead(b);if(pvMode)cpPaint();ptLine();return}}}catch{}}
+if(Nm.isFinite(n)&&n>=0){if(Lc(St(account||""))!==who)return ptLine();cpPts=n>0||d>0?{n,d:Nm.isFinite(d)?d:0,b:bd,ds:dl,tb,tp:tp>0&&tp<1e20?tp:0,tt:tt>=1e-6&&tt<1e20?tt:0,f:T&&T.factor>1&&T.factor<9?Math.round(T.factor*100)/100:0}:null;cpPtsFor=who;await cpClaimRead(b);if(pvMode)cpPaint();ptLine();return}}}catch{}}
 if(cpPtsFor!==who)cpPts=null;ptLine()};
 const ptEl=gE("ptEl"),ptShow=()=>Hd(ptEl,!account||!ptEl.firstChild||oM()),ptSync=()=>{let o;try{o=LS["zswap:ptok"]}catch{}return account&&(cpSeed||o)?cpPtsRead().catch(Np):ptLine()},ptClaim=()=>pvRun(async()=>{await cpClaimRead(cpClm?.b||cpRelayBase()).catch(Np);
 if(!cpClm)throw Er("Nothing to claim right now.");
@@ -7581,7 +7541,7 @@ if(last)return last;throw e};
 let cpBtcSat=null,cpBtcAt=0;
 const cpBtcRead=async()=>{if(!cpBtc||Dn()-cpBtcAt<6e4)return;cpBtcAt=Dn();const a=cpBtc;
 for(const u of[...B_API]){try{const j=await relayFetch("/address/"+a,null,u),n=x=>Ns(x)&&x>=0?x:NaN,c=j.chain_stats,m=j.mempool_stats,s=n(c.funded_txo_sum)-n(c.spent_txo_sum)+n(m.funded_txo_sum)-n(m.spent_txo_sum);
-if(Number.isFinite(s)&&s>=0&&a===cpBtc){cpBtcSat=s;if(pvMode)cpPaint();return}}catch{}}};
+if(Nm.isFinite(s)&&s>=0&&a===cpBtc){cpBtcSat=s;if(pvMode)cpPaint();return}}catch{}}};
 let cpMore=false,cpVer=0,cpDk="",cpSeed="",cpFp="",cpPub="",cpBtc="",cpNotes=[],cpLocks=[],cpPool=null,cpSyncAt=0,cpBusy=0,pvMode=false,pvTimer=0,pvTick=0;
 const cpK={},cpNoteOf=n=>{const a=n.a||CP_ETH,h=cpFp+(n.z?n.b:n.s?n.s+n.b:n.i)+":"+n.v+":"+a;if(cpK[h])return cpK[h];const{secret,blinding}=n.s?{secret:n.s,blinding:Bi(n.b)}:cpDerive(cpSeed,n.i,a),owner=n.z?Z32:cpOwner(secret),{cx,cy}=cpXY(cpCommit(n.v,blinding)),leaf=cpLeaf(cx,cy,owner,a);
 return cpK[h]={secret,blinding,owner,cx,cy,leaf,asset:a,nu:n.z?keccak(cpCat(b32(leaf),cpU8("spent"))):cpNu(secret,leaf),value:Bi(n.v),dep:cpDepId(n.v,cpDepCommit(cx,cy,owner),a)}},
@@ -7601,8 +7561,8 @@ try{if(fee&&Bi(fee)>0n)return base;const t=await cpProveTip();if(t<=0n)return ba
 const d=base.data,req={from:account,to:CP_TIPFWD_S,value:toHex(t),gas:toHex(gas+60000),
 data:"0x"+SEL_CPSTIP+[0,1,2].map(i=>eU(Bx(d.slice(10+i*64,74+i*64))+32n)).join("")+eA(CP_TIPTO)+d.slice(202)};
 await rpc(C,[req,L]);return req}catch{return base}};
-const cpSettleData=(pv,pr,ms=[])=>{const a=encBytes(pv),b=encBytes(pr),t=ms.map(encBytes);let off=ms.length*32,hd=eU(ms.length);for(const x of t){hd+=eU(off);off+=x.length/2}
-return"0x"+SEL_CPSETTLE+pad32("60")+eU(96+a.length/2)+eU(96+(a.length+b.length)/2)+a+b+hd+t.join("")};
+const cpSettleData=(pv,pr,ms=[])=>{const a=encBytes(pv),b=encBytes(pr);
+return"0x"+SEL_CPSETTLE+pad32("60")+eU(96+a.length/2)+eU(96+(a.length+b.length)/2)+a+b+cCalls(ms.map(encBytes))};
 const NOKEEP="this browser will not keep the escrow's terms, and taking it back needs them — free some storage, or leave private browsing",
 cpRecOk=n=>!!n&&Ni(n.i)&&/^\d+$/.test(n.v||"")&&(!n.a||/^0x[0-9a-f]{64}$/.test(n.a))&&(!n.p||/^0x[0-9a-fA-F]{64}$/.test(n.dep||""))&&(!n.z||/^0x[0-9a-f]{64}$/.test(n.b||""))&&(!n.s||/^0x[0-9a-f]{64}$/.test(n.s)&&/^0x[0-9a-f]{64}$/.test(n.b||""));
 const cpKeyOf=n=>n.p?n.dep:n.z?n.b:n.s?n.s+":"+n.b:n.i+":"+n.v+(n.a?":"+n.a:""),cpMerge=()=>{for(const s of cpLoadNotes()){const m=cpNotes.find(n=>cpKeyOf(n)===cpKeyOf(s));if(!m)cpNotes.push(s);else if(s.ex&&!m.ex)m.ex=s.ex}},cpSaveNotes=raw=>{try{if(!raw)cpMerge();const s=cpSealS(cpNotes);try{LS[CP_NOTES+cpFp]=s}catch{delete LS[CP_CACHE];LS[CP_NOTES+cpFp]=s}return rlDurable()&&LS[CP_NOTES+cpFp]===s}catch{return!1}};
@@ -7735,20 +7695,20 @@ const sats=Nm(pU(s,8));if(!Ns(sats)||sats<546)throw Er("Lock at least 0.00000546
 try{await cpScanBtc()}catch{throw Er("Could not check this address for Tacit notes, and the lock could spend one. Try again.")}const nb=new Set(cpBtcNotes.map(n=>n.t+":"+n.o).concat(cpBtcSkip));
 const u=(await bGet("/address/"+cpBtc+"/utxo")).filter(x=>x&&/^[0-9a-f]{64}$/.test(x.txid)&&Ni(x.vout)&&Ns(x.value)&&x.value>546&&!nb.has(x.txid+":"+x.vout));
 let rate=5;try{const f=await bGet("/fee-estimates");rate=Mn(2000,Mx(1,Math.ceil(f["2"]||f["3"]||f["6"]||5)))}catch{}
-const X=bLock(cpSeed,u,rate,sats,crypto.getRandomValues(U8(32)));
+const X=bLock(cpSeed,u,rate,sats,cpAux());
 if(!await sure("Lock "+s+" BTC? Two Bitcoin transactions, about "+X.fee+" sats in fees at "+rate+" sat/vB. The coins stay with this key until the lock is redeemed."))return;
-const l={t:X.lockTxid,v:St(sats),cx:X.cx,cy:X.cy,b:"0x"+h16(X.blinding).padStart(64,"0"),an:X.anchor.txid+":"+X.anchor.vout,at:Mf(Dn()/1000),raw:[X.commit,X.reveal]};
+const l={t:X.lockTxid,v:St(sats),cx:X.cx,cy:X.cy,b:cpX64(X.blinding),an:X.anchor.txid+":"+X.anchor.vout,at:Mf(Dn()/1000),raw:[X.commit,X.reveal]};
 cpLocks.push(l);cpSaveLocks();cpPaint();await cpLockSend(l);
 Sm("Locked. It is recorded after 24 Bitcoin confirmations and the next reflection proof, about four hours; then post the escrow and mint.")},
 cpLockSend=async l=>{for(const h of l.raw||[])await bPost(h).catch(()=>Zz(3e3).then(()=>bPost(h)));l.sent=1;cpSaveLocks()},
 cpScanLocks=async()=>{const K=bKeys(cpSeed),la=cpSeg("bc",K.lock.slice(2),1),lk=cpHex(K.lock),txs=[];let f=0,last="";
 for(let pg=0;pg<40;pg++){const b=await bGet("/address/"+la+"/txs"+(last?"/chain/"+last:"")),a=Ia(b)?b:[],cf=a.filter(t=>t&&t.status&&t.status.confirmed&&/^[0-9a-f]{64}$/.test(t.txid||""));txs.push(...a);if(cf.length<25)break;last=cf[cf.length-1].txid}
-for(const tx of Ia(txs)?txs:[]){const o=tx&&(tx.vout||[])[1];if(!o||o.scriptpubkey!==lk||!/^[0-9a-f]{64}$/.test(tx.txid||"")||cpLocks.some(l=>l.t===tx.txid)||!Ns(o.value))continue;
+for(const tx of txs){const o=tx&&(tx.vout||[])[1];if(!o||o.scriptpubkey!==lk||!/^[0-9a-f]{64}$/.test(tx.txid||"")||cpLocks.some(l=>l.t===tx.txid)||!Ns(o.value))continue;
 const sc=St(((tx.vin||[])[0]||{}).witness?.[1]||""),m=sc.indexOf("05544143495401014cc566"),e=m<0?"":sc.slice(m+20,m+414);
 if(e.length!==394||e.slice(2,66)!==CP_CBTC.slice(2)||e.slice(66,74)!=="01000000")continue;
 const cx="0x"+e.slice(74,138),cy="0x"+e.slice(138,202),a=((await bGet("/tx/"+tx.vin[0].txid)).vin||[])[0];if(!a||!/^[0-9a-f]{64}$/.test(a.txid||""))continue;
 const r=bCbtcBlind(cpSeed,a.txid,a.vout),q=cpXY(cpCommit(o.value,r));if(q.cx!==cx||q.cy!==cy)continue;
-cpLocks.push({t:tx.txid,v:St(o.value),cx,cy,b:"0x"+h16(r).padStart(64,"0"),an:a.txid+":"+a.vout,at:tx.status&&tx.status.block_time||0,sent:1});f++}
+cpLocks.push({t:tx.txid,v:St(o.value),cx,cy,b:cpX64(r),an:a.txid+":"+a.vout,at:tx.status&&tx.status.block_time||0,sent:1});f++}
 if(f)cpSaveLocks();return f},
 cpLockSync=async()=>{if(!cpLocks.length)return;const w=h=>Bx(Sx(h||"").slice(0,64)||"0");
 const rs=await cfgBatch(cpLocks.flatMap(l=>{const o=bOp(l);return[{to:CP_POOL,data:"0x7cea1c1a"+pad32(o)},{to:CP_POOL,data:"0xe2c2a40c"+pad32(o)},{to:CP_CE,data:"0x058e18b0"+pad32(o)+eU(l.v)},{to:CP_CE,data:"0xe06e89c9"+pad32(o)},{to:CP_CE,data:"0x034448ed"+eU(l.v)},{to:CP_POOL,data:"0xb5229671"+pad32(o)},...[CP_EH,CP_EH0].map(to=>({to,data:"0x78808388"+pad32(o)+eA(account||ZERO)}))]}));
@@ -7762,7 +7722,7 @@ const name="Wrapped liquid staked Ether 2.0",dt=keccak(cpU8(EIP712DOM));
 if(keccak(cpCat(b32(dt),b32(keccak(cpU8(name))),b32(keccak(cpU8("1"))),b32(1n),b32(Lc(Sx(CP_WSTETH)))))!==Lc(St(ds||"")))return null;
 const td={types:{EIP712Domain:[{name:"name",type:"string"},{name:"version",type:"string"},{name:"chainId",type:"uint256"},{name:"verifyingContract",type:"address"}],
 Permit:[{name:"owner",type:"address"},{name:"spender",type:"address"},{name:"value",type:"uint256"},{name:"nonce",type:"uint256"},{name:"deadline",type:"uint256"}]},
-primaryType:"Permit",domain:{name,version:"1",chainId:1,verifyingContract:CP_WSTETH},message:{owner:account,spender:CP_EH,value:value.toString(),nonce:Bi(n||"0x0").toString(),deadline:deadline.toString()}},
+primaryType:"Permit",domain:{name,version:"1",chainId:1,verifyingContract:CP_WSTETH},message:{owner:account,spender:CP_EH,value:St(value),nonce:St(Bi(n||"0x0")),deadline:St(deadline)}},
 sig=Sx(await rpc("eth_signTypedData_v4",[account,Js(td)]));if(sig.length!==130)throw Er("The wallet returned an unusable signature.");
 let v=parseInt(sig.slice(128,130),16);if(v<27)v+=27;return{v,r:sig.slice(0,64),s:sig.slice(64,128)}},
 cpEscrowPost=async l=>{const add=await cpEscrowNeed(l);if(!add)return void Sm("The escrow already covers this lock.");
@@ -7798,10 +7758,10 @@ const w=h=>Bx(Sx(h||"").slice(0,64)||"0"),[u,rt,rb]=await cfgBatch([{to:CP_CE,da
 const usd=w(u),ratio=w(rb),max=w(rt)&&ratio&&usd*9900n/ratio;if(!max)throw Er("The engine could not price this cBTC — try again.");
 const s=(await ask("Borrow how many cUSD against "+tM(k.value,8)+" cBTC (worth $"+tM(usd,8)+")? At most "+tM(max,8)+"; the engine liquidates a position that falls below its liquidation ratio.",tM(max/2n,8))||"").trim();if(!s)return;
 const debt=pU(s,8);if(debt<=0n||debt>max)throw Er("Borrow more than zero and at most "+tM(max,8)+" cUSD.");
-await cpScanCdps();if(cpScanCdps.n<0)throw Er("No node served the loan history.");const cdps=cpLoadCdps(),i=cdps.reduce((m,p)=>Mx(m,p.i+1),cpScanCdps.n||0),{root,path}=cpTree(c.leaves,li),rate="0x"+w(rt).toString(16).padStart(64,"0"),X=cdpBuildOp(k,li,root,path,debt,rate,i),self=true;
+await cpScanCdps();if(cpScanCdps.n<0)throw Er("No node served the loan history.");const cdps=cpLoadCdps(),i=cdps.reduce((m,p)=>Mx(m,p.i+1),cpScanCdps.n||0),{root,path}=cpTree(c.leaves,li),rate="0x"+h16(w(rt)).padStart(64,"0"),X=cdpBuildOp(k,li,root,path,debt,rate,i),self=true;
 const memo=cpSeal(cpPub,{value:debt,blinding:X.S.blind,secret:X.S.nk,owner:X.S.dOwner,asset:CP_CUSD},cpRandom());
 const p={i,v:St(debt),cv:St(k.value),rate,leaf:cdpLeaf(debt,rate,X.S.owner,X.S.nonce,[[k.asset,k.value]]),memo,at:Mf(Dn()/1000)};cdps.push(p);cpSaveCdps(cdps);
-const nn=cpNotes.some(x=>x.s===X.S.nk)?null:{i:-1,v:St(debt),a:CP_CUSD,s:X.S.nk,b:"0x"+h16(X.S.blind).padStart(64,"0"),at:p.at,sid:"d"+i};if(nn){cpNotes.push(nn);cpSaveNotes()}
+const nn=cpNotes.some(x=>x.s===X.S.nk)?null:{i:-1,v:St(debt),a:CP_CUSD,s:X.S.nk,b:cpX64(X.S.blind),at:p.at,sid:"d"+i};if(nn){cpNotes.push(nn);cpSaveNotes()}
 const undo=()=>{const q=cpLoadCdps().filter(x=>x.leaf!==p.leaf);cpSaveCdps(q);const ix=cpNotes.indexOf(nn);if(ix>=0){cpNotes.splice(ix,1);cpSaveNotes(true)}};
 let j,jrb;try{({j,rb:jrb}=await relaySub({type:"cdpmint",op:X.op,memos:[memo],mode:self?"prove":"settle"}))}catch(e){if(e&&e.rej)undo();throw e}if(!j.jobId){undo();throw Er("The relay did not take the loan.")}
 p.job=j.jobId;p.js=j.status||"pending";p.rb=jrb;p.self=self?1:0;cpSaveCdps(cdps);Sm("Proving the loan. Press settle when it appears: a loan is opened from this wallet, and the tip covers the proof.")},
@@ -7841,7 +7801,7 @@ for(let i=0;i<u.length;i+=6){const g=u.slice(i,i+6),ts=await Pa(g.map(x=>bGet("/
 for(let i=0;i<out.length;i+=64)try{const w=(await relayFetch("/reflection/note-witness",{leaves:out.slice(i,i+64).map(n=>n.l)})).witnesses;if(w&&typeof w==="object")for(const n of out.slice(i,i+64))n.w=w[n.l]?1:0}catch{}
 cpBtcNotes=out;cpSv("zswap:cpb:",out);return out.length},
 cpBtcRows=()=>cpBtcNotes.filter(n=>/^[0-9a-f]{64}$/.test(n.t)&&/^\d+$/.test(n.v)).map(n=>{const A=cpAs(n.a);
-const [lb,tt]=n.w===1?["verified","Tacit's reflection of Bitcoin holds this note in its note set, looked up by the leaf this key computes. Spend it on tacit.finance."]
+const[lb,tt]=n.w===1?["verified","Tacit's reflection of Bitcoin holds this note in its note set, looked up by the leaf this key computes. Spend it on tacit.finance."]
 :n.w===0?["not reflected yet","Tacit's reflection does not hold this note yet: new Bitcoin notes join it 24 blocks deep (about four hours), at the next reflection."]
 :["unverified","A Tacit note held by this key's Bitcoin address. The reflection lookup did not answer, so zSwap has not checked it; spend it on tacit.finance."];
 return`<div class="cpr"><span><b>${A?tM(Bi(n.v)*A.scale,A.dec)+" "+A.sym:n.v+" units"}</b> on Bitcoin</span><span title="${tt}"><a href="https://mempool.space/tx/${n.t}" target="_blank" rel="noreferrer">${lb}</a></span></div>`}).join(""),
@@ -7872,7 +7832,7 @@ else try{await cpKeep(d,s)}catch{if(s!==d&&!old)note="This browser cannot seal a
 cpDk=d;cpUse(s);cpVer=1;rxPost();if(note)Sm(note);
 if(cw&&!t)await ask("Your Tacit key. This wallet may not reproduce it later, so keep it: anyone holding it can spend your shielded notes and the Bitcoin at "+cpBtc+".",cpSeed)};
 const cpRescue=i=>{const k=fmod(big(sha2(cpCat(cpU8("zswap-exit-rescue-v1"),b32(cpSeed),beN(i,8)))),FN)||1n,[x,y]=paff(pmul(GP,k));
-return{key:"0x"+h16(k).padStart(64,"0"),addr:"0x"+Sx(keccak(cpCat(beN(x,32),beN(y,32)))).slice(24)}};
+return{key:cpX64(k),addr:"0x"+keccak(cpCat(b32(x),b32(y))).slice(26)}};
 const cpLogsOk=r=>Ia(r)&&r.every(l=>l&&Ia(l.topics)&&l.topics.every(t=>/^0x[0-9a-f]{64}$/i.test(t))
 &&/^0x([0-9a-f]{2})*$/i.test(l.data||"0x")&&/^0x[0-9a-f]+$/i.test(l.blockNumber||"")&&/^0x[0-9a-f]+$/i.test(l.logIndex||"")),
 cpGetLogs=async(from,to,depth)=>{
@@ -7892,7 +7852,7 @@ const cpArr=(d,off)=>{const n=Nm(Bi("0x"+cpWord(d,off)||"0x0")),o=[];for(let i=0
 let cpRet=0,cpSyncQ=Promise.resolve();const cpSync=(force,nu)=>{const p=cpSyncQ.then(()=>cpSync0(force,nu));cpSyncQ=p.catch(Np);return p},cpSync0=async(force,nu)=>{
 if(!force&&cpPool&&Dn()-cpSyncAt<60000)return cpPool;
 let c=cpPool;if(!c)try{c=Jp(LS[CP_CACHE]||"null")}catch{}
-if(!c||c.pool!==CP_POOL||c.v!==3||![c.leaves,c.memos,c.spent,c.wraps,c.lk,c.lm,c.ln,c.ls,c.q,c.tx].every(Array.isArray)||!(c.to>=CP_BLOCK))c={v:3,pool:CP_POOL,to:CP_BLOCK-1,leaves:[],memos:[],spent:[],wraps:[],lk:[],lm:[],ln:[],ls:[],q:[],tx:[]};
+if(!c||c.pool!==CP_POOL||c.v!==3||![c.leaves,c.memos,c.spent,c.wraps,c.lk,c.lm,c.ln,c.ls,c.q,c.tx].every(Ia)||!(c.to>=CP_BLOCK))c={v:3,pool:CP_POOL,to:CP_BLOCK-1,leaves:[],memos:[],spent:[],wraps:[],lk:[],lm:[],ln:[],ls:[],q:[],tx:[]};
 if(!c.qe||typeof c.qe!=="object"||Ia(c.qe))c.qe={};
 const cached=c.to>=CP_BLOCK,
 rT=cR(CP_POOL,"0x6ff968c3");rT.catch(Np);const head=parseInt(await cfgRead(BN,[]),16)-3,nC=cfgRead(C,[{to:CP_POOL,data:"0x"+SEL_CPNEXT},toHex(head)]);nC.catch(Np);try{const r=Bi(await rT||"0x0")!==0n;if(r!==cpRet){cpRet=r;pvHintSync()}}catch{}
@@ -7901,9 +7861,9 @@ logs.sort((a,b)=>(parseInt(a.blockNumber,16)-parseInt(b.blockNumber,16))||(parse
 for(const l of logs){const t=Lc(l.topics[0]),d=Sx(l.data||""),tx=Lc(St(l.transactionHash||""));if((t===CP_T_LEAVES||t===CP_T_SPENT)&&/^0x[0-9a-f]{64}$/.test(tx)&&!c.tx.includes(tx)){c.q.push(tx);c.tx.push(tx);if(c.tx.length>256)c.tx.shift()}
 if(t===CP_T_LEAVES&&l.topics[1]){const first=Nm(Bi(l.topics[1])),off=Nm(Bx(cpWord(d,0)))/32;
 cpArr(d,off).forEach((x,i)=>{c.leaves[first+i]=x});
-try{const ms=cpBArr(d,Nm(Bx(cpWord(d,1)))/32).map(m=>Lc(m));ms.forEach((m,i)=>{if(m.length===340)c.memos[first+i]=m});
-if(c.q.includes(tx))(c.qe[tx]||=[]).push(cpEvSig("L",cpArr(d,off).map(x=>Lc(x)),ms))}catch{}}
-else if(t===CP_T_SPENT){const nu=cpArr(d,Nm(Bx(cpWord(d,0)))/32).map(x=>Lc(x));c.spent.push(...nu);if(c.q.includes(tx))(c.qe[tx]||=[]).push(cpEvSig("N",nu))}
+try{const ms=cpBArr(d,Nm(Bx(cpWord(d,1)))/32).map(Lc);ms.forEach((m,i)=>{if(m.length===340)c.memos[first+i]=m});
+if(c.q.includes(tx))(c.qe[tx]||=[]).push(cpEvSig("L",cpArr(d,off).map(Lc),ms))}catch{}}
+else if(t===CP_T_SPENT){const nu=cpArr(d,Nm(Bx(cpWord(d,0)))/32).map(Lc);c.spent.push(...nu);if(c.q.includes(tx))(c.qe[tx]||=[]).push(cpEvSig("N",nu))}
 else if(t===CP_T_WRAP&&l.topics[2])c.wraps.push([Lc(l.topics[1]),"0x"+cpWord(d,0),Lc(l.topics[2])])}
 c.to=head}
 const next=Nm(Bi(await nC||"0x0"));
@@ -7911,9 +7871,9 @@ if([...c.leaves,0].findIndex(x=>!x)<next){
 if(cached){cpPool=null;try{delete LS[CP_CACHE]}catch{}return cpSync0(true,nu)}
 throw Er("The pool's history came back incomplete.")}
 await Pa([cpLockQ(c).then(()=>cpLockChk(c,head)),nu&&cpNuChk(c)]);cpPool=c;cpSyncAt=Dn();try{LS[CP_CACHE]=Js(c)}catch{try{delete LS[CP_CACHE]}catch{}}return c};
-const cpLadder=v=>{let x=Bi(v);if(x<=0n)return 0n;const d=x.toString().length;if(d<=2)return x;const s=10n**Bi(d-2);return(x+s-1n)/s*s};
+const cpLadder=v=>{let x=Bi(v);if(x<=0n)return 0n;const d=St(x).length;if(d<=2)return x;const s=10n**Bi(d-2);return(x+s-1n)/s*s};
 const cpFeed=async f=>{try{const h=Sx(await cR(f,"0xfeaf968c")||"");return h.length>=320?Nm(Bx(h.slice(64,128)))/1e8:0}catch{return 0}},
-cpQ={},cpQuote=async A=>{const t=cpTicker(A),c=cpQ[t];if(c&&Dn()-c.at<3e5)return c.q;let q=null;
+cpQ={},cpQuote=async A=>{const t=A.id,c=cpQ[t];if(c&&Dn()-c.at<3e5)return c.q;let q=null;
 try{const j=await relayFetch("/confidential/quote?asset="+A.id);if(j&&typeof j.relayFeeEligible==="boolean"&&Lc(St(j.assetId||""))===A.id)q=j}catch{}cpQ[t]={q,at:Dn()};return q},
 cpFee=async(v,A=CP_ETH_AS,g=323000n)=>{const q=await cpQuote(A);if(q&&!q.relayFeeEligible)throw Er("The relay takes no fee in "+A.sym+" — choose Settle: from this wallet.");
 const fl=q?[q.staticFloorUnits,q.gasAwareFloorUnits].filter(x=>/^\d{1,30}$/.test(x||"")).reduce((m,x)=>Bi(x)>m?Bi(x):m,0n):0n;
@@ -7996,13 +7956,13 @@ const CP_TIPFWD_T="0x0000007b1d93d72f698A861aA86Ac675D6AF7216",SEL_CPWTIPT="801f
 cpTipTok=async A=>{if(!cpTipOn()||pvPath.value==="self")return 0n;
 try{const j=await relayFetch("/confidential/quote?asset="+A.id),r=St(j&&j.recommendedWrapTipWei||"");
 if(!cpTipTo(j)||!/^\d{1,30}$/.test(r))return 0n;let t=Bi(r);if(t<=0n)return 0n;
-for(const c of [await gasNow()*1400000n,2000000000000000n])if(t>c)t=c;return t}catch{return 0n}},
+for(const c of[await gasNow()*1400000n,2000000000000000n])if(t>c)t=c;return t}catch{return 0n}},
 cpTipFor=async wei=>{if(!cpTipOn()||pvPath.value==="self"||!(wei>0n))return 0n;
 const g=10n**Bi(Mx(0,St(wei).length-3)),qw=wei/g*g||wei;
 try{const j=await relayFetch("/confidential/quote?asset="+CP_ETH+"&amountWei="+qw),r=St(j&&j.recommendedWrapTipWei||"");
 if(!cpTipTo(j)||!/^\d{1,30}$/.test(r))return 0n;let t=Bi(r);if(t<=0n)return 0n;
-for(const c of [await gasNow()*1400000n,wei*300n/10000n,2000000000000000n])if(t>c)t=c;
-return t>0n?t:0n}catch{return 0n}},
+for(const c of[await gasNow()*1400000n,wei*300n/10000n,2000000000000000n])if(t>c)t=c;
+return t}catch{return 0n}},
 cpDepositOne=async(v,label,A=CP_ETH_AS)=>{const{i,k}=await cpFresh(v,A.id),n=cpNote(i,k),amt=v*A.scale,cm=cpDepCommit(k.cx,k.cy,k.owner);
 const req={from:account,to:CP_POOL,value:A.tok===ZERO?toHex(amt):"0x0",data:"0x"+SEL_CPWRAP+pad32(A.id)+eU(amt)+pad32(cm)};
 let tip=0n;
@@ -8083,7 +8043,7 @@ if(!o&&!self){if(A.tok!==ZERO&&!CP_FEES[A.id])why="The relay takes no fee in "+A
 else{const w=part?"amount":"note";fee=await cpFee(v,A,(part?600000n:323000n)+(ch!==1?CP_L2[ch].gas/2n:0n));why=fee>=v?"This "+w+" is too small to pay the relay":fee*10000n/v>300n?"The relay fee would be "+(Nm(fee*10000n/v)/100).toFixed(1)+"% of this "+w:""}
 if(why){if(p.auto)throw Er(why);if(!await sure(why+". Settle it from this wallet instead? The relay still proves it; this wallet sends the settle, which links the exit to it."))throw Er(why+" — wait for cheaper gas, or settle it from this wallet.");self=true;fee=0n}}
 const net=v-fee,wei=net*A.scale,tb=tbChk(to,A.tok===ZERO&&ch!==4663?wei:-1n,ch);if(tb)throw Er(tb+" Relay fee: "+cpFmt(fee,A)+" ETH.");
-const x={ch,to,dl:St((Mf(Dn()/86400000)+3)*86400),nonce:o&&/^\d{1,80}$/.test(St(o.nonce||""))?St(o.nonce):big(sha2(cpU8("zswap-exit-nonce-v1:"+cpFp+":"+(n.s?n.s+n.b:n.i)))).toString(),
+const x={ch,to,dl:St((Mf(Dn()/86400000)+3)*86400),nonce:o&&/^\d{1,80}$/.test(St(o.nonce||""))?St(o.nonce):St(big(sha2(cpU8("zswap-exit-nonce-v1:"+cpFp+":"+(n.s?n.s+n.b:n.i))))),
 fee:St(fee),wei:St(wei),self,fin:to};if(part)x.v=St(v);
 let esc=Lc(to),warn="";
 if(ch!==1){const code=await cfgRead(GC,[to,L]),l1=Sx(code||"")!=="",l2=!l1&&!o&&Sx(await cpL2Read(ch,GC,[to,"latest"]).catch(()=>"0x")||"")!=="";
@@ -8131,7 +8091,7 @@ x.rtx=await sendTx([req]);cpSaveNotes();cpPaint();
 await cpMine(x,"rtx");Sm("Returned to "+x.fin+" on Ethereum.")},
 CP_SENDS="zswap:cps:",CP_INBOX="zswap:cpi:",CP_CUR="zswap:cpm:",SEL_CPWT="50de88e1",CP_DONE=/^(claimed|refunded|done)$/;
 let cpSends=[],cpInbox=[];
-const cpN=x=>fmod(x,FN),cpInv=x=>fpow(x,FN-2n,FN),cpCB=P=>hB(pcomp(P)),cpX64=x=>"0x"+cpN(Bi(x)).toString(16).padStart(64,"0"),cpAux=()=>crypto.getRandomValues(U8(32)),
+const cpN=x=>fmod(x,FN),cpInv=x=>fpow(x,FN-2n,FN),cpCB=P=>hB(pcomp(P)),cpX64=x=>"0x"+h16(cpN(Bi(x))).padStart(64,"0"),cpAux=()=>crypto.getRandomValues(U8(32)),
 cpPt=h=>{h=Sx(St(h||""));const P=/^[0-9a-f]{64}$/i.test(h)?pfromx(Bx(h),0):/^0[23][0-9a-f]{64}$/i.test(h)?pfromx(Bx(h.slice(2)),h.slice(0,2)==="03"):null;if(!P)throw Er("That is not a key on the curve.");return P};
 let cpGv=[],cpHv=[];
 const cpGen=(t,i)=>{for(let c=0;c<256;c++){const P=pfromx(big(sha2(cpCat(cpU8(t),bLE(i,4),[c]))),0);if(P)return P}throw Er("generator")},
@@ -8227,13 +8187,13 @@ if(!t){const a=await nameFwd(n).catch(()=>"");if(isAddr(a||""))return cpToPublic
 if(!/^tacit1/i.test(t))throw Er(n+"'s Tacit record is not a tacit1… address.");
 const h=cpRecip(t);if(!await sure("Send to "+n+"?\n\n"+n+" → "+t.slice(0,12)+"…"+t.slice(-8)+"\nID "+cpId(t)+"\n\nThis is the Tacit address the name's owner published. Continue only if it is the person you mean to pay."))throw Er("cancelled");return h}
 return cpRecip(s)},
-cpGasOk=async q=>{const [b,gp]=await Pa([rpc(GB,[account,L]).then(Bi),gasNow()]),need=Bi(q.value||"0x0")+Bi(q.gas||"0x0")*gp*2n;
-if(b<need)throw Oa(Er("This wallet holds too little ETH to submit this itself (about "+tM(need,18)+" ETH with gas). Settle it through the relay instead."),{offChain:true})};
+cpGasOk=async q=>{const[b,gp]=await Pa([rpc(GB,[account,L]).then(Bi),gasNow()]),need=Bi(q.value||"0x0")+Bi(q.gas||"0x0")*gp*2n;
+if(b<need)throw Oa(Er("This wallet holds too little ETH to submit this itself (about "+tM(need,18)+" ETH with gas)."+(q.to===CP_ROUTER?"":" Settle it through the relay instead.")),{offChain:true})};
 const cpRecip=s=>{s=St(s||"").trim();let h;
 if(/^tacit1/i.test(s)){const b=cpLn(s);if(!b)throw Er("Not a valid Tacit address.");if(!(b[1]&130))throw Er("That Tacit address does not carry an Ethereum lane.");h=cpHex(b[1]&2?b.slice(68,101):b.slice(2,35))}
 else if(/^(0x)?0[23][0-9a-f]{64}$/i.test(s))h=Lc(Sx(s));else throw Er("Send to a Tacit address (tacit1…), a name, a 0x or a 33-byte Tacit key.");cpPt(h);return h};
-const cpWtData=(w,cm,pv,pr,ms,to)=>{const a=encBytes(pv),b=encBytes(pr),t=ms.map(encBytes);let off=ms.length*32,hd=eU(ms.length);for(const x of t){hd+=eU(off);off+=x.length/2}
-return"0x"+SEL_CPWT+eU(w)+pad32(cm)+eU(192)+eU(192+a.length/2)+eU(192+(a.length+b.length)/2)+(to?eA(to):pad32("0"))+a+b+hd+t.join("")};
+const cpWtData=(w,cm,pv,pr,ms,to)=>{const a=encBytes(pv),b=encBytes(pr);
+return"0x"+SEL_CPWT+eU(w)+pad32(cm)+eU(192)+eU(192+a.length/2)+eU(192+(a.length+b.length)/2)+(to?eA(to):pad32("0"))+a+b+cCalls(ms.map(encBytes))};
 const CP_RELAYER="0x000000009c28617ac88b52eae5efaacdd4ac34c3",CP_LKBAD="This page's copy of the pool's lock set does not match the chain, so anything built on it would fail. Press recover and try again, or use tacit.finance.",
 cpSlot=(k,s)=>keccak(cpCat(b32(k),b32(Bi(s)))),cpStor=(s,t)=>l1Read("eth_getStorageAt",[CP_POOL,typeof s==="string"?s:toHex(s),t||L]);
 const cpCalls=inp=>{const h=Lc(Sx(inp)),sel=h.slice(0,8),d=h.slice(8),W=(s,o)=>{const x=Bx(s.slice(o*2,o*2+64)||"0");if(x>1n<<24n)throw Er("pv");return Nm(x)},N=x=>{if(x>4096||(N.b=(N.b||0)+x)>16384)throw Er("pv");return x},
@@ -8281,13 +8241,13 @@ if(ex){const S={...cpNewS(A,v,to,self),n:cpKeyOf(ex),ins:[cpKeyOf(ex)],st:"lock"
 let sf=self,fee=await cpFeeOk(v,A,self,"send",600000n);if(fee===null){sf=true;fee=0n}
 const ins=[];let t=0n;for(const n of rd){if(t>=v+fee||ins.length===8)break;ins.push(n);t+=Bi(n.v)}
 if(t>=v+fee){await cpXferGo(ins,v,fee,A,c,sf,to);Sm("Splitting off "+cpFmt(v,A)+" "+A.sym+(fee?" (relay fee "+cpFmt(fee,A)+" "+A.sym+")":"")+"; it locks to the recipient once that settles.");return}
-if(A.tok!==ZERO)throw Er("Not enough shielded "+A.sym+" for that — shield some first.");
+if(pvShV(A)>=v+fee)throw Er("That needs more than eight notes — merge some first.");if(A.tok!==ZERO)throw Er("Not enough shielded "+A.sym+" for that — shield some first.");
 if(cpRet)throw Er(CP_RET);const have=rd.reduce((s,n)=>s+Bi(n.v),0n);if(!await sure((have?"Only "+cpFmt(have,A)+" "+A.sym+" is shielded. ":"")+"Wrap "+cpFmt(v,A)+" ETH from this wallet and send it in one transaction? The relay proves it first, which takes a few minutes; this wallet then sends it."))throw Er("Send cancelled.");
 const{i}=await cpFresh(v,A.id),x=cpWtOp(v,A.id,i,cpSeed,cpBinding()),S={...cpNewS(A,v,to,self),st:"fund",di:i,ins:[]};
 S.fj=await cpJob("wraptransfer",x.op,x.memos,1,x.dep);Oa(S.fj,{w:St(v*A.scale),cm:x.cm});S.n=cpAddOut(x.out,A.id,S.id);cpSends.push(S);cpSaveS();cpSaveNotes();Sm("The relay is proving the wrap; send it from its row when it is ready.")},
 cpSendTick=async()=>{const c=cpPool;if(!c)return;let ch=0;for(const S of cpSends){try{
 if(S.st==="fund"){try{await cpJobPoll(S.fj);S.pf=0}catch{S.pf=(S.pf||0)+1}ch=1;const n=cpNotes.find(x=>cpKeyOf(x)===S.n);if(n&&cpStatus(n).s==="ready"){if(S.out){try{await cpExit(n,null,{...S.out,auto:1});S.st="done"}catch(e){S.st="outfail";S.err=St(e&&e.message||e).slice(0,120)}}else if(S.to===cpPub)S.st="done";else await cpLockGo(S)}else if(/failed|unknown/.test(S.fj.js)&&!S.fj.stx)S.st="failed"}
-else if(S.st==="lock"||S.st==="lockfail"&&c.lk.includes(S.lf)){ch=1;if(c.lk.includes(S.lf)){S.st="sent";if(c.lm[c.lk.indexOf(S.lf)]!=S.lop.m[0])Sm("This send landed with a different memo than the one sealed here, so the recipient may not find it. This browser keeps the sealed copy.")}else if(!S.lj)await cpLockGo(S).catch(e=>{S.st="lockfail";S.err=St(e&&e.message||e).slice(0,120)});else{try{await cpJobPoll(S.lj)}catch{}if(/failed|unknown/.test(S.lj.js)&&!S.lj.stx)S.st="lockfail"}}
+else if(S.st==="lock"||S.st==="lockfail"&&c.lk.includes(S.lf)){ch=1;if(c.lk.includes(S.lf)){S.st="sent";if(c.lm[c.lk.indexOf(S.lf)]!=S.lop.m[0])Sm("This send landed with a different memo than the one sealed here, so the recipient may not find it. This browser keeps the sealed copy.")}else if(!S.lj)cpBusy||await cpLockGo(S).catch(e=>{S.st="lockfail";S.err=St(e&&e.message||e).slice(0,120)});else{try{await cpJobPoll(S.lj)}catch{}if(/failed|unknown/.test(S.lj.js)&&!S.lj.stx)S.st="lockfail"}}
 else if(S.st==="sent"&&await cpLockSpent(S.lf)||S.st==="refund"&&c.leaves.includes(S.rj.nd)){S.st=S.st==="refund"?"refunded":"claimed";ch=1}
 else if(S.st==="refund"){ch=1;try{await cpJobPoll(S.rj)}catch{}if(/failed|unknown/.test(S.rj.js)&&!S.rj.stx){delete S.rj;S.st="sent"}}}catch{}}
 if(ch){cpSaveS();cpSaveNotes()}},
@@ -8330,7 +8290,7 @@ cpDoing=k=>{const S=cpSends.find(S=>S.st!=="done"&&(S.n===k||(S.ins||[]).include
 cpSendRows=()=>cpSends.map(S=>{if(S.st==="done"||/^(claimed|refunded)$/.test(S.st)&&nowS()-(S.at||0)>864e3)return"";const A=cpAs(S.a)||{sym:"?",scale:CP_SCALE,dec:18},B=(a,l,t)=>`<button class="fclink" data-a="${a}" data-s="${S.id}"${t?` title="${t}"`:""}>${l}</button>`,J=S.st==="fund"?S.fj:S.st==="lock"?S.lj:S.st==="refund"?S.rj:null,
 w=J&&J.stx?"sent…":J&&J.self?J.pv?B("sgo",J.t==="wraptransfer"?"wrap & send":S.to===cpPub?"settle":"send",S.to===cpPub?"One transaction from this wallet finishes it; the relay takes no fee, only the tip for proving it":"Send it from this wallet; the relay takes no fee, only the tip for proving it"):"proving…":"",
 s=S.st==="fund"?(S.pf||0)>=5&&!(S.fj&&S.fj.pv)?`<span title="The relay accepted this job and has stopped answering for it. Your notes are safe on chain and nothing has been spent. Retry asks it again; forget releases the notes for other use, and should the relay ever settle this job afterwards, that later spend simply fails.">relay not answering</span>`+B("spoll","retry")+B("sforget","forget"):w||(S.to===cpPub?"settling…":"funding…"):S.st==="lock"?w||"locking…":S.st==="sent"?Dn()/1e3>+S.dl?"unclaimed"+B("srefund","take back"):"waiting for the recipient":S.st==="claimed"?"claimed":S.st==="refund"?w||"taking back…":S.st==="refunded"?"taken back":S.st==="lockfail"?`<span title="${St(S.err||"").replace(/[^\w .,:;()%-]/g,"")}">relay failed</span>`+B("slock","retry")+B("sforget","forget"):S.st==="outfail"?"withdrawal not started"+B("sout","withdraw")+B("sforget","forget"):"failed"+B("sforget","forget");
-return`<div class="cpr"><span><b>${cpFmt(S.v,A)} ${A.sym}</b> ${S.out?"merge for a withdrawal":S.to===cpPub?S.ins&&S.ins.length>1?"merging "+S.ins.length+" notes into one":"split · the rest stays shielded":"sent to "+cpShort(S.to)}</span><span>${cpWatch(s)}</span></div>`}).join(""),
+return`<div class="cpr"><span><b>${cpFmt(S.v,A)} ${A.sym}</b> ${S.out?"merge for a withdrawal":S.to===cpPub?S.ins&&S.ins.length>1?"merging "+S.ins.length+" notes into one":"split · the rest stays shielded":"sent to "+cpShort(safeSym(S.to,99))}</span><span>${cpWatch(s)}</span></div>`}).join(""),
 cpInRows=()=>cpInbox.map(L=>{if(L.st==="claimed")return"";const A=cpAs(L.a)||{sym:"?",scale:CP_SCALE,dec:18},B=(a,l)=>`<button class="fclink" data-a="${a}" data-i="${L.lf}">${l}</button>`,J=L.cj,
 s=J?J.stx?"sent…":/failed|unknown/.test(J.js)||!J.pv&&Dn()-J.at>36e5?"relay failed"+B("claim","retry"):J.self?J.pv?B("cgo","claim"):"proving…":"claiming…":Dn()/1e3>+L.dl?"expired":B("claim","claim");
 const by=!J&&+L.dl>Dn()/1e3?" · claim by "+new Date(+L.dl*1e3).toLocaleDateString(undefined,{year:"numeric",month:"short",day:"numeric"}):"";
@@ -8340,7 +8300,7 @@ let o=0;for(const n of cpNotes){if(n.p||n.ex)continue;const s=cpStatus(n).s,a=n.
 for(const L of cpInbox)if(L.st!=="claimed"&&!L.cj&&Dn()/1e3<=+L.dl)inc[L.a]=(inc[L.a]||0n)+Bi(L.v);
 const x=F(r),y=F(inc),z=F(mov),m=Ok(cnt).filter(a=>cnt[a]>1).map(a=>`<button class="fclink" data-a="merge" data-as="${a}">merge ${(cpAs(a)||{sym:"?"}).sym}</button>`).join("");
 return x||y||z||o?`<div class="cpr cps"><span>Shielded <b>${x||"0"}</b>${z?" · settling "+z:""}${y?" · incoming "+y:""}${o?` · ${o} other Tacit note${o>1?"s":""} (LP or farm), on tacit.finance`:""}</span><span>${m}</span></div>`:""};
-let cpFindQ=Promise.resolve();const cpFind=full=>{const p=cpFindQ.then(()=>cpFind0(full));cpFindQ=p.catch(Np);return p},cpFind0=async full=>{const c=await cpSync(!!full),m={},own=id=>cpNotes.some(n=>!n.p&&cpNoteOf(n).dep===id),z=()=>++q%16?0:new Promise(r=>setTimeout(r)),cu=cpCur(),N=64+cpNotes.concat(cpSends.map(S=>({i:S.di}))).reduce((x,n)=>Ni(n.i)&&n.i>=0?Mx(x,n.i+1):x,0);let f=0,q=0;
+let cpFindQ=Promise.resolve();const cpFind=full=>{const p=cpFindQ.then(()=>cpFind0(full));cpFindQ=p.catch(Np);return p},cpFind0=async full=>{const c=await cpSync(!!full),m={},own=id=>cpNotes.some(n=>!n.p&&cpNoteOf(n).dep===id),z=()=>++q%16?0:Zz(),cu=cpCur(),N=64+cpNotes.concat(cpSends.map(S=>({i:S.di}))).reduce((x,n)=>Ni(n.i)&&n.i>=0?Mx(x,n.i+1):x,0);let f=0,q=0;
 for(const[id,amt,as]of c.wraps){const A=cpAs(as),wei=Bi(amt),h=cpFp+id,dn=cpK[h]||0;if(!A||wei%A.scale||dn>=N||own(id))continue;const v=wei/A.scale,a=A.id,g="t"+cpFp+a,mk=a+v+"/"+dn;
 const t=cpK[g]||(cpK[g]=[]);for(let i=t.length;i<N;i++){const d=cpDerive(cpSeed,i,a);t[i]=[cpOwner(d.secret),pmul(GP,d.blinding)];await z()}
 if(!m[mk]){m[mk]={};const V=pmul(cpH,v);for(let i=N;i-->dn;){const{cx,cy}=cpXY(padd(V,t[i][1]));m[mk][cpDepId(v,cpDepCommit(cx,cy,t[i][0]),a)]=i;await z()}}
@@ -8385,7 +8345,7 @@ const fmApr=async j=>{const ids={cETH:CP_ETH,TAC:(cpAssets.find(a=>a.sym==="TAC"
 pid=(a,b)=>{const[x,y]=Bi(a)<Bi(b)?[a,b]:[b,a];return Lc(keccak(hB(pad32(x)+pad32(y)+eU(30n))))},
 q=cs.map(c=>{const[a,b]=c._p.pair.split("/").map(k=>ids[k]);if(!a||!b)return null;const P=pid(a,b);return Lc(keccak(hB(Sx(P)+"6c70")))===Lc(St(c._p.lpAsset))?P:null});
 const need=q.map((P,i)=>P&&!(cs[i]._p.reserves&&Lc(St(cs[i]._p.poolId))===P)?P:null),
-rs=need.some(Boolean)?await cfgBatch(need.filter(Boolean).map(P=>({to:CP_POOL,data:"0xb5217bb4"+Sx(P)}))):[];if(CHAIN_ID!==1)return;let k=0,px=0;
+rs=await cfgBatch(need.filter(Boolean).map(P=>({to:CP_POOL,data:"0xb5217bb4"+Sx(P)})));if(CHAIN_ID!==1)return;let k=0,px=0;
 const pl=q.map((P,i)=>{if(!P)return null;const R=cs[i]._p.reserves;let a,rA,rB,sh;
 if(!need[i]){a=Lc(St(R.assetA));rA=+R.reserveA;rB=+R.reserveB;sh=+R.lpTotalShares}
 else{const h=Sx(rs[k++]||""),w=n=>Bx(h.slice(n*64,n*64+64)||"0");if(h.length<448||!w(0))return null;a="0x"+h.slice(64,128);rA=Nm(w(3));rB=Nm(w(4));sh=Nm(w(6))}
@@ -8434,11 +8394,7 @@ pvAmt.value=v>0n?fU(v*A.scale,A.dec):"";pvPrevSoon()};
 const pvHintSync=()=>{cpTipSync();Hd(pvPath.parentElement,pvPool());if(pvPool()){const v=pvAct.value;Hd(pvTipL,1);Hd(pvPrev,1);Tx(pvHint,(v==="send"?"Pay a bp1… Tacit pool address privately, or a tacit1… or name that carries one. Proved on this device; the keeper relays it so this wallet stays unlinked.":v==="out"?pvChain.value==="1"?"Withdraw to any 0x on Ethereum. The amount and the recipient are public.":"Bridges to your private ETH address on "+CHAINS[+pvChain.value].name+", where its keeper shields it (below the keeper's minimum, sweep it in yourself from the Private ETH menu there). The amount is public on Ethereum; which note paid is not.":"Deposit ETH into the Tacit pool, proved on this device with no relay. It earns TAC points.")+(twW&&twW.y?" You hold "+tbE(twW.balance())+" in the pool.":""));return}const v=pvAct.value,A=cpSel(),e=A.tok===ZERO,P=A.pub,on=e?" on Ethereum, Base or Robinhood":" on Ethereum";Tx(pvHint,v==="send"?"Send "+(e?"tETH, or plain ETH straight from this wallet,":"shielded "+A.sym)+" to a tacit1 address or name. The amount and the recipient stay hidden; they claim it into their own notes.":v==="out"?"Pay out shielded "+A.sym+" as "+P+" to any 0x"+on+". You stay hidden as the sender; the amount and the recipient are public.":(e?"Deposit plain ETH from this wallet. It becomes tETH, private ETH, so you need no tETH first.":"Deposit "+P+" from this wallet. It becomes shielded "+A.sym+".")+" From there, send it privately or withdraw it as "+P+" to any 0x"+on+"."+(A.id===CP_CBTC?"\ncBTC is bitcoin locked on Bitcoin. "+(cpSeed?"Use lock btc under more on the key row below":"Unlock your key below, then use lock btc under more")+", or deposit tacBTC.":A.id===CP_CUSD?"\ncUSD is borrowed against shielded cBTC: use borrow cUSD on a cBTC note, or deposit tacUSD.":""));pvHint.textContent+="\n"+(pvPath.value==="self"?"Settling from this wallet: after the "+(v==="dep"?"deposit":"first")+" transaction you send the settle yourself. The relay takes no fee"+(cpTipOn()?", and the settle carries a tip for the proof it still made.":", and tipping is off, so it proves unpaid."):v==="dep"?cpTipOn()?"The relay proves and settles your deposit; the tip beside Settle covers what that costs it.":"The relay proves and settles your deposit, free, paying its own gas.":"The relay proves and settles it, paying its own gas, for a flat fee taken from the amount.");if(cpRet)Tx(pvHint,CP_RET+"\n"+pvHint.textContent)};
 pvAct.onchange=()=>{sBlip();pvActSync();cpPaint()};pvChain.onchange=()=>{sBlip();pvActSync();cpPaint()};
 pvPath.onchange=()=>{sBlip();pvHintSync()};
-const cpExplorerLink=(base,value,label,kind)=>{
-if(typeof value!=="string")return label;
-const ok=kind==="tx"?/^0x[0-9a-fA-F]{64}$/.test(value):isAddr(value);
-return ok?`<a href="${base}/${kind}/${value}" target="_blank" rel="noreferrer">${label}</a>`:label;
-},
+const cpExplorerLink=(b,v,l,k)=>typeof v=="string"&&(k=="tx"?/^0x[0-9a-fA-F]{64}$/.test(v):isAddr(v))?`<a href="${b}/${k}/${v}" target="_blank" rel="noreferrer">${l}</a>`:l,
 pubOk=n=>!!n&&/\.(g?wei|eth)$/i.test(n)&&!/\.base\.eth$/i.test(n);
 let pubName="",pubFor="",tacAddr="",tacFor="";
 const tacShort=()=>{if(tacFor!==cpSeed){tacFor=cpSeed;tacAddr=cpSeed?cpTacAddr(cpSeed):""}return tacAddr?tacAddr.slice(0,12)+"…"+tacAddr.slice(-6):""},
@@ -8528,7 +8484,7 @@ mkAll[i]=m;if(q)mkPosDec(q,[m.id],mkPos);
 if(!mkSel||mkSel.id!==wasId){mkPaintList();return}
 mkSel=m;Tx(mkNote,"");mkPaintList();mkDetPaint();if(vT(mkAmt))mkQuote();return}
 const cs=[];for(let s=0;s<n&&s<MK_MAX;s+=25)cs.push({to:PM,data:"0x80968d48"+eU(s)+eU(25)});
-const hs=cs.length?await mD(cs):[];
+const hs=await mD(cs);
 if(hs.some(h=>!h))throw Er("partial");
 const all=hs.flatMap(mkDec),wq=Lc(mkWant);if(wq&&/^(0x[0-9a-f]{1,64}|\d{1,78})$/.test(wq)&&!all.some(m=>St(m.id)===wq||toHex(m.id)===wq)){const h=await eC(PM,"0xeb44fdd3"+eU(Bi(wq)%2n**256n)).catch(Nl),g=h&&mkDec1(h);if(g&&g.r!==ZERO&&g.id===Bi(wq))all.push(g)}if(account&&n>MK_MAX)await mkOld(all).catch(Np);await mkPosLoad(all);
 mkAll=all;mkCount=n;mkMore=n>MK_MAX;mkFee={};
@@ -8567,7 +8523,7 @@ mkQuote=async()=>{const m=mkSel,my=++mkQSeq;mkQv=null;if(!m||!mkLive(m))return T
 const t=mkTok(m.a),pay=mkPay.value;if(t.u||mkTok(pay).u)return Tx(mkQ,"Reading the token…");let v;try{v=pU(mkAmt.value||"0",mkTok(pay).dec)}catch(e){return Tx(mkQ,e.message)}
 if(!v)return Tx(mkQ,"");
 try{const a=pay===m.a?v:Bi(await eC(MK_WST,"0xb0e38900"+eU(v))),[hy,hn]=await mD([true,false].map(y=>({to:PM,data:"0x124d6efc"+eU(m.id)+eBo(y)+eU(a)})));if(my!==mkQSeq)return;
-const d=h=>{h=Sx(h||"");return[Bx(h.slice(0,64)||"0"),Bx(h.slice(64,128)||"0")]},[sy,py]=d(hy),[sn,pn]=d(hn),S=safeSym(t.sym);
+const d=h=>{h=Sx(h);return[Bx(h.slice(0,64)||"0"),Bx(h.slice(64,128)||"0")]},[sy,py]=d(hy),[sn,pn]=d(hn),S=safeSym(t.sym);
 mkQv={v,sy,sn};Tx(mkQ,`Wins ${sigAmt(py,t.dec,6)} ${S} betting YES · ${sigAmt(pn,t.dec,6)} ${S} betting NO`)}catch{if(my===mkQSeq)Tx(mkQ,"Could not quote.")}},
 mkSend=async(req,verb)=>{Sm(verb);await sS(req);mkCount=-1;mkLoad(1)},pmT=d=>({from:account,to:PM,data:d,value:"0x0"}),
 mkBuy=async yes=>{const m=mkSel,pay=mkPay.value;await mkQuote();const q=mkQv;if(!q)throw Er(mkQ.textContent||"Enter an amount.");
@@ -8641,11 +8597,11 @@ mkGo.onclick=async()=>{if(mkGo.disabled)return;sBlip();
 if(cL(mkForm).contains("hide")){mkSel=null;mkPaintList();mkDetPaint();Hd(mkForm,0);Tx(mkGo,"Create market");mkRes.oninput();mkForm.scrollIntoView?.({block:"nearest",behavior:"smooth"});return}
 if(!account)return void connect();
 mkGo.disabled=true;
-try{const d=vT(mkDesc),db=new TextEncoder().encode(d);if(!d)throw Er("Write the question first.");if(db.length>1024)throw Er("That question is too long.");
+try{const d=vT(mkDesc),db=cpU8(d);if(!d)throw Er("Write the question first.");if(db.length>1024)throw Er("That question is too long.");
 const rv=vT(mkRes);let r=account;if(rv){const e=rcErr(rv);if(e)throw Er(e);r=await rcvOf(rv,true);if(!r)throw Er("Resolver name not registered.")}
 const cl=mkClose.value==="0"?Mf(new Date(mkAt.value).getTime()/1e3):nowS()+ +mkClose.value;if(!(cl>nowS()+300))throw Er("Pick a close time in the future.");
-const bp=v=>{const x=Math.round(+v*100);if(!(x>=0&&x<=5000))throw Er("Taxes run from 0 to 50%.");return x},hx=cpHex(db);
-mkNew=[d,Lc(r),Lc(mkAsset.value),cl]+"";await mkSend(pmT("0x6f406fa1"+pad32("e0")+eA(r)+eA(mkAsset.value)+eU(cl)+eBo(mkCan.checked)+eU(bp(mkExit.value))+eU(bp(mkLate.value))+eU(db.length)+hx.padEnd(Math.ceil(hx.length/64)*64,"0")),"Creating…");
+const bp=v=>{const x=Math.round(+v*100);if(!(x>=0&&x<=5000))throw Er("Taxes run from 0 to 50%.");return x};
+mkNew=[d,Lc(r),Lc(mkAsset.value),cl]+"";await mkSend(pmT("0x6f406fa1"+pad32("e0")+eA(r)+eA(mkAsset.value)+eU(cl)+eBo(mkCan.checked)+eU(bp(mkExit.value))+eU(bp(mkLate.value))+encBytes(cpHex(db))),"Creating…");
 Hd(mkForm,1);Tx(mkGo,"New market");mkDesc.value="";mkF="open";mkS="new";mkChipPaint()}
 catch(e){mkNew="";err(e)}finally{mkGo.disabled=false}};
 addEventListener("storage",e=>{if(cpSeed&&e.key===CP_NOTES+cpFp&&!cpBusy){cpMerge();cpPaint()}});
@@ -9410,8 +9366,8 @@ go.onclick=()=>{sBlip();invPlay()};
 aC(scEl,go);
 };
 let lSeq=0,listReady=false,linkChain=0,dlyUser=false,pairUser=false,pairFree=0;
-const lkWrote=Object.create(null);
-let lkEv=0,lkArm=0;
+const lkWrote=Object.create(null),mOff=()=>{if(lnMode)lnSet(false);if(wnMode)wnSet(false);if(pvMode)pvSet(false);if(mkMode)mkSet(false)};
+let lkEv=0,lkArm=0;const lkHeld=()=>Dn()<lkArm&&Sm("The link just changed this trade — check it, then press again.");
 const lkKeep=(el,v)=>{const w=lkWrote[el.id];
 if((el.value!==(el.options?.[0].value??"")||el===dly)&&el.value!==w&&(w!==undefined||el!==dly||dlyUser))return false;
 if(lkEv&&el.value!==v)lkArm=Dn()+2500;
@@ -9420,13 +9376,13 @@ el.value=v;lkWrote[el.id]=v;return true;
 async function applyLink(e){if(e&&(busy||txLive))return void idle(()=>applyLink(e));lkEv=!!e;
 const q=new URLSearchParams(location.hash.slice(1));if(q.has("farm")){pfOpen=1;q.set("token","ETH");q.set("out",TAC_TOK);q.set("lq","1")}
 const tx=q.get("tacit-box");if(tx){history.replaceState(null,"",location.href.split("#")[0]);return void tbGo(tx)}
-const ti=q.get("tacit-invoice");if(ti!==null){try{history.replaceState(null,"",location.href.split("#")[0])}catch{}if(/^[A-Za-z0-9_-]{16,8000}$/.test(ti)){window.__tinv=ti;try{SS.setItem("zswap:tinv",ti)}catch{}setTimeout(()=>cpInvGo(),0)}return}
+const ti=q.get("tacit-invoice");if(ti!==null){try{history.replaceState(null,"",location.href.split("#")[0])}catch{}if(/^[A-Za-z0-9_-]{16,8000}$/.test(ti)){cpInvSet(ti);setTimeout(cpInvGo)}return}
 const my=++lSeq,pp=Js(pairAddrs());
 if(![...q.keys()].length){
-if(!e)setTimeout(()=>cpInvGo(),0);
+if(!e)setTimeout(cpInvGo);
 if(e){
 const d=mode==="out"?outAmt:amt;
-if(d.value===lkWrote[d.id]){amt.value=outAmt.value="";fitFont(amt);fitFont(outAmt);setMode("in")}
+if(d.value===lkWrote[d.id]){amt.value="";fitFont(amt);setMode("in")}
 if(rc.value===lkWrote.rc){rc.value="";cL(rc).remove("bad");Tx(rcvEl,"")}
 if(tab!=="book"&&dly.value===lkWrote.dly){dly.value="0";dly.onchange()}
 for(const el of[sdChain,kind,fill,dRest,nftId,floorAmt])if(el.value===lkWrote[el.id])el.value=el.options?.[0].value??"";
@@ -9474,8 +9430,8 @@ if(lkEv&&pp!==Js(pairAddrs()))lkArm=Dn()+2500;const rcMine=rc.value!==""&&rc.val
 wantLq=q.get("lq")==="1",
 linkWantsCard=fi>=0||oi>=0||to||n||!isNaN(lk)||q.get("token")||q.get("out")||want;
 if(!wantLq&&lqMode&&linkWantsCard)lqSet(false);
-if(linkWantsCard){if(lnMode)lnSet(false);if(wnMode)wnSet(false);if(pvMode)pvSet(false);if(mkMode)mkSet(false)}
-setTab(t);
+if(linkWantsCard)mOff()
+const ob=t==tab&&t=="book"&&pp==Js(pairAddrs())&&outAmt.value;setTab(t);if(ob)outAmt.value=ob;
 if(q.get("pm")&&t==="swap"&&CHAIN_ID===1){mkWant=q.get("pm");if(mkMode)mkLoad();else mkSet(true)}
 if(wantLq&&t==="swap"&&!lqMode)lqSet(true);
 if(to&&!rcMine)lkKeep(rc,to);
@@ -9483,7 +9439,7 @@ if(!isNaN(lk)){const os=[...dly.options].map(x=>+x.value).sort((a,b)=>a-b);
 const v=St(os.find(o=>o>=lk)??os[os.length-1]);
 if(t==="book")bookD=v;else if(t==="send")sendD=v;
 if(t!=="swap")lkKeep(dly,v)}
-const num=v=>/^\d*\.?\d+$/.test(v)?v:"";
+const num=v=>/^[\d,]*\.?\d+$/.test(v)?v:"";
 if(num(n)){
 if(t!=="book"&&q.get("exactOut")==="1"&&q.get("out")){if(toSel.value==oi&&lkKeep(outAmt,n)){setMode("out");fitFont(outAmt)}}
 else if(lkKeep(amt,fromSel.value==fi||!q.get("token")?n:"")){if(t!=="book")setMode("in");fitFont(amt)}
@@ -9505,7 +9461,7 @@ if(miss.length){try{await upd}catch{}
 if(my===lSeq)Sm(`Couldn’t find ${miss.join(" or ")}${/^0x/i.test(miss)?"":" — link it by address instead"}.`);}
 }
 }
-addEventListener("hashchange",applyLink);
+aE(window,"hashchange",applyLink);
 const tname=t=>t.cust||t.launched||/\s/.test(t.sym)||!symAddr(Lc(t.sym))?t.addr:t.sym;
 lk.onclick=async()=>{
 const f=TOKENS[fromSel.value],t=TOKENS[toSel.value],p=new URLSearchParams();
@@ -9533,7 +9489,7 @@ const u=(location.origin&&location.origin!=="null"?location.origin+location.path
 try{await navigator.clipboard.writeText(u);Sm("Link copied");setTimeout(()=>{if(stat.textContent==="Link copied")Sm("")},2e3)}
 catch{Sm(u)}
 };
-tabSwap.onclick=()=>{sBlip();if(lnMode)lnSet(false);if(wnMode)wnSet(false);if(pvMode)pvSet(false);if(mkMode)mkSet(false);setTab("swap")};
+tabSwap.onclick=()=>{sBlip();mOff();setTab("swap")};
 tabSend.onclick=()=>{sBlip();setTab("send")};
 {const TABS=[tabSwap,tabSend,tabBook],NAMES=["swap","send","book"];
 for(const el of TABS)aE(el,"keydown",e=>{
@@ -9633,8 +9589,7 @@ await rpc(C,[req,L]);tx=await sendTx([req]);
 await settle(tx);
 }
 const PUSH_MAGIC="381bcb9ccaaab09ca206deb73834ed7b483c58bb3face9b43e8c7b50193253e2",
-SEL_SAFE_TRANSFER_DATA="b88d4fde",SEL_OWNEROF="6352211e",
-isWns=a=>Lc(a||"")===Lc(WNS);
+SEL_SAFE_TRANSFER_DATA="b88d4fde",SEL_OWNEROF="6352211e";
 const weiName=v=>{const n=Lc((v||"").trim());return n.endsWith(".wei")?n:n+".wei"};
 const nftIdIn=(addr,v)=>{v=(v||"").trim();
 if(!v||/^\d+$/.test(v)||!isWns(addr))return v;
@@ -9806,10 +9761,10 @@ loadBook();rBal();render();
 }
 swap.onclick=async()=>{
 if(busy)return;
-if(Dn()<lkArm)return void Sm("The link just changed this trade — check it, then press again.");
-if(tab==="book"){if(!account)return connect();return placeOrder()}
-if(tab==="send"){if(!account)return connect();return doSend()}
-if(!account) return connect();
+if(lkHeld())return;
+if(!account)return connect();
+if(tab==="book")return placeOrder();
+if(tab==="send")return doSend();
 if(!last)return;const q0=last;
 if(Dn()>last.exp){Sm("Quote expired — refreshing…");updateSoon();return}
 if(last.impact>=IMPACT_CONFIRM){
