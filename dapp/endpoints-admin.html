@@ -145,6 +145,7 @@
   </section>
 </main>
 
+<script src="./steward-route.js"></script>
 <script>
 const EPS = '0x00000051F365d898132f4ebF345Cd3968e02F288';
 // zRpcList: Ethereum's own read nodes, the one list zSwap keeps outside zEndpoints. Same owner.
@@ -211,7 +212,7 @@ const paint = id => {
 const say = (id, text, kind) => { notes.set(id, [text, kind]); paint(id); };
 const hide = id => { notes.delete(id); paint(id); };
 
-let provider = null, account = null, owner = null, pending = null;
+let provider = null, account = null, owner = null, pending = null, canEps = false, canL1 = false;
 let cards = [];             // { w, chain, name, known, list, inherits }
 let l1 = [], l1Owner = null; // zRpcList's list and owner
 const probes = new Map();   // probe key -> [text, kind]
@@ -299,7 +300,7 @@ async function load() {
     const [o, p, k] = await Promise.all([rpcCall('0x' + SEL.owner), rpcCall('0x' + SEL.pending), rpcCall('0x' + SEL.keys)]);
     owner = '0x' + o.slice(26);
     pending = '0x' + p.slice(26);
-    $('owner').textContent = owner;
+    $('owner').textContent = owner + (zSteward.held(owner) ? ' (zSteward: additions wait its delay, removals apply at once)' : '');
     $('pending').textContent = zero(pending) ? 'none' : pending;
     const written = decKeys(k), next = defaults();
     for (const x of written) if (!next.some(y => y.w === x.w && y.chain === x.chain)) next.push(x);
@@ -428,7 +429,7 @@ function card(c, mine) {
 }
 
 function l1Card() {
-  const mine = !!(account && l1Owner && account.toLowerCase() === l1Owner.toLowerCase());
+  const mine = canL1;
   const s = mk('section');
   s.append(mk('h2', {}, mk('code', { textContent: 'zRpcList' }), ' · Ethereum read nodes'));
   s.append(mk('p', { className: 'hint', style: 'margin:0 0 6px', textContent: `At ${RPCL}. zSwap reads Ethereum through these nodes, in this order, and sticks with the first that answers — so #0 takes the traffic. They must allow browser requests from any origin.` }));
@@ -548,9 +549,11 @@ async function probeRaw(kind, u, chain) {
 }
 
 // ---------------------------------------------------------------- who
-const isOwner = () => !!(account && owner && account.toLowerCase() === owner.toLowerCase());
+const isOwner = () => canEps;
 
-function checkWho() {
+async function checkWho() {
+  canEps = !!account && await zSteward.may(account, owner);
+  canL1 = !!account && await zSteward.may(account, l1Owner);
   const mine = isOwner();
   const isPending = account && pending && account.toLowerCase() === pending.toLowerCase();
   $('propose').disabled = !mine;
@@ -560,7 +563,7 @@ function checkWho() {
   $('batch').disabled = !account || !plan.length;
   if (owner) {
     if (!account) say('who', 'Read-only. Connect the owner to change anything.', 'warn');
-    else if (mine) say('who', 'You are the owner.', 'ok');
+    else if (mine) say('who', zSteward.held(owner) ? 'You are zSteward\'s steward: additions are queued for its delay, removals apply at once.' : 'You are the owner.', 'ok');
     else if (isPending) say('who', 'Ownership has been offered to you. Accept it below.', 'warn');
     else say('who', 'This account is not the owner — every write will revert.', 'bad');
   }
@@ -584,18 +587,19 @@ async function send(data, msgEl, to = EPS) {
   try {
     // Simulate first: a revert here is almost always "not the owner", and it
     // is much cheaper to learn that before signing.
-    await provider.request({ method: 'eth_call', params: [{ from: account, to, data }, 'latest'] });
+    var via = await zSteward.route(to, data, to === RPCL ? l1Owner : owner);
+    await provider.request({ method: 'eth_call', params: [{ from: account, to: via.to, data: via.data }, 'latest'] });
   } catch (e) { return say(msgEl, 'It would revert: ' + why(e), 'bad'); }
   try {
     const tx = await provider.request({ method: 'eth_sendTransaction',
-      params: [{ from: account, to, data }] });
+      params: [{ from: account, to: via.to, data: via.data }] });
     say(msgEl, 'Sent ' + tx + '\nWaiting for it to be mined…', 'warn');
     for (let i = 0; i < 120; i++) {
       await new Promise(r => setTimeout(r, 2500));
       const r = await provider.request({ method: 'eth_getTransactionReceipt', params: [tx] });
       if (r) {
         if (r.status === '0x0') return say(msgEl, 'Reverted on chain: ' + tx, 'bad');
-        say(msgEl, 'Done — ' + tx, 'ok');
+        say(msgEl, 'Done — ' + tx + (via.note ? '\n' + via.note : ''), 'ok');
         return load();
       }
     }
@@ -707,8 +711,10 @@ $('batch').onclick = async () => {
   const pick = plan.filter(x => x.on);
   if (!pick.length) return say('planmsg', 'Nothing ticked.', 'warn');
   if (!confirm(`Send ${pick.length} list change${pick.length === 1 ? '' : 's'} to zEndpoints?\n\n` + pick.map(x => `${x.c.name} · ${chainLabel(x.c.chain)}:\n  ${x.next.join('\n  ')}`).join('\n\n'))) return;
-  const calls = pick.map(x => x.call || { to: EPS, data: CALL.set(x.c.w, x.c.chain, x.next) });
+  let calls;
   try {
+    calls = await Promise.all(pick.map(x => x.call || { to: EPS, data: CALL.set(x.c.w, x.c.chain, x.next) })
+      .map(k => zSteward.route(k.to, k.data, k.to === RPCL ? l1Owner : owner).then(v => ({ to: v.to, data: v.data }))));
     if (parseInt(await provider.request({ method: 'eth_chainId' }), 16) !== 1)
       await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x1' }] });
     for (const k of calls) await provider.request({ method: 'eth_call', params: [{ from: account, ...k }, 'latest'] });
@@ -723,7 +729,7 @@ $('batch').onclick = async () => {
       await new Promise(res => setTimeout(res, 2500));
       const s = await provider.request({ method: 'wallet_getCallsStatus', params: [id] }).catch(() => null);
       const st = s && (typeof s.status === 'number' ? s.status : { CONFIRMED: 200, FAILED: 400 }[s.status]);
-      if (st >= 200) { say('planmsg', st < 300 ? 'Done: the batch landed.' : 'The batch failed on chain.', st < 300 ? 'ok' : 'bad'); plan = []; renderPlan(); return load(); }
+      if (st >= 200) { say('planmsg', st < 300 ? 'Done: the batch landed.' + (calls.some(k => k.to === zSteward.STW) ? ' Changes to lists zSteward owns are queued for its delay; land them from steward-queue.html.' : '') : 'The batch failed on chain.', st < 300 ? 'ok' : 'bad'); plan = []; renderPlan(); return load(); }
     }
     return say('planmsg', 'Still pending: ' + id, 'warn');
   } catch (e) { if (batched || (e && e.code === 4001)) return say('planmsg', why(e), 'bad'); }
@@ -736,7 +742,7 @@ $('batch').onclick = async () => {
       if (!r || r.status === '0x0') return say('planmsg', (r ? 'Reverted: ' : 'Still pending: ') + tx, 'bad');
     } catch (e) { return say('planmsg', why(e), 'bad'); }
   }
-  say('planmsg', `Done: ${calls.length} change${calls.length === 1 ? '' : 's'} landed.`, 'ok'); plan = []; renderPlan(); load();
+  say('planmsg', `Done: ${calls.length} change${calls.length === 1 ? '' : 's'} landed.` + (calls.some(k => k.to === zSteward.STW) ? ' Changes to lists zSteward owns are queued for its delay; land them from steward-queue.html.' : ''), 'ok'); plan = []; renderPlan(); load();
 };
 
 $('nAdd').onclick = () => {

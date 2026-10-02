@@ -55,6 +55,7 @@ const SOURCES = {
   zQuoterV4: "src/zQuoterV4.sol",
   zEndpoints: "src/utils/zEndpoints.sol",
   zGuard: "src/utils/zGuard.sol",
+  zSteward: "src/utils/zSteward.sol",
   PM: "src/PM.sol",
   PrecisionPoolFactory: "src/pools/PrecisionPoolFactory.sol",
   PrecisionRoute: "src/pools/PrecisionRoute.sol",
@@ -109,6 +110,7 @@ const OPTIMIZER_RUNS = {
   zQuoterV4: 9_999_999,
   zEndpoints: 9_999_999,
   zGuard: 9_999_999,
+  zSteward: 9_999_999,
   PM: 9_999_999,
   PrecisionPoolFactory: 200,
   PrecisionRoute: 200,
@@ -275,6 +277,13 @@ const specs = [
   // constructor, so the same SafeSummoner calldata lands one address on 1,
   // 8453 and 4663, which is the one the page pins as GUARD.
   {name: "zGuard", args: []},
+  // The delayed owner of the four curated lists: the steward (the lists'
+  // current curator), the zFi DAO as guardian, and a three-day delay. The page
+  // pins this address as STW and reads every list through it.
+  {
+    name: "zSteward",
+    args: ["0x1C0Aa8cCD568d90d61659F060D1bFb1e6f855A20", "0x5E58BA0e06ED0F5558f83bE732a4b899a674053E", 259200],
+  },
   // Parimutuel markets. No constructor; WSTETH, ZROUTER and PERMIT2 are constants.
   {name: "PM", args: []},
   // The on-chain endpoint roster. Its constructor takes the owner and the seven

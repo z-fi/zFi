@@ -1,0 +1,444 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>zSteward Queue</title>
+<style>
+  :root { color-scheme: light dark; --bg:#0b0d10; --fg:#e6e8eb; --mut:#8b949e; --line:#232a31;
+          --ok:#3fb950; --bad:#f85149; --warn:#d29922; --acc:#58a6ff; }
+  @media (prefers-color-scheme: light) {
+    :root { --bg:#fff; --fg:#14171a; --mut:#57606a; --line:#d8dee4; --ok:#1a7f37; --bad:#cf222e; --warn:#9a6700; --acc:#0969da; }
+  }
+  * { box-sizing:border-box }
+  body { margin:0; background:var(--bg); color:var(--fg); padding:28px 16px; display:flex; justify-content:center;
+         font:14px/1.55 ui-sans-serif,-apple-system,system-ui,sans-serif }
+  main { width:100%; max-width:760px }
+  h1 { font-size:17px; margin:0 0 2px }
+  .sub { color:var(--mut); margin:0 0 22px }
+  section { border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-bottom:14px }
+  h2 { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--mut); margin:0 0 10px; font-weight:600 }
+  dl { display:grid; grid-template-columns:auto 1fr; gap:5px 14px; margin:0 }
+  dt { color:var(--mut) }
+  dd { margin:0; font-family:ui-monospace,Menlo,monospace; font-size:12.5px; word-break:break-all }
+  button { font:inherit; font-weight:600; padding:9px 15px; border-radius:8px; border:1px solid var(--line);
+           background:var(--acc); color:#fff; cursor:pointer }
+  button.ghost { background:transparent; color:var(--fg) }
+  button.sm { padding:3px 9px; font-size:12px; font-weight:500; border-radius:6px }
+  button:disabled { opacity:.45; cursor:not-allowed }
+  .row { display:flex; gap:9px; align-items:center; flex-wrap:wrap }
+  .msg { margin-top:11px; padding:9px 11px; border-radius:8px; border:1px solid var(--line); display:none;
+         font-family:ui-monospace,Menlo,monospace; font-size:12px; word-break:break-all; white-space:pre-wrap }
+  .msg.show { display:block }
+  .ok { color:var(--ok); border-color:var(--ok) }
+  .bad { color:var(--bad); border-color:var(--bad) }
+  .warn { color:var(--warn); border-color:var(--warn) }
+  .hint { color:var(--mut); font-size:12.5px; margin:9px 0 0 }
+  a { color:var(--acc) }
+  code, .mono { font-family:ui-monospace,Menlo,monospace; font-size:12px; word-break:break-all }
+  .op { border-top:1px solid var(--line); padding:10px 0; display:grid; gap:3px }
+  .op:first-child { border-top:0; padding-top:0 }
+  .op .what { font-weight:600 }
+  .op .kv { font-size:12.5px; color:var(--mut) }
+  .tag { font-family:ui-monospace,Menlo,monospace; font-size:11.5px }
+  .tag.ok { color:var(--ok) } .tag.bad { color:var(--bad) } .tag.warn { color:var(--warn) } .tag.mut { color:var(--mut) }
+  select, textarea { font:inherit; font-size:12.5px; padding:6px 8px; background:transparent; color:var(--fg);
+                     border:1px solid var(--line); border-radius:6px }
+  textarea { width:100%; min-height:5em; font-family:ui-monospace,Menlo,monospace; font-size:11.5px; word-break:break-all }
+  table { width:100%; border-collapse:collapse; font-size:12.5px }
+  th,td { text-align:left; padding:7px 6px; border-bottom:1px solid var(--line); vertical-align:top }
+  th { color:var(--mut); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.05em }
+  @media (max-width:560px) { th:nth-child(2), td:nth-child(2) { display:none } }
+</style>
+
+<main>
+  <h1>zSteward — the delay on zSwap's lists</h1>
+  <p class="sub">
+    <code>zSteward</code> at <code id="stwAddr"></code> is an optional owner for the lists zSwap reads its
+    nodes, relays and aggregators from. zSwap follows the lists whoever holds them; a list held here takes
+    any addition only after <b id="delayTxt">a few days</b> in public, during which the guardian can cancel
+    it. Removing an entry, disabling a solver or switching a lane off applies at once. Everything on this
+    page is read from chain; no wallet is needed to see what is queued.
+  </p>
+
+  <section>
+    <h2>zSteward</h2>
+    <dl>
+      <dt>Status</dt><dd id="st">…</dd>
+      <dt>Delay</dt><dd id="delay">…</dd>
+      <dt>Grace</dt><dd id="grace">…</dd>
+      <dt>Steward</dt><dd id="steward">…</dd>
+      <dt>Guardian</dt><dd id="guardian">…</dd>
+      <dt>You</dt><dd id="me">not connected</dd>
+    </dl>
+    <div class="row" style="margin-top:12px" id="wallets"><span class="hint">Looking for wallets…</span></div>
+    <div class="row" style="margin-top:9px">
+      <button id="connect">Connect</button>
+      <button id="reload" class="ghost">Reload</button>
+    </div>
+    <div class="msg" id="who"></div>
+  </section>
+
+  <section>
+    <h2>The lists</h2>
+    <table>
+      <thead><tr><th>List</th><th>Address</th><th>Owner</th><th>Changes</th></tr></thead>
+      <tbody id="lists"></tbody>
+    </table>
+    <p class="hint">
+      Handing a list over takes two steps: its owner offers it to zSteward, then anyone completes the handover
+      with Accept. A list leaves zSteward only through the queue.
+    </p>
+    <div class="msg" id="listmsg"></div>
+  </section>
+
+  <section>
+    <h2>Queued changes</h2>
+    <div id="ops"><span class="hint">Reading the log…</span></div>
+    <div class="msg" id="opmsg"></div>
+  </section>
+
+  <section>
+    <h2>Removals applied at once</h2>
+    <div id="narrows"><span class="hint">Reading the log…</span></div>
+  </section>
+
+  <section>
+    <h2>Queue or remove</h2>
+    <div class="row">
+      <select id="target"></select>
+    </div>
+    <textarea id="calldata" placeholder="0x… calldata for the list, as its own admin page would send it" spellcheck="false" style="margin-top:9px"></textarea>
+    <div class="kv hint" id="preview"></div>
+    <div class="row" style="margin-top:9px">
+      <button id="submit" disabled>Queue</button>
+    </div>
+    <p class="hint">
+      The steward queues; the steward or the guardian removes. Calldata that only removes an entry, disables a
+      solver or switches a lane off goes through <code>narrow</code> and applies at once; anything else is
+      queued. The list admin pages route their writes here on their own once zSteward owns the list.
+    </p>
+    <div class="msg" id="submsg"></div>
+  </section>
+</main>
+
+<script>
+const STW = '0x0000005F38594Af514e65e7d1e4EddE773bcF886';
+// zSteward is deployed after this block; logs are scanned from here.
+const FROM_BLOCK = 26098664;
+const RPCS = ['https://ethereum-rpc.publicnode.com', 'https://eth-mainnet.public.blastapi.io',
+              'https://mainnet.gateway.tenderly.co', 'https://rpc.mevblocker.io'];
+const LISTS = [
+  { name: 'zRpcList', addr: '0x8C7348D039f58C4e9cfA936EF410eec759213b12', what: 'Ethereum read nodes' },
+  { name: 'zEndpoints', addr: '0x00000051F365d898132f4ebF345Cd3968e02F288', what: 'L2 nodes, relays, Bitcoin APIs, WalletConnect' },
+  { name: 'zSolverList', addr: '0x1Dfbb2f41B596F72187370469074C46de60dA2e3', what: 'aggregator lanes' },
+  { name: 'zSwapFlags', addr: '0x0000008a1a3C78440d0a28EBB4bb5526abA91d45', what: 'lane switches' },
+];
+const NAMES = Object.fromEntries([...LISTS.map(l => [l.addr.toLowerCase(), l.name]), [STW.toLowerCase(), 'zSteward']]);
+const TOPIC = {
+  queued: '0x2af3717503e258bf79a9ee2ddd72be783e08ec512ede480ba81e03e602661ee5',
+  executed: '0xa74c8847d513feba22a0f0cb38d53081abf97562cdb293926ba243689e7c41ca',
+  cancelled: '0xbaa1eb22f2a492ba1a5fea61b8df4d27c6c8b5f3971e63bb58fa14ff72eedb70',
+  narrowed: '0xe25b6f3c23a7d05139a2d599423071ba642634fedcba0a1599c677fb1927368a',
+};
+const SOLVER = '(string,string,address,uint16,bool)';
+// Every write the four lists and zSteward itself accept, by selector.
+const CALLS = {
+  b0c8f9dc: ['add', ['string']], '4cc82215': ['remove', ['uint256']], a4ece52c: ['pop', []],
+  '0867408f': ['move', ['uint256', 'uint256']], bf23d38b: ['setAt', ['uint256', 'string']], '52e66db8': ['set', ['string[]']],
+  '63a418e3': ['add', ['bytes32', 'uint256', 'string']], aceba3fd: ['remove', ['bytes32', 'uint256', 'uint256']],
+  b87e183d: ['pop', ['bytes32', 'uint256']], fd530b5e: ['move', ['bytes32', 'uint256', 'uint256', 'uint256']],
+  '1dbd5943': ['setAt', ['bytes32', 'uint256', 'uint256', 'string']], '3e2e459c': ['set', ['bytes32', 'uint256', 'string[]']],
+  b4671e31: ['add', [SOLVER]], e5c13dd1: ['setEnabled', ['uint256', 'bool']], ac6d93c8: ['setHandicap', ['uint256', 'uint16']],
+  '8c0381cd': ['setEndpoint', ['uint256', 'string', 'address']], '00aafeab': ['setAt', ['uint256', SOLVER]],
+  '9334962f': ['set', [SOLVER + '[]']], '97f10dcd': ['set', ['bytes32', 'uint256', 'uint8']],
+  f5459d96: ['setMany', ['bytes32', 'uint256[]', 'uint8[]']], f2fde38b: ['transferOwnership', ['address']],
+  '79ba5097': ['acceptOwnership', []], c0f5f46e: ['setSteward', ['address']], '8a0dac4a': ['setGuardian', ['address']],
+};
+const SEL = { delay: '69b41170', grace: '137d29d9', steward: '637eea19', guardian: '452a9320', eta: '088775a3',
+              narrows: 'ae1f986e', queue: 'e3d20e6d', accept: '9f005920', narrow: '431e2b22', execute: 'a04a0908', cancel: 'c4d252f5',
+              owner: '8da5cb5b', pending: 'e30c3978', transfer: 'f2fde38b' };
+
+const $ = id => document.getElementById(id);
+const el = (t, c, txt) => { const e = document.createElement(t); if (c) e.className = c; if (txt != null) e.textContent = txt; return e; };
+const say = (id, text, kind) => { const e = $(id); e.textContent = text; e.className = 'msg show' + (kind ? ' ' + kind : ''); };
+const hex = n => BigInt(n).toString(16).padStart(64, '0');
+const pad = a => a.replace(/^0x/, '').toLowerCase().padStart(64, '0');
+const strip = h => (h || '').replace(/^0x/, '');
+const bytesArg = d => { const h = strip(d); return hex(h.length / 2) + h.padEnd(Math.ceil(h.length / 64) * 64, '0'); };
+const same = (a, b) => (a || '').toLowerCase() === (b || '').toLowerCase();
+const short = a => a.slice(0, 6) + '…' + a.slice(-4);
+const dur = s => { s = Number(s); const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
+  return [d && d + 'd', h && h + 'h', !d && m && m + 'm'].filter(Boolean).join(' ') || s + 's'; };
+const when = t => new Date(Number(t) * 1000).toLocaleString();
+
+// ---------------------------------------------------------------- abi
+const W = (h, i) => h.slice(i * 64, i * 64 + 64);
+const num = w => BigInt('0x' + (w || '0'));
+const parts = t => t.slice(1, -1).split(',');
+const dyn = t => t === 'string' || t === 'bytes' || t.endsWith('[]') || (t[0] === '(' && parts(t).some(dyn));
+function one(t, h, i) {
+  if (dyn(t)) return tail(t, h.slice(Number(num(W(h, i))) * 2));
+  const w = W(h, i);
+  if (t === 'address') return '0x' + w.slice(24);
+  if (t === 'bool') return num(w) !== 0n;
+  if (t === 'bytes32') return '0x' + w;
+  return num(w).toString();
+}
+function tail(t, h) {
+  if (t === 'string' || t === 'bytes') {
+    const b = h.slice(64, 64 + Number(num(W(h, 0))) * 2);
+    return t === 'bytes' ? '0x' + b : new TextDecoder().decode(new Uint8Array(b.match(/../g)?.map(x => parseInt(x, 16)) || []));
+  }
+  if (t.endsWith('[]')) { const n = Number(num(W(h, 0))), body = h.slice(64); return [...Array(Math.min(n, 256))].map((_, k) => one(t.slice(0, -2), body, k)); }
+  return parts(t).map((p, k) => one(p, h, k));
+}
+const label = b => { const s = strip(b).replace(/(00)+$/, ''); return /^([2-7][0-9a-f])+$/.test(s) ? '"' + s.match(/../g).map(x => String.fromCharCode(parseInt(x, 16))).join('') + '"' : b; };
+const show = (t, v) => t === 'bytes32' ? label(v) : t === SOLVER ? `{${v[0]}, ${v[1]}, ${short(v[2])}, ${v[3]}bps, ${v[4] ? 'on' : 'off'}}`
+  : t.endsWith('[]') ? '[' + v.map(x => show(t.slice(0, -2), x)).join(', ') + ']' : t === 'string' ? JSON.stringify(v) : String(v);
+function describe(target, data) {
+  const h = strip(data), c = CALLS[h.slice(0, 8)], who = NAMES[target.toLowerCase()] || target;
+  if (!c) return who + ' · unknown call 0x' + h.slice(0, 8);
+  try { const v = c[1].map((t, i) => one(t, h.slice(8), i)); return `${who}.${c[0]}(${v.map((x, i) => show(c[1][i], x)).join(', ')})`; }
+  catch { return `${who}.${c[0]}(…undecodable)`; }
+}
+
+// ---------------------------------------------------------------- reads
+let rpcAt = 0;
+async function rpc(method, params) {
+  let last;
+  for (let k = 0; k < RPCS.length; k++) {
+    const u = RPCS[(rpcAt + k) % RPCS.length];
+    try {
+      const r = await fetch(u, { method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) });
+      const j = await r.json();
+      if (j.error) { last = Error(j.error.message || 'node error'); if (/revert/i.test(last.message)) throw last; continue; }
+      rpcAt = (rpcAt + k) % RPCS.length;
+      return j.result;
+    } catch (e) { last = e; if (/revert/i.test(e.message || '')) throw e; }
+  }
+  throw last || Error('no node answered');
+}
+const call = (to, data) => rpc('eth_call', [{ to, data: '0x' + strip(data) }, 'latest']);
+const addrOf = r => '0x' + strip(r).slice(24);
+
+let provider = null, account = null, state = null, ops = [], now = 0;
+
+async function readState() {
+  const code = await rpc('eth_getCode', [STW, 'latest']);
+  if (strip(code) === '') return { deployed: false };
+  const [delay, grace, steward, guardian] = await Promise.all(
+    [SEL.delay, SEL.grace, SEL.steward, SEL.guardian].map(s => call(STW, s)));
+  return { deployed: true, delay: num(strip(delay)), grace: num(strip(grace)), steward: addrOf(steward), guardian: addrOf(guardian) };
+}
+
+async function readLists() {
+  return Promise.all(LISTS.map(async l => {
+    const [o, p] = await Promise.all([call(l.addr, SEL.owner), call(l.addr, SEL.pending)]);
+    return { ...l, owner: addrOf(o), pending: addrOf(p) };
+  }));
+}
+
+async function readLogs() {
+  const head = Number(await rpc('eth_blockNumber', []));
+  const logs = [];
+  let from = FROM_BLOCK, span = 50000;
+  while (from <= head) {
+    const to = Math.min(head, from + span - 1);
+    try {
+      logs.push(...await rpc('eth_getLogs', [{ address: STW, fromBlock: '0x' + from.toString(16), toBlock: '0x' + to.toString(16),
+        topics: [[TOPIC.queued, TOPIC.executed, TOPIC.cancelled, TOPIC.narrowed]] }]));
+      from = to + 1;
+    } catch (e) { if (span <= 500) throw e; span = Math.floor(span / 4); }
+  }
+  return logs;
+}
+
+function fold(logs) {
+  const byId = new Map(), narrowed = [];
+  for (const l of logs) {
+    const t = l.topics[0], d = strip(l.data);
+    if (t === TOPIC.queued) {
+      const id = l.topics[1], target = '0x' + l.topics[2].slice(26);
+      byId.set(id, { id, target, data: tail('bytes', d.slice(Number(num(W(d, 0))) * 2)), nonce: num(W(d, 1)), eta: num(W(d, 2)),
+                     tx: l.transactionHash, status: 'queued' });
+    } else if (t === TOPIC.executed || t === TOPIC.cancelled) {
+      const o = byId.get(l.topics[1]);
+      if (o) { o.status = t === TOPIC.executed ? 'executed' : 'cancelled'; o.doneTx = l.transactionHash; }
+    } else if (t === TOPIC.narrowed) {
+      narrowed.push({ target: '0x' + l.topics[1].slice(26), data: tail('bytes', d.slice(Number(num(W(d, 0))) * 2)), tx: l.transactionHash });
+    }
+  }
+  return { ops: [...byId.values()].reverse(), narrowed: narrowed.reverse() };
+}
+
+// ---------------------------------------------------------------- render
+const isSteward = () => account && state && state.deployed && same(account, state.steward);
+const isGuardian = () => account && state && state.deployed && same(account, state.guardian);
+const txLink = h => { const a = el('a', 'mono', short(h)); a.href = 'https://etherscan.io/tx/' + h; a.target = '_blank'; a.rel = 'noopener'; return a; };
+
+function paintState() {
+  $('stwAddr').textContent = STW;
+  if (!state.deployed) {
+    $('st').textContent = 'not deployed yet';
+    for (const k of ['delay', 'grace', 'steward', 'guardian']) $(k).textContent = '—';
+    return;
+  }
+  $('st').textContent = 'deployed';
+  $('delay').textContent = dur(state.delay);
+  $('delayTxt').textContent = dur(state.delay);
+  $('grace').textContent = dur(state.grace) + ' after it falls due';
+  $('steward').textContent = state.steward;
+  $('guardian').textContent = /^0x0+$/.test(state.guardian) ? 'none' : state.guardian;
+}
+
+function paintLists(lists) {
+  const tb = $('lists'); tb.textContent = '';
+  for (const l of lists) {
+    const tr = el('tr'), held = same(l.owner, STW), offered = same(l.pending, STW);
+    const a = el('td'); a.append(el('b', null, l.name), el('div', 'hint', l.what)); a.lastChild.style.margin = '0';
+    const status = el('td'), tag = el('span', 'tag ' + (held ? 'ok' : offered ? 'warn' : 'bad'),
+      held ? 'additions wait the delay' : offered ? 'offered to zSteward, not yet accepted' : 'apply at once');
+    status.append(tag);
+    if (!held && offered && account && state.deployed) {
+      const b = el('button', 'sm ghost', 'Accept'); b.style.marginTop = '6px';
+      b.onclick = () => send({ to: STW, data: '0x' + SEL.accept + pad(l.addr) }, 'listmsg');
+      status.append(el('div'), b);
+    }
+    if (!held && !offered && account && same(account, l.owner) && state.deployed) {
+      const b = el('button', 'sm ghost', 'Offer to zSteward'); b.style.marginTop = '6px';
+      b.onclick = () => confirm(`Offer ${l.name} to zSteward?\n\nYou keep it until someone presses Accept. After that, every addition waits the delay.`)
+        && send({ to: l.addr, data: '0x' + SEL.transfer + pad(STW) }, 'listmsg');
+      status.append(el('div'), b);
+    }
+    tr.append(a, el('td', 'mono', l.addr), el('td', 'mono', held ? 'zSteward' : l.owner), status);
+    tb.append(tr);
+  }
+}
+
+function paintOps(folded) {
+  const box = $('ops'); box.textContent = '';
+  if (!folded.ops.length) box.append(el('span', 'hint', 'Nothing has been queued.'));
+  for (const o of folded.ops) {
+    const row = el('div', 'op'), due = now >= o.eta, lapsed = now > o.eta + (state.grace || 0n);
+    const [txt, cls] = o.status === 'executed' ? ['landed', 'ok'] : o.status === 'cancelled' ? ['cancelled', 'mut']
+      : lapsed ? ['lapsed — never landed', 'mut'] : due ? ['due — anyone can land it', 'warn'] : ['waiting · due in ' + dur(o.eta - now), 'warn'];
+    row.append(el('div', 'what mono', describe(o.target, o.data)));
+    const kv = el('div', 'kv'); kv.append(el('span', 'tag ' + cls, txt), ' · due ' + when(o.eta) + ' · queued in ', txLink(o.tx));
+    if (o.doneTx) kv.append(' · ' + o.status + ' in ', txLink(o.doneTx));
+    row.append(kv);
+    if (o.status === 'queued' && !lapsed) {
+      const r = el('div', 'row');
+      if (due) { const b = el('button', 'sm', 'Land it'); b.disabled = !account;
+        b.onclick = () => send({ to: STW, data: '0x' + SEL.execute + pad(o.target) + hex(96) + hex(o.nonce) + bytesArg(o.data) }, 'opmsg'); r.append(b); }
+      if (isSteward() || isGuardian()) { const b = el('button', 'sm ghost', 'Cancel');
+        b.onclick = () => confirm('Cancel this change?') && send({ to: STW, data: '0x' + SEL.cancel + strip(o.id) }, 'opmsg'); r.append(b); }
+      if (r.childNodes.length) row.append(r);
+    }
+    box.append(row);
+  }
+  const nb = $('narrows'); nb.textContent = '';
+  if (!folded.narrowed.length) nb.append(el('span', 'hint', 'None.'));
+  for (const n of folded.narrowed) {
+    const row = el('div', 'op'); row.append(el('div', 'what mono', describe(n.target, n.data)));
+    const kv = el('div', 'kv'); kv.append('applied in ', txLink(n.tx)); row.append(kv); nb.append(row);
+  }
+}
+
+function paintWho() {
+  if (!account) return say('who', 'Read-only. Anyone can land a change that is due; the steward queues and the guardian cancels.', 'warn');
+  if (isSteward() && isGuardian()) return say('who', 'You are the steward and the guardian.', 'ok');
+  if (isSteward()) return say('who', 'You are the steward: you queue changes, remove entries and cancel.', 'ok');
+  if (isGuardian()) return say('who', 'You are the guardian: you cancel changes, remove entries and can replace the steward.', 'ok');
+  say('who', 'You can land changes that are due. Queuing and cancelling are for the steward and the guardian.', 'warn');
+}
+
+async function load() {
+  try {
+    [state] = await Promise.all([readState()]);
+    paintState();
+    const lists = await readLists();
+    now = BigInt(Number((await rpc('eth_getBlockByNumber', ['latest', false])).timestamp));
+    paintLists(lists);
+    paintWho();
+    fillTargets();
+    if (!state.deployed) {
+      $('ops').textContent = ''; $('ops').append(el('span', 'hint', 'zSteward is not deployed yet, so nothing can be queued.'));
+      $('narrows').textContent = ''; $('narrows').append(el('span', 'hint', 'None.'));
+      return;
+    }
+    paintOps(fold(await readLogs()));
+  } catch (e) { say('who', 'Could not read the chain: ' + (e.message || e), 'bad'); }
+}
+
+// ---------------------------------------------------------------- queue or remove
+function fillTargets() {
+  const s = $('target'), keep = s.value; s.textContent = '';
+  for (const l of [...LISTS, { name: 'zSteward', addr: STW }]) { const o = el('option', null, l.name + ' · ' + short(l.addr)); o.value = l.addr; s.append(o); }
+  if (keep) s.value = keep;
+  preview();
+}
+let plan = null;
+async function preview() {
+  plan = null; $('submit').disabled = true; $('submit').textContent = 'Queue';
+  const d = $('calldata').value.trim(), to = $('target').value;
+  if (!d) return void ($('preview').textContent = '');
+  if (!/^0x([0-9a-fA-F]{2}){4,}$/.test(d)) return void ($('preview').textContent = 'Calldata is 0x and whole bytes.');
+  let fast = false;
+  try { fast = state.deployed && num(strip(await call(STW, SEL.narrows + hex(32) + bytesArg(d)))) === 1n; } catch {}
+  $('preview').textContent = describe(to, d) + (fast ? '  →  applies at once' : '  →  queued for ' + (state.deployed ? dur(state.delay) : 'the delay'));
+  plan = { to: STW, data: '0x' + (fast ? SEL.narrow : SEL.queue) + pad(to) + hex(64) + bytesArg(d) };
+  $('submit').textContent = fast ? 'Remove now' : 'Queue';
+  $('submit').disabled = !(fast ? isSteward() || isGuardian() : isSteward());
+}
+$('calldata').oninput = preview;
+$('target').onchange = preview;
+$('submit').onclick = () => plan && send(plan, 'submsg');
+
+// ---------------------------------------------------------------- writes
+async function send(tx, msgEl) {
+  try {
+    if (parseInt(await provider.request({ method: 'eth_chainId' }), 16) !== 1)
+      await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x1' }] });
+  } catch { return say(msgEl, 'zSteward is on Ethereum. Switch your wallet to mainnet.', 'bad'); }
+  try { await provider.request({ method: 'eth_call', params: [{ from: account, ...tx }, 'latest'] }); }
+  catch (e) { return say(msgEl, 'It would revert: ' + (e.message || e), 'bad'); }
+  try {
+    const h = await provider.request({ method: 'eth_sendTransaction', params: [{ from: account, ...tx }] });
+    say(msgEl, 'Sent ' + h + '\nWaiting for it to be mined…', 'warn');
+    for (let i = 0; i < 150; i++) {
+      await new Promise(r => setTimeout(r, 2500));
+      const r = await provider.request({ method: 'eth_getTransactionReceipt', params: [h] });
+      if (r) { say(msgEl, (r.status === '0x0' ? 'Reverted on chain: ' : 'Done: ') + h, r.status === '0x0' ? 'bad' : 'ok'); return load(); }
+    }
+    say(msgEl, 'Still pending: ' + h, 'warn');
+  } catch (e) { say(msgEl, e.message || String(e), 'bad'); }
+}
+
+// ---------------------------------------------------------------- wallet
+const found = [];
+addEventListener('eip6963:announceProvider', e => {
+  if (found.some(p => p.info.uuid === e.detail.info.uuid)) return;
+  found.push(e.detail); paintWallets();
+});
+dispatchEvent(new Event('eip6963:requestProvider'));
+function paintWallets() {
+  const box = $('wallets'); box.textContent = '';
+  const list = found.length ? found : (window.ethereum ? [{ info: { name: 'Injected wallet' }, provider: window.ethereum }] : []);
+  if (!list.length) return void box.append(el('span', 'hint', 'No wallet found.'));
+  for (const w of list) { const b = el('button', 'ghost', w.info.name); b.onclick = () => connect(w.provider); box.append(b); }
+}
+async function connect(p) {
+  provider = p || (found[0] && found[0].provider) || window.ethereum;
+  if (!provider) return say('who', 'No wallet found.', 'bad');
+  try {
+    account = (await provider.request({ method: 'eth_requestAccounts' }))[0];
+    $('me').textContent = account;
+    provider.on && provider.on('accountsChanged', () => location.reload());
+    load();
+  } catch (e) { say('who', e.message || String(e), 'bad'); }
+}
+$('connect').onclick = () => connect();
+$('reload').onclick = () => load();
+paintWallets();
+load();
+</script>

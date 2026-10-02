@@ -86,6 +86,7 @@
   </section>
 </main>
 
+<script src="./steward-route.js"></script>
 <script type="module">
 const RPC = 'https://ethereum-rpc.publicnode.com';
 const EPS = '0x00000051F365d898132f4ebF345Cd3968e02F288';   // zEndpoints
@@ -164,7 +165,7 @@ const keeperInfo = (base, chain) => timed(async signal => {
 });
 
 // ---------------------------------------------------------------- wallet
-let provider = null, account = null, steward = null;
+let provider = null, account = null, steward = null, epsOwner = null;
 const found = [];
 addEventListener('eip6963:announceProvider', e => { if (!found.some(p => p.info.uuid === e.detail.info.uuid)) { found.push(e.detail); paintWallets(); } });
 dispatchEvent(new Event('eip6963:requestProvider'));
@@ -258,9 +259,10 @@ function paintSend() {
   b.textContent = !account ? 'Connect a wallet to apply' : account !== steward ? 'Apply (not the steward: will revert)' : !pick.length ? 'Nothing to apply' : 'Apply recommended';
 }
 $('send').onclick = async () => {
-  const calls = acts.filter(a => a.on).map(a => ({ to: EPS, data: a.data }));
+  let calls = acts.filter(a => a.on).map(a => ({ to: EPS, data: a.data }));
   if (!calls.length) return;
   try {
+    calls = await Promise.all(calls.map(c => zSteward.route(c.to, c.data, epsOwner).then(v => ({ to: v.to, data: v.data }))));
     if (parseInt(await provider.request({ method: 'eth_chainId' }), 16) !== 1)
       await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x1' }] });
     for (const c of calls) await provider.request({ method: 'eth_call', params: [{ from: account, ...c }, 'latest'] });
@@ -275,7 +277,7 @@ $('send').onclick = async () => {
         await new Promise(res => setTimeout(res, 2500));
         const s = await provider.request({ method: 'wallet_getCallsStatus', params: [id] }).catch(() => null);
         const st = s && (typeof s.status === 'number' ? s.status : { CONFIRMED: 200, FAILED: 400 }[s.status]);
-        if (st >= 200) { say('sendmsg', st < 300 ? 'Done: the batch landed.' : 'The batch failed on chain.', st < 300 ? 'ok' : 'bad'); return reload(); }
+        if (st >= 200) { say('sendmsg', st < 300 ? 'Done: the batch landed.' + (calls.some(c => c.to === zSteward.STW) ? ' Additions to a list zSteward owns are queued for its delay; land them from steward-queue.html.' : '') : 'The batch failed on chain.', st < 300 ? 'ok' : 'bad'); return reload(); }
       }
       return say('sendmsg', 'Still pending: ' + id, 'warn');
     } catch (e) { if (e && e.code === 4001) return say('sendmsg', 'Rejected in the wallet.', 'bad'); }
@@ -289,7 +291,7 @@ $('send').onclick = async () => {
       if (!r || r.status === '0x0') return say('sendmsg', (r ? 'Reverted: ' : 'Still pending: ') + tx, 'bad');
     } catch (e) { return say('sendmsg', why(e), 'bad'); }
   }
-  say('sendmsg', 'Done: ' + calls.length + ' change' + (calls.length === 1 ? '' : 's') + ' landed.', 'ok');
+  say('sendmsg', 'Done: ' + calls.length + ' change' + (calls.length === 1 ? '' : 's') + ' landed.' + (calls.some(c => c.to === zSteward.STW) ? ' Additions to a list zSteward owns are queued for its delay; land them from steward-queue.html.' : ''), 'ok');
   reload();
 };
 
@@ -335,11 +337,12 @@ async function loadOthers() {
   const dl = $('others'); dl.textContent = '';
   const cs = [['zEndpoints', EPS], ['zSwapFlags', FLAGS], ['zRpcList', RPCL], ['zSolverList', SOLV]];
   const os = await Promise.all(cs.map(async ([, a]) => [await ownerOf(a), await pendingOf(a).catch(() => '')]));
-  steward = os[0][0];
-  $('steward').textContent = steward;
+  steward = epsOwner = os[0][0];
+  if (zSteward.held(epsOwner)) steward = ((await zSteward.steward()) || epsOwner).toLowerCase();
+  $('steward').textContent = steward + (zSteward.held(epsOwner) ? ' (through zSteward: additions wait its delay)' : '');
   cs.forEach(([n, a], i) => {
     const [o, p] = os[i];
-    dl.append(el('dt', null, n), el('dd', null, short(a) + ' · owner ' + (o === steward ? 'the steward' : o) + (p && !/^0x0{40}$/.test(p) ? ' · pending transfer to ' + p : '')));
+    dl.append(el('dt', null, n), el('dd', null, short(a) + ' · owner ' + (o === epsOwner ? (zSteward.held(o) ? 'zSteward' : 'the steward') : o) + (p && !/^0x0{40}$/.test(p) ? ' · pending transfer to ' + p : '')));
   });
   const br = '0x' + hex('bridge').padEnd(64, '0'), names = ['unset (the page decides)', 'on for everyone', 'off for everyone'];
   const st = await Promise.all([0, 1, 8453, 4663].map(c => read(FLAGS, '0xeb517a45' + br.slice(2) + uint(c)).then(h => Number(BigInt(h)))));

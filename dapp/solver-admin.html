@@ -97,6 +97,7 @@
 
 </main>
 
+<script src="./steward-route.js"></script>
 <script>
 const LIST='0x1Dfbb2f41B596F72187370469074C46de60dA2e3';
 const FILL='0x7A2f21e476cA2ADde027BC868c5a083338EEfE54';
@@ -272,7 +273,7 @@ async function readBack(h,el,describe){
 async function requireMainnet(){
   const c=await provider.request({method:'eth_chainId'});
   if(c!==MAINNET)throw Error('Wallet is on chain '+parseInt(c,16)+', not Ethereum mainnet. Switch back and retry.');
-  if(listOwner&&listOwner.toLowerCase()!==account.toLowerCase())
+  if(listOwner&&!await zSteward.may(account,listOwner))
     throw Error('Only the registry owner can write. Switch to '+listOwner+' and reconnect.');
 }
 async function connect(){
@@ -286,9 +287,10 @@ async function connect(){
     $('p-you').textContent=account;
     const o='0x'+(await call(LIST,'0x'+SEL_OWNER)).slice(26);
     listOwner=o;
-    $('p-owner').textContent=o+(o.toLowerCase()===account.toLowerCase()?'  \u2713 you':'  \u2717 not you');
+    const mine=await zSteward.may(account,o);
+    $('p-owner').textContent=o+(zSteward.held(o)?' (zSteward: changes wait its delay)':'')+(mine?'  \u2713 you':'  \u2717 not you');
     $('load').disabled=false;$('test8453').disabled=false;$('test4663').disabled=false;
-    show($('w-out'),'Connected via '+walletName(p)+'.',o.toLowerCase()===account.toLowerCase()?'ok':'bad');
+    show($('w-out'),'Connected via '+walletName(p)+'.',mine?'ok':'bad');
   }catch(e){show($('w-out'),e.message||String(e),'bad')}
 }
 function walletName(p){
@@ -408,8 +410,9 @@ async function applyRow(r,ep,tr){
     if(!(proven[r.i]&&proven[r.i].has(c)))return show($('t-out'),
       'Row '+r.i+' claims '+nameChain(c)+' but has not answered there in this session. Run that chain\'s probe first.','bad');
   }
-  const tx={from:account,to:LIST,data:setEpData(r.i,ep,r.adapter),value:'0x0'};
-  try{await requireMainnet()}catch(e){return show($('t-out'),e.message,'bad')}
+  let via,tx;
+  try{await requireMainnet();via=await zSteward.route(LIST,setEpData(r.i,ep,r.adapter),listOwner);tx={from:account,to:via.to,data:via.data,value:'0x0'}}
+  catch(e){return show($('t-out'),e.message,'bad')}
   show($('t-out'),'Simulating row '+r.i+'…');
   try{
     await provider.request({method:'eth_call',params:[tx,'latest']});
@@ -420,6 +423,7 @@ async function applyRow(r,ep,tr){
   try{
     const h=await provider.request({method:'eth_sendTransaction',params:[tx]});
     show($('t-out'),'Row '+r.i+' ('+r.name+') sent: '+h+'\nWaiting for it to mine\u2026','ok');
+    if(via.note)return show($('t-out'),'Row '+r.i+' ('+r.name+') '+via.note+'\n'+h,'ok');
     await readBack(h,$('t-out'),fresh=>{
       const after=fresh[r.i];
       return after&&after.endpoint===ep
@@ -476,9 +480,10 @@ function renderPlan(){
 }
 async function sendOne(i,btn){
   const p=plan[i];
-  const tx={from:account,to:p.to,data:p.data,value:'0x0'};
+  let via,tx;
   if(btn)btn.disabled=true;
-  try{await requireMainnet()}catch(e){if(btn)btn.disabled=false;show($('p-out'),e.message,'bad');return false}
+  try{await requireMainnet();via=await zSteward.route(p.to,p.data,listOwner);tx={from:account,to:via.to,data:via.data,value:'0x0'}}
+  catch(e){if(btn)btn.disabled=false;show($('p-out'),e.message,'bad');return false}
   show($('p-out'),'Simulating: '+p.label+'…');
   try{ await provider.request({method:'eth_call',params:[tx,'latest']}); }
   catch(e){
@@ -491,6 +496,7 @@ async function sendOne(i,btn){
     const h=await provider.request({method:'eth_sendTransaction',params:[tx]});
     show($('p-out'),p.label+' sent: '+h+'\nWaiting for it to mine\u2026','ok');
     if(btn)btn.textContent='sent';
+    if(via.note){show($('p-out'),p.label+': '+via.note+'\n'+h,'ok');return true}
     await readBack(h,$('p-out'),()=>p.label+' landed.');
     return true;
   }catch(e){ if(btn)btn.disabled=false; show($('p-out'),e.message||String(e),'bad'); return false }

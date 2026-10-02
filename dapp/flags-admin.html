@@ -118,12 +118,13 @@
   </section>
 </main>
 
+<script src="./steward-route.js"></script>
 <script>
 const FLAGS = '0x0000008a1a3C78440d0a28EBB4bb5526abA91d45';
 const RPC = 'https://ethereum-rpc.publicnode.com';
 const NAME = '6272696467650000000000000000000000000000000000000000000000000000'; // "bridge"
 const SEL = { owner:'8da5cb5b', pending:'e30c3978', stateOf:'eb517a45', stateAt:'ab9bea1d',
-              setMany:'f5459d96', transfer:'f2fde38b', accept:'79ba5097' };
+              setMany:'f5459d96', set:'97f10dcd', transfer:'f2fde38b', accept:'79ba5097' };
 const CHAINS = [
   { id: 0,    name: 'All chains',  note: 'fallback' },
   { id: 1,    name: 'Ethereum',    note: 'canonical bridges' },
@@ -142,7 +143,7 @@ const say = (el, text, kind) => {
 };
 const hide = el => { $(el).className = 'msg'; };
 
-let provider = null, account = null, owner = null, pending = null;
+let provider = null, account = null, owner = null, pending = null, canWrite = false;
 const stored = new Map();   // chainId -> raw stateAt
 const wanted = new Map();   // chainId -> what the selects say
 
@@ -162,7 +163,7 @@ async function load() {
   try {
     owner = '0x' + (await rpcCall('0x' + SEL.owner)).slice(26);
     pending = '0x' + (await rpcCall('0x' + SEL.pending)).slice(26);
-    $('owner').textContent = owner;
+    $('owner').textContent = owner + (zSteward.held(owner) ? ' (zSteward: changes wait its delay, Off applies at once)' : '');
     $('pending').textContent = /^0x0+$/.test(pending) ? 'none' : pending;
     for (const c of CHAINS) {
       stored.set(c.id, Number(await rpcCall('0x' + SEL.stateAt + NAME + hex(c.id))));
@@ -198,7 +199,7 @@ function render() {
       o.value = String(i); o.textContent = l; sel.append(o);
     });
     sel.value = String(wanted.has(c.id) ? wanted.get(c.id) : stored.get(c.id));
-    sel.disabled = !account || account.toLowerCase() !== (owner || '').toLowerCase();
+    sel.disabled = !canWrite;
     sel.onchange = () => { wanted.set(c.id, Number(sel.value)); diff(); };
     cell.append(sel); tr.append(cell);
     $('rows').append(tr);
@@ -212,14 +213,15 @@ function changes() {
 
 function diff() {
   const ch = changes();
-  const mine = account && owner && account.toLowerCase() === owner.toLowerCase();
+  const mine = canWrite;
   $('apply').disabled = !ch.length || !mine;
   $('diff').textContent = !ch.length ? ''
     : ch.map(c => `${c.name}: ${LABEL[stored.get(c.id)].split(' —')[0]} → ${LABEL[wanted.get(c.id)].split(' —')[0]}`).join('   ·   ');
 }
 
-function checkWho() {
-  const mine = account && owner && account.toLowerCase() === owner.toLowerCase();
+async function checkWho() {
+  canWrite = !!account && await zSteward.may(account, owner);
+  const mine = canWrite;
   const isPending = account && pending && account.toLowerCase() === pending.toLowerCase();
   $('propose').disabled = !mine;
   $('cancel').disabled = !mine || /^0x0+$/.test(pending || '0x0');
@@ -242,18 +244,19 @@ async function send(data, msgEl) {
   try {
     // Simulate first: a revert here is almost always "not the steward", and it
     // is much cheaper to learn that before signing.
-    await provider.request({ method: 'eth_call', params: [{ from: account, to: FLAGS, data }, 'latest'] });
+    var via = await zSteward.route(FLAGS, data, owner);
+    await provider.request({ method: 'eth_call', params: [{ from: account, to: via.to, data: via.data }, 'latest'] });
   } catch (e) { return say(msgEl, 'It would revert: ' + (e.message || e), 'bad'); }
   try {
     const tx = await provider.request({ method: 'eth_sendTransaction',
-      params: [{ from: account, to: FLAGS, data }] });
+      params: [{ from: account, to: via.to, data: via.data }] });
     say(msgEl, 'Sent ' + tx + '\nWaiting for it to be mined…', 'warn');
     for (let i = 0; i < 120; i++) {
       await new Promise(r => setTimeout(r, 2500));
       const r = await provider.request({ method: 'eth_getTransactionReceipt', params: [tx] });
       if (r) {
         if (r.status === '0x0') return say(msgEl, 'Reverted on chain: ' + tx, 'bad');
-        say(msgEl, 'Done — ' + tx, 'ok');
+        say(msgEl, 'Done — ' + tx + (via.note ? '\n' + via.note : ''), 'ok');
         wanted.clear();
         return load();
       }
@@ -268,8 +271,13 @@ $('apply').onclick = () => {
   if (ch.some(c => wanted.get(c.id) === 2) &&
       !confirm('Setting a lane to Off withdraws it from everyone, including viewers who already '
              + 'opted in, on every device. Continue?')) return;
-  // setMany, so a reorg or a stuck nonce cannot leave the chains half-applied.
   const ids = ch.map(c => c.id), st = ch.map(c => wanted.get(c.id));
+  // Under zSteward an Off applies at once only as set(name, chain, 2); setMany
+  // is queued like any other change. So Off-only edits go chain by chain.
+  if (zSteward.held(owner) && st.every(x => x === 2)) {
+    return (async () => { for (const id of ids) await send('0x' + SEL.set + NAME + hex(id) + hex(2), 'setmsg'); })();
+  }
+  // setMany, so a reorg or a stuck nonce cannot leave the chains half-applied.
   const data = '0x' + SEL.setMany + NAME
     + hex(96) + hex(96 + 32 + ids.length * 32)
     + hex(ids.length) + ids.map(hex).join('')

@@ -33,6 +33,7 @@ const SOURCES = {
   zSwapFlags: "src/utils/zSwapFlags.sol",
   zEndpoints: "src/utils/zEndpoints.sol",
   zGuard: "src/utils/zGuard.sol",
+  zSteward: "src/utils/zSteward.sol",
   PM: "src/PM.sol",
   TokenListRenderer: "src/utils/TokenListRenderer.sol",
   FWCPoisonPillProposer: "src/dao/FWCPoisonPill.sol",
