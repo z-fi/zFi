@@ -752,6 +752,25 @@ if (exported) {
     return `zRpcList, zEndpoints and zSolverList from ${pools.length} L1_SEED reads; zSteward ${stw[1]} named, not required`;
   });
 
+  check('a name read off the wallet\'s chain needs two of the page\'s own nodes to agree', () => {
+    // On Base and Robinhood an Ethereum-rooted name (.eth, .wei, .gwei and
+    // their text records) is read from two L1_SEED nodes that must agree, and
+    // a Basename read off Base asks two Base nodes, the page's built-in ones
+    // first. On the name's own chain the wallet's node answers, as it does for
+    // every read. A recipient is the one read a single lying node could turn
+    // into a payment to someone else.
+    if (!html.includes('nR=(t,d)=>CHAIN_ID===1?cR(t,d):agreeRead([{to:t,data:d},L],L1_SEED)')) throw Error('nR no longer needs two page-named Ethereum nodes off Ethereum');
+    if (!html.includes('const B_SEED=[...CHAINS[BASE_ID].rpcs],baseRead=(m,p)=>CHAIN_ID===BASE_ID?rpc(m,p):agreeRead(p,[...new Set([...B_SEED,')) throw Error('Basenames off Base no longer need two Base nodes to agree');
+    if (!/const\[a,b\]=await Pa\(\[one\(\),one\(\)\]\);if\(a!==b\)throw/.test(html)) throw Error('agreeRead no longer requires two answers to match');
+    const a = html.indexOf('nsFwd=async'), b = html.indexOf('setTextReq=');
+    if (a < 0 || b < a) throw Error('the name readers moved');
+    const region = html.slice(a, b);
+    if (/\bcR\(|cfgRead\(|httpRead\(|nodeRead\(|l1Read\(/.test(region)) throw Error('a name reader reads around nR and baseRead');
+    const n = (region.match(/\bnR\(/g) || []).length;
+    if (n < 9) throw Error(`only ${n} name reads go through nR`);
+    return `${n} Ethereum-rooted name reads through nR; Basenames through baseRead`;
+  });
+
   check('WalletConnect protocol tags match the spec', () => {
     const want = { T_PROPOSE: 1100, T_SETTLE_RES: 1103, T_REQ: 1108 };
     for (const [name, v] of Object.entries(want)) {

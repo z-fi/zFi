@@ -1464,9 +1464,9 @@ if(!curated)loadCurated().catch(Np);
 return r}
 catch(e){last=e;if(!e.retry)throw e}}
 throw last||Er("no read node answered")};
-const agreeRead=async q=>{const us=[...new Set([rpcPin(),...rpcPool.slice(rpcPi),...rpcPool.slice(0,rpcPi)])].filter(Boolean).slice(0,6);let i=0;
+const agreeRead=async(q,us=[...new Set([rpcPin(),...rpcPool.slice(rpcPi),...rpcPool.slice(0,rpcPi)])].filter(Boolean).slice(0,6))=>{let i=0;
 const one=async()=>{let last;while(i<us.length){try{return Lc(await hexOk(await httpRead(us[i++],C,q)))}catch(e){last=e;if(!e.retry)throw e}}throw last||Er("no read node answered")};
-const[a,b]=await Pa([one(),one()]);if(a!==b)throw Er("the read nodes disagree");return a};
+const[a,b]=await Pa([one(),one()]);if(a!==b)throw Er("the read nodes disagree");return a},nR=(t,d)=>CHAIN_ID===1?cR(t,d):agreeRead([{to:t,data:d},L],L1_SEED);
 const isSign=m=>m===S||m.indexOf("wallet_")===0||m==="eth_requestAccounts"||m==="eth_accounts"||WC_SIGN.indexOf(m)>=0;
 const hexOk=r=>typeof r==="string"&&/^0x[0-9a-fA-F]*$/.test(r)?r:Promise.reject(Oa(Er("bad hex from node"),{retry:1}));
 const rpc=(method,params)=>{const e=prov();
@@ -1550,7 +1550,7 @@ const a="0x"+Lc(s.slice(24));
 return /^0x0{40}$/.test(a)?"":a};
 const nameOk=n=>/^[a-z0-9.-]+$/.test(n)
 &&n.split(".").every(l=>l&&l.length<256),
-nsFwd=async(reg,n)=>retAddr(await cR(reg,"0x4f896d4f"+pad32(namehash(n)))),
+nsFwd=async(reg,n)=>retAddr(await nR(reg,"0x4f896d4f"+pad32(namehash(n)))),
 dnsEnc=n=>{let h="";
 for(const l of n.split(".")){const b=cpU8(l);
 h+=cpHex([b.length,...b])}
@@ -1566,8 +1566,8 @@ const len=Nm(Bx(h.slice(off,off+64)))*2;
 if(!Ns(len)||off+64+len>h.length)return"";
 return "0x"+h.slice(off+64,off+64+len)},
 NS_ERR=()=>Oa(Er("name lookup failed"),{retry:1}),
-nsBatch=async cs=>{let bad=0;const one=c=>cfgRead(C,[c,L]).catch(()=>{bad++;return null});
-if(cs.length>1)try{const r=decAgg3(await cR(MC3,encAgg3(cs)));
+nsBatch=async cs=>{let bad=0;const one=c=>nR(c.to,c.data).catch(()=>{bad++;return null});
+if(cs.length>1)try{const r=decAgg3(await nR(MC3,encAgg3(cs)));
 if(r.length===cs.length)return r}catch{}
 const r=await Pa(cs.map(one));if(bad&&r.every(x=>x==null))throw NS_ERR();return r},
 ensFind=async n=>{const parts=n.split("."),
@@ -1581,7 +1581,7 @@ if(!f)return"";
 const nh=pad32(namehash(n)),inner="0x"+SEL_EADDR+nh,ci=c=>({to:f.r,data:"0xf1cb7e06"+nh+eU(2147483648+c)}),[w,a,...m]=await nsBatch([{to:f.r,data:supports(SEL_ERESOLVE)},{to:f.r,data:inner},...d>1?[ci(d),ci(0)]:[]]),x=f.exact&&m.map(decBytes).find(y=>isAddr(y)&&!/^0x0{40}$/.test(y));
 if(x)return Lc(x);
 if(!/^0x0{63}1$/.test(w))return f.exact?retAddr(a):"";
-try{return retAddr(decBytes(await cR(f.r,"0x"+SEL_ERESOLVE+encResolve(dnsEnc(n),inner))))}
+try{return retAddr(decBytes(await nR(f.r,"0x"+SEL_ERESOLVE+encResolve(dnsEnc(n),inner))))}
 catch(e){
 if(/556f1830/i.test((e&&e.data?Js(e.data):"")+((e&&e.message)||"")))
 throw Oa(Er(NAME_OFFCHAIN),{offchain:true});
@@ -1589,18 +1589,10 @@ return"";
 }},
 ensRevName=async(nd,r)=>{
 if(!r)return"";
-try{return dS(await cR(r,"0x"+SEL_ENAME+pad32(nd))).trim()}catch{return""}},
+try{return dS(await nR(r,"0x"+SEL_ENAME+pad32(nd))).trim()}catch{return""}},
 BNREG="0xB94704422c2a1E396835A571837Aa5AE53285a95",
 BASE_ID=8453;
-let bsi=0;
-const baseRead=async(method,params)=>{
-if(CHAIN_ID===BASE_ID)return rpc(method,params);
-const us=CHAINS[BASE_ID].rpcs;
-for(let k=0;k<us.length*2;k++){
-try{return await httpRead(us[bsi%us.length],method,params)}catch(e){if(!e.retry)throw e;bsi++}
-}
-throw Er("no base read node");
-},
+const B_SEED=[...CHAINS[BASE_ID].rpcs],baseRead=(m,p)=>CHAIN_ID===BASE_ID?rpc(m,p):agreeRead(p,[...new Set([...B_SEED,...CHAINS[BASE_ID].rpcs])].slice(0,6)),
 bnRead=c=>baseRead(C,[c,L]).catch(Nl),
 bnRes=async nd=>retAddr(await baseRead(C,[{to:BNREG,data:"0x"+SEL_RSLV+pad32(nd)},L]).catch(()=>{throw NS_ERR()})),
 bnFwd=async n=>{const nd=namehash(n),r=await bnRes(nd);
@@ -1614,10 +1606,10 @@ nameFwd=(n,d)=>/\.gwei$/i.test(n)?nsFwd(GNS,n):/\.wei$/i.test(n)?nsFwd(WNS,n):/\
 TACIT_KEY="finance.tacit",
 textCall=n=>"0x59d1d43c"+pad32(namehash(n))+eU(64)+strTail(TACIT_KEY),
 ensText=async n=>{const f=await ensFind(n);if(!f)return"";const inner=textCall(n);
-if(f.exact)return dS(await cR(f.r,inner)||"0x");
-try{return dS(decBytes(await cR(f.r,"0x"+SEL_ERESOLVE+encResolve(dnsEnc(n),inner))))}catch(e){if(/revert/i.test(e&&e.message))return"";throw e}},
-nameText=async n=>/\.gwei$/i.test(n)?dS(await cR(GNS,textCall(n))||"0x")
-:/\.wei$/i.test(n)?dS(await cR(WNS,textCall(n))||"0x")
+if(f.exact)return dS(await nR(f.r,inner)||"0x");
+try{return dS(decBytes(await nR(f.r,"0x"+SEL_ERESOLVE+encResolve(dnsEnc(n),inner))))}catch(e){if(/revert/i.test(e&&e.message))return"";throw e}},
+nameText=async n=>/\.gwei$/i.test(n)?dS(await nR(GNS,textCall(n))||"0x")
+:/\.wei$/i.test(n)?dS(await nR(WNS,textCall(n))||"0x")
 :/\.base\.eth$/i.test(n)?bnText(n):/\.eth$/i.test(n)?ensText(n):"",
 setTextReq=async n=>{const k=strTail(TACIT_KEY),v=strTail(cpTacAddr(cpSeed)),tail=eU(96)+eU(96+k.length/2)+k+v;
 if(/\.g?wei$/i.test(n))return{from:account,to:/\.gwei$/i.test(n)?GNS:WNS,data:"0x3fb24782"+pad32(namehash(n))+tail};

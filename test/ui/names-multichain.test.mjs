@@ -33,9 +33,11 @@ const RH = 4663;
 const NAMED = '0x3333333333333333333333333333333333333333';
 
 // Every mainnet RPC the page carries, plus Base's, keyed the way the harness
-// routes them: a JSON-RPC POST whose URL contains the fragment.
-const L1_FRAGMENTS = ['ethereum-rpc', 'blastapi'];
-const BASE_FRAGMENT = 'base-rpc';
+// routes them: a JSON-RPC POST whose URL contains the fragment. A name read on
+// a chain the wallet is not on goes to two of these, which must agree.
+const L1_FRAGMENTS = ['ethereum-rpc', 'blastapi', 'gateway.tenderly', 'mevblocker', 'onfinality'];
+const BASE_FRAGMENTS = ['base-rpc', 'blxrbdn'];
+const EVIL = '0x6666666666666666666666666666666666666666';
 
 /** A mainnet MockChain that knows one .eth name and one .wei name. */
 const l1Fixture = () => {
@@ -57,7 +59,7 @@ const baseFixture = () => {
 async function openOn(chainId, { l1 = l1Fixture(), base = null } = {}) {
   const chain = new MockChain({ chainId, autoConnected: true });
   for (const f of L1_FRAGMENTS) chain.remotes[f] = l1;
-  if (base) chain.remotes[BASE_FRAGMENT] = base;
+  if (base) for (const f of BASE_FRAGMENTS) chain.remotes[f] = base;
   const p = await loadPage({ chain });
   await p.connect();
   p.click('tabSend');
@@ -156,7 +158,7 @@ describe('the registry walk is one read, not one per label', () => {
   const l1Requests = chain =>
     (chain.httpLog || []).filter(e => L1_FRAGMENTS.some(f => e.url.includes(f))).length;
 
-  test('a deep .eth name costs the same two mainnet round trips as a shallow one', async () => {
+  test('a deep .eth name costs the same mainnet round trips as a shallow one', async () => {
     const l1 = l1Fixture();
     l1.ensNames.set('pay.team.alice.eth', NAMED);
     const { p, chain } = await openOn(RH, { l1 });
@@ -167,13 +169,14 @@ describe('the registry walk is one read, not one per label', () => {
     assert.equal(shown.toLowerCase(), NAMED);
 
     // One batch for the four-label walk, one at the resolver it found, which
-    // asks addr() and supportsInterface(ENSIP-10) together.
-    assert.equal(l1Requests(chain) - before, 2,
+    // asks addr() and supportsInterface(ENSIP-10) together - each asked of two
+    // nodes that must agree.
+    assert.equal(l1Requests(chain) - before, 4,
       'the walk must not spend a round trip per label');
 
     const batched = l1.calls.slice(seen).filter(c =>
       c.to.toLowerCase() === A.MC3.toLowerCase() && c.selector === SEL.AGG3);
-    assert.equal(batched.length, 2, 'and multicalls carry both');
+    assert.equal(batched.length, 4, 'and multicalls carry both');
     p.close();
   });
 
@@ -245,10 +248,77 @@ describe('Basenames are read from Base', () => {
       return req(a);
     };
     const { p, chain } = await openOn(RH, { base });
-    chain.remotes['blxrbdn'] = base;
     const { shown, status } = await resolveRecipient(p, 'alice.base.eth');
     assert.equal(shown, '');
     assert.doesNotMatch(status, /not registered/i);
+    p.close();
+  });
+});
+
+describe('a name is only taken on the word of two of the page\'s own nodes', () => {
+  /** A mainnet fixture that answers alice.eth with someone else's address. */
+  const liarL1 = () => { const l = l1Fixture(); l.ensNames.set('alice.eth', EVIL); l.names.set('alice.wei', EVIL); return l; };
+  const liarBase = () => { const b = baseFixture(); b.ensNames.set('alice.base.eth', EVIL); return b; };
+
+  for (const [label, chainId] of [['Base', BASE], ['Robinhood', RH]]) {
+    for (const name of ['alice.eth', 'alice.wei']) {
+      test(`on ${label}, ${name} is refused when one mainnet node says otherwise`, async () => {
+        const chain = new MockChain({ chainId, autoConnected: true });
+        chain.remotes['ethereum-rpc'] = l1Fixture();
+        chain.remotes['blastapi'] = liarL1();
+        const p = await loadPage({ chain });
+        await p.connect();
+        p.click('tabSend');
+        await p.settle();
+        const { shown } = await resolveRecipient(p, name);
+        assert.equal(shown, '', 'no recipient may be shown');
+        assert.ok(!p.text('rcvEl').toLowerCase().includes(EVIL.slice(2)), 'least of all the liar\'s');
+        p.close();
+      });
+    }
+  }
+
+  test('from another chain, a Basename is refused when one Base node says otherwise', async () => {
+    const chain = new MockChain({ chainId: RH, autoConnected: true });
+    for (const f of L1_FRAGMENTS) chain.remotes[f] = l1Fixture();
+    chain.remotes['base-rpc'] = baseFixture();
+    chain.remotes['blxrbdn'] = liarBase();
+    const p = await loadPage({ chain });
+    await p.connect();
+    p.click('tabSend');
+    await p.settle();
+    const { shown } = await resolveRecipient(p, 'alice.base.eth');
+    assert.equal(shown, '');
+    p.close();
+  });
+
+  test('a node the curated list put first cannot outvote the page\'s own', async () => {
+    // A curated Ethereum node leads the read path, but name reads on an L2 go
+    // to L1_SEED, which holds only the nodes built into the page.
+    const chain = new MockChain({ chainId: RH, autoConnected: true });
+    for (const f of L1_FRAGMENTS) chain.remotes[f] = l1Fixture();
+    chain.remotes['curated.example'] = liarL1();
+    const p = await loadPage({ chain });
+    await p.connect();
+    p.window.eval('L1_RPCS.unshift("https://curated.example")');
+    p.click('tabSend');
+    await p.settle();
+    const { shown } = await resolveRecipient(p, 'alice.eth');
+    assert.equal(shown.toLowerCase(), NAMED);
+    p.close();
+  });
+
+  test('connected on Ethereum, the wallet\'s own node answers alone, as before', async () => {
+    const chain = new MockChain({ chainId: 1, autoConnected: true });
+    chain.ensResolver = A.ENSRESOLVER;
+    chain.ensNames.set('alice.eth', NAMED);
+    chain.remotes['blastapi'] = liarL1();
+    const p = await loadPage({ chain });
+    await p.connect();
+    p.click('tabSend');
+    await p.settle();
+    const { shown } = await resolveRecipient(p, 'alice.eth');
+    assert.equal(shown.toLowerCase(), NAMED);
     p.close();
   });
 });
