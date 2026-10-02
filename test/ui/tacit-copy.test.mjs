@@ -58,7 +58,7 @@ function poolChain() {
 const serve = (chain, route, body) => Object.defineProperty(chain.lanes, RELAY + route, {
   configurable: true, enumerable: true, get: () => body,
 });
-const roster = { 'zswap:ep3': JSON.stringify({ t: Date.now(), v: [[], [], [], ['https://' + RELAY], [], [], [], [], [], [], [], []] }) };
+const roster = { 'zswap:ep4': JSON.stringify({ t: Date.now(), v: [[], [], [], ['https://' + RELAY], [], [], [], [], [], [], [], []] }) };
 
 async function unlocked(chain) {
   const p = await loadPage({ chain, storage: roster });

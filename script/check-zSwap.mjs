@@ -734,6 +734,24 @@ if (exported) {
     return 'account and recipient replaced by fresh random addresses; refused if either survives';
   });
 
+  check('the curated lists are read only from nodes the page names', () => {
+    // zRpcList, zEndpoints and zSolverList are read from L1_SEED, the Ethereum
+    // and logs nodes in the page's own bytes, never from a node a list added,
+    // so no node can vouch for the list that named it. STW is only a label:
+    // the page follows the lists whoever holds them.
+    if (!/const L1_RPCS=CHAINS\[1\]\.rpcs,L1_SEED=\[\.\.\.L1_RPCS\];/.test(html)) throw Error('L1_SEED is not a copy of the built-in Ethereum nodes');
+    if (!/L1_SEED\.push\(\.\.\.CP_LOGS\);/.test(html)) throw Error('L1_SEED does not take the built-in logs nodes');
+    if (/L1_SEED\.(unshift|splice)|L1_SEED=(?!\[\.\.\.L1_RPCS\])|epM\(L1_SEED/.test(html)) throw Error('something other than the built-in nodes reaches L1_SEED');
+    const pools = [...html.matchAll(/quorum2\(([^,]+),/g)].map(m => m[1]);
+    if (pools.length !== 3 || pools.some(x => x !== 'L1_SEED')) throw Error(`quorum2 is asked of ${pools.join(', ')}; every list read must go to L1_SEED`);
+    for (const r of [/quorum2\(L1_SEED,\{to:RPCS_PIN,data:"0x"\+SEL_LIST\}\)/, /quorum2\(L1_SEED,\{to:list,data:"0x"\+SEL_SLIST\}\)/, /rd=x=>quorum2\(L1_SEED,x\)/])
+      if (!r.test(html)) throw Error(`a list read moved: ${r}`);
+    const stw = html.match(/const STW="(0x[0-9a-fA-F]{40})"/);
+    const want = fs.readFileSync(path.join(ROOT, 'deploy', 'zSteward.address.txt'), 'utf8').trim();
+    if (!stw || stw[1].toLowerCase() !== want.toLowerCase()) throw Error(`STW is ${stw && stw[1]}, deploy/zSteward.address.txt says ${want}`);
+    return `zRpcList, zEndpoints and zSolverList from ${pools.length} L1_SEED reads; zSteward ${stw[1]} named, not required`;
+  });
+
   check('WalletConnect protocol tags match the spec', () => {
     const want = { T_PROPOSE: 1100, T_SETTLE_RES: 1103, T_REQ: 1108 };
     for (const [name, v] of Object.entries(want)) {

@@ -1008,7 +1008,7 @@ describe('self-help', () => {
  */
 describe('a relay that does not answer', () => {
   const roster = (...rs) => ({
-    storage: { 'zswap:ep3': JSON.stringify({ t: Date.now(), v: [[], [], [], rs, [], [], [], [], [], [], [], []] }) },
+    storage: { 'zswap:ep4': JSON.stringify({ t: Date.now(), v: [[], [], [], rs, [], [], [], [], [], [], [], []] }) },
   });
 
   test('the roster keeps every relay it names, the built-in one last', async () => {
@@ -1050,7 +1050,7 @@ describe('a relay that does not answer', () => {
 
   test('a relay the viewer pinned is used alone, with no fallback', async () => {
     const p = await open({ storage: {
-      'zswap:ep3': JSON.stringify({ t: Date.now(), v: [[], [], [], [], [], [], [], [], [], [], [], []] }),
+      'zswap:ep4': JSON.stringify({ t: Date.now(), v: [[], [], [], [], [], [], [], [], [], [], [], []] }),
       'zswap:cprelay': 'https://down.relay',
     } });
     assert.equal(p.window.eval('cpRelayBase()'), 'https://down.relay');
@@ -1851,7 +1851,7 @@ describe('a note list that names a destination', () => {
 
 describe('the points a wallet has been credited', () => {
   const PTS = 'relay.two.example';
-  const roster = { 'zswap:ep3': JSON.stringify({ t: Date.now(), v: [[], [], [], ['https://' + RELAY, 'https://' + PTS], [], [], [], [], [], [], [], []] }) };
+  const roster = { 'zswap:ep4': JSON.stringify({ t: Date.now(), v: [[], [], [], ['https://' + RELAY, 'https://' + PTS], [], [], [], [], [], [], [], []] }) };
   const serve = (p, host, body) => {
     Object.defineProperty(p.chain.lanes, host + '/points/', {
       configurable: true, enumerable: true, get: () => body,

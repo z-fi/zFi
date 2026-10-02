@@ -59,6 +59,9 @@ export const A = {
   ZROUTER: '0x000000000000FB114709235f1ccBFfb925F600e4',
   PERMIT2: '0x000000000022D473030F116dDEE9F6B43aC78BA3',
   MC3: '0xcA11bde05977b3631167028862bE2a173976CA11',
+  // zSteward, the optional delayed owner of the curated lists. The page names
+  // it only to say which lists it holds.
+  STEWARD: '0x0000005F38594Af514e65e7d1e4EddE773bcF886',
   // Whatever a simulated safeSummonDAICO answers. The page never reads it.
   CAUSE_DAO: '0x00000000000000000000000000000000da0da0da',
   // ShareOffering — where a cause is bought, as the page pins it.
@@ -2454,7 +2457,7 @@ export function assertAddressesMatchPage(assert) {
     // Not patched by any suite, so the fixtures answer at the real addresses
     // and a redeploy has to update both.
     PFACTORY: 'PFACTORY', PLQLENS: 'PLQLENS', PROUTE: 'PROUTE',
-    TOKENLIST: 'TOKENLIST', ZLISTLENS: 'ZLISTLENS', V4LENS: 'V4LENS',
+    TOKENLIST: 'TOKENLIST', ZLISTLENS: 'ZLISTLENS', V4LENS: 'V4LENS', STEWARD: 'STW',
   };
   // The book, the route and the launcher are per-chain: the page keeps their
   // mainnet addresses in the `MB` table and rebinds the names in setChain.

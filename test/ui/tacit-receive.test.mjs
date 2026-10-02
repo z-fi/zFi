@@ -17,7 +17,7 @@ const KEY = '0x' + '11'.repeat(32);
 const NPK0 = 4783613888947850950044057964142544727340891053660060203316524895455918575012n;
 const word = x => BigInt(x).toString(16).padStart(64, '0');
 
-const roster = k => ({ 'zswap:ep3': JSON.stringify({ t: Date.now(), v: [[], [], [], [], [], [], [], [], k[1] || [], k[8453] || [], [], []] }) });
+const roster = k => ({ 'zswap:ep4': JSON.stringify({ t: Date.now(), v: [[], [], [], [], [], [], [], [], k[1] || [], k[8453] || [], [], []] }) });
 
 function chainOn(id, { live = true, infoChain } = {}) {
   const chain = new MockChain({ chainId: '0x' + id.toString(16) });

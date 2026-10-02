@@ -26,7 +26,7 @@ const intent = (o = {}) => ({
 });
 const hint = { outputs: [{ v: (AMOUNT - 10n ** 15n).toString(), npk: '5', rho: '9' }, null], fee: '1000000000000000', memo0: '0x', memo1: '0x' };
 const link = (o = {}, chainId = 1) => 'tacit-box=' + Buffer.from(JSON.stringify({ chainId, intent: intent(o), hint })).toString('base64url');
-const roster = (k1 = [KEEPER], k8453 = []) => ({ 'zswap:ep3': JSON.stringify({ t: Date.now(), v: [[], [], [], [], [], [], [], [], k1, k8453, [], []] }) });
+const roster = (k1 = [KEEPER], k8453 = []) => ({ 'zswap:ep4': JSON.stringify({ t: Date.now(), v: [[], [], [], [], [], [], [], [], k1, k8453, [], []] }) });
 const SRC = readFileSync(new URL('../../zSwap.html', import.meta.url), 'utf8');
 const EPS = /const EPS="(0x[0-9a-fA-F]{40})"/.exec(SRC)[1].toLowerCase();
 const RPCS_PIN = /const RPCS_PIN="(0x[0-9a-fA-F]{40})"/.exec(SRC)[1].toLowerCase();

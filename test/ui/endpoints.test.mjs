@@ -7,6 +7,12 @@ import { A, MockChain, loadPage, closeAllPages } from './harness.mjs';
 const SRC = readFileSync(new URL('../../zSwap.html', import.meta.url), 'utf8');
 const EPS = /const EPS="(0x[0-9a-fA-F]{40})"/.exec(SRC)[1].toLowerCase();
 const RPCS_PIN = /const RPCS_PIN="(0x[0-9a-fA-F]{40})"/.exec(SRC)[1].toLowerCase();
+const SOLVERS = /const SOLVERS_PIN="(0x[0-9a-fA-F]{40})"/.exec(SRC)[1].toLowerCase();
+const FLAGS = /(?:const|let) FLAGS="(0x[0-9a-fA-F]{40})"/.exec(SRC)[1].toLowerCase();
+const STW = /const STW="(0x[0-9a-fA-F]{40})"/.exec(SRC)[1].toLowerCase();
+/* The nodes named in the page's own bytes: its Ethereum seeds, then its logs nodes. */
+const SEEDS = ['https://ethereum-rpc.publicnode.com', 'https://eth-mainnet.public.blastapi.io', 'https://mainnet.gateway.tenderly.co',
+  'https://rpc.mevblocker.io', 'https://gateway.tenderly.co/public/mainnet', 'https://eth.api.onfinality.io/public'];
 
 after(closeAllPages);
 
@@ -54,7 +60,7 @@ describe('the endpoint roster', () => {
     const chain = serve(new MockChain(), CURATED);
     const p = await loadPage({ walletless: true, chain });
     await p.settle();
-    assert.equal(chain.epAsks.length, 2, 'two nodes, one call each');
+    assert.equal(chain.epAsks.length, 4, 'four of the page\'s own nodes, one call each');
     assert.equal(chain.epAsks[0], chain.epAsks[1]);
     const [svc, ids] = IFACE.decodeFunctionData('listsOf', chain.epAsks[0]);
     assert.deepEqual([...svc], ASKED.map(q => b32(q[0])));
@@ -83,7 +89,7 @@ describe('the endpoint roster', () => {
     assert.deepEqual(JSON.parse(ev(p, 'JSON.stringify(TB_K[8453])')), ['https://tacit-evm-pool-keeper-base.onrender.com/evm-pool/keeper'], 'a keeper base ending in / is refused');
     assert.deepEqual(JSON.parse(ev(p, 'JSON.stringify(TB_K[4663])')), ['https://k4663.cur/keeper', 'https://tacit-evm-pool-keeper-robinhood.onrender.com/evm-pool/keeper'], 'each chain keeps its own keepers');
     assert.ok(ev(p, 'AD_API').some(u => u.startsWith('https://cdn.jsdelivr.net/')), 'the built-in mirrors stay behind it');
-    const kept = JSON.parse(p.window.localStorage.getItem('zswap:ep3'));
+    const kept = JSON.parse(p.window.localStorage.getItem('zswap:ep4'));
     assert.ok(kept && kept.t > 0 && kept.v.length === 12, 'the answer is kept for the next load');
     assert.deepEqual(p.consoleErrors, []);
     p.close();
@@ -103,7 +109,7 @@ describe('the endpoint roster', () => {
     await p.settle();
     assert.equal(ev(p, 'CHAIN_ID'), 8453);
     assert.equal(ev(p, 'rpcPool[0]'), 'https://base.cur');
-    assert.equal(chain.epAsks.length, 2, 'the roster is read from mainnet on an L2 too');
+    assert.equal(chain.epAsks.length, 4, 'the roster is read from mainnet on an L2 too');
     p.close();
   });
 
@@ -133,7 +139,7 @@ describe('the endpoint roster', () => {
     const p = await loadPage({ walletless: true, chain, storage: { 'zswap:ep': JSON.stringify({ t: Date.now(), v: old }) } });
     await p.settle();
     assert.ok(!ev(p, 'AD_API').includes('https://l1.old'), 'an L1 node never lands among the airdrop mirrors');
-    assert.equal(chain.epAsks.length, 2, 'the roster is read afresh');
+    assert.equal(chain.epAsks.length, 4, 'the roster is read afresh');
     p.close();
   });
 
@@ -143,7 +149,7 @@ describe('the endpoint roster', () => {
     const p = await loadPage({ walletless: true, chain, storage: { 'zswap:ep2': JSON.stringify({ t: Date.now(), v: old }) } });
     await p.settle();
     assert.deepEqual(JSON.parse(ev(p, 'JSON.stringify(TB_K[1])')), ['https://tacit-evm-pool-keeper.onrender.com/evm-pool/keeper'], 'an L1 node never becomes a keeper');
-    assert.equal(chain.epAsks.length, 2, 'the roster is read afresh');
+    assert.equal(chain.epAsks.length, 4, 'the roster is read afresh');
     p.close();
   });
 
@@ -155,7 +161,8 @@ describe('the endpoint roster', () => {
     await p.settle();
     assert.equal(ev(p, 'cpRelayBase()'), 'https://api.tacit.finance');
     assert.notEqual(ev(p, 'CHAINS[8453].rpcs[0]'), 'https://base.cur');
-    assert.equal(p.window.localStorage.getItem('zswap:ep3'), null, 'nothing kept from a split answer');
+    const kept = JSON.parse(p.window.localStorage.getItem('zswap:ep4') || 'null');
+    assert.ok(!kept || kept.v.slice(0, 11).every(l => l.length === 0), 'only what the other nodes agreed on is kept');
     p.close();
   });
 
@@ -164,7 +171,7 @@ describe('the endpoint roster', () => {
     const v = CURATED.concat([['https://l1.cur']]);
     const p = await loadPage({
       walletless: true, chain,
-      storage: { 'zswap:ep3': JSON.stringify({ t: Date.now(), v }) },
+      storage: { 'zswap:ep4': JSON.stringify({ t: Date.now(), v }) },
     });
     await p.settle();
     assert.equal(ev(p, 'cpRelayBase()'), 'https://relay.cur');
@@ -178,10 +185,10 @@ describe('the endpoint roster', () => {
     const v = CURATED.concat([[]]);
     const p = await loadPage({
       walletless: true, chain,
-      storage: { 'zswap:ep3': JSON.stringify({ t: Date.now() - 7 * 3600e3, v }) },
+      storage: { 'zswap:ep4': JSON.stringify({ t: Date.now() - 7 * 3600e3, v }) },
     });
     await p.settle();
-    assert.equal(chain.epAsks.length, 2, 'a stale copy must be refreshed');
+    assert.equal(chain.epAsks.length, 4, 'a stale copy must be refreshed');
     assert.equal(ev(p, 'cpRelayBase()'), 'https://relay.cur', 'an empty refresh does not unlist what was kept');
     p.close();
   });
@@ -194,6 +201,70 @@ describe('the endpoint roster', () => {
     assert.deepEqual([...ev(p, 'B_API')], ['https://mempool.space/api', 'https://blockstream.info/api', 'https://mempool.emzy.de/api']);
     assert.deepEqual([...ev(p, 'WC_RELAY')], ['wss://relay.walletconnect.org']);
     assert.deepEqual(p.consoleErrors, []);
+    p.close();
+  });
+});
+
+describe('who holds the lists', () => {
+  const word = a => '0x' + a.slice(2).padStart(64, '0');
+  const EOA = '0x1c0aa8ccd568d90d61659f060d1bfb1e6f855a20';
+
+  test('the lists are followed whoever holds them, with zSteward nowhere in the read path', async () => {
+    const chain = serve(new MockChain(), CURATED);
+    const p = await loadPage({ walletless: true, chain });
+    await p.settle();
+    assert.equal(ev(p, 'cpRelayBase()'), 'https://relay.cur');
+    assert.equal(ev(p, 'L1_RPCS[0]'), 'https://l1.cur');
+    assert.equal(chain.calls.filter(c => c.to === STW).length, 0, 'zSteward is never called on the way to a list');
+    p.close();
+  });
+
+  test('a curated node never vouches for the lists that named it', async () => {
+    // l1.cur was listed in zRpcList and kept from an earlier visit, so it leads
+    // the Ethereum read path. It serves a hostile chain that would answer every
+    // list with its own picks; a refresh must still ask only the page's own nodes.
+    const chain = serve(new MockChain(), CURATED);
+    const hostile = serve(new MockChain(), CURATED.map(() => ['https://evil.example']), { l1: ['https://l1.cur', 'https://evil.example'] });
+    chain.remotes = { 'l1.cur': hostile };
+    const v = CURATED.map(() => []).concat([['https://l1.cur']]);
+    const p = await loadPage({ walletless: true, chain, storage: { 'zswap:ep4': JSON.stringify({ t: Date.now(), v }) } });
+    await p.settle();
+    assert.equal(ev(p, 'L1_RPCS[0]'), 'https://l1.cur', 'the kept node leads the Ethereum read path');
+    p.window.localStorage.removeItem(ev(p, 'EP_KEY'));
+    await p.window.eval('epLoad()');
+    await p.settle();
+    assert.equal(hostile.epAsks.length, 0, 'it was never asked for a list');
+    assert.ok(!ev(p, 'L1_RPCS').includes('https://evil.example'));
+    assert.equal(ev(p, 'cpRelayBase()'), 'https://relay.cur');
+    p.close();
+  });
+
+  test('a roster kept under the old key is left alone and not applied', async () => {
+    const chain = serve(new MockChain(), CURATED.map(() => []));
+    const old = CURATED.map(() => ['https://old.example']).concat([['https://l1.old']]);
+    const p = await loadPage({ walletless: true, chain, storage: { 'zswap:ep3': JSON.stringify({ t: Date.now(), v: old }) } });
+    await p.settle();
+    assert.equal(ev(p, 'cpRelayBase()'), 'https://api.tacit.finance', 'an ep3 roster is not applied');
+    assert.ok(!ev(p, 'L1_RPCS').includes('https://l1.old'));
+    assert.equal(chain.epAsks.length, 4, 'the roster is read afresh from the page\'s own nodes');
+    assert.ok(p.window.localStorage.getItem('zswap:ep3'), 'and the old copy is not deleted, so an older page on the same origin keeps it');
+    p.close();
+  });
+
+  test('the page shows who holds each list and what it uses now', async () => {
+    const chain = serve(new MockChain(), CURATED);
+    for (const [a, o] of [[RPCS_PIN, STW], [EPS, EOA], [SOLVERS, STW], [FLAGS, EOA]]) chain.answers.set(`${a}:8da5cb5b`, word(o));
+    const p = await loadPage({ walletless: true, chain });
+    await p.settle();
+    p.window.document.getElementById('srcA').click();
+    await p.settle();
+    const t = p.window.document.getElementById('wkList').textContent;
+    for (const s of ['zRpcList: zSteward, additions wait three days', `zEndpoints: ${EOA}, changes apply at once`,
+      'zSolverList: zSteward, additions wait three days', `zSwapFlags: ${EOA}, changes apply at once`,
+      'Read nodes', 'https://l1.cur', 'Private relay', 'https://relay.cur', 'Bitcoin', 'https://btc.cur/api', 'WalletConnect', 'wss://wc.cur', 'Pool keepers', 'https://k1.cur'])
+      assert.ok(t.includes(s), s);
+    assert.ok(!t.includes('Ethereum nodes'), 'on Ethereum the read nodes are the Ethereum nodes');
+    assert.ok(!p.window.document.getElementById('wkWrap').classList.contains('hide'));
     p.close();
   });
 });

@@ -366,7 +366,7 @@ background:var(--e);margin:.5em auto .1em}
 .invq{padding:10px 11px;margin:-10px -6px;opacity:1}
 .invm,.invsh{padding:10px 3px;margin:-10px -1px}}
 @media(pointer:coarse) and (max-width:24em){
-.meta{gap:.3em .12em}.mtl{gap:.12em}.mb{width:32px;height:32px}#slip{width:2em}}.dlgm{white-space:pre-wrap;text-align:left;max-height:50vh;overflow:auto}.dlgt{width:calc(100% - 2.2em);margin:0 1.1em;box-sizing:border-box;font:inherit;font-size:.8em;word-break:break-all}@media(pointer:coarse){.dlgt{font-size:16px}}.dlgr{display:flex;gap:1.2em;justify-content:flex-end;padding:.6em 1.1em 1em}</style>
+.meta{gap:.3em .12em}.mtl{gap:.12em}.mb{width:32px;height:32px}#slip{width:2em}}.dlgm{white-space:pre-wrap;overflow-wrap:anywhere;text-align:left;max-height:50vh;overflow:auto}.dlgt{width:calc(100% - 2.2em);margin:0 1.1em;box-sizing:border-box;font:inherit;font-size:.8em;word-break:break-all}@media(pointer:coarse){.dlgt{font-size:16px}}.dlgr{display:flex;gap:1.2em;justify-content:flex-end;padding:.6em 1.1em 1em}</style>
 <script>const H=document.documentElement;let LS,SS;try{LS=localStorage||{}}catch{LS={}}try{(SS=sessionStorage).key}catch{SS={getItem(){},setItem(){},removeItem(){}}}if(LS.t?LS.t=='d':matchMedia('(prefers-color-scheme:dark)').matches)H.className='d'</script>
 <button id="sd" title="Sound" aria-label="Toggle sound"><svg width="14" height="14" viewBox="0 0 24 24" class="ik" aria-hidden="true"><path d="M4 9.5v5h3.5L12 18V6L7.5 9.5H4z"/><path id="sdw" d="M15.5 9a4 4 0 0 1 0 6"/><path id="sdx" d="M16 9.5l4 4m0-4l-4 4"/></svg></button>
 <span id="net" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false" title="Network"></span>
@@ -536,7 +536,7 @@ background:var(--e);margin:.5em auto .1em}
 <p>Every market names a <b>resolver</b>, and the resolver is trusted: they answer the question, may end trading early where the market allows it, and take a fee they set (up to 10%), fixed when the market is made. A market voids if a side is empty at resolution or the resolver voids it, and anyone can void one left unanswered thirty days past close — every share then takes back an equal part of the pot, with no fee.</p>
 <p>Two optional taxes, both kept in the pot. <b>Exit tax</b> is the least a share gives up when sold back before close; at zero, bets are final. <b>Late tax</b> ramps from nothing at creation to its full size at close, so later bets mint fewer shares.</p></details>
 <details><summary>What this page is</summary>
-<p>There is no server behind this page. It is served from a contract and runs only its own bytes, which nobody can change, us included — a new version is a new address. The token list is a contract too, artwork included, and so are the lists of nodes, relays and aggregators the page talks to: curated on chain, where any one can be switched off in a single transaction.</p>
+<p>There is no server behind this page. It is served from a contract and runs only its own bytes, which nobody can change, us included — a new version is a new address. The token list is a contract too, artwork included, and so are the lists of nodes, relays and aggregators the page talks to: curated on chain, where any one can be switched off in a single transaction. The page reads them only through nodes named in its own bytes. A list held by <a href="https://etherscan.io/address/0x0000005F38594Af514e65e7d1e4EddE773bcF886#events" target="_blank" rel="noopener">zSteward</a> takes an addition only after three days in public, and the zFi DAO can cancel it. <a href="#" id="srcA">See who holds each list and what the page uses now</a>.</p>
 <p><b>What it talks to.</b> Your wallet, and your wallet’s node for reads; with no wallet connected, public nodes from that list. A quote your wallet’s node cannot run is asked of a public node <b>with your address replaced by a random one</b>. Aggregators, some via a proxy that list names, are asked for a price on a pair and a size and <b>are not told who is asking</b>; pin <b>On-chain</b> in the venue list to always take the chain’s route. WalletConnect needs its relay to reach your phone, and the private bridge relay sees what is described under Private bridge.</p>
 <p>Your wallet’s keys never leave it, and nothing here holds your funds: every trade settles from your address to contracts you can read. The one key the page handles is your Tacit key.</p>
 <p>The token list is <b>zList</b>, ranked on chain by conviction staking. Anything not on it can still be traded by pasting its address.</p></details>
@@ -617,7 +617,7 @@ const L2B={sb:"0x0000001330435808A906432449D233d482Bc9b60",sw:"0x000000015d94289
 cC=()=>CHAINS[CHAIN_ID]||CHAINS[1],
 NUMERAIRES=["0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48","0xdac17f958d2ee523a2206206994597c13d831ec7","0x6b175474e89094c44da98b954eedeac495271d0f"],
 MONEY=()=>cC().money||NUMERAIRES;
-const L1_RPCS=CHAINS[1].rpcs;
+const L1_RPCS=CHAINS[1].rpcs,L1_SEED=[...L1_RPCS];
 let l1i=0;
 const l1Read=async(method,params)=>{
 for(let k=0;k<L1_RPCS.length*2;k++){
@@ -1254,7 +1254,7 @@ if(CHAIN_ID!==1)return;
 if(curating||Dn()-curatedTry<60000)return;
 curating=1;curatedTry=Dn();
 try{
-const a1=await quorum2(rpcPool,{to:RPCS_PIN,data:"0x"+SEL_LIST});
+const a1=await quorum2(L1_SEED,{to:RPCS_PIN,data:"0x"+SEL_LIST});
 if(!a1||CHAIN_ID!==1)return;
 const urls=decStrArr(a1).map(s=>s.trim()).filter(s=>/^https:\/\/\S+$/.test(s));
 if(!urls.length)return;
@@ -1311,7 +1311,7 @@ const loadSolvers=()=>solversJob||(Dn()<solversRetry?Promise.resolve():solversJo
 const id=CHAIN_ID;try{
 const list=SOLVERS_PIN;
 solverFill=SOLVER_FILL_PIN;
-const sx=cC().sx,rj=quorum2(L1_RPCS,{to:list,data:"0x"+SEL_SLIST}).then(x=>{if(!x)throw 0;return x});rj.catch(Np);
+const sx=cC().sx,rj=quorum2(L1_SEED,{to:list,data:"0x"+SEL_SLIST}).then(x=>{if(!x)throw 0;return x});rj.catch(Np);
 const hc=sx?await hasCode(sx).catch(Nl):false;if(id!==CHAIN_ID)return;if(hc==null){solversRetry=Dn()+SOLVER_COOL;solversJob=null;return}if(hc)solverFill=solverExec=sx;else{
 const ex=await nodeRead("eth_call",[{to:solverFill,data:"0x495c73b0"},L]).catch(Nl);
 if(id!==CHAIN_ID)return;const exec="0x"+Sx(ex||"0x").slice(24);
@@ -7445,7 +7445,7 @@ let CP_RELAY="https://api.tacit.finance",CP_RELAYS=[CP_RELAY];
 const CP_POOL="0x000000000Ed1eabD231Be41d93b719056F7febFC",CP_ROUTER="0x000000005dA3E3B73726af3c774Deeb9472D4992",
 CP_ETH="0x3cba71e1114af183cdeacc6b8457a474d17529fd28704480ca799d0d03126f34",CP_SCALE=10000000000n,CP_BLOCK=25998736,
 CP_LOGS=["https://mainnet.gateway.tenderly.co","https://rpc.mevblocker.io","https://gateway.tenderly.co/public/mainnet","https://eth.api.onfinality.io/public"],
-CP_NI="0x00000000000000000000000000000000000000C8",CP_KEY="zswap:cpk:",CP_NOTES="zswap:cpn:",CP_CACHE="zswap:cppool";
+CP_NI="0x00000000000000000000000000000000000000C8",CP_KEY="zswap:cpk:",CP_NOTES="zswap:cpn:",CP_CACHE="zswap:cppool";L1_SEED.push(...CP_LOGS);
 const CP_L2={8453:{bridge:"0x3154Cf16ccdb4C6d922629664174b904d80F2C35",peer:"0x4200000000000000000000000000000000000010",gas:1200000n},
 4663:{inbox:"0x1A07cc4BD17E0118BdB54D70990D2158AbAD7a2D",peer:"0xDf8755334ce7A73cCF6b581C02eA649AE3E864b3",gas:1000000n}},
 SEL_CPESCROW="2bf0cda2",SEL_CPACT="1699fd5b",SEL_CPRECL="02edf635",SEL_CPEXIT="acad0634",SEL_CPWRAP="8be3ad21",
@@ -7677,18 +7677,20 @@ const rt={ins:[{txid:bTxid(ct),vout:0,seq:0xfffffffd,wit:[]}],outs:[{v:546,s:K.w
 rt.ins[0].wit=[bSchnorr(bSig341(rt,[{v:cv,s:p2tr}],lf),K.d,aux),scr,cpCat([192|tw.par],TAP_NUMS)];
 return{commit:cpHex(bSer(ct,1)),reveal:cpHex(bSer(rt,1)),lockTxid:bTxid(rt),blinding:r,cx,cy,anchor:{txid:f.txid,vout:f.vout},vBtc:vSats,fee:(outs[1]?cfee+cv:tot)-vSats-546}};
 const CP_CE="0x000000003f608BDdF0ca45934003ffb9DbDF70DB",CP_WSTETH="0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",CP_LOCKS="zswap:cpl:",B_API=["https://mempool.space/api","https://blockstream.info/api","https://mempool.emzy.de/api"];
-const EPS="0x00000051F365d898132f4ebF345Cd3968e02F288",SEL_EPS="c03c2d74",EP_KEY="zswap:ep3",TB_K={1:["https://tacit-evm-pool-keeper.onrender.com/evm-pool/keeper"],8453:["https://tacit-evm-pool-keeper-base.onrender.com/evm-pool/keeper"],4663:["https://tacit-evm-pool-keeper-robinhood.onrender.com/evm-pool/keeper"]},EP_H=/^https:\/\/\S+$/,EP_Q=[["rpc",8453],["rpc",4663],["logs",1],["tacit",1],["btc",0],["wc",0],["wcpid",0],["tacad",1],["evk",1],["evk",8453],["evk",4663]];
+const EPS="0x00000051F365d898132f4ebF345Cd3968e02F288",SEL_EPS="c03c2d74",EP_KEY="zswap:ep4",TB_K={1:["https://tacit-evm-pool-keeper.onrender.com/evm-pool/keeper"],8453:["https://tacit-evm-pool-keeper-base.onrender.com/evm-pool/keeper"],4663:["https://tacit-evm-pool-keeper-robinhood.onrender.com/evm-pool/keeper"]},EP_H=/^https:\/\/\S+$/,EP_Q=[["rpc",8453],["rpc",4663],["logs",1],["tacit",1],["btc",0],["wc",0],["wcpid",0],["tacad",1],["evk",1],["evk",8453],["evk",4663]];
 const epM=(a,u,re)=>{u=(u||[]).map(s=>St(s).trim()).filter(s=>re.test(s));if(u.length){const m=[...new Set(u.concat(a))];a.length=0;a.push(...m)}};
 const epApply=v=>{if(!Ia(v))return;epM(CHAINS[8453].rpcs,v[0],EP_H);epM(CHAINS[4663].rpcs,v[1],EP_H);epM(CP_LOGS,v[2],EP_H);epM(B_API,v[4],EP_H);epM(WC_RELAY,v[5],/^wss:\/\/[\w.-]+(:\d+)?$/);epM(AD_API,v[7],/^https:\/\/[\w.-]+(:\d+)?\/[\w./@-]*\/$/);epM(L1_RPCS,v[11],EP_H);[1,8453,4663].map((c,i)=>epM(TB_K[c],v[8+i],/^https:\/\/\S*[^/\s]$/));
 epM(CP_RELAYS,v[3],/^https:\/\/[\w.-]+(:\d+)?(\/[\w./-]*)?$/);CP_RELAYS=CP_RELAYS.map(x=>x.replace(/\/$/,""));
 const t=CP_RELAYS[0],p=(v[6]||[]).find(s=>/^[0-9a-f]{32}$/.test(s)),c=CHAINS[CHAIN_ID];if(t)CP_RELAY=t.replace(/\/$/,"");if(p)WC_PID=p;if(CHAIN_ID!==1&&c)rpcPool=[...new Set(c.rpcs.concat(rpcPool))]},
 epLoad=async()=>{let c;try{c=Jp(LS[EP_KEY])}catch{}const ok=c&&c.t<=Dn();if(ok&&Dn()-c.t<216e5)return epApply(c.v);const old=()=>ok&&epApply(c.v);
-const n=EP_Q.length,rd=x=>quorum2(L1_RPCS,x),
+const n=EP_Q.length,rd=x=>quorum2(L1_SEED,x),
 [e,r]=await Pa([rd({to:EPS,data:"0x"+SEL_EPS+eU(64)+eU(96+32*n)+eU(n)+EP_Q.map(q=>cpHex(cpU8(q[0])).padEnd(64,"0")).join("")+eU(n)+EP_Q.map(q=>eU(q[1])).join("")}),rd({to:RPCS_PIN,data:"0x"+SEL_LIST})]),
 W=i=>parseInt(e.slice(i*64,i*64+64),16),o=W(0)/32;
 const rl=decStrArr(r);if(W(o)!==n)return void(epM(L1_RPCS,rl,EP_H),old());
 const v=EP_Q.map((_,i)=>decStrArr(e,o+1+W(o+1+i)/32));v[11]=rl;epApply(ok?v.map((x,i)=>x.length?x:c.v[i]):v);try{LS[EP_KEY]=Js({t:Dn(),v})}catch{}};
 const epP=epLoad().catch(()=>{try{const c=Jp(LS[EP_KEY]);if(c.t<=Dn())epApply(c.v)}catch{}});
+const STW="0x0000005F38594Af514e65e7d1e4EddE773bcF886";
+srcA.onclick=async e=>{e.preventDefault();const o=await Pa([RPCS_PIN,EPS,SOLVERS_PIN,FLAGS].map(a=>cfgRead(C,[{to:a,data:"0x8da5cb5b"},L]).then(x=>"0x"+Sx(x).slice(-40),Nl)));dlg([["Held by",["zRpcList","zEndpoints","zSolverList","zSwapFlags"].map((n,i)=>n+": "+(!o[i]?"unknown":Lc(o[i])==Lc(STW)?"zSteward, additions wait three days":o[i]+", changes apply at once"))],["Read nodes",[rpcPin(),...rpcPool]],["Ethereum nodes",CHAIN_ID>1?L1_RPCS:[]],["Logs",CP_LOGS],["Private relay",cpRelayLs()],["Bitcoin",B_API],["WalletConnect",WC_RELAY],["Airdrop proofs",AD_API],["Pool keepers",tbKs(CHAIN_ID)],["Aggregators",(solverLanes||[]).map(x=>x.name+" "+x.endpoint)]].map(([k,v])=>[k,v.filter(Boolean)]).filter(x=>x[1].length).map(([k,v])=>k+"\n"+v.join("\n")).join("\n\n"))};
 let twW=null,twJob=null;
 const TB_R="0x0000006C96Afa6f1cD4DF8FE19bc0d8B6A6Cd7B5",tbR=(m,p)=>offChain()?nodeRead(m,p):rpc(m,p),tbPin=c=>{try{const u=LS["zswap:evk:"+c]||"";return/^https:\/\/\S*[^/\s]$/.test(u)?u:""}catch{return""}},tbKs=c=>[...new Set([tbPin(c),...TB_K[c]].filter(Boolean))],tbL=()=>{try{return Jp(LS["zswap:tb"])||[]}catch{return[]}},tbPut=(b,x)=>{try{LS["zswap:tb"]=Js(tbL().filter(y=>y.b!==b).concat(x||[]))}catch{}},
 tbB=async(r,d,n)=>{const a=retAddr(await r(C,[{to:TB_R,data:d},L]).catch(()=>""));if(a)return a;throw Er("Could not read the Tacit pool on "+n+". Try again.")},tbA=i=>[i.amount,i.outLeaf0,i.outLeaf1,i.memo0Hash,i.memo1Hash,i.refund,i.deadline,i.nonce].map(eU).join(""),tbE=w=>fU(w,18)+" ETH",tbW=async(b,r=tbR)=>Bi(await r(GB,[b,L])||"0x0"),
