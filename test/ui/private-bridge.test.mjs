@@ -580,6 +580,39 @@ describe('exiting to Base through the relay', () => {
     p.close();
   });
 
+  test('an exit the relay refuses at submit gives its note back, and the next try is built afresh', async () => {
+    const p = await open();
+    await unlock(p);
+    await deposit(p);
+    settleDeposit(p);
+    poke(p);
+    await p.waitFor(() => /exit/.test(p.text('pvList')), SLOW);
+    p.chain.escrow = escrowOf(baseRecipe(NET_BASE * 10n ** 10n));
+    const inner = p.window.fetch;
+    let refused = false;
+    p.window.fetch = async (url, init) => {
+      if (!refused && String(url).includes('/confidential/submit')) {
+        refused = true;
+        p.window.__relayPosts.push(JSON.parse(init.body));
+        return { ok: false, status: 400, json: async () => ({ error: 'relay fee below the current floor' }) };
+      }
+      return inner(url, init);
+    };
+    p.select('pvChain', '8453');
+    p.select('pvAct', 'out');
+    p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
+    await p.waitFor(() => /below the current floor/.test(p.text('stat')), { label: 'the refusal', ...SLOW });
+    assert.equal(p.window.eval('cpNotes.some(n=>n.ex)'), false, 'no exit is left on the note');
+    await p.waitFor(() => p.$('pvList').querySelector('button[data-a="exit"]'), { label: 'the note to be ready again', ...SLOW });
+    assert.doesNotMatch(p.text('pvList'), /relay failed|exiting/);
+    p.select('pvChain', '8453');
+    p.select('pvAct', 'out');
+    p.click(p.$('pvList').querySelector('button[data-a="exit"]'));
+    await p.waitFor(() => p.window.__relayPosts.length === 3, { label: 'the second try to reach the relay', ...SLOW });
+    assert.ok(!p.asked.confirm.some(m => /Build this exit again/.test(m)), 'nothing was left to rebuild');
+    p.close();
+  });
+
   test('refuses a recipe the router maps elsewhere', async () => {
     const p = await open();
     await unlock(p);

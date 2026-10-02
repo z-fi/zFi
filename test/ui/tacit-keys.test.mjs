@@ -120,7 +120,7 @@ describe('tacit1 addresses', () => {
     assert.equal(p.window.eval(`cpTacDec("${PADDED}")`), null, 'the raw decode refuses it');
     assert.equal(p.window.eval(`cpLn("${PADDED}")`), null);
     assert.equal(p.window.eval(`(()=>{try{return cpRecip("${PADDED}")}catch(e){return e.message}})()`),
-      'That Tacit address does not carry an Ethereum lane.', 'and nothing is sent to it');
+      'Not a valid Tacit address.', 'and nothing is sent to it');
     assert.equal(p.window.eval(`cpRecip("${F.send.address}")`), F.pub.slice(2), 'an address Tacit\'s own encoder made still decodes');
     const mine = p.window.eval('cpTacAddr(cpSeed)');
     assert.equal(p.window.eval(`cpRecip("${mine}")`), F.pub.slice(2), 'and so does the page\'s own, back to its key');
