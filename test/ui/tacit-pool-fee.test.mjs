@@ -116,7 +116,7 @@ describe('the keeper fee', () => {
     await done(p);
     const asked = p.asked.confirm.at(-1);
     assert.match(asked, /^Pay 0\.2 ETH to bp1qfriend…friend, ID [0-9a-f]{4}·[0-9a-f]{4}·[0-9a-f]{4}·[0-9a-f]{4}\./);
-    assert.match(asked, /Keeper fee: 0\.001 ETH\. Go ahead\?$/);
+    assert.match(asked, /Keeper fee: 0\.001 ETH, at most 0\.00125 ETH if gas rises first\. Go ahead\?$/);
     assert.match(p.text('stat'), /Not sent/);
     assert.deepEqual(calls(p), []);
     p.queueConfirm(true);
@@ -132,7 +132,7 @@ describe('the keeper fee', () => {
     p.queueConfirm(false);
     await pay(p, '0.25');
     await done(p);
-    assert.match(p.asked.confirm.at(-1), /Keeper fee: 0\.002 ETH, including 1 note merge first\. Go ahead\?$/);
+    assert.match(p.asked.confirm.at(-1), /Keeper fee: 0\.002 ETH, including 1 note merge first, at most 0\.0025 ETH if gas rises first\. Go ahead\?$/);
     p.type('pvAmt', '0.35');
     p.click('pvGo');
     await p.waitFor(() => /does not hold/.test(p.text('stat')), { label: 'the refusal' });
@@ -152,12 +152,46 @@ describe('the keeper fee', () => {
     await p.waitFor(() => /Sent: 0xbridge/.test(p.text('stat')), { label: 'the bridge' });
     const q = p.chain.httpLog.filter(x => x.url.includes('keeper.test')).map(x => x.url.split('?')[1]);
     assert.deepEqual(q, ['gas=1300000'], 'the Base bridge asks for its own gas');
-    assert.match(p.asked.confirm.at(-1), /^Keeper fee: 0\.001 ETH\. Go ahead\?$/);
+    assert.match(p.asked.confirm.at(-1), /^Keeper fee: 0\.001 ETH, at most 0\.00125 ETH if gas rises first\. Go ahead\?$/);
+    p.close();
+  });
+});
+
+describe('the fee the keeper may take', () => {
+  test('is capped at a quarter over the fee shown, as Tacit\'s own page caps it', async () => {
+    const p = await open({ keeper: true });
+    p.window.eval('twW.send=async(to,v,o)=>{twW.calls.push(["send",to,String(v),String(o&&o.maxFee)]);return "0xsend"}');
+    p.queueConfirm(true);
+    await pay(p, '0.2');
+    await p.waitFor(() => /Sent: 0xsend/.test(p.text('stat')), { label: 'the payment' });
+    assert.deepEqual(calls(p), [['send', 'bp1qfriend', '200000000000000000', '1250000000000000']]);
+    p.close();
+  });
+
+  test('a fee that rose after it was shown is refused, and not sent from this wallet instead', async () => {
+    const p = await open({ keeper: true });
+    p.window.eval('twW.send=async(to,v,o)=>{twW.calls.push(["send",to,String(v),o&&o.via||"keeper"]);throw Object.assign(Error("The relay fee went up since it was shown. Check the new fee and try again."),{feeMoved:2000000000000000n})}');
+    p.queueConfirm(true);
+    await pay(p, '0.2');
+    await p.waitFor(() => /fee went up/.test(p.text('stat')), { label: 'the refusal' });
+    assert.ok(!p.asked.confirm.some(m => /from this wallet instead/.test(m)), 'no send from this wallet is offered');
+    assert.equal(calls(p).length, 1);
     p.close();
   });
 });
 
 describe('a keeper that does not answer', () => {
+  test('in the wallet\'s own words is not followed by a send from this wallet', async () => {
+    const p = await open();
+    p.window.eval('twW.send=async(to,v,o)=>{twW.calls.push(["send",to,String(v),o&&o.via||"keeper"]);throw Object.assign(Error("The relay did not answer, and it may still have sent your payment. Check Activity before sending again."),{said:true})}');
+    await pay(p, '0.1');
+    await done(p);
+    assert.match(p.text('stat'), /The keeper did not answer, and it may still send this\./);
+    assert.ok(!p.asked.confirm.some(m => /from this wallet instead/.test(m)));
+    assert.equal(calls(p).length, 1);
+    p.close();
+  });
+
   test('after the relay step is not followed by a send from this wallet', async () => {
     const p = await open();
     p.window.eval(`twW.send=async(to,v,o)=>{twW.calls.push(["send",to,String(v),o&&o.via||"keeper"]);o.onStep("sending through the relayer");throw new TypeError("Failed to fetch")}`);

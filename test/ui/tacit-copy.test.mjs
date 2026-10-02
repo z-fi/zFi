@@ -27,7 +27,7 @@ const RELAY = 'api.tacit.finance';
 const ME = A.ACCOUNT.toLowerCase();
 
 describe('the points paragraph in the docs', () => {
-  test('says a deposit earns its sender, and names the early and TAC holder boosts', async () => {
+  test('says a deposit earns its sender, and names the boosts, the bond rule and the week multiplier as the program scores them', async () => {
     const p = await loadPage({ chain: new MockChain() });
     const para = [...p.$('docPanel').querySelectorAll('p')].find(x => /Tacit’s points count/.test(x.textContent));
     assert.ok(para, 'the points paragraph');
@@ -35,6 +35,10 @@ describe('the points paragraph in the docs', () => {
     assert.match(t, /earns its sender 1,000 points per ETH/);
     assert.match(t, /Early activity earns up to 5×/);
     assert.match(t, /100, 1,000 or 10,000 public TAC held at the sender all the previous day boosts points 1\.25×, 1\.5× or 2×/);
+    assert.match(t, /from 4 Oct, once cBTC is minted against it and it is still posted when the day settles, plus a daily credit while it stays posted/, 'a cBTC bond counts as the program now scores it');
+    assert.match(t, /split across everyone who earned points that day by their counted points, which from 4 Oct grow up to 1\.75× with activity across kinds and days in the week/);
+    assert.doesNotMatch(t, /weighted by kind of activity/, 'there are no per-activity weights');
+    assert.match(p.window.document.documentElement.innerHTML, /Each day's TAC is split by counted points; claim on Ethereum\./, 'the points line says so too');
     p.close();
   });
 });
