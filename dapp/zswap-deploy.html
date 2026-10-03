@@ -1,0 +1,588 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>zSwap Deploy</title>
+<style>
+  :root { color-scheme: light dark; --bg:#0b0d10; --fg:#e6e8eb; --mut:#8b949e; --line:#232a31;
+          --ok:#3fb950; --bad:#f85149; --warn:#d29922; --acc:#58a6ff; }
+  @media (prefers-color-scheme: light) {
+    :root { --bg:#fff; --fg:#14171a; --mut:#57606a; --line:#d8dee4; --ok:#1a7f37; --bad:#cf222e; --warn:#9a6700; --acc:#0969da; }
+  }
+  * { box-sizing:border-box }
+  body { margin:0; background:var(--bg); color:var(--fg); padding:28px 18px; display:flex; justify-content:center;
+         font:14px/1.55 ui-sans-serif,-apple-system,system-ui,sans-serif }
+  main { width:100%; max-width:780px }
+  h1 { font-size:17px; margin:0 0 2px }
+  .sub { color:var(--mut); margin:0 0 18px }
+  section { border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-bottom:14px }
+  section.go { border-color:var(--acc) }
+  h2 { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--mut); margin:0 0 10px; font-weight:600 }
+  dl { display:grid; grid-template-columns:auto 1fr; gap:5px 14px; margin:0 }
+  dt { color:var(--mut) }
+  dd { margin:0; font-family:ui-monospace,Menlo,monospace; font-size:12.5px; word-break:break-all }
+  button { font:inherit; font-weight:600; padding:9px 15px; border-radius:8px; border:1px solid var(--line);
+           background:var(--acc); color:#fff; cursor:pointer }
+  button.ghost { background:transparent; color:var(--fg) }
+  button.big { padding:12px 20px; font-size:15px }
+  button:disabled { opacity:.45; cursor:not-allowed }
+  input[type=text], input[type=number], textarea { font:inherit; padding:7px 9px; border-radius:8px; border:1px solid var(--line);
+           background:transparent; color:var(--fg) }
+  textarea { width:100%; min-height:70px; font-family:ui-monospace,Menlo,monospace; font-size:12px }
+  .row { display:flex; gap:9px; align-items:center; flex-wrap:wrap; margin-top:10px }
+  .msg { margin-top:11px; padding:9px 11px; border-radius:8px; border:1px solid var(--line); display:none;
+         font-family:ui-monospace,Menlo,monospace; font-size:12px; word-break:break-all; white-space:pre-wrap }
+  .msg.show { display:block }
+  .ok { color:var(--ok); border-color:var(--ok) }
+  .bad { color:var(--bad); border-color:var(--bad) }
+  .warn { color:var(--warn); border-color:var(--warn) }
+  .hint { color:var(--mut); font-size:12.5px; margin-top:9px }
+  a { color:var(--acc) }
+  table { width:100%; border-collapse:collapse; font-size:12.5px; margin-top:10px }
+  th,td { text-align:left; padding:5px 8px; border-bottom:1px solid var(--line); vertical-align:middle; font-family:ui-monospace,Menlo,monospace }
+  th { color:var(--mut); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.05em; font-family:inherit }
+  td.s-done { color:var(--ok) } td.s-bad { color:var(--bad) } td.s-pend { color:var(--warn) }
+  td a.x { color:var(--mut); margin-left:6px; text-decoration:none }
+  label.chk { display:flex; gap:7px; align-items:center; color:var(--mut); font-size:12.5px }
+  code { font-family:ui-monospace,Menlo,monospace; font-size:12px }
+  .bar { height:8px; border-radius:4px; background:var(--line); overflow:hidden; margin-top:10px }
+  .bar i { display:block; height:100%; background:var(--ok); width:0; transition:width .3s }
+  #step { font-size:15px; margin:0 0 6px }
+  details summary { cursor:pointer; color:var(--mut); font-size:12.5px }
+</style>
+<main>
+  <h1>zSwap deploy</h1>
+  <p class="sub">Puts the committed <code>zSwap.html</code> on Ethereum from your wallet: 28 data-contract chunks, then the standalone v0.3 root that serves them. Every byte is read back from the chain before the next step is offered, and anything you already deployed is found on its own.</p>
+
+  <section class="go" id="gosec">
+    <h2>Next step</h2>
+    <p id="step">Connect a wallet to begin.</p>
+    <div class="row">
+      <button id="go" class="big" disabled>Deploy</button>
+      <button id="all" disabled>Deploy all remaining chunks</button>
+      <button id="stop" class="ghost" disabled>Stop after this one</button>
+      <button id="skip" class="ghost" style="display:none">Skip the scan</button>
+    </div>
+    <div class="bar"><i id="barfill"></i></div>
+    <p class="hint" id="prog">—</p>
+    <div class="row">
+      <span class="hint" style="margin:0">Hold while the base fee is above</span>
+      <input type="number" id="cap" step="0.01" min="0" value="1" style="width:90px"> <span class="hint" style="margin:0">gwei</span>
+    </div>
+    <div id="m-go" class="msg"></div>
+    <details open style="margin-top:10px"><summary>Activity</summary><pre id="log" style="margin:6px 0 0;max-height:220px;overflow:auto;font-size:11.5px;white-space:pre-wrap;color:var(--mut)"></pre></details>
+  </section>
+
+  <section>
+    <h2>Wallet</h2>
+    <div class="row"><span id="wallets"></span><button id="connect" class="ghost">Connect</button></div>
+    <dl style="margin-top:10px">
+      <dt>Account</dt><dd id="me">—</dd>
+      <dt>Chain</dt><dd id="chain">—</dd>
+      <dt>Balance</dt><dd id="bal">—</dd>
+      <dt>Next nonce</dt><dd id="nonce">—</dd>
+      <dt>Base fee</dt><dd id="gas">—</dd>
+    </dl>
+    <div class="row">
+      <label class="chk"><input type="checkbox" id="anychain"> allow a chain other than Ethereum mainnet (dry run on a testnet)</label>
+    </div>
+    <div id="m-wallet" class="msg"></div>
+  </section>
+
+  <section>
+    <h2>Page</h2>
+    <dl>
+      <dt>Expected</dt><dd id="exp"></dd>
+      <dt>Loaded</dt><dd id="pinfo">—</dd>
+    </dl>
+    <div class="row">
+      <span class="hint" style="margin:0">Different file:</span><input type="file" id="file" accept=".html,text/html">
+      <label class="chk"><input type="checkbox" id="override"> deploy a page whose hash is not the pinned one</label>
+    </div>
+    <div id="m-page" class="msg"></div>
+  </section>
+
+  <section>
+    <h2>Chunks</h2>
+    <table id="tbl" style="display:none"><thead><tr><th>#</th><th>bytes</th><th>status</th><th>address</th><th>tx</th></tr></thead><tbody></tbody></table>
+    <div class="row">
+      <button id="rescan" class="ghost" disabled>Rescan my recent nonces</button>
+      <button id="recheck" class="ghost" disabled>Re-verify all</button>
+      <button id="export" class="ghost" disabled>Export record</button>
+      <button id="import" class="ghost">Import record</button>
+    </div>
+    <textarea id="rec" placeholder='{"chunks":["0x…", …]}' style="display:none;margin-top:8px"></textarea>
+    <div id="m-chunks" class="msg"></div>
+  </section>
+
+  <section>
+    <h2>Root wrapper (the v0.3 candidate)</h2>
+    <p class="hint">A standalone <code>zSwap(dao, 0x0, chunks)</code>. It serves the page by itself at its own address and is not yet part of the v0.1 → v0.2 lineage.</p>
+    <dl style="margin-top:10px">
+      <dt>DAO</dt><dd id="dao"></dd>
+      <dt>Initcode</dt><dd id="ilen">—</dd>
+      <dt>Will deploy at</dt><dd id="pred">—</dd>
+      <dt>Deployed</dt><dd id="wrap">—</dd>
+      <dt>Served page</dt><dd id="served">—</dd>
+    </dl>
+    <div class="row">
+      <button id="verifyw" class="ghost" disabled>Verify served page</button>
+      <input type="text" id="wrapin" placeholder="or paste an existing wrapper address" style="width:340px">
+      <button id="usew" class="ghost">Use</button>
+    </div>
+    <div id="links" class="hint"></div>
+    <div id="m-wrap" class="msg"></div>
+  </section>
+
+  <section>
+    <h2>Afterwards: the DAO's successor over the same chunks</h2>
+    <p class="hint">Once the candidate is proven live, the DAO can make it the lineage's next version without paying for the page again: <code>deployNext</code> on the v0.2 tip with <code>zSwap(dao, tip, chunks)</code>, the same 28 addresses. Re-run <code>script/build-zSwapNext.mjs</code> on the committed tree before any vote and compare.</p>
+    <div class="row">
+      <span class="hint" style="margin:0">Salt</span><input type="text" id="salt" value="0x0000000000000000000000000000000000000000000000000000000000000000" style="width:100%;max-width:560px">
+    </div>
+    <dl style="margin-top:10px">
+      <dt>Tip (v0.2)</dt><dd id="tip"></dd>
+      <dt>Successor address</dt><dd id="pred2">—</dd>
+    </dl>
+    <div class="row"><button id="emit" class="ghost" disabled>Emit build command and deployNext calldata</button></div>
+    <textarea id="emitout" style="display:none;margin-top:8px;min-height:120px"></textarea>
+  </section>
+</main>
+<script>
+//LIB-START
+const PIN = {
+  hash: '0x8bd76d3bca0103e98bc8be869cff09054a28fe7bcd7e9035893de797af774667',
+  len: 666463,
+  n: 28,
+  dao: '0x5E58BA0e06ED0F5558f83bE732a4b899a674053E',
+  tip: '0xe686952842627A2cf81DF42CCaD54ef98046DB8D',
+  lock: 'audit b00ccdc, page c89da66, origin 39e4558',
+  creation: '610440604052346104d957604051612b9d3881900390601f8201601f19168301906001600160401b038211848310176104dd578291604052833981016103c0828203126104d95761004f826104f1565b61005b602084016104f1565b9180605f850112156104d9576040519361038085016001600160401b038111868210176104dd5760405284906103c081019283116104d957604001905b8282106104c1575050506001600160a01b03821680151590816104b6575b506104935761040052610420525f5b601c810361041b575080516001600160a01b0390811660809081526020830151821660a0908152604080850151841660c09081526060860151851660e09081529386015185166101009081529286015185166101209081529086015185166101409081529386015185166101609081529286015185166101809081529086015185166101a09081529386015185166101c09081529286015185166101e09081529086015185166102009081529386015185166102209081529286015185166102409081529086015185166102609081529386015185166102809081529286015185166102a09081529086015185166102c09081529386015185166102e0908152928601518516610300908152908601518516610320908152938601518516610340908152928601518516610360908152908601518516610380529285015184166103a0529084015183166103c052920151166103e0525161266490816105398239608051818181611a6e0152611f17015260a0518181816119b40152611f50015260c0518181816111f10152611f8c015260e0518181816107050152611fc8015261010051818181610629015261200401526101205181818161054d0152612040015261014051818181610bb0015261207c0152610160518181816109a801526120b80152610180518181816103ab01526120f401526101a051818181610ce2015261213101526101c0518181816108cc015261216e01526101e05181818161069701526121ab0152610200518181816113f601526121e80152610220518181816107f0015261222501526102405181818161131a01526122620152610260518181816112ac015261229f01526102805181818161146401526122dc01526102a05181818161093a015261231901526102c051818181610b42015261235601526102e0518181816119460152612393015261030051818181610a1601526123d0015261032051818181610c1e015261240d0152610340518181816102cf015261244a015261036051818181610ad4015261248701526103805181818161047101526124c401526103a05181818161033d015261250101526103c0518181816105bb015261253e01526103e0518181816104df015261257b01526104005181818161085e0152610dd6015261042051816113880152f35b6001600160a01b0361042d8284610513565b51163b1561049357600181018082116104a2575b601c8103610458575061045390610505565b6100c5565b6001600160a01b0361046a8385610513565b51166001600160a01b0361047e8386610513565b5116146104935761048e90610505565b610441565b635cb045db60e01b5f5260045ffd5b634e487b7160e01b5f52601160045260245ffd5b90503314155f6100b6565b602080916104ce846104f1565b815201910190610098565b5f80fd5b634e487b7160e01b5f52604160045260245ffd5b51906001600160a01b03821682036104d957565b5f1981146104a25760010190565b90601c8110156105245760051b0190565b634e487b7160e01b5f52603260045260245ffdfe6080806040526004361015610012575f80fd5b5f3560e01c9081630576137c14611adb575080630793edd714611a925780630a1c6e7014611a245780630b6feb61146119d85780630c2de4441461196a57806312667108146118fc5780631374c460146114c85780631721952214611488578063195c553d1461141a5780632304449b146113ac578063247dfaa81461133e57806326d89846146112d05780632a8aca051461126257806333c34ac3146112155780633f710d52146111a7578063451aae601461116a5780634821578714610d525780634f3391f614610d065780635265a80b14610c9857806352bfe78914610c4257806355c210bf14610bd45780636398811614610b665780636415785014610af8578063663eb6f214610a8a5780636ff968c314610a3a5780637d4b6807146109cc5780637ddafbc81461095e57806381fe8454146108f0578063859d38071461088257806398fabd3a14610814578063a1b39843146107a6578063a3f4df7e14610729578063a9e6f9e3146106bb578063b113e2891461064d578063b29e7bec146105df578063b36bb54614610571578063b7684a4814610503578063cc95f6fa14610495578063d94672c714610427578063dd473fae146103cf578063de2f72f514610361578063eb5a7ee6146102f3578063fc4c817c146102855763ffa1ad7414610200575f80fd5b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc3601126102815761027d60405161023f604082611b6e565b600381527f302e3300000000000000000000000000000000000000000000000000000000006020820152604051918291602083526020830190611c47565b0390f35b5f80fd5b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc36011261028157602060405173ffffffffffffffffffffffffffffffffffffffff7f0000000000000000000000000000000000000000000000000000000000000000168152f35b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc36011261028157602060405173ffffffffffffffffffffffffffffffffffffffff7f0000000000000000000000000000000000000000000000000000000000000000168152f35b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc36011261028157602060405173ffffffffffffffffffffffffffffffffffffffff7f0000000000000000000000000000000000000000000000000000000000000000168152f35b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc3601126102815760206040517f35323139000000000000000000000000000000000000000000000000000000008152f35b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc36011261028157602060405173ffffffffffffffffffffffffffffffffffffffff7f0000000000000000000000000000000000000000000000000000000000000000168152f35b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc36011261028157602060405173ffffffffffffffffffffffffffffffffffffffff7f0000000000000000000000000000000000000000000000000000000000000000168152f35b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc36011261028157602060405173ffffffffffffffffffffffffffffffffffffffff7f0000000000000000000000000000000000000000000000000000000000000000168152f35b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc36011261028157602060405173ffffffffffffffffffffffffffffffffffffffff7f0000000000000000000000000000000000000000000000000000000000000000168152f35b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc36011261028157602060405173ffffffffffffffffffffffffffffffffffffffff7f0000000000000000000000000000000000000000000000000000000000000000168152f35b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc36011261028157602060405173ffffffffffffffffffffffffffffffffffffffff7f0000000000000000000000000000000000000000000000000000000000000000168152f35b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc36011261028157602060405173ffffffffffffffffffffffffffffffffffffffff7f0000000000000000000000000000000000000000000000000000000000000000168152f35b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc3601126102815761027d604051610768604082611b6e565b600581527f7a537761700000000000000000000000000000000000000000000000000000006020820152604051918291602083526020830190611c47565b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc36011261028157602060405173ffffffffffffffffffffffffffffffffffffffff7f0000000000000000000000000000000000000000000000000000000000000000168152f35b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc36011261028157602060405173ffffffffffffffffffffffffffffffffffffffff7f0000000000000000000000000000000000000000000000000000000000000000168152f35b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc36011261028157602060405173ffffffffffffffffffffffffffffffffffffffff7f0000000000000000000000000000000000000000000000000000000000000000168152f35b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc36011261028157602060405173ffffffffffffffffffffffffffffffffffffffff7f0000000000000000000000000000000000000000000000000000000000000000168152f35b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc36011261028157602060405173ffffffffffffffffffffffffffffffffffffffff7f0000000000000000000000000000000000000000000000000000000000000000168152f35b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc36011261028157602060405173ffffffffffffffffffffffffffffffffffffffff7f0000000000000000000000000000000000000000000000000000000000000000168152f35b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc36011261028157602073ffffffffffffffffffffffffffffffffffffffff5f5416604051908152f35b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc36011261028157602060405173ffffffffffffffffffffffffffffffffffffffff7f0000000000000000000000000000000000000000000000000000000000000000168152f35b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc36011261028157602060405173ffffffffffffffffffffffffffffffffffffffff7f0000000000000000000000000000000000000000000000000000000000000000168152f35b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc36011261028157602060405173ffffffffffffffffffffffffffffffffffffffff7f0000000000000000000000000000000000000000000000000000000000000000168152f35b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc36011261028157602060405173ffffffffffffffffffffffffffffffffffffffff7f0000000000000000000000000000000000000000000000000000000000000000168152f35b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc360112610281576020610c7a611e2b565b73ffffffffffffffffffffffffffffffffffffffff60405191168152f35b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc36011261028157602060405173ffffffffffffffffffffffffffffffffffffffff7f0000000000000000000000000000000000000000000000000000000000000000168152f35b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc360112610281576020604051737a2f21e476ca2adde027bc868c5a083338eefe548152f35b346102815760407ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc3601126102815760043567ffffffffffffffff811161028157366023820112156102815780600401359067ffffffffffffffff82116102815736602483830101116102815773ffffffffffffffffffffffffffffffffffffffff7f000000000000000000000000000000000000000000000000000000000000000016918233036111425773ffffffffffffffffffffffffffffffffffffffff5f541661111a5780602460405193018337602435915ff59073ffffffffffffffffffffffffffffffffffffffff82169182156110f2575f8060405160208101907f247dfaa800000000000000000000000000000000000000000000000000000000825260048152610e85602482611b6e565b519084617530fa610e94611dfc565b90159081156110e5575b81156110b2575b50611008575f8060405160208101907f6ff968c300000000000000000000000000000000000000000000000000000000825260048152610ee6602482611b6e565b519084617530fa610ef5611dfc565b90159081156110a5575b8115611072575b50611008575f809160405160208101907f98fabd3a00000000000000000000000000000000000000000000000000000000825260048152610f48602482611b6e565b5191617530fa90610f57611dfc565b9115918215611065575b8215611030575b5050611008577fffffffffffffffffffffffff00000000000000000000000000000000000000004260a01b1681175f55610fa0611d2d565b60018101809111610fdb5760209160405191817f9ae36d545514bf1e12f2c7e16c6f07e049946c2925b6cc3d50c28edbfcfe66365f80a38152f35b7f4e487b71000000000000000000000000000000000000000000000000000000005f52601160045260245ffd5b7fa5c84399000000000000000000000000000000000000000000000000000000005f5260045ffd5b73ffffffffffffffffffffffffffffffffffffffff9192508060208061105b93518301019101611d01565b1614158280610f68565b8051602014159250610f61565b73ffffffffffffffffffffffffffffffffffffffff91508060208061109c93518301019101611d01565b16151584610f06565b8051602014159150610eff565b6110c6915060208082518301019101611d01565b73ffffffffffffffffffffffffffffffffffffffff1630141584610ea5565b8051602014159150610e9e565b7fb4f54111000000000000000000000000000000000000000000000000000000005f5260045ffd5b7fe0f5ec9d000000000000000000000000000000000000000000000000000000005f5260045ffd5b7f4ead1a5e000000000000000000000000000000000000000000000000000000005f5260045ffd5b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc3601126102815760205f5460a01c604051908152f35b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc36011261028157602060405173ffffffffffffffffffffffffffffffffffffffff7f0000000000000000000000000000000000000000000000000000000000000000168152f35b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc3601126102815761027d61124e611ee1565b604051918291602083526020830190611c47565b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc36011261028157602060405173ffffffffffffffffffffffffffffffffffffffff7f0000000000000000000000000000000000000000000000000000000000000000168152f35b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc36011261028157602060405173ffffffffffffffffffffffffffffffffffffffff7f0000000000000000000000000000000000000000000000000000000000000000168152f35b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc36011261028157602060405173ffffffffffffffffffffffffffffffffffffffff7f0000000000000000000000000000000000000000000000000000000000000000168152f35b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc36011261028157602060405173ffffffffffffffffffffffffffffffffffffffff7f0000000000000000000000000000000000000000000000000000000000000000168152f35b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc36011261028157602060405173ffffffffffffffffffffffffffffffffffffffff7f0000000000000000000000000000000000000000000000000000000000000000168152f35b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc3601126102815760206114c0611d2d565b604051908152f35b346102815760407ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc3601126102815760043567ffffffffffffffff81116102815736602382011215610281578060040135906024602061152784611baf565b6115346040519182611b6e565b848152019260051b820101903682116102815760248101925b8284106118cc5760243567ffffffffffffffff81116102815736602382011215610281578060040135906024602061158484611baf565b6115916040519182611b6e565b848152019260051b820101903682116102815760248101925b828410611822576115b9611ee1565b60606040516115c88282611b6e565b600281527fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe082015f5b8181106117f95750506117606040519361160a85611b25565b60409485516116198782611b6e565b600c81527f436f6e74656e742d5479706500000000000000000000000000000000000000006020820152815285516116518782611b6e565b600981527f746578742f68746d6c00000000000000000000000000000000000000000000006020820152602082015261168984611c8a565b5261169383611c8a565b50845161169f81611b25565b85516116ab8782611b6e565b600d81527f43616368652d436f6e74726f6c000000000000000000000000000000000000006020820152815285516116e38682611b6e565b602381527f7075626c69632c206d61782d6167653d33313533363030302c20696d6d75746160208201527f626c65000000000000000000000000000000000000000000000000000000000087820152602082015261174084611cc4565b5261174a83611cc4565b5084519360c88552806020860152840190611c47565b82810384840152815190818152602081016020808460051b8401019401955f925b84841061178e5786860387f35b90919293946020806117e8837fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe086600196030188528b5190836117d883518a84528a840190611c47565b9201519084818403910152611c47565b990194019401929694939190611781565b60209060409593955161180b81611b25565b8581528583820152828288010152019391936115f1565b833567ffffffffffffffff811161028157820160407fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffdc8236030112610281576040519161186e83611b25565b602482013567ffffffffffffffff8111610281576118929060243691850101611c01565b835260448201359267ffffffffffffffff8411610281576118bd602094936024869536920101611c01565b838201528152019301926115aa565b833567ffffffffffffffff8111610281576020916118f1839260243691870101611c01565b81520193019261154d565b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc36011261028157602060405173ffffffffffffffffffffffffffffffffffffffff7f0000000000000000000000000000000000000000000000000000000000000000168152f35b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc36011261028157602060405173ffffffffffffffffffffffffffffffffffffffff7f0000000000000000000000000000000000000000000000000000000000000000168152f35b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc360112610281576020604051738c7348d039f58c4e9cfa936ef410eec759213b128152f35b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc36011261028157602060405173ffffffffffffffffffffffffffffffffffffffff7f0000000000000000000000000000000000000000000000000000000000000000168152f35b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc3601126102815760206040517051f365d898132f4ebf345cd3968e02f2888152f35b34610281575f7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc3601126102815780731dfbb2f41b596f72187370469074c46de60da2e360209252f35b6040810190811067ffffffffffffffff821117611b4157604052565b7f4e487b71000000000000000000000000000000000000000000000000000000005f52604160045260245ffd5b90601f7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe0910116810190811067ffffffffffffffff821117611b4157604052565b67ffffffffffffffff8111611b415760051b60200190565b67ffffffffffffffff8111611b4157601f017fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe01660200190565b81601f8201121561028157803590611c1882611bc7565b92611c266040519485611b6e565b8284526020838301011161028157815f926020809301838601378301015290565b907fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe0601f602080948051918291828752018686015e5f8582860101520116010190565b805115611c975760200190565b7f4e487b71000000000000000000000000000000000000000000000000000000005f52603260045260245ffd5b805160011015611c975760400190565b7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8114610fdb5760010190565b90816020910312610281575173ffffffffffffffffffffffffffffffffffffffff811681036102815790565b6001305b60218203611d3d575090565b602073ffffffffffffffffffffffffffffffffffffffff916004604051809481937f247dfaa8000000000000000000000000000000000000000000000000000000008352165afa908115611df1575f91611dc3575b5073ffffffffffffffffffffffffffffffffffffffff811615611dbf57611db99091611cd4565b90611d31565b5090565b611de4915060203d8111611dea575b611ddc8183611b6e565b810190611d01565b5f611d92565b503d611dd2565b6040513d5f823e3d90fd5b3d15611e26573d90611e0d82611bc7565b91611e1b6040519384611b6e565b82523d5f602084013e565b606090565b30905f5b60208103611e3a5750565b91604051907f6ff968c300000000000000000000000000000000000000000000000000000000825260208260048173ffffffffffffffffffffffffffffffffffffffff85165afa918215611df1575f92611ec1575b5073ffffffffffffffffffffffffffffffffffffffff821615611ebc5750611eb79092611cd4565b611e2f565b925050565b611eda91925060203d8111611dea57611ddc8183611b6e565b905f611e8f565b60405190610380820182811067ffffffffffffffff821117611b415760405273ffffffffffffffffffffffffffffffffffffffff7f000000000000000000000000000000000000000000000000000000000000000016825273ffffffffffffffffffffffffffffffffffffffff7f000000000000000000000000000000000000000000000000000000000000000016602083015273ffffffffffffffffffffffffffffffffffffffff7f000000000000000000000000000000000000000000000000000000000000000016604083015273ffffffffffffffffffffffffffffffffffffffff7f000000000000000000000000000000000000000000000000000000000000000016606083015273ffffffffffffffffffffffffffffffffffffffff7f000000000000000000000000000000000000000000000000000000000000000016608083015273ffffffffffffffffffffffffffffffffffffffff7f00000000000000000000000000000000000000000000000000000000000000001660a083015273ffffffffffffffffffffffffffffffffffffffff7f00000000000000000000000000000000000000000000000000000000000000001660c083015273ffffffffffffffffffffffffffffffffffffffff7f00000000000000000000000000000000000000000000000000000000000000001660e083015273ffffffffffffffffffffffffffffffffffffffff7f00000000000000000000000000000000000000000000000000000000000000001661010083015273ffffffffffffffffffffffffffffffffffffffff7f00000000000000000000000000000000000000000000000000000000000000001661012083015273ffffffffffffffffffffffffffffffffffffffff7f00000000000000000000000000000000000000000000000000000000000000001661014083015273ffffffffffffffffffffffffffffffffffffffff7f00000000000000000000000000000000000000000000000000000000000000001661016083015273ffffffffffffffffffffffffffffffffffffffff7f00000000000000000000000000000000000000000000000000000000000000001661018083015273ffffffffffffffffffffffffffffffffffffffff7f0000000000000000000000000000000000000000000000000000000000000000166101a083015273ffffffffffffffffffffffffffffffffffffffff7f0000000000000000000000000000000000000000000000000000000000000000166101c083015273ffffffffffffffffffffffffffffffffffffffff7f0000000000000000000000000000000000000000000000000000000000000000166101e083015273ffffffffffffffffffffffffffffffffffffffff7f00000000000000000000000000000000000000000000000000000000000000001661020083015273ffffffffffffffffffffffffffffffffffffffff7f00000000000000000000000000000000000000000000000000000000000000001661022083015273ffffffffffffffffffffffffffffffffffffffff7f00000000000000000000000000000000000000000000000000000000000000001661024083015273ffffffffffffffffffffffffffffffffffffffff7f00000000000000000000000000000000000000000000000000000000000000001661026083015273ffffffffffffffffffffffffffffffffffffffff7f00000000000000000000000000000000000000000000000000000000000000001661028083015273ffffffffffffffffffffffffffffffffffffffff7f0000000000000000000000000000000000000000000000000000000000000000166102a083015273ffffffffffffffffffffffffffffffffffffffff7f0000000000000000000000000000000000000000000000000000000000000000166102c083015273ffffffffffffffffffffffffffffffffffffffff7f0000000000000000000000000000000000000000000000000000000000000000166102e083015273ffffffffffffffffffffffffffffffffffffffff7f00000000000000000000000000000000000000000000000000000000000000001661030083015273ffffffffffffffffffffffffffffffffffffffff7f00000000000000000000000000000000000000000000000000000000000000001661032083015273ffffffffffffffffffffffffffffffffffffffff7f00000000000000000000000000000000000000000000000000000000000000001661034083015273ffffffffffffffffffffffffffffffffffffffff7f000000000000000000000000000000000000000000000000000000000000000016610360830152604051809260208201905f905b601c821061260e5750507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff6020927fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe0920382810186520116830101604052565b918193508060019260051b8401515f813b9384923c0192018492916125ae56fea264697066735822122037d075a986c04913a7487d4d9c696a06954ab807b7a1512dc8caebe46ca757ef64736f6c63430008240033'
+};
+const EIP170 = 24576;
+const M64 = (1n << 64n) - 1n;
+const RC = [1n,0x8082n,0x800000000000808an,0x8000000080008000n,0x808bn,0x80000001n,0x8000000080008081n,0x8000000000008009n,
+  0x8an,0x88n,0x80008009n,0x8000000an,0x8000808bn,0x800000000000008bn,0x8000000000008089n,0x8000000000008003n,
+  0x8000000000008002n,0x8000000000000080n,0x800an,0x800000008000000an,0x8000000080008081n,0x8000000000008080n,0x80000001n,0x8000000080008008n];
+const ROT = [[0,36,3,41,18],[1,44,10,45,2],[62,6,43,15,61],[28,55,25,21,56],[27,20,39,8,14]];
+const rot = (v, n) => n ? ((v << BigInt(n)) | (v >> BigInt(64 - n))) & M64 : v;
+function keccakF(s) {
+  for (let r = 0; r < 24; r++) {
+    const C = [0,1,2,3,4].map(x => s[x] ^ s[x+5] ^ s[x+10] ^ s[x+15] ^ s[x+20]);
+    const D = [0,1,2,3,4].map(x => C[(x+4)%5] ^ rot(C[(x+1)%5], 1));
+    for (let i = 0; i < 25; i++) s[i] ^= D[i % 5];
+    const B = new Array(25);
+    for (let x = 0; x < 5; x++) for (let y = 0; y < 5; y++) B[y + 5*((2*x + 3*y) % 5)] = rot(s[x + 5*y], ROT[x][y]);
+    for (let x = 0; x < 5; x++) for (let y = 0; y < 5; y++) s[x + 5*y] = B[x + 5*y] ^ ((~B[(x+1)%5 + 5*y] & M64) & B[(x+2)%5 + 5*y]);
+    s[0] ^= RC[r];
+  }
+}
+// keccak256 over a Uint8Array; returns lowercase hex without 0x
+function keccak(bytes) {
+  const rate = 136, s = new Array(25).fill(0n);
+  const padded = new Uint8Array(Math.ceil((bytes.length + 1) / rate) * rate);
+  padded.set(bytes); padded[bytes.length] ^= 0x01; padded[padded.length - 1] ^= 0x80;
+  for (let off = 0; off < padded.length; off += rate) {
+    for (let i = 0; i < 17; i++) {
+      let lane = 0n;
+      for (let b = 7; b >= 0; b--) lane = (lane << 8n) | BigInt(padded[off + i*8 + b]);
+      s[i] ^= lane;
+    }
+    keccakF(s);
+  }
+  let out = '';
+  for (let i = 0; i < 4; i++) { let v = s[i]; for (let b = 0; b < 8; b++) { out += (v & 0xffn).toString(16).padStart(2, '0'); v >>= 8n; } }
+  return out;
+}
+const hexOf = u8 => Array.from(u8, b => b.toString(16).padStart(2, '0')).join('');
+const bytesOf = hex => { hex = hex.replace(/^0x/, ''); const u = new Uint8Array(hex.length / 2); for (let i = 0; i < u.length; i++) u[i] = parseInt(hex.substr(i*2, 2), 16); return u; };
+const strip0x = h => h.replace(/^0x/i, '').toLowerCase();
+const pad32 = h => strip0x(h).padStart(64, '0');
+const addrWord = a => pad32(a);
+const isAddr = a => /^0x[0-9a-fA-F]{40}$/.test(a || '');
+const same = (a, b) => (a || '').toLowerCase() === (b || '').toLowerCase();
+// split the page exactly as script/build-zSwap-chunks.mjs does
+function chunk(page, n) {
+  const per = Math.ceil(page.length / n), out = [];
+  for (let i = 0; i < n; i++) {
+    const slice = page.subarray(i * per, Math.min((i + 1) * per, page.length));
+    if (!slice.length) throw new Error(`chunk ${i + 1} would be empty`);
+    if (slice.length > EIP170) throw new Error(`chunk ${i + 1} is ${slice.length} B, over EIP-170`);
+    const stub = '61' + slice.length.toString(16).padStart(4, '0') + '80600a5f395ff3';
+    const runtime = hexOf(slice);
+    out.push({ i: i + 1, bytes: slice.length, runtime, init: '0x' + stub + runtime, hash: '0x' + keccak(slice) });
+  }
+  return out;
+}
+// address = keccak(rlp([sender, nonce]))[12:]
+function createAddress(sender, nonce) {
+  const a = strip0x(sender);
+  let nh;
+  if (nonce === 0) nh = '80';
+  else if (nonce < 0x80) nh = nonce.toString(16).padStart(2, '0');
+  else { let h = nonce.toString(16); if (h.length % 2) h = '0' + h; nh = (0x80 + h.length / 2).toString(16) + h; }
+  const payload = '94' + a + nh;
+  const rlp = (0xc0 + payload.length / 2).toString(16) + payload;
+  return '0x' + keccak(bytesOf(rlp)).slice(24);
+}
+function create2Address(deployer, salt, initcode) {
+  const pre = 'ff' + strip0x(deployer) + pad32(salt) + keccak(bytesOf(initcode));
+  return '0x' + keccak(bytesOf(pre)).slice(24);
+}
+// abi.encode(address dao, address previous, address[28] chunks): all static, inline
+const encodeCtor = (dao, prev, chunks) => addrWord(dao) + addrWord(prev) + chunks.map(addrWord).join('');
+const wrapperInit = (dao, prev, chunks) => PIN.creation + encodeCtor(dao, prev, chunks);
+const SEL_DEPLOYNEXT = keccak(new TextEncoder().encode('deployNext(bytes,bytes32)')).slice(0, 8);
+const encodeDeployNext = (initcode, salt) => {
+  const data = strip0x(initcode), len = data.length / 2, padded = data.padEnd(Math.ceil(len / 32) * 64, '0');
+  return '0x' + SEL_DEPLOYNEXT + pad32('40') + pad32(salt) + pad32(len.toString(16)) + padded;
+};
+const SEL = s => '0x' + keccak(new TextEncoder().encode(s)).slice(0, 8);
+//LIB-END
+
+const $ = id => document.getElementById(id);
+const say = (id, text, cls) => { const el = $('m-' + id); el.textContent = text; el.className = 'msg show ' + (cls || ''); log(text); };
+const log = t => { const el = $('log'); if (!el || !t) return; el.textContent = (el.textContent + `[${new Date().toTimeString().slice(0, 8)}] ${t}\n`).split('\n').slice(-200).join('\n'); el.scrollTop = el.scrollHeight; };
+const clear = id => { $('m-' + id).className = 'msg'; };
+const ZERO = '0x' + '0'.repeat(40);
+const READ_RPCS = { 1: ['https://ethereum-rpc.publicnode.com', 'https://rpc.mevblocker.io', 'https://eth-mainnet.public.blastapi.io', 'https://mainnet.gateway.tenderly.co'] };
+const BIG_CALL_RPCS = ['https://rpc.mevblocker.io', 'https://eth-mainnet.public.blastapi.io', 'https://mainnet.gateway.tenderly.co'];
+let provider = null, account = null, chainId = 0, page = null, pageHash = '', chunks = [], rec = { chunks: [], tx: [], wrapper: null, wrapperTx: null, served: false };
+let stopFlag = false, running = false, baseNow = NaN, scanning = '', skipScan = false;
+const status = new Array(PIN.n).fill('');
+
+$('exp').textContent = `${PIN.len.toLocaleString('en-US')} B, ${PIN.hash} (${PIN.lock})`;
+$('dao').textContent = PIN.dao; $('tip').textContent = PIN.tip;
+
+// ---------- RPC: sends through the wallet, reads through public nodes first
+async function rpc(method, params, { pub = false } = {}) {
+  if (!pub && provider) return provider.request({ method, params });
+  const urls = READ_RPCS[chainId] || [];
+  if (!urls.length) return provider.request({ method, params });
+  let last;
+  for (const u of urls) {
+    try {
+      const r = await fetch(u, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) });
+      const j = await r.json(); if (j.error) throw new Error(j.error.message || 'node error'); return j.result;
+    } catch (e) { last = e; }
+  }
+  throw last || new Error('no read node answered');
+}
+const readCode = async a => { try { return await rpc('eth_getCode', [a, 'latest'], { pub: true }); } catch { return rpc('eth_getCode', [a, 'latest']); } };
+const callPub = async (to, data) => { try { return await rpc('eth_call', [{ to, data }, 'latest'], { pub: true }); } catch { return rpc('eth_call', [{ to, data }, 'latest']); } };
+
+// ---------- wallet
+const found = [];
+addEventListener('eip6963:announceProvider', e => {
+  if (found.some(p => p.info.uuid === e.detail.info.uuid)) return;
+  found.push(e.detail); paintWallets();
+  if (!provider && localStorage.getItem('zdeploy:wallet') === e.detail.info.uuid) connect(e.detail.provider, e.detail.info.uuid, true);
+});
+dispatchEvent(new Event('eip6963:requestProvider'));
+setTimeout(() => { if (!provider && !found.length && window.ethereum) connect(window.ethereum, 'injected', true); }, 600);
+function paintWallets() {
+  const box = $('wallets'); box.innerHTML = '';
+  const list = found.length ? found : (window.ethereum ? [{ info: { name: 'Injected wallet', uuid: 'injected' }, provider: window.ethereum }] : []);
+  if (!list.length) { box.innerHTML = '<span class="hint">No wallet found in this browser.</span>'; return; }
+  for (const w of list) { const b = document.createElement('button'); b.className = 'ghost'; b.textContent = w.info.name; b.onclick = () => connect(w.provider, w.info.uuid); box.append(b); }
+}
+async function connect(p, uuid, silent) {
+  provider = p || (found[0] && found[0].provider) || window.ethereum;
+  if (!provider) return say('wallet', 'No wallet found.', 'bad');
+  try {
+    const a = await provider.request({ method: silent ? 'eth_accounts' : 'eth_requestAccounts' });
+    if (!a || !a.length) { if (silent) { provider = null; return; } throw new Error('No account was shared.'); }
+    account = a[0]; try { localStorage.setItem('zdeploy:wallet', uuid || 'injected'); } catch {}
+    provider.on && provider.on('accountsChanged', () => location.reload());
+    provider.on && provider.on('chainChanged', () => location.reload());
+    chainId = parseInt(await provider.request({ method: 'eth_chainId' }), 16);
+    if (chainId !== 1 && !$('anychain').checked) {
+      try { await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x1' }] }); return; }
+      catch { say('wallet', 'Switch the wallet to Ethereum mainnet, or tick the dry-run box.', 'warn'); }
+    }
+    $('me').textContent = account; $('chain').textContent = chainId === 1 ? 'Ethereum mainnet (1)' : `chain ${chainId}`;
+    say('wallet', chainId === 1 ? 'Connected.' : 'Connected to a non-mainnet chain: a dry run.', chainId === 1 ? 'ok' : 'warn');
+    await refreshWallet();
+    await onReady();
+  } catch (e) { if (!silent) say('wallet', e.message || String(e), 'bad'); }
+}
+async function refreshWallet() {
+  if (!account) return {};
+  const [bal, nonce, blk] = await Promise.all([
+    rpc('eth_getBalance', [account, 'latest']), rpc('eth_getTransactionCount', [account, 'latest']), rpc('eth_getBlockByNumber', ['latest', false])]);
+  $('bal').textContent = (Number(BigInt(bal)) / 1e18).toFixed(5) + ' ETH';
+  $('nonce').textContent = parseInt(nonce, 16);
+  baseNow = blk && blk.baseFeePerGas ? Number(BigInt(blk.baseFeePerGas)) / 1e9 : NaN;
+  $('gas').textContent = isNaN(baseNow) ? '—' : baseNow.toFixed(3) + ' gwei';
+  return { nonce: parseInt(nonce, 16), base: baseNow };
+}
+$('connect').onclick = () => connect();
+$('anychain').onchange = () => { if (provider) location.reload(); };
+
+// ---------- page: served copy first, a picked file as the override
+async function loadPageBytes(bytes, from) {
+  page = bytes; pageHash = '0x' + keccak(page);
+  try { chunks = chunk(page, PIN.n); } catch (err) { chunks = []; $('pinfo').textContent = `${page.length} B from ${from}`; return say('page', err.message, 'bad'); }
+  const pinned = pageHash === PIN.hash && page.length === PIN.len;
+  $('pinfo').textContent = `${page.length.toLocaleString('en-US')} B, ${pageHash} from ${from}; ${PIN.n} chunks of up to ${chunks[0].bytes.toLocaleString('en-US')} B`;
+  say('page', pinned ? 'This is the pinned release page.' : 'This file is NOT the pinned release page. Tick the override only if you mean to deploy it.', pinned ? 'ok' : 'warn');
+  rec = { chunks: [], tx: [], wrapper: null, wrapperTx: null, served: false }; status.fill('');
+  await onReady();
+}
+(async () => {
+  try {
+    const r = await fetch('../zSwap.html', { cache: 'no-store' });
+    if (r.ok) { const b = new Uint8Array(await r.arrayBuffer()); if (b.length > 1000) return loadPageBytes(b, 'this server'); }
+  } catch {}
+  $('pinfo').textContent = 'not served here: pick zSwap.html below'; paint();
+})();
+$('file').onchange = async e => { const f = e.target.files[0]; if (f) loadPageBytes(new Uint8Array(await f.arrayBuffer()), f.name); };
+const pageOk = () => page && chunks.length && (pageHash === PIN.hash || $('override').checked);
+$('override').onchange = paint;
+
+// ---------- the record (per chain, per page hash) and detection of what is already up
+const recKey = () => `zdeploy:${chainId}:${pageHash}`;
+function loadRecord() { if (!page || !chainId) return; try { const r = JSON.parse(localStorage.getItem(recKey()) || 'null'); if (r) rec = { served: false, ...r }; } catch {} }
+function saveRecord() { try { localStorage.setItem(recKey(), JSON.stringify(rec)); } catch {} }
+let readyBusy = false;
+// Runs whenever both a wallet and a page are present: load the record, verify
+// every recorded address, then walk recent nonces for anything unrecorded.
+async function onReady() {
+  if (!account || !page || readyBusy) return paint();
+  readyBusy = true; running = true; skipScan = false; loadRecord(); paint();
+  try {
+    log(`Connected ${account} on chain ${chainId}; page ${pageHash.slice(0, 10)}… loaded. Checking what this account already deployed…`);
+    await verifyAll();
+    const n = await rescan(true);
+    const done = chunks.filter((c, i) => status[i] === 'verified').length;
+    say('chunks', done ? `${done} of ${PIN.n} chunks are already on chain and verified${n ? ` (${n} found by nonce scan)` : ''}.` : 'No chunks deployed yet from this account.', done ? 'ok' : '');
+    if (rec.wrapper) await checkWrapper(true);
+  } catch (e) { say('chunks', e.message || String(e), 'bad'); }
+  finally { readyBusy = false; running = false; paint(); }
+}
+async function verifyChunk(i) {
+  const a = rec.chunks[i]; if (!a) { status[i] = ''; return false; }
+  const code = await readCode(a);
+  if (!code || code === '0x') { status[i] = 'not a contract'; return false; }
+  const ok = strip0x(code) === chunks[i].runtime;
+  status[i] = ok ? 'verified' : 'mismatch';
+  return ok;
+}
+async function verifyAll() { for (let i = 0; i < chunks.length; i++) if (rec.chunks[i]) { await verifyChunk(i); paint(); } }
+// A CREATE address depends only on sender and nonce, so recent nonces reveal
+// every chunk (and wrapper) this account deployed, even after a sped-up tx.
+async function rescan(quiet, depth) {
+  const { nonce } = await refreshWallet();
+  const from = Math.max(0, nonce - (depth || 64)); let hits = 0, seen = 0;
+  const wanted = new Map(chunks.map((c, i) => [c.hash, i]));
+  const known = new Set(rec.chunks.filter(Boolean).map(a => a.toLowerCase()));
+  const todo = []; for (let n = nonce - 1; n >= from; n--) { const a = createAddress(account, n); if (!known.has(a.toLowerCase())) todo.push(a); }
+  const total = todo.length; $('skip').style.display = total ? 'inline-block' : 'none';
+  const wrappers = [];
+  const one = async a => {
+    const code = await readCode(a); seen++; scanning = `Checking recent deployments from this account… ${seen} / ${total}`; $('step').textContent = scanning;
+    if (!code || code === '0x') return;
+    const h = '0x' + keccak(bytesOf(code));
+    if (wanted.has(h)) { const i = wanted.get(h); if (status[i] !== 'verified') { rec.chunks[i] = a; status[i] = 'verified'; hits++; log(`found chunk ${i + 1} already on chain at ${a}`); paint(); } return; }
+    wrappers.push(a);
+  };
+  const workers = Array.from({ length: 8 }, async () => { while (todo.length && !skipScan) await one(todo.shift()).catch(() => {}); });
+  await Promise.all(workers);
+  if (!rec.wrapper && rec.chunks[0]) for (const a of wrappers) { try { const d1 = await callPub(a, SEL('DATA1()')); if (same('0x' + d1.slice(-40), rec.chunks[0])) { rec.wrapper = a; log(`found a wrapper at ${a}`); break; } } catch {} }
+  if (skipScan) log(`scan skipped after ${seen} of ${total} nonces`);
+  scanning = ''; $('skip').style.display = 'none'; saveRecord(); paint();
+  if (!quiet) say('chunks', `Scanned nonces ${from}…${nonce - 1}: ${hits} new chunk contract(s) found${rec.wrapper ? '; wrapper ' + rec.wrapper : ''}.`, hits ? 'ok' : 'warn');
+  return hits;
+}
+$('skip').onclick = () => { skipScan = true; };
+$('rescan').onclick = async () => { running = true; skipScan = false; paint(); try { await verifyAll(); await rescan(false, 200); } catch (e) { say('chunks', e.message || String(e), 'bad'); } finally { running = false; paint(); } };
+$('recheck').onclick = async () => { running = true; paint(); try { await verifyAll(); say('chunks', 'Re-verified every recorded chunk against the chain.', 'ok'); } finally { running = false; paint(); } };
+$('export').onclick = () => { $('rec').style.display = 'block'; $('rec').value = JSON.stringify({ page: pageHash, chainId, ...rec }, null, 1); };
+$('import').onclick = async () => {
+  if ($('rec').style.display !== 'block') { $('rec').style.display = 'block'; $('rec').focus(); return say('chunks', 'Paste a record, then press Import again.', 'warn'); }
+  try {
+    const r = JSON.parse($('rec').value);
+    if (!Array.isArray(r.chunks)) throw new Error('no chunks array');
+    rec = { chunks: r.chunks, tx: r.tx || [], wrapper: r.wrapper || null, wrapperTx: r.wrapperTx || null, served: false };
+    saveRecord(); running = true; paint(); await verifyAll(); if (rec.wrapper) await checkWrapper(true);
+  } catch (e) { say('chunks', 'Could not import: ' + (e.message || e), 'bad'); }
+  finally { running = false; paint(); }
+};
+function forget(i) { rec.chunks[i] = ''; rec.tx[i] = ''; status[i] = ''; saveRecord(); paint(); }
+
+// ---------- painting
+const link = (h, tx) => chainId === 1 ? `<a target="_blank" rel="noopener" href="https://etherscan.io/${tx ? 'tx' : 'address'}/${h}">${h.slice(0, 10)}…${h.slice(-6)}</a>` : `${h.slice(0, 10)}…${h.slice(-6)}`;
+function nextStep() {
+  if (!account) return { text: 'Connect a wallet to begin.', label: 'Deploy', can: false };
+  if (!page) return { text: 'Load the release zSwap.html.', label: 'Deploy', can: false };
+  if (!pageOk()) return { text: 'The loaded page is not the pinned release. Load the right file, or tick the override.', label: 'Deploy', can: false };
+  const bad = chunks.findIndex((c, i) => status[i] === 'mismatch');
+  if (bad >= 0) return { text: `Chunk ${bad + 1} is recorded at an address holding other bytes. Forget it (× in the table) and it will be redeployed.`, label: 'Deploy', can: false };
+  const i = chunks.findIndex((c, i) => status[i] !== 'verified');
+  if (i >= 0) return { text: `Deploy chunk ${i + 1} of ${PIN.n} (${chunks[i].bytes.toLocaleString('en-US')} B, about 5.3M gas). ${PIN.n - i - 1} more after it.`, label: `Deploy chunk ${i + 1}`, can: true, kind: 'chunk', i };
+  if (!rec.wrapper) return { text: 'All 28 chunks are verified. Deploy the root wrapper that serves them.', label: 'Deploy root wrapper', can: true, kind: 'wrapper' };
+  if (!rec.served) return { text: `Wrapper ${rec.wrapper} is up. Read its html() back from the chain and compare it to the page.`, label: 'Verify served page', can: true, kind: 'verify' };
+  return { text: `Done. ${rec.wrapper} serves the release page byte for byte. The section at the bottom has the DAO's follow-up.`, label: 'Done', can: false };
+}
+function paint() {
+  const s = nextStep();
+  $('step').textContent = scanning || s.text; $('go').textContent = s.label;
+  $('go').disabled = !s.can || running; $('all').disabled = !(s.can && s.kind === 'chunk') || running; $('stop').disabled = !running;
+  const done = chunks.length ? chunks.filter((c, i) => status[i] === 'verified').length : 0;
+  $('barfill').style.width = (chunks.length ? (done / PIN.n) * 92 + (rec.wrapper ? 4 : 0) + (rec.served ? 4 : 0) : 0) + '%';
+  const left = PIN.n - done, gasLeft = 5.3e6 * left + (rec.wrapper ? 0 : 3e6);
+  $('prog').textContent = chunks.length ? `${done} / ${PIN.n} chunks verified${rec.wrapper ? ' · wrapper deployed' : ''}${rec.served ? ' · served page verified' : ''}` + (left || !rec.wrapper ? ` · about ${(gasLeft / 1e6).toFixed(0)}M gas left` + (isNaN(baseNow) ? '' : `, ≈ ${(gasLeft * baseNow / 1e9).toFixed(4)} ETH at ${baseNow.toFixed(3)} gwei`) : '') : '—';
+  $('tbl').style.display = chunks.length ? 'table' : 'none';
+  const tb = $('tbl').querySelector('tbody'); tb.innerHTML = '';
+  chunks.forEach((c, i) => {
+    const tr = document.createElement('tr');
+    const a = rec.chunks[i] || '', tx = rec.tx[i] || '';
+    const st = status[i] || (a ? 'recorded, unverified' : 'not deployed');
+    const cls = /verified/.test(st) ? 's-done' : /mismatch|failed|not a contract/.test(st) ? 's-bad' : /pending|sent|await|estimat/.test(st) ? 's-pend' : '';
+    tr.innerHTML = `<td>${c.i}</td><td>${c.bytes.toLocaleString('en-US')}</td><td class="${cls}">${st}</td><td>${a ? link(a) + (st !== 'verified' ? `<a class="x" href="#" title="forget this address" data-i="${i}">×</a>` : '') : '—'}</td><td>${tx ? link(tx, true) : '—'}</td>`;
+    tb.append(tr);
+  });
+  tb.querySelectorAll('a.x').forEach(x => x.onclick = e => { e.preventDefault(); forget(+x.dataset.i); });
+  const ready = !!(account && pageOk());
+  $('rescan').disabled = !ready || running; $('recheck').disabled = !ready || running || !rec.chunks.some(Boolean); $('export').disabled = !page;
+  const allDone = chunks.length && done === PIN.n;
+  if (allDone) $('ilen').textContent = `${(strip0x(wrapperInit(PIN.dao, ZERO, rec.chunks)).length / 2).toLocaleString('en-US')} B (creation ${strip0x(PIN.creation).length / 2} B + 30 words)`;
+  $('wrap').textContent = rec.wrapper || '—'; $('served').textContent = rec.served ? 'verified byte for byte' : '—';
+  $('verifyw').disabled = !rec.wrapper || running; $('emit').disabled = !allDone;
+  $('links').innerHTML = rec.wrapper ? `Open it: <a target="_blank" rel="noopener" href="https://${rec.wrapper}.1.w3link.io/">w3link</a> · <a target="_blank" rel="noopener" href="https://${rec.wrapper.toLowerCase()}.w4eth.io/">w4eth</a> · <a target="_blank" rel="noopener" href="https://etherscan.io/address/${rec.wrapper}">Etherscan</a>` : '';
+  predict(allDone);
+}
+let predSeq = 0;
+async function predict(allDone) {
+  const my = ++predSeq;
+  if (!account || !allDone) { $('pred').textContent = '—'; $('pred2').textContent = '—'; return; }
+  try { const n = parseInt(await rpc('eth_getTransactionCount', [account, 'latest'], { pub: true }), 16); if (my === predSeq) $('pred').textContent = rec.wrapper ? '(deployed)' : createAddress(account, n) + ` (your nonce ${n})`; } catch {}
+  try { $('pred2').textContent = create2Address(PIN.tip, $('salt').value, wrapperInit(PIN.dao, PIN.tip, rec.chunks)); } catch { $('pred2').textContent = 'bad salt'; }
+}
+$('salt').oninput = () => predict(chunks.length && chunks.every((c, i) => status[i] === 'verified'));
+
+// ---------- sending
+async function waitReceipt(tx, label) {
+  const t0 = Date.now();
+  for (;;) {
+    let r = null;
+    try { r = await rpc('eth_getTransactionReceipt', [tx]); } catch {}
+    if (!r) { try { r = await rpc('eth_getTransactionReceipt', [tx], { pub: true }); } catch {} }
+    if (r) return r;
+    if (Date.now() - t0 > 45 * 60e3) throw new Error(`${label}: no receipt after 45 minutes. If you sped it up or replaced it, press "Rescan my recent nonces".`);
+    await new Promise(r => setTimeout(r, 4000));
+  }
+}
+async function holdForGas() {
+  const cap = Number($('cap').value || 0);
+  for (;;) {
+    const { base } = await refreshWallet();
+    if (!cap || isNaN(base) || base <= cap) return base;
+    say('go', `Base fee ${base.toFixed(3)} gwei is above your ${cap} gwei cap. Waiting (raise the cap to send now)…`, 'warn');
+    await new Promise(r => setTimeout(r, 12000));
+    if (stopFlag) throw new Error('Stopped while waiting for gas.');
+  }
+}
+function explain(e) {
+  const m = (e && (e.message || e.shortMessage)) || String(e);
+  if (/insufficient funds/i.test(m)) return 'The account cannot pay for this transaction: fund it and press again.';
+  if (/user rejected|denied|rejected the request/i.test(m)) return 'You declined the transaction in the wallet. Nothing was sent.';
+  return m;
+}
+async function deployChunk(i) {
+  const c = chunks[i];
+  status[i] = 'estimating'; paint();
+  const est = BigInt(await rpc('eth_estimateGas', [{ from: account, data: c.init }]));
+  const gas = '0x' + (est * 110n / 100n).toString(16);
+  const base = await holdForGas();
+  say('go', `Chunk ${c.i}: ${est.toLocaleString('en-US')} gas estimated, base fee ${base.toFixed(3)} gwei. Confirm it in the wallet.`, '');
+  status[i] = 'awaiting signature'; paint();
+  const tx = await rpc('eth_sendTransaction', [{ from: account, data: c.init, gas }]);
+  rec.tx[i] = tx; status[i] = 'pending ' + tx.slice(0, 10); saveRecord(); paint();
+  say('go', `Chunk ${c.i} sent: ${tx}. Waiting for the receipt…`, 'warn');
+  const r = await waitReceipt(tx, `chunk ${c.i}`);
+  if (r.status !== '0x1' || !r.contractAddress) { status[i] = 'failed'; paint(); throw new Error(`Chunk ${c.i} transaction ${tx} failed on chain.`); }
+  log(`chunk ${c.i} mined in block ${parseInt(r.blockNumber, 16)} at ${r.contractAddress}; reading its code back…`);
+  rec.chunks[i] = r.contractAddress; saveRecord();
+  const ok = await verifyChunk(i); paint();
+  if (!ok) throw new Error(`Chunk ${c.i} at ${r.contractAddress} does not hold the expected bytes. Stop here and report it.`);
+  say('go', `Chunk ${c.i} verified at ${r.contractAddress} (${BigInt(r.gasUsed).toLocaleString('en-US')} gas).`, 'ok');
+}
+async function deployWrapper() {
+  if (!chunks.every((c, i) => status[i] === 'verified')) throw new Error('Not every chunk is verified.');
+  if (new Set(rec.chunks.map(a => a.toLowerCase())).size !== PIN.n) throw new Error('The chunk addresses are not all distinct.');
+  const init = '0x' + wrapperInit(PIN.dao, ZERO, rec.chunks);
+  const est = BigInt(await rpc('eth_estimateGas', [{ from: account, data: init }]));
+  const gas = '0x' + (est * 115n / 100n).toString(16);
+  await holdForGas();
+  say('go', `Root wrapper: ${est.toLocaleString('en-US')} gas estimated. Confirm it in the wallet.`, '');
+  const tx = await rpc('eth_sendTransaction', [{ from: account, data: init, gas }]);
+  rec.wrapperTx = tx; saveRecord(); say('go', `Wrapper sent: ${tx}. Waiting for the receipt…`, 'warn');
+  const r = await waitReceipt(tx, 'wrapper');
+  if (r.status !== '0x1' || !r.contractAddress) throw new Error(`Wrapper transaction ${tx} failed on chain.`);
+  rec.wrapper = r.contractAddress; saveRecord(); paint();
+  const probs = await checkWrapper(false);
+  if (probs.length) throw new Error('Wrapper deployed but its pointers are wrong: ' + probs.join(', '));
+  say('go', `Wrapper ${rec.wrapper} deployed (${BigInt(r.gasUsed).toLocaleString('en-US')} gas); DAO, PREVIOUS = 0 and all 28 DATA pointers match. Verifying the served page…`, 'ok');
+  await verifyServed();
+}
+async function checkWrapper(quiet) {
+  const w = rec.wrapper, probs = [];
+  try {
+    const prev = await callPub(w, SEL('PREVIOUS()')), dao = await callPub(w, SEL('DAO()'));
+    if (!/^0x0{64}$/.test(prev)) probs.push('PREVIOUS is not zero');
+    if (!same('0x' + dao.slice(-40), PIN.dao)) probs.push('DAO differs');
+    for (let i = 0; i < PIN.n; i++) { const d = await callPub(w, SEL(`DATA${i + 1}()`)); if (!same('0x' + d.slice(-40), rec.chunks[i])) probs.push(`DATA${i + 1} differs`); }
+  } catch (e) { probs.push('could not read the wrapper: ' + (e.message || e)); }
+  say('wrap', probs.length ? 'Wrapper problems: ' + probs.join(', ') : `Wrapper ${w}: DAO, PREVIOUS = 0 and all 28 DATA pointers match.`, probs.length ? 'bad' : 'ok');
+  return probs;
+}
+// html() costs about 29M gas of eth_call, which only some public nodes allow
+async function verifyServed() {
+  const w = rec.wrapper, data = SEL('html()'); let last;
+  say('wrap', 'Reading html() from the chain (about 29M gas of eth_call)…', '');
+  const tryOne = async (send, via) => { const ret = await send(); return finishVerify(ret, via); };
+  for (const u of (chainId === 1 ? BIG_CALL_RPCS : [])) {
+    try { return await tryOne(async () => { const r = await fetch(u, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_call', params: [{ to: w, data, gas: '0x1C9C380' }, 'latest'] }) }); const j = await r.json(); if (j.error) throw new Error(j.error.message || 'error'); return j.result; }, u); }
+    catch (e) { last = e; }
+  }
+  try { return await tryOne(() => provider.request({ method: 'eth_call', params: [{ to: w, data, gas: '0x1C9C380' }, 'latest'] }), 'the wallet node'); } catch (e) { last = e; }
+  throw new Error('No node could serve the full page: ' + (last && last.message));
+}
+function finishVerify(ret, via) {
+  const h = strip0x(ret), off = parseInt(h.slice(0, 64), 16) * 2, len = parseInt(h.slice(off, off + 64), 16);
+  const body = bytesOf(h.slice(off + 64, off + 64 + len * 2));
+  const k = '0x' + keccak(body), ok = k === pageHash && len === page.length;
+  rec.served = ok; saveRecord(); paint();
+  say('wrap', ok ? `Served page verified via ${via}: ${len.toLocaleString('en-US')} B, keccak ${k}.` : `Served page differs: ${len} B, ${k}.`, ok ? 'ok' : 'bad');
+  if (ok) say('go', `Done: ${rec.wrapper} serves the release page byte for byte.`, 'ok');
+  if (!ok) throw new Error('The served page differs from the file.');
+}
+async function run(all) {
+  if (running) return; running = true; stopFlag = false; clear('go'); paint();
+  try {
+    for (;;) {
+      const s = nextStep(); if (!s.can) break;
+      if (s.kind === 'chunk') { await deployChunk(s.i); if (!all || stopFlag) break; continue; }
+      if (s.kind === 'wrapper') { await deployWrapper(); break; }
+      if (s.kind === 'verify') { await verifyServed(); break; }
+    }
+  } catch (e) { say('go', explain(e), 'bad'); }
+  finally { running = false; stopFlag = false; paint(); }
+}
+$('go').onclick = () => run(false); $('all').onclick = () => run(true); $('stop').onclick = () => { stopFlag = true; $('stop').disabled = true; };
+$('verifyw').onclick = async () => { if (running) return; running = true; paint(); try { await verifyServed(); } catch (e) { say('wrap', e.message || String(e), 'bad'); } finally { running = false; paint(); } };
+$('usew').onclick = async () => { const a = $('wrapin').value.trim(); if (!isAddr(a)) return say('wrap', 'Not an address.', 'bad'); rec.wrapper = a; rec.served = false; saveRecord(); running = true; paint(); try { await checkWrapper(false); } finally { running = false; paint(); } };
+setInterval(() => { if (account && !running) refreshWallet().then(() => paint()).catch(() => {}); }, 20000);
+
+// ---------- for the DAO later
+$('emit').onclick = () => {
+  const init = '0x' + wrapperInit(PIN.dao, PIN.tip, rec.chunks), salt = $('salt').value;
+  const out = [
+    '# re-run on the committed tree and compare before any vote:',
+    'ETH_RPC_URL=https://ethereum-rpc.publicnode.com node script/build-zSwapNext.mjs ' + rec.chunks.join(' ') + (/^0x0+$/.test(salt) ? '' : ' --salt ' + salt),
+    '', '# successor (CREATE2 from the v0.2 tip ' + PIN.tip + ')', create2Address(PIN.tip, salt, init),
+    '', '# deployNext(bytes initcode, bytes32 salt) calldata for the DAO to send to the tip:', encodeDeployNext(init, salt)];
+  $('emitout').style.display = 'block'; $('emitout').value = out.join('\n');
+};
+paintWallets(); paint();
+</script>
