@@ -14,6 +14,7 @@ The page and all its on-chain dependencies are ready. What remains is deploying 
 | Markets | PM LIVE `0x0000003b…aB5C5` on mainnet, verified (Etherscan + Sourcify); the page's `#mk` mode (mainnet only) |
 | zGuard | LIVE `0x00000057…2b1961` on 1/8453/4663, verified (Sourcify + Etherscan) |
 | Explorers | every zFi contract under `deploy/` verified on Etherscan (1/8453/4663) |
+| Candidate (2026-10-03) | the 28 chunks and a standalone root `0x0a0Be4271Ca53f0002800a323Dee65A6B31CD507` (PREVIOUS = 0, DAO set) are live on mainnet from the steward key, 148.0M gas / 0.0104 ETH; Etherscan-verified; `html()` reads back identical; record in `deploy/zSwap-v0.3-candidate.deployed.json`. The lineage step (DAO `deployNext` over the same chunks) is still ahead |
 
 ## Deploy steps
 
