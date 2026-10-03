@@ -342,6 +342,25 @@ describe('navigating between links', () => {
     p.close();
   });
 
+  test('an exact-input link does not replace a receive amount the user typed', async () => {
+    const p = await open('token=ETH&out=USDC&amount=1');
+    await p.typeAmount('outAmt', '300');
+    assert.match(p.text('rate'), /Max/);
+    p.window.location.hash = 'token=ETH&out=USDC&amount=5';
+    await p.settle();
+    assert.equal(p.value('outAmt'), '300', 'the typed receive amount survives');
+    assert.match(p.text('rate'), /Max/, 'and the trade is still exact-out');
+    p.close();
+  });
+
+  test('a receive amount a link wrote gives way to an exact-input link', async () => {
+    const p = await open('token=ETH&out=USDC&amount=500&exactOut=1');
+    await p.waitFor(() => p.value('outAmt') === '500' && /Max/.test(p.text('rate')), { label: 'the exact-out link applied' });
+    p.window.location.hash = 'token=ETH&out=USDC&amount=2';
+    await p.waitFor(() => p.value('amt') === '2' && /Min/.test(p.text('rate')), { label: 'the exact-in link applied' });
+    p.close();
+  });
+
   /**
    * Setting another window's location.hash is ordinary cross-origin navigation,
    * so a page that opened this one can push a fresh link at it long after the

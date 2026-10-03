@@ -9431,7 +9431,7 @@ wantLq=q.get("lq")==="1",
 linkWantsCard=fi>=0||oi>=0||to||n||!isNaN(lk)||q.get("token")||q.get("out")||want;
 if(!wantLq&&lqMode&&linkWantsCard)lqSet(false);
 if(linkWantsCard)mOff()
-const ob=t==tab&&(t=="book"||mode=="out")&&pp==Js(pairAddrs())&&outAmt.value,ua=mode=="in"&&amt.value&&amt.value!==lkWrote.amt;setTab(t);if(ob){outAmt.value=ob;if(t!="book")setMode("out")}
+const ob=t==tab&&(t=="book"||mode=="out")&&pp==Js(pairAddrs())&&outAmt.value,ua=mode=="in"&&amt.value&&amt.value!==lkWrote.amt,uo=ob&&t!="book"&&ob!==lkWrote.outAmt;setTab(t);if(ob){outAmt.value=ob;if(t!="book")setMode("out")}
 if(q.get("pm")&&t==="swap"&&CHAIN_ID===1){mkWant=q.get("pm");if(mkMode)mkLoad();else mkSet(true)}
 if(wantLq&&t==="swap"&&!lqMode)lqSet(true);
 if(to&&!rcMine)lkKeep(rc,to);
@@ -9442,7 +9442,7 @@ if(t!=="swap")lkKeep(dly,v)}
 const num=v=>/^[\d,]*\.?\d+$/.test(v)?v:"";
 if(num(n)){
 if(t!=="book"&&q.get("exactOut")==="1"&&q.get("out")){if(toSel.value==oi&&!ua&&lkKeep(outAmt,n)){setMode("out");fitFont(outAmt)}}
-else if(lkKeep(amt,fromSel.value==fi||!q.get("token")?n:"")){if(t!=="book")setMode("in");fitFont(amt)}
+else if(!uo&&lkKeep(amt,fromSel.value==fi||!q.get("token")?n:"")){if(t!=="book")setMode("in");fitFont(amt)}
 }
 if(t==="send"){const d=q.get("dest");brLkD=brLanes()?"":d||"";if(brLanes()){lkKeep(sdChain,d!==St(CHAIN_ID)&&[...sdChain.options].some(o=>o.value===d)?d:"0");syncTip()}}
 if(t==="book"){const k=q.get("kind"),r=St(lsecs(q.get("rest"))),id=q.get("id")||"";
