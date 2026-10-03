@@ -312,6 +312,36 @@ describe('navigating between links', () => {
     p.close();
   });
 
+  test('an exact-output link arriving while a quote fills the pay side keeps its exact output', async () => {
+    const p = await open('token=ETH&out=USDC&amount=1');
+    await p.waitFor(() => p.value('outAmt') === '3000', { label: 'the first quote' });
+    p.window.location.hash = 'token=ETH&out=USDC&amount=500&exactOut=1';
+    await p.waitFor(() => p.value('outAmt') === '500' && /Max/.test(p.text('rate')), { label: 'the exact-out link applied' });
+    assert.notEqual(p.value('amt'), '1', 'the pay side is now the quote, not the earlier link amount');
+    p.close();
+  });
+
+  test('an exact-output link does not replace a receive amount the user typed', async () => {
+    const p = await open('token=ETH&out=USDC&amount=1');
+    await p.typeAmount('outAmt', '300');
+    assert.match(p.text('rate'), /Max/);
+    p.window.location.hash = 'token=ETH&out=USDC&amount=500&exactOut=1';
+    await p.settle();
+    assert.equal(p.value('outAmt'), '300', 'the typed receive amount survives');
+    assert.match(p.text('rate'), /Max/, 'and the trade is still exact-out');
+    p.close();
+  });
+
+  test('an exact-output link does not replace a pay amount the user typed', async () => {
+    const p = await open('token=ETH&out=USDC&amount=1');
+    await p.type('amt', '5');
+    p.window.location.hash = 'token=ETH&out=USDC&amount=500&exactOut=1';
+    await p.settle();
+    assert.equal(p.value('amt'), '5', 'the typed pay amount survives');
+    assert.match(p.text('rate'), /Min/, 'and the trade is still exact-in');
+    p.close();
+  });
+
   /**
    * Setting another window's location.hash is ordinary cross-origin navigation,
    * so a page that opened this one can push a fresh link at it long after the

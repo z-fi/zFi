@@ -9369,7 +9369,7 @@ let lSeq=0,listReady=false,linkChain=0,dlyUser=false,pairUser=false,pairFree=0;
 const lkWrote=Object.create(null),mOff=()=>{if(lnMode)lnSet(false);if(wnMode)wnSet(false);if(pvMode)pvSet(false);if(mkMode)mkSet(false)};
 let lkEv=0,lkArm=0;const lkHeld=()=>Dn()<lkArm&&Sm("The link just changed this trade — check it, then press again.");
 const lkKeep=(el,v)=>{const w=lkWrote[el.id];
-if((el.value!==(el.options?.[0].value??"")||el===dly)&&el.value!==w&&(w!==undefined||el!==dly||dlyUser))return false;
+if(((el.value!==(el.options?.[0].value??"")&&el.value!=="...")||el===dly)&&el.value!==w&&(w!==undefined||el!==dly||dlyUser))return false;
 if(lkEv&&el.value!==v)lkArm=Dn()+2500;
 el.value=v;lkWrote[el.id]=v;return true;
 };
@@ -9431,7 +9431,7 @@ wantLq=q.get("lq")==="1",
 linkWantsCard=fi>=0||oi>=0||to||n||!isNaN(lk)||q.get("token")||q.get("out")||want;
 if(!wantLq&&lqMode&&linkWantsCard)lqSet(false);
 if(linkWantsCard)mOff()
-const ob=t==tab&&t=="book"&&pp==Js(pairAddrs())&&outAmt.value;setTab(t);if(ob)outAmt.value=ob;
+const ob=t==tab&&(t=="book"||mode=="out")&&pp==Js(pairAddrs())&&outAmt.value,ua=mode=="in"&&amt.value&&amt.value!==lkWrote.amt;setTab(t);if(ob){outAmt.value=ob;if(t!="book")setMode("out")}
 if(q.get("pm")&&t==="swap"&&CHAIN_ID===1){mkWant=q.get("pm");if(mkMode)mkLoad();else mkSet(true)}
 if(wantLq&&t==="swap"&&!lqMode)lqSet(true);
 if(to&&!rcMine)lkKeep(rc,to);
@@ -9441,7 +9441,7 @@ if(t==="book")bookD=v;else if(t==="send")sendD=v;
 if(t!=="swap")lkKeep(dly,v)}
 const num=v=>/^[\d,]*\.?\d+$/.test(v)?v:"";
 if(num(n)){
-if(t!=="book"&&q.get("exactOut")==="1"&&q.get("out")){if(toSel.value==oi&&lkKeep(outAmt,n)){setMode("out");fitFont(outAmt)}}
+if(t!=="book"&&q.get("exactOut")==="1"&&q.get("out")){if(toSel.value==oi&&!ua&&lkKeep(outAmt,n)){setMode("out");fitFont(outAmt)}}
 else if(lkKeep(amt,fromSel.value==fi||!q.get("token")?n:"")){if(t!=="book")setMode("in");fitFont(amt)}
 }
 if(t==="send"){const d=q.get("dest");brLkD=brLanes()?"":d||"";if(brLanes()){lkKeep(sdChain,d!==St(CHAIN_ID)&&[...sdChain.options].some(o=>o.value===d)?d:"0");syncTip()}}
