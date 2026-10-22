@@ -492,3 +492,10 @@ via_ir = true
 optimizer = true
 optimizer_runs = 9_999_999
 evm_version = "prague"
+
+# zSwapLink is carried inside a DAO proposal's calldata, and its bytes become
+# the proposal's size: 3,051 B of initcode at the default runs, 2,110 B at 200.
+# Its only hot path is the relay fallback, which the optimizer cannot shorten.
+[[profile.default.compilation_restrictions]]
+paths = "src/zSwapLink.sol"
+max_optimizer_runs = 200
