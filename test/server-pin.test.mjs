@@ -21,3 +21,16 @@ test('a public-looking name that resolves to loopback is refused', async (t) => 
   assert.equal(r.status, 400);
   assert.match(await r.text(), /public host only/);
 });
+
+const preflight = origin => pin.fetch(new Request('https://api.zfi.wei.is/0x/swap/allowance-holder/price', {
+  method: 'OPTIONS', headers: { origin },
+}), {}).then(r => r.headers.get('Access-Control-Allow-Origin'));
+
+test('the proxy answers the sites that use it, and no others', async () => {
+  for (const o of ['https://zfi.wei.is', 'https://zswap.wei.limo', 'https://new.zswap.wei.limo', 'https://zerofi.sh',
+    'https://tacit.finance', 'https://www.tacit.finance', 'https://0x0a0be4271ca53f0002800a323dee65a6b31cd507.w4eth.io'])
+    assert.equal(await preflight(o), o, o);
+  for (const o of ['http://tacit.finance', 'https://tacit.finance.evil.com', 'https://evil-tacit.finance', 'https://a.b.tacit.finance',
+    'https://evil.com', 'https://zswap.wei.limo.evil.com'])
+    assert.equal(await preflight(o), '', o);
+});

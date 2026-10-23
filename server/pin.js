@@ -48,11 +48,12 @@ const ADDR_HOST = /^0x[0-9a-f]{40}(\.\d+)?\.(?:w4eth\.io|w3link\.io|wei\.limo|we
 // host that happens to live on the gateway.
 const NAMED_HOSTS = /^(?:[a-z0-9-]+\.)?(?:zfi|zerofi|zswap)\.(?:wei\.limo|wei\.is|wei\.domains)$/i;
 
-// A DOMAIN WE OWN OUTRIGHT, so the name itself is the authorisation - there is
+// DOMAINS WE OWN OUTRIGHT (zerofi.sh, and tacit.finance, which runs the same
+// quoter and solver swap), so the name itself is the authorisation - there is
 // no gateway in front of it and no other tenant on it. Apex and one subdomain
 // label, https only; `zerofi.sh.evil.com` is not a match because the test is an
 // exact host, not a suffix.
-const OWN_HOSTS = /^(?:[a-z0-9-]+\.)?zerofi\.sh$/i;
+const OWN_HOSTS = /^(?:[a-z0-9-]+\.)?(?:zerofi\.sh|tacit\.finance)$/i;
 
 const INTERNAL_HOST = /^\[|^[\d.]+$|^[^.]+\.?$|\.(?:localhost|local|internal|intranet|lan|home|corp|arpa)\.?$/i;
 const MAX_HOPS = 4;
