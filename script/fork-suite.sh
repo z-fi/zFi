@@ -12,12 +12,13 @@
 # scenario. Nothing needed writing; something needed deleting.
 #
 # Usage:
-#   script/fork-suite.sh                  # every scenario
+#   FORK_UPSTREAM=<archive rpc> script/fork-suite.sh   # every scenario
 #   script/fork-suite.sh swap:wrap order:cancel
 #   FORK_BLOCK=25739900 script/fork-suite.sh
 set -euo pipefail
 
-RPC_UP="${FORK_UPSTREAM:-https://mainnet.gateway.tenderly.co/6iRl6GAEIRHvSbcFXqvQ5P}"
+# An archive RPC for the pinned block, from the environment: a key written here is a key published.
+RPC_UP="${FORK_UPSTREAM:?set FORK_UPSTREAM to an archive Ethereum RPC}"
 BLOCK="${FORK_BLOCK:-25739900}"
 PORT="${FORK_PORT:-8545}"
 LOCAL="http://127.0.0.1:${PORT}"
