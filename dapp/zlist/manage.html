@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>zOrgz Bond Manager</title>
+<style>
+:root{--bg:#fbfaf7;--fg:#1d1c1a;--mut:#6b675f;--line:#e2ded5;--card:#fff;--acc:#2f5bd3;--ok:#1d7a46;--warn:#a5590c;--bad:#b42318}
+@media (prefers-color-scheme:dark){:root{--bg:#141413;--fg:#ecebe6;--mut:#9d998f;--line:#2e2d2a;--card:#1c1b19;--acc:#7b9cf0;--ok:#5cc58a;--warn:#e6a35a;--bad:#f07a6e}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 ui-sans-serif,system-ui,-apple-system,sans-serif}
+main{max-width:920px;margin:0 auto;padding:24px 16px 64px}
+h1{font-size:22px;margin:0 0 4px}
+.sub{color:var(--mut);margin:0 0 20px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:16px}
+button{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--fg);padding:7px 12px;border-radius:8px;cursor:pointer}
+button.prim{background:var(--acc);border-color:var(--acc);color:#fff}
+button:disabled{opacity:.45;cursor:not-allowed}
+input{font:inherit;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--fg);width:110px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+.card h2{font-size:17px;margin:0 0 8px;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.tag{font-size:12px;padding:1px 8px;border-radius:99px;border:1px solid var(--line);color:var(--mut)}
+.tag.ok{color:var(--ok);border-color:currentColor}.tag.warn{color:var(--warn);border-color:currentColor}.tag.bad{color:var(--bad);border-color:currentColor}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:6px 16px;margin:6px 0 12px}
+.kv div{font-size:13px;color:var(--mut)}.kv b{display:block;color:var(--fg);font-size:14px;font-weight:600}
+table{width:100%;border-collapse:collapse;font-size:13px;margin:6px 0 12px}
+th,td{text-align:left;padding:5px 6px;border-bottom:1px solid var(--line)}th{color:var(--mut);font-weight:500}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+.steps{display:flex;flex-wrap:wrap;gap:8px}
+.why{font-size:13px;color:var(--mut);margin-top:8px}
+#log{font:12px/1.5 ui-monospace,monospace;white-space:pre-wrap;color:var(--mut);max-height:220px;overflow:auto}
+.scroll{overflow-x:auto}
+</style>
+</head>
+<body>
+<main>
+<h1>zOrgz Bond Manager</h1>
+<p class="sub">Exit a zOrgz bond on <a href="https://etherscan.io/address/0x0000006D936bA3653b8854490E16E782cd32a9a8#code" target="_blank" rel="noopener">ZorgConviction</a>.
+Order: set every allocation to 0, then <code>unbond</code> (returns the zOrgz + zOrg and credits the ETH), then <code>withdrawEthCredit</code>.</p>
+
+<div class="bar">
+  <button id="connect" class="prim">Connect wallet</button>
+  <span id="acct" class="tag">not connected</span>
+  <input id="rid" placeholder="receipt #" inputmode="numeric">
+  <button id="add">Load receipt</button>
+  <button id="refresh">Refresh</button>
+</div>
+
+<div class="card" id="credit"><h2>ETH credit</h2><div id="creditBody" class="why">Connect to read.</div></div>
+<div id="receipts"></div>
+<div class="card"><h2>Log</h2><div id="log"></div></div>
+</main>
+<script>
+const GOV='0x0000006d936ba3653b8854490e16e782cd32a9a8', TL='0x0000006013df75a31678b786061c2b54bf531524';
+const RPCS=['https://mainnet.gateway.tenderly.co','https://rpc.mevblocker.io','https://ethereum-rpc.publicnode.com','https://eth.drpc.org'];
+const LOG_RPCS=['https://mainnet.gateway.tenderly.co','https://rpc.mevblocker.io'];
+const S={ownerOf:'0x6352211e',bal:'0x70a08231',weight:'0xe0fb17b2',allocated:'0x09807420',allocOf:'0x53e45ba5',
+  lock:'0x10feefe2',eternal:'0x467339e2',quote:'0x934d2a0a',credits:'0x387552eb',allocate:'0x1a0ffd57',
+  unbond:'0x27de9e32',withdraw:'0x58bc0a50',state:'0x1ba8024c',json:'0x74e18e96',paused:'0x5c975abb',ethBonds:'0x0574ba2b'};
+const T_ALLOC='0x9ebf773779c195a26bee963a4074f326394733ec989ad89ffadf11237a4e354e';
+const T_XFER='0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
+const $=id=>document.getElementById(id);
+let me=null, ids=new Set(), names={}, allListings=null;
+
+const log=m=>{ $('log').textContent=new Date().toLocaleTimeString()+'  '+m+'\n'+$('log').textContent };
+const w32=v=>BigInt(v).toString(16).padStart(64,'0');
+const wA=a=>a.toLowerCase().replace('0x','').padStart(64,'0');
+const words=h=>{h=h.slice(2);const o=[];for(let i=0;i<h.length;i+=64)o.push(BigInt('0x'+h.slice(i,i+64)));return o};
+const fmt=(v,d=18,p=2)=>{const n=Number(v)/10**d;return n.toLocaleString(undefined,{maximumFractionDigits:p})};
+const eth=v=>fmt(v,18,6);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+async function post(url,method,params,ms=25000){
+  const ctl=new AbortController(); const t=setTimeout(()=>ctl.abort(),ms);
+  try{
+    const r=await fetch(url,{method:'POST',headers:{'content-type':'application/json'},signal:ctl.signal,
+      body:JSON.stringify({jsonrpc:'2.0',id:1,method,params})});
+    const j=await r.json(); if(j.error)throw Error(j.error.message); return j.result;
+  }finally{clearTimeout(t)}
+}
+async function rpc(method,params,pool=RPCS){
+  let err; for(const u of pool){ try{return await post(u,method,params)}catch(e){err=e} } throw err;
+}
+const call=(to,data)=>rpc('eth_call',[{to,data},'latest']);
+const logs=f=>rpc('eth_getLogs',[{fromBlock:'0x0',toBlock:'latest',...f}],LOG_RPCS);
+
+async function nameOf(id){
+  if(names[id])return names[id];
+  try{
+    const h=(await call(TL,S.json+w32(id))).slice(2);
+    const len=parseInt(h.slice(64,128),16); const bytes=h.slice(128,128+len*2);
+    let s=new TextDecoder().decode(new Uint8Array(bytes.match(/../g).map(x=>parseInt(x,16))));
+    const j=JSON.parse(s); names[id]=j.s||j.n||('#'+id);
+  }catch(e){ names[id]=id.length>12?id.slice(0,6)+'…':'#'+id }
+  return names[id];
+}
+
+/* Every listing that ever received an allocation, with live score and weight, so a
+   receipt's exit can be ranked against the field before and after. */
+async function listingField(){
+  if(allListings)return allListings;
+  const L=await logs({address:GOV,topics:[T_ALLOC]});
+  const lids=[...new Set(L.map(l=>BigInt(l.topics[1]).toString()))];
+  const st=await Promise.all(lids.map(id=>call(GOV,S.state+w32(id)).then(words)));
+  allListings=lids.map((id,i)=>({id,score:st[i][0],weight:st[i][1]})).filter(x=>x.score>0n);
+  return allListings;
+}
+const rankOf=(field,id,override)=>{
+  const arr=field.map(x=>({id:x.id,s:override&&override[x.id]!==undefined?override[x.id]:x.score}));
+  arr.sort((a,b)=>a.s===b.s?0:(a.s>b.s?-1:1));
+  return arr.findIndex(x=>x.id===id)+1;
+};
+
+async function discover(){
+  if(!me)return;
+  try{
+    const L=await logs({address:GOV,topics:[T_XFER,null,'0x'+wA(me)]});
+    const cand=[...new Set(L.map(l=>BigInt(l.topics[3]).toString()))];
+    const own=await Promise.all(cand.map(id=>call(GOV,S.ownerOf+w32(id)).then(o=>('0x'+o.slice(26)).toLowerCase()===me?id:null).catch(()=>null)));
+    own.filter(Boolean).forEach(id=>ids.add(id));
+    log('found receipts: '+[...ids].join(', '));
+  }catch(e){ log('discovery failed ('+e.message+') - enter a receipt # manually') }
+}
+
+async function readCredit(){
+  if(!me)return;
+  const c=words(await call(GOV,S.credits+wA(me)))[0];
+  $('creditBody').innerHTML=`<div class="kv"><div>Withdrawable now<b>${eth(c)} ETH</b></div></div>
+    <div class="steps"><button class="prim" id="wd" ${c===0n?'disabled':''}>withdrawEthCredit → my wallet</button></div>
+    <div class="why">${c===0n?'Nothing credited yet. ETH is only credited by <code>unbond</code> or <code>claimLoyalty</code>; calling withdraw before that reverts <code>NoEthCredit</code>.':'Pulls the whole credit to the connected address.'}</div>`;
+  if(c>0n)$('wd').onclick=()=>send(S.withdraw+wA(me),'withdrawEthCredit');
+}
+
+async function readReceipt(id){
+  const q=d=>call(GOV,d).then(words);
+  const [owner,weight,allocated,lock,eternal,quote,eb]=await Promise.all([
+    call(GOV,S.ownerOf+w32(id)).then(o=>'0x'+o.slice(26)).catch(()=>null),
+    q(S.weight+w32(id)),q(S.allocated+w32(id)),q(S.lock+w32(id)),q(S.eternal+w32(id)),q(S.quote+w32(id)),q(S.ethBonds+w32(id))]);
+  const L=await logs({address:GOV,topics:[T_ALLOC,null,'0x'+w32(id)]});
+  const lids=[...new Set(L.map(l=>BigInt(l.topics[1]).toString()))];
+  const allocs=(await Promise.all(lids.map(async lid=>({lid,amt:(await q(S.allocOf+w32(id)+w32(lid)))[0]})))).filter(a=>a.amt>0n);
+  return {id,owner,weight:weight[0],allocated:allocated[0],unlockAt:lock[1],boost:lock[2],tier:lock[3],
+    eternal:eternal[0]===1n,principal:quote[0],tax:quote[1],loyalty:quote[2],maturityAt:eb[4],allocs};
+}
+
+async function render(){
+  const box=$('receipts'); box.innerHTML='';
+  if(!ids.size){box.innerHTML='<div class="card why">No receipts loaded.</div>';return}
+  const now=BigInt(Math.floor(Date.now()/1000));
+  const field=await listingField().catch(()=>[]);
+  for(const id of [...ids].sort((a,b)=>a-b)){
+    let r; try{ r=await readReceipt(id) }catch(e){ log('#'+id+': '+e.message); continue }
+    const mine=me&&r.owner&&r.owner.toLowerCase()===me;
+    const locked=r.unlockAt>now, immature=r.maturityAt>now;
+    const tags=[];
+    if(!r.owner)tags.push('<span class="tag">not bonded / burned</span>');
+    if(r.eternal)tags.push('<span class="tag bad">eternal - never redeemable</span>');
+    else if(locked)tags.push(`<span class="tag warn">tier ${r.tier} lock until ${new Date(Number(r.unlockAt)*1000).toLocaleDateString()}</span>`);
+    else tags.push('<span class="tag ok">unlocked</span>');
+    if(!r.eternal&&r.owner)tags.push(immature?`<span class="tag warn">early exit: ${eth(r.tax)} ETH tax</span>`:'<span class="tag ok">ETH mature, no tax</span>');
+    if(r.owner&&!mine)tags.push('<span class="tag bad">not owned by connected wallet</span>');
+
+    let rows='';
+    for(const a of r.allocs){
+      const eff=a.amt*BigInt(r.boost)/10000n;
+      const L=field.find(x=>x.id===a.lid)||{score:0n,weight:0n};
+      const nowScore=L.score, afterScore=L.score>eff?L.score-eff:0n;
+      const w2=L.weight>eff?L.weight-eff:0n;
+      const share=L.weight?Number(eff*10000n/L.weight)/100:0;
+      /* steady state: conviction converges to weight, so score -> 2 x weight.
+         Others are assumed to stay where they are; most already sit near 2x. */
+      const steady={};field.forEach(x=>steady[x.id]=x.weight*2n);steady[a.lid]=w2*2n;
+      rows+=`<tr><td>${esc(await nameOf(a.lid))}</td><td class="n">${fmt(a.amt)}</td><td class="n">${share.toFixed(1)}%</td>
+        <td class="n">#${rankOf(field,a.lid)} · ${fmt(nowScore,18,0)}</td>
+        <td class="n">#${rankOf(field,a.lid,{[a.lid]:afterScore})} · ${fmt(afterScore,18,0)}</td>
+        <td class="n">#${rankOf(field,a.lid,steady)} · ${fmt(w2*2n,18,0)}</td>
+        <td><button data-z="${a.lid}" ${mine?'':'disabled'}>set 0</button></td></tr>`;
+    }
+    const canUnbond=mine&&!r.eternal&&!locked&&r.allocs.length===0;
+    const why=r.eternal?'Eternal bonds cannot unbond; only loyalty ETH can be claimed.'
+      :locked?'unbond reverts ReceiptLocked until the lock ends.'
+      :r.allocs.length?'unbond reverts BondHasActiveAllocations: set every allocation above to 0 first.'
+      :'Ready: unbond returns the zOrgz + '+fmt(r.weight)+' zOrg and credits '+eth(r.principal+r.loyalty)+' ETH, then withdraw it above.';
+    const c=document.createElement('div'); c.className='card';
+    c.innerHTML=`<h2>zOrgz #${id} ${tags.join(' ')}</h2>
+      <div class="kv"><div>Bonded zOrg<b>${fmt(r.weight)}</b></div><div>Allocated<b>${fmt(r.allocated)}</b></div>
+      <div>Support boost<b>${(Number(r.boost)/10000).toFixed(2)}×</b></div><div>ETH back on unbond<b>${eth(r.principal)}${r.loyalty?' + '+eth(r.loyalty)+' loyalty':''}</b></div></div>
+      ${r.allocs.length?`<div class="scroll"><table><tr><th>Listing</th><th class="n">Allocated</th><th class="n">Share of listing weight</th>
+        <th class="n">Rank · score now</th><th class="n">Right after</th><th class="n">Long run (~1-2 wk)</th><th></th></tr>${rows}</table></div>`:''}
+      <div class="steps">
+        ${r.allocs.length>1?`<button id="za${id}" ${mine?'':'disabled'}>Set all ${r.allocs.length} allocations to 0</button>`:''}
+        <button class="prim" id="ub${id}" ${canUnbond?'':'disabled'}>unbond #${id}</button>
+        <button class="prim" id="bx${id}" ${mine&&!r.eternal&&!locked?'':'disabled'}>Exit in one batch (${r.allocs.length+2} calls)</button>
+      </div><div class="why">${why}</div>`;
+    box.appendChild(c);
+    c.querySelectorAll('button[data-z]').forEach(b=>b.onclick=()=>send(S.allocate+w32(id)+w32(b.dataset.z)+w32(0),`allocate #${id} → 0 on ${names[b.dataset.z]}`));
+    if($('za'+id))$('za'+id).onclick=async()=>{for(const a of r.allocs){ if(!await send(S.allocate+w32(id)+w32(a.lid)+w32(0),`allocate #${id} → 0 on ${names[a.lid]}`,false))return } refresh()};
+    $('ub'+id).onclick=()=>send(S.unbond+w32(id),'unbond #'+id);
+    $('bx'+id).onclick=()=>batchExit(id,r.allocs);
+  }
+}
+
+async function send(data,label,thenRefresh=true){
+  if(!window.ethereum||!me){log('connect a wallet first');return false}
+  try{
+    const chain=await ethereum.request({method:'eth_chainId'});
+    if(chain!=='0x1')await ethereum.request({method:'wallet_switchEthereumChain',params:[{chainId:'0x1'}]});
+    // simulate first so a revert shows here instead of as a failed tx
+    await rpc('eth_call',[{from:me,to:GOV,data},'latest']).catch(e=>{throw Error('simulation reverted: '+e.message)});
+    const hash=await ethereum.request({method:'eth_sendTransaction',params:[{from:me,to:GOV,data}]});
+    log(label+' sent '+hash);
+    for(let i=0;i<120;i++){
+      const rc=await rpc('eth_getTransactionReceipt',[hash]).catch(()=>null);
+      if(rc){ log(label+(rc.status==='0x1'?' confirmed':' REVERTED')); allListings=null; if(thenRefresh)refresh(); return rc.status==='0x1' }
+      await new Promise(r=>setTimeout(r,3000));
+    }
+    log(label+': still pending, refresh later'); return false;
+  }catch(e){ log(label+' failed: '+(e.message||e)); return false }
+}
+
+/* allocate(...,0) for every live allocation, then unbond, then withdrawEthCredit.
+   The order is the whole point: unbond reverts while any allocation is live, and
+   withdraw reverts until unbond has credited the ETH. Wallets that speak EIP-5792
+   run it as one atomic batch; others get the same calls one at a time, each
+   waiting for the previous to confirm. */
+async function batchExit(id,allocs){
+  const calls=[...allocs.map(a=>({data:S.allocate+w32(id)+w32(a.lid)+w32(0),label:`allocate #${id} → 0 on ${names[a.lid]}`})),
+    {data:S.unbond+w32(id),label:'unbond #'+id},{data:S.withdraw+wA(me),label:'withdrawEthCredit'}];
+  log('batch: '+calls.map(c=>c.label).join(' → '));
+  try{
+    const chain=await ethereum.request({method:'eth_chainId'});
+    if(chain!=='0x1')await ethereum.request({method:'wallet_switchEthereumChain',params:[{chainId:'0x1'}]});
+    const res=await ethereum.request({method:'wallet_sendCalls',params:[{version:'2.0.0',chainId:'0x1',from:me,atomicRequired:true,
+      calls:calls.map(c=>({to:GOV,data:c.data,value:'0x0'}))}]});
+    const bid=res.id||res; log('batch sent '+bid);
+    for(let i=0;i<120;i++){
+      const s=await ethereum.request({method:'wallet_getCallsStatus',params:[bid]}).catch(()=>null);
+      if(s&&(s.status===200||s.status==='CONFIRMED')){log('batch confirmed');allListings=null;return refresh()}
+      if(s&&(s.status>=400||s.status==='FAILED'||s.status==='REVERTED')){log('batch failed: '+JSON.stringify(s.status));return refresh()}
+      await new Promise(r=>setTimeout(r,3000));
+    }
+    log('batch still pending, refresh later');
+  }catch(e){
+    log('wallet_sendCalls unavailable ('+(e.message||e)+'), sending one at a time');
+    for(const c of calls){ if(!await send(c.data,c.label,false))return refresh() }
+    refresh();
+  }
+}
+
+async function refresh(){ try{ await readCredit(); await render() }catch(e){ log('refresh: '+e.message) } }
+
+$('connect').onclick=async()=>{
+  if(!window.ethereum){log('no injected wallet found');return}
+  const [a]=await ethereum.request({method:'eth_requestAccounts'}); me=a.toLowerCase();
+  $('acct').textContent=a.slice(0,6)+'…'+a.slice(-4);
+  ethereum.on&&ethereum.on('accountsChanged',x=>{me=(x[0]||'').toLowerCase()||null;ids.clear();$('acct').textContent=me||'not connected';discover().then(refresh)});
+  await discover(); refresh();
+};
+$('add').onclick=()=>{const v=$('rid').value.trim(); if(/^\d+$/.test(v)){ids.add(v);refresh()}};
+$('refresh').onclick=()=>{allListings=null;refresh()};
+render();
+</script>
+</body>
+</html>
