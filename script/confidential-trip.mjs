@@ -209,7 +209,7 @@ const sandbox = {
   CHAINS: {
     1: { name: 'Ethereum', explorer: 'https://etherscan.io', rpcs: [RPC] },
     8453: { name: 'Base', explorer: 'https://basescan.org', rpcs: ['https://mainnet.base.org'] },
-    4663: { name: 'Robinhood', explorer: 'https://robinscan.io', rpcs: ['https://rpc.mainnet.chain.robinhood.com'] },
+    4663: { name: 'Robinhood', explorer: 'https://robin.etherscan.io', rpcs: ['https://rpc.mainnet.chain.robinhood.com'] },
   },
   document: { querySelector: () => el(), hidden: false },
   stat, pvNote, pvKey: el(), pvList: el(), pvGo: el(), pvAmt: el(), pvChain: el({ value: '8453' }), pvTo: el(), pvPath: el({ value: 'relay' }),
